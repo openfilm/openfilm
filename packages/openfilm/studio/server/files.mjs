@@ -21,7 +21,7 @@ import { addLinkedPlaces, changeMediaReferences, mediaReference, mediaReferences
 import { changeProjectFilm, readProjectFilm } from './film.mjs';
 import { filesWritten } from './person-edits.mjs';
 import { TOOL_DIR } from './projects.mjs';
-import { moveToTrash } from './trash.mjs';
+import { recycle } from './recycle-bin.mjs';
 import { linkKind, rewriteLinks } from './page-links.mjs';
 import { ffmpeg } from '../../src/shared.mjs';
 import { compoundOuter } from './parts.mjs';
@@ -597,7 +597,7 @@ export async function trashFile(/** @type {string} */ root, /** @type {string} *
   if (!existsSync(abs)) throw new FileError(`${rel} is not there`, 404);
   const canonical = (/** @type {string} */ path) => { try { return realpathSync.native(path); } catch { return resolve(path); } };
   if ([savedRoot(), libraryRoot()].some(path => canonical(path) === canonical(abs))) throw new FileError('Library roots cannot be deleted.', 403);
-  await moveToTrash(abs);
+  await recycle(abs);
   changeMediaReferences(root, (entries) => entries.some((entry) => entry.name === rel || entry.name.startsWith(`${rel}/`))
     ? entries.filter((entry) => entry.name !== rel && !entry.name.startsWith(`${rel}/`)) : entries);
 }

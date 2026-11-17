@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { INSTRUCTIONS, STUDIO_REFERENCES, ownAgentPrompt } from './agents.mjs';
+import { INSTRUCTIONS, ownAgentPrompt } from './agents.mjs';
 
 const count = (text, part) => text.split(part).length - 1;
 
@@ -9,20 +9,20 @@ test("the app's own agent's prompt is OpenFilm's system prompt for an agent in t
   assert.ok(prompt.split(/\s+/).length < 330, 'a few lines');
   for (const word of ['## film.html', 'window.film', '`edit`', 'openfilm look', 'openfilm render', 'openfilm get']) assert.ok(!prompt.includes(word), `nothing of one kind of work: ${word}`);
   assert.ok(!prompt.includes(INSTRUCTIONS), 'not the words for another agent');
-  assert.equal(count(prompt, STUDIO_REFERENCES), 1, 'how Studio is pointed at, once');
+  assert.equal(count(prompt, 'numbered links after their message'), 1, 'how Studio is pointed at, once: the system prompt says it');
   assert.equal(count(prompt, 'Reply in the language'), 1);
-  assert.match(prompt, /already open beside this chat/);
+  assert.match(prompt, /Studio is open beside this chat/);
   assert.match(prompt, /Read the one a task needs, whole, before you start it/);
-  assert.match(prompt, /Run OpenFilm's commands as `openfilm`, also where a skill says `npx openfilm`/);
+  for (const word of ['npx', 'openfilm open']) assert.ok(!prompt.includes(word), `nothing a desktop agent never runs: ${word}`);
 });
 
 test('another agent is told to run openfilm for the system prompt and the skills, and nothing of how a film is made', () => {
-  assert.match(INSTRUCTIONS, /run `openfilm` with no\narguments and follow what it prints/);
+  assert.match(INSTRUCTIONS, /run `openfilm` with no arguments and follow\swhat it prints/);
   for (const word of ['window.film', 'openfilm look', 'Reply in the language']) assert.ok(!INSTRUCTIONS.includes(word), word);
 });
 
-test('every agent is told how to point at Studio', () => {
-  assert.ok(INSTRUCTIONS.endsWith(STUDIO_REFERENCES));
+test('another agent is told nothing it never runs in the app, nor how to point: what `openfilm` prints says that', () => {
+  for (const word of ['npx', 'openfilm open', '#t=']) assert.ok(!INSTRUCTIONS.includes(word), word);
 });
 
 test("the app's own agent is told which of its skills build on which, as `openfilm` tells others", () => {

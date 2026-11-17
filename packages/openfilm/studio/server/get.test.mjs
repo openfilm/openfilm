@@ -551,10 +551,11 @@ test('openfilm get: what can be got here, connected, partly or not at all; wrong
     /* a search of the library: answered by the Studio running, which keeps it loaded, as the CLI answers it itself */
     const studio = JSON.parse(readFileSync(join(process.env.OPENFILM_HOME, 'run.json'), 'utf8'));
     const ask = (body) => fetch(`${studio.origin}/api/get/library`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-studio-key': studio.key }, body: JSON.stringify(body) });
-    const searched = await (await ask({ verb: 'transition', args: { prompt: 'glitch', limit: '3' } })).json();
-    assert.deepEqual(searched, await libraryGet('transition', { prompt: 'glitch', limit: '3' }));
-    assert.equal(get(scratch, 'transition', '--prompt', 'glitch', '--limit', '3').stdout, `${searched.lines.join('\n')}\n`);
-    assert.equal((await ask({ verb: 'transition', args: { take: 'openfilm/transitions/glitch' } })).status, 400, 'taking one is the CLI\'s, in its project');
+    const searched = await (await ask({ verb: 'sticker', args: { prompt: 'heart', limit: '3' } })).json();
+    assert.deepEqual(searched, await libraryGet('sticker', { prompt: 'heart', limit: '3' }));
+    assert.equal(get(scratch, 'sticker', '--prompt', 'heart', '--limit', '3').stdout, `${searched.lines.join('\n')}\n`);
+    assert.equal((await ask({ verb: 'sticker', args: { take: 'openfilm/stickers/heart' } })).status, 400, 'taking one is the CLI\'s, in its project');
+    assert.equal((await ask({ verb: 'transition', args: { prompt: 'glitch' } })).status, 400, 'transitions are the person\'s to pick in Studio');
     assert.equal((await ask({ verb: 'music', args: { prompt: 'calm' } })).status, 400);
 
     assert.equal(get(scratch, 'tts', '--out', 'x').status, 2, 'not in a project');

@@ -23,7 +23,7 @@ const HELP = `openfilm canvas [apply <steps> | add <file…>]
                          a making node's make, prompt, model, opts, versions and the one shown, path) and wires
                          (from, to, order: what goes into a node, in that order)
   canvas add <file…>     files of the project put on the board the person has open, in a row below what is there,
-                         in the order named (the pair of \`openfilm edit add\`)
+                         in the order named
   canvas apply <steps>   steps on it, all taken or none: a JSON list, a .json file, or - to read it
     {"op":"add","kind":"note|file|image|video|sfx|music|tts|cut|group","id":"…", text | path | prompt, via, model,
       preset, opts: {ratio, sec, mode, quality, size, count, voice}, name, color, x, y, w, h, group: "<group id>",

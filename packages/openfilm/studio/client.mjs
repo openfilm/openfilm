@@ -318,10 +318,22 @@ export async function keptNote(from = '.') {
 }
 
 /**
+ * Whose a node `openfilm canvas` adds is, as the board shows it: the agent by its name (OPENFILM_AGENT_NAME, which the
+ * desktop app sets; else OPENFILM_AGENT) and its conversation (OPENFILM_SESSION, else the app's `app:<conversation>`).
+ * None outside an agent. @param {Record<string, string | undefined>} [env]
+ */
+export function canvasBy(env = process.env) {
+  const agent = env.OPENFILM_AGENT_NAME || env.OPENFILM_AGENT;
+  if (!agent) return undefined;
+  const session = env.OPENFILM_SESSION || (env.OPENFILM_AGENT?.startsWith('app:') ? env.OPENFILM_AGENT.slice(4) : '');
+  return { agent, ...(session ? { session } : {}) };
+}
+
+/**
  * `openfilm canvas`: the canvas of the project around the current folder, as JSON; `openfilm canvas apply <steps>`
  * takes an agent's steps on it (a JSON list, a .json file, or - for standard input; see applyCanvasOps in
  * server/canvas.mjs), all or none, and Studio shows them on the board at once. What it adds is the agent's that runs it
- * (OPENFILM_AGENT, and OPENFILM_SESSION when it says which conversation).
+ * (canvasBy).
  * @param {string[]} args @param {(line: string) => void} [say] @returns {Promise<{ ok: boolean, usage?: boolean, lines: string[] }>}
  */
 export async function canvasCommand(args, say) {
@@ -336,8 +348,7 @@ export async function canvasCommand(args, say) {
     const text = given === '-' ? readFileSync(0, 'utf8') : given.trim().startsWith('[') ? given : readFileSync(given, 'utf8');
     try { ops = JSON.parse(text); } catch (e) { return { ok: false, usage: true, lines: [`openfilm canvas apply: the steps are not JSON: ${/** @type {Error} */ (e).message}`] }; }
   }
-  const agent = process.env.OPENFILM_AGENT;
-  const by = agent ? { agent, ...(process.env.OPENFILM_SESSION ? { session: process.env.OPENFILM_SESSION } : {}) } : undefined;
+  const by = canvasBy();
   const run = await ensureStudio(say);
   const answer = await post(run, '/api/canvas', { folder, ...(ops === undefined ? {} : { ops }), ...(by ? { by } : {}) });
   if (!answer?.ok) return { ok: false, usage: answer?.code === 2, lines: [`openfilm canvas: ${answer?.text ?? answer?.error ?? 'Studio did not say how it went'}`] };

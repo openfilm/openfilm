@@ -8,17 +8,20 @@ import { dirname, join } from 'node:path';
 const PREFIX = 'community/v1';
 const MAX_CATALOG = 2 * 1024 * 1024;
 const MAX_FILE = 8 * 1024 * 1024;
+/** A media file (footage, a picture, a recording): larger than the library's other files */
+const MAX_MEDIA = 50 * 1024 * 1024;
+const MEDIA_EXT = { video: ['mp4', 'mov', 'webm'], image: ['jpg', 'jpeg', 'png', 'webp'], audio: ['m4a', 'mp3', 'wav'] };
 const REFRESH = 60_000;
 const TIMEOUT = 8000;
 const HEX = /^[a-f0-9]{64}$/;
-const ITEM = /^(sound|music|transition|effect)\/[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const ITEM = /^(sound|music|transition|effect|media)\/[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const languages = ['en', 'zh-CN', 'ja', 'ko', 'es'];
 const sha256 = (/** @type {Buffer} */ bytes) => createHash('sha256').update(bytes).digest('hex');
 const endpoint = () => (process.env.OPENFILM_COMMUNITY_LIBRARY_URL ??
   `${(process.env.OPENFILM_LIBRARY_URL || 'https://openfilm.dev/library').replace(/\/+$/, '')}/${PREFIX}`).replace(/\/+$/, '');
 
 /** @typedef {{ sha256: string, bytes: number }} Blob */
-/** @typedef {{ group: string, id: string, cat: string, kind: 'sound' | 'page', name: Record<string,string>, durationMs: number, tags: string[], about: string, by: string, src?: string, place?: 'cut' }} Item */
+/** @typedef {{ group: string, id: string, cat: string, kind: 'sound' | 'page' | 'file', name: Record<string,string>, durationMs: number, tags: string[], about: string, by: string, src?: string, place?: 'cut', media?: 'video' | 'image' | 'audio', poster?: string }} Item */
 /**
  * A pack: things of one maker's put together (a music pack of forty pieces), or one thing listed alone, as a pack of
  * its own (`lone`). Its id is `<maker>/<name>`; its things' `group` in the library is that id, so it is a group of
@@ -82,26 +85,32 @@ function decode(json) {
     result.packs.push(pack);
   }
   for (const entry of json.items) {
-    const { id, version, revision, name, about, tags, by, durationMs, files } = entry ?? {};
+    const { id, version, revision, name, about, tags, by, durationMs, files, media } = entry ?? {};
     const kind = typeof id === 'string' && id.length < 100 ? ITEM.exec(id)?.[1] : undefined;
+    /* a media file: footage, a picture or a recording, one file (a poster beside footage); a picture lasts nothing */
+    const isMedia = kind === 'media';
+    if (isMedia && !['video', 'image', 'audio'].includes(media)) throw new Error('Invalid community item');
     if (!kind || seen.has(id) || !Number.isSafeInteger(version) || version < 1 || !HEX.test(revision) ||
         typeof by !== 'string' || !/^[a-zA-Z0-9-]{1,39}$/.test(by) ||
         !name || !languages.every((lang) => typeof name[lang] === 'string' && name[lang].trim() && name[lang].length <= 60) ||
         typeof about !== 'string' || about.length > 300 ||
         !Array.isArray(tags) || tags.length > 12 || !tags.every((t) => typeof t === 'string' && /^[a-z0-9-]{1,40}$/.test(t)) ||
-        !Number.isInteger(durationMs) || durationMs < 1 || durationMs > 3_600_000 ||
+        !Number.isInteger(durationMs) || durationMs < (isMedia && media === 'image' ? 0 : 1) || durationMs > 3_600_000 ||
         !files || typeof files !== 'object') throw new Error('Invalid community item');
     seen.add(id);
     const base = `${PREFIX}/${id}-v${version}-${revision}`;
     const audio = kind === 'sound' || kind === 'music';
     const basename = `community-${id.replace('/', '-')}`;
     const sound = [`${basename}.m4a`, `${basename}.mp3`].find((key) => Object.hasOwn(files, key));
-    const expected = audio ? [sound, `waves/${basename}.png`] : ['saved.json', 'files/overlay.html', 'poster.jpg', 'preview.mp4'];
+    const mediaFile = isMedia ? MEDIA_EXT[/** @type {'video' | 'image' | 'audio'} */ (media)].map((ext) => `${basename}.${ext}`).find((key) => Object.hasOwn(files, key)) : undefined;
+    const expected = isMedia ? [mediaFile, ...(media === 'video' ? ['poster.jpg'] : [])]
+      : audio ? [sound, `waves/${basename}.png`] : ['saved.json', 'files/overlay.html', 'poster.jpg', 'preview.mp4'];
     if (Object.keys(files).length !== expected.length) throw new Error('Invalid community files');
     for (const key of expected) {
       const file = key ? files[key] : null;
+      const limit = isMedia && key === mediaFile ? MAX_MEDIA : MAX_FILE;
       if (!key || !file || typeof file.sha256 !== 'string' || !HEX.test(file.sha256) ||
-          !Number.isInteger(file.bytes) || file.bytes < 1 || file.bytes > MAX_FILE) throw new Error('Invalid community file');
+          !Number.isInteger(file.bytes) || file.bytes < 1 || file.bytes > limit) throw new Error('Invalid community file');
       result.files.set(`${base}/${key}`, file);
     }
     if (!audio) result.bundles.set(base, ['saved.json', 'files/overlay.html'].map((key) => `${base}/${key}`));
@@ -113,12 +122,14 @@ function decode(json) {
       if (result.packs.some((p) => p.id === pack?.id)) throw new Error('Invalid community pack');
       result.packs.push(pack);
     }
-    const itemId = audio ? `${base}/${sound}` : base;
+    const itemId = isMedia ? `${base}/${mediaFile}` : audio ? `${base}/${sound}` : base;
     pack.items.push(itemId);
     const groups = (result.groups[kind] ??= []);
     if (!groups.some((g) => g.id === pack.id)) groups.push({ id: pack.id, name: pack.name, by: pack.by });
-    result.items.push({ id: itemId, cat: kind, group: pack.id, kind: audio ? 'sound' : 'page',
-      name, about, tags, by, durationMs, ...(!audio ? { src: 'overlay.html', ...(kind === 'transition' ? { place: /** @type {const} */ ('cut') } : {}) } : {}) });
+    result.items.push(isMedia
+      ? { id: itemId, cat: kind, group: pack.id, kind: 'file', media, name, about, tags, by, durationMs, ...(media === 'video' ? { poster: `${base}/poster.jpg` } : {}) }
+      : { id: itemId, cat: kind, group: pack.id, kind: audio ? 'sound' : 'page',
+        name, about, tags, by, durationMs, ...(!audio ? { src: 'overlay.html', ...(kind === 'transition' ? { place: /** @type {const} */ ('cut') } : {}) } : {}) });
   }
   /* a pack keeps only the things the catalog has (in its own order); one left with none is no pack */
   for (const pack of result.packs) {

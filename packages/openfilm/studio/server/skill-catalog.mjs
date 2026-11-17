@@ -26,6 +26,7 @@ import { setSharedPref, sharedHome, sharedPref } from '../../src/locations.mjs';
 import { REVOKED_FILE, SKILL_NAME, SOURCE_FILE, discoverDir, discoverFolder, officialSkillsDir, readSkill, revocations, skillSource, skillUid, skillsIn } from '../../src/skills.mjs';
 import { downloadFiles, listFiles } from './fetch-github.mjs';
 import { moveToTrash } from './trash.mjs';
+import { recycle } from './recycle-bin.mjs';
 
 /** The index Discover reads. */
 /* the community's repository, renamed from openfilm/skills (its old address still answers, through GitHub's redirect,
@@ -370,10 +371,10 @@ export async function installSkill(uid) {
   return made;
 }
 
-/** Uninstall a skill: its folder to the trash. → whether it was installed. @param {string} uid */
+/** Uninstall a skill: its folder to the recycle bin. → whether it was installed. @param {string} uid */
 export async function uninstallSkill(uid) {
   const there = installedOne(uid);
   if (!there) return false;
-  await moveToTrash(there.folder);
+  await recycle(there.folder, 'skill');
   return true;
 }

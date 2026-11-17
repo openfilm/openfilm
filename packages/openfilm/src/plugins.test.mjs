@@ -3,23 +3,43 @@ import assert from 'node:assert/strict';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { CATEGORIES, PLUGINS, pluginOfSkill, pluginSkillDir, pluginStates, pluginsDir, pluginsOffLine, profileOf, readPlugins, setPluginOn, workbenchesOn } from './plugins.mjs';
+import { CATEGORIES, PLUGINS, inPersonsOrder, pluginOfSkill, pluginSkillDir, pluginStates, pluginsDir, pluginsOffLine, profileOf, readPlugins, removePlugin, setPluginOn, setWorkbenchOrder, workbenchOrder, workbenchesOn } from './plugins.mjs';
 import { offeredSkills, promptSkills, setSkillOn } from './skills.mjs';
 import { readBlocks } from './plugin-blocks.mjs';
 
 const home = () => mkdtempSync(join(tmpdir(), 'of-plugins-'));
 const where = (h) => ({ home: h, mine: join(h, 'mine'), official: join(h, 'official') });
 
-test('the screening, the edit and the canvas are on until the person says, Motion is not; the choice is kept by plugin', () => {
+test('the screening, the edit and the canvas are on until the person says, Color is not; the choice is kept by plugin', () => {
   const h = home();
   assert.deepEqual(workbenchesOn(h), ['screening', 'edit', 'canvas']);
-  assert.deepEqual(pluginStates(h).filter((p) => p.workbench).map((p) => [p.id, p.on]), [['screening', true], ['edit', true], ['canvas', true], ['motion', false], ['stage', false], ['color', false]]);
-  setPluginOn('motion', true, h);
+  assert.deepEqual(pluginStates(h).filter((p) => p.workbench).map((p) => [p.id, p.on]), [['screening', true], ['edit', true], ['canvas', true], ['color', false]]);
+  setPluginOn('color', true, h);
   setPluginOn('canvas', false, h);
-  assert.deepEqual(workbenchesOn(h), ['screening', 'edit', 'motion']);
+  assert.deepEqual(workbenchesOn(h), ['screening', 'edit', 'color']);
   /* only what was chosen is kept: a default changed in a later version reaches those who did not choose */
-  assert.deepEqual(JSON.parse(readFileSync(join(h, 'prefs.json'), 'utf8')).plugins, { motion: true, canvas: false });
+  assert.deepEqual(JSON.parse(readFileSync(join(h, 'prefs.json'), 'utf8')).plugins, { color: true, canvas: false });
   assert.throws(() => setPluginOn('colour', true, h), /no plugin/);
+});
+
+test('a plugin is got before it is the person\'s, as an editor\'s extensions: one OpenFilm comes with is only turned off', () => {
+  const h = home();
+  const state = (id) => { const p = pluginStates(h).find((x) => x.id === id); return [p.installed, p.on, p.builtIn]; };
+  /* on from the start: it comes with OpenFilm; off from the start: in the store until got */
+  assert.deepEqual(state('edit'), [true, true, true]);
+  assert.deepEqual(state('color'), [false, false, false]);
+  /* got, turned off, it stays the person's; removed, it is back to never got and nothing of it is kept */
+  setPluginOn('color', true, h);
+  setPluginOn('color', false, h);
+  assert.deepEqual(state('color'), [true, false, false]);
+  removePlugin('color', h);
+  assert.deepEqual(state('color'), [false, false, false]);
+  assert.deepEqual(JSON.parse(readFileSync(join(h, 'prefs.json'), 'utf8')).plugins, {});
+  /* one OpenFilm comes with is not removed: turned off, it is still there */
+  assert.throws(() => removePlugin('edit', h), /comes with OpenFilm/);
+  setPluginOn('edit', false, h);
+  assert.deepEqual(state('edit'), [true, false, true]);
+  assert.throws(() => removePlugin('colour', h), /no plugin/);
 });
 
 test('every plugin can be off at once: no workbench is shown then', () => {
@@ -33,54 +53,53 @@ test('every plugin can be off at once: no workbench is shown then', () => {
   assert.deepEqual(workbenchesOn(h), ['canvas']);
   /* a prefs.json written by hand: what is no plugin, or no true or false, is not followed; what else it holds is left */
   mkdirSync(h, { recursive: true });
-  writeFileSync(join(h, 'prefs.json'), JSON.stringify({ plugins: { screening: false, edit: false, canvas: false, motion: 'yes', other: true, media: false }, kept: 1 }));
+  writeFileSync(join(h, 'prefs.json'), JSON.stringify({ plugins: { screening: false, edit: false, canvas: false, color: 'yes', other: true, media: false }, kept: 1 }));
   assert.deepEqual(workbenchesOn(h), []);
-  setPluginOn('motion', true, h);
-  assert.deepEqual(workbenchesOn(h), ['motion']);
+  setPluginOn('color', true, h);
+  assert.deepEqual(workbenchesOn(h), ['color']);
   assert.equal(JSON.parse(readFileSync(join(h, 'prefs.json'), 'utf8')).kept, 1);
 });
 
 test('an agent is given the skills the plugins on bring and require, each after those it builds on', () => {
   const h = home();
   const names = () => offeredSkills(where(h)).given.map((s) => s.name);
-  /* as made: the edit, the canvas and Screening on; the film and the media are theirs to need, motion is off */
+  /* as made: the edit, the canvas and Screening on; the film and the media are theirs to need, color is off */
   assert.deepEqual(names(), ['film', 'media', 'canvas']);
-  assert.equal(pluginsOffLine(h).startsWith('Plugins the person has turned off (Community › Added, in the OpenFilm menu, turns one on): motion ('), true);
+  assert.equal(pluginsOffLine(h).startsWith('Plugins the person has turned off (Community › Added, in the OpenFilm menu, turns one on): color ('), true);
   assert.match(promptSkills(h), /^- `canvas` \(after `media`\):/m);
 
-  setPluginOn('motion', true, h);
-  assert.deepEqual(names(), ['film', 'media', 'canvas', 'motion']);
-  assert.match(String(pluginsOffLine(h)), /turns one on\): stage \(.*; color \(/);
-  /* the skills each in a line, and no more; then, apart, the plugins still off (the stage's and color's, at first) */
+  setPluginOn('color', true, h);
+  assert.deepEqual(names(), ['film', 'media', 'canvas', 'color']);
+  assert.equal(pluginsOffLine(h), null, 'none left off');
+  /* the skills each in a line, and no more */
   const [given] = promptSkills(h).split('\n\n');
-  assert.deepEqual(given.trim().split('\n').map((line) => /^- `([a-z]+)`( \(after [^)]+\))?: \S/.exec(line)?.[1]), ['film', 'media', 'canvas', 'motion'], 'each in a line, and no more');
-  assert.match(promptSkills(h), /^- `motion` \(after `film`\):/m);
+  assert.deepEqual(given.trim().split('\n').map((line) => /^- `([a-z]+)`( \(after [^)]+\))?: \S/.exec(line)?.[1]), ['film', 'media', 'canvas', 'color'], 'each in a line, and no more');
 
   /* the canvas alone: no film to write, so the agent is not told how one is */
-  for (const id of ['edit', 'motion', 'screening']) setPluginOn(id, false, h);
+  for (const id of ['edit', 'color', 'screening']) setPluginOn(id, false, h);
   assert.deepEqual(names(), ['media', 'canvas']);
   assert.doesNotMatch(promptSkills(h), /^- `film`/m);
-  /* Screening alone brings no skill of its own, and needs the film: the agent can change one */
+  /* Screening alone brings no skill of its own, and needs the film and its media, as the edit does: the agent changes the film */
   setPluginOn('canvas', false, h);
   setPluginOn('screening', true, h);
-  assert.deepEqual(names(), ['film']);
-  /* every plugin off: no skill at all; what every agent has is the system prompt */
+  assert.deepEqual(names(), ['film', 'media']);
+  /* every plugin off: no workbench beside the conversation, so the agent makes the film alone: how one is written and its media */
   setPluginOn('screening', false, h);
-  assert.deepEqual(names(), []);
+  assert.deepEqual(names(), ['film', 'media']);
 });
 
 test('a skill of OpenFilm\'s own has no switch of its own: the plugin it goes with turns it, and one that goes with none is there while needed', () => {
   const h = home();
   const names = () => offeredSkills(where(h)).given.map((s) => s.name);
-  setPluginOn('motion', true, h);
+  setPluginOn('color', true, h);
   /* a choice kept before plugins had the one switch is not followed */
   setSkillOn('openfilm/media', false, h);
   setSkillOn('openfilm/canvas', false, h);
   assert.match(promptSkills(h), /^- `media`:/m);
-  assert.deepEqual(names(), ['film', 'media', 'canvas', 'motion']);
+  assert.deepEqual(names(), ['film', 'media', 'canvas', 'color']);
   /* the edit is a plugin like any other, and brings no skill: the film's is there while anything on needs it */
   setPluginOn('edit', false, h);
-  assert.deepEqual(names(), ['film', 'media', 'canvas', 'motion']);
+  assert.deepEqual(names(), ['film', 'media', 'canvas', 'color']);
   assert.throws(() => setPluginOn('media', false, h), /no plugin/);
   assert.match(pluginsOffLine(h), /turns one on\): edit \(the film itself and its timeline/);
 });
@@ -88,20 +107,19 @@ test('a skill of OpenFilm\'s own has no switch of its own: the plugin it goes wi
 test('every plugin made has a switch; what is not made yet is never on, and no agent hears of it', async () => {
   const h = home();
   const state = (id) => pluginStates(h).find((p) => p.id === id);
-  assert.deepEqual(PLUGINS.filter((p) => !p.soon).map((p) => [p.id, p.on]), [['screening', true], ['edit', true], ['canvas', true], ['motion', false], ['stage', false], ['color', false]]);
-  assert.deepEqual(PLUGINS.filter((p) => p.soon).map((p) => p.id), ['sound', 'composite']);
+  /* 0.4.0 has these four; the rest come in later versions (none listed before then) */
+  assert.deepEqual(PLUGINS.map((p) => [p.id, p.on]), [['screening', true], ['edit', true], ['canvas', true], ['color', false]]);
   const { CORE_SKILLS } = await import('./skills.mjs');
   /* the film's and the media's go with none: each is there while a plugin on needs it */
-  assert.deepEqual(CORE_SKILLS.map((skill) => pluginOfSkill(skill)), [undefined, undefined, 'canvas', 'motion']);
-  assert.deepEqual(PLUGINS.filter((p) => !p.soon).map((p) => [p.id, p.skills, p.requires]),
-    [['screening', [], ['film']], ['edit', [], ['film', 'media']], ['canvas', ['canvas'], ['media']], ['motion', ['motion'], ['film']], ['stage', ['stage'], []], ['color', ['color'], ['film']]]);
-  assert.throws(() => setPluginOn('sound', true, h), /not made yet/);
-  /* a choice written by hand for one of them is not followed */
+  assert.deepEqual(CORE_SKILLS.map((skill) => pluginOfSkill(skill)), [undefined, undefined, 'canvas']);
+  assert.deepEqual(PLUGINS.map((p) => [p.id, p.skills, p.requires]),
+    [['screening', [], ['film', 'media']], ['edit', [], ['film', 'media']], ['canvas', ['canvas'], ['media']], ['color', ['color'], ['film']]]);
+  assert.throws(() => setPluginOn('sound', true, h), /no plugin/);
+  /* a choice written by hand for one there is not is not followed */
   mkdirSync(h, { recursive: true });
   writeFileSync(join(h, 'prefs.json'), JSON.stringify({ plugins: { sound: true } }));
-  assert.equal(state('sound').on, false);
-  assert.equal(state('sound').workbench, undefined);
-  assert.doesNotMatch(pluginsOffLine(h), /sound|composite/);
+  assert.equal(state('sound'), undefined);
+  assert.doesNotMatch(String(pluginsOffLine(h)), /sound/);
 });
 
 test('a plugin is a folder with an openfilm.json that has a title; they are listed in their order', () => {
@@ -135,7 +153,7 @@ test('a plugin can ask for a tab of the library: its words and mark, or its own;
   assert.deepEqual(tabs, { later: undefined, none: undefined, notes: { icon: 'film', title: { en: 'Notes', 'zh-CN': '笔记' } }, odd: {}, plain: {} });
 });
 
-test('an official plugin is one folder: each skill it names is in its skills/<name>/, and the canvas\'s and Motion\'s are nowhere else', async () => {
+test('an official plugin is one folder: each skill it names is in its skills/<name>/, and the canvas\'s is nowhere else', async () => {
   const { coreSkills, coreSkillsDir } = await import('./skills.mjs');
   for (const p of PLUGINS) {
     let folders = [];
@@ -147,8 +165,7 @@ test('an official plugin is one folder: each skill it names is in its skills/<na
   assert.deepEqual(readdirSync(coreSkillsDir()).sort(), ['film', 'media']);
   assert.deepEqual(coreSkills().map((s) => [s.name, s.uid, s.folder]), [
     ['film', 'openfilm/film', join(coreSkillsDir(), 'film')], ['media', 'openfilm/media', join(coreSkillsDir(), 'media')],
-    ['canvas', 'openfilm/canvas', pluginSkillDir('canvas', 'canvas')], ['motion', 'openfilm/motion', pluginSkillDir('motion', 'motion')],
-    ['color', 'openfilm/color', pluginSkillDir('color', 'color')], ['stage', 'openfilm/stage', pluginSkillDir('stage', 'stage')],
+    ['canvas', 'openfilm/canvas', pluginSkillDir('canvas', 'canvas')], ['color', 'openfilm/color', pluginSkillDir('color', 'color')],
   ]);
   /* a skill is no plugin of its own: the plugin's element and commands are the plugin's, not its skill's */
   for (const s of coreSkills()) assert.deepEqual([s.element, s.commands, s.scripts], [undefined, undefined, []], s.name);
@@ -175,7 +192,7 @@ test('each plugin of OpenFilm\'s own is in one category, and one made is rated, 
   }
   /* by what it helps make, in the order a film is made */
   assert.deepEqual(Object.fromEntries(PLUGINS.map((p) => [p.id, p.profile?.category])), {
-    screening: 'edit', edit: 'edit', canvas: 'material', motion: 'picture', stage: 'material', color: 'picture', sound: 'sound', composite: 'picture',
+    screening: 'edit', edit: 'edit', canvas: 'material', color: 'picture',
   });
 });
 
@@ -188,11 +205,10 @@ test('a profile reads what is right and leaves out the rest', () => {
   assert.equal(profileOf(null, words), undefined);
 });
 
-test('a plugin declares the blocks its workbench is laid out in, each checked; Motion is laid out as the edit is', () => {
+test('a plugin declares the blocks its workbench is laid out in, each checked', () => {
   const edit = PLUGINS.find((p) => p.id === 'edit');
   assert.deepEqual(edit?.blocks?.map((b) => (typeof b === 'string' ? b : [b.id, b.edge])), [['layers', 'left'], ['viewer', 'center'], ['inspector', 'right'], ['timeline', 'bottom']]);
   assert.deepEqual(PLUGINS.find((p) => p.id === 'canvas')?.blocks?.map((b) => (typeof b === 'string' ? b : b.id)), ['canvas']);
-  assert.equal(PLUGINS.find((p) => p.id === 'motion')?.blocks, 'edit');
   assert.deepEqual(readBlocks([
     { id: 'scopes', edge: 'left', size: 300, title: { en: 'Scopes', xx: 1 }, min: [200, 120], range: [10, 5] },
     { id: 'wheels' }, { id: 'curves', edge: 'center' }, { id: 'scopes' }, { id: 'Bad' }, 'edit:viewer', 'edit:viewer', 'nope', { id: 'tall', size: 1e9, open: false },
@@ -202,4 +218,38 @@ test('a plugin declares the blocks its workbench is laid out in, each checked; M
   ]);
   assert.equal(readBlocks('edit'), 'edit');
   for (const none of [undefined, [], 'Bad Name', [{ id: '' }], 3]) assert.equal(readBlocks(none), undefined);
+});
+
+test('the person puts the workbenches in their own order; what the order leaves out keeps its place after it', () => {
+  const h = home();
+  setPluginOn('color', true, h);
+  assert.deepEqual(workbenchesOn(h), ['screening', 'edit', 'canvas', 'color']);
+  setWorkbenchOrder(['canvas', 'someone/bench', 'edit', 'canvas', 7, '../x'], h);
+  assert.deepEqual(workbenchOrder(h), ['canvas', 'someone/bench', 'edit']);
+  assert.deepEqual(workbenchesOn(h), ['canvas', 'edit', 'screening', 'color']);
+  assert.deepEqual(inPersonsOrder([{ id: 'a' }, { id: 'b' }, { id: 'c' }], ['c', 'x', 'a']).map((p) => p.id), ['c', 'a', 'b']);
+  assert.throws(() => setWorkbenchOrder('edit', h), /list/);
+});
+
+test('a connector is a plugin whose .mcp.json names its MCP servers: a remote one at an https address, or a program', async () => {
+  const { readMcpServers } = await import('./plugins.mjs');
+  const dir = mkdtempSync(join(tmpdir(), 'of-plugin-connector-'));
+  const put = (id, mcp) => { mkdirSync(join(dir, id), { recursive: true }); writeFileSync(join(dir, id, 'openfilm.json'), JSON.stringify({ title: { en: id } })); if (mcp) writeFileSync(join(dir, id, '.mcp.json'), JSON.stringify(mcp)); };
+  put('notes', { mcpServers: {
+    notes: { type: 'http', url: 'https://mcp.example.com/mcp', headers: { 'X-Team': 'a', bad: 3 } },
+    local: { type: 'stdio', command: 'npx', args: ['-y', 'notes-mcp', 7], env: { A: '1' } },
+    plain: { type: 'http', url: 'http://insecure.example.com/mcp' },
+    'Bad Name': { type: 'http', url: 'https://x.example.com' },
+    none: { type: 'sse', url: 'https://old.example.com/sse' },
+  } });
+  put('editor');
+  put('broken', { mcpServers: 'no' });
+  assert.deepEqual(readMcpServers(join(dir, 'notes')), {
+    notes: { type: 'http', url: 'https://mcp.example.com/mcp', headers: { 'X-Team': 'a' } },
+    local: { type: 'stdio', command: 'npx', args: ['-y', 'notes-mcp'], env: { A: '1' } },
+  });
+  const read = Object.fromEntries(readPlugins(dir).map((p) => [p.id, p.mcpServers]));
+  assert.deepEqual(Object.keys(read.notes ?? {}), ['notes', 'local']);
+  assert.equal(read.editor, undefined, 'no .mcp.json: no connector');
+  assert.equal(read.broken, undefined);
 });

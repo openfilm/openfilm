@@ -6,7 +6,7 @@
  * foot of the nav, quietly, where OpenFilm lives: its code, the examples and the website.
  */
 import React from 'react';
-import { Settings2, Keyboard, Sun, Moon, Monitor, Boxes, Bot, SquareTerminal, Loader2, SlidersHorizontal } from 'lucide-react';
+import { Settings2, Keyboard, Sun, Moon, Monitor, Boxes, Bot, SquareTerminal, Loader2, SlidersHorizontal, ChevronLeft } from 'lucide-react';
 import { LANGUAGES, phrasesUnder, useLanguage, useLanguageChoice, useT, type LanguageChoice } from '@/i18n';
 import { studioHost, type HostDeveloper, type HostUpdateState } from '@/lib/host';
 import { showWhatsNew } from '@/lib/whats-new';
@@ -22,6 +22,7 @@ import { ShortcutsSection } from './ShortcutsSection';
 import { SettingsButton, SettingsGroup, SettingsItem, SettingsPage, SettingsSegmented, SettingsSwitch } from './ui';
 import { useThemeMode, type ThemeMode } from './theme';
 import { AccountGroup } from './AccountGroup';
+import { StorageGroup, StorageEntry } from './StorageGroup';
 import { LargeDialog, LargeDialogGroup, LargeDialogPage, LargeDialogPlace, LargeDialogSearch } from '../LargeDialog';
 import { LibraryCategoriesGroup } from './LibraryCategoriesGroup';
 
@@ -73,11 +74,14 @@ export interface SettingsModalProps {
 export function SettingsModal({ open, onClose, section: opening }: SettingsModalProps) {
   const t = useT();
   const language = useLanguage();
-  const [section, setSection] = React.useState<SettingsSection>('general');
+  const [section, setSectionNow] = React.useState<SettingsSection>('general');
+  /* a page under General (Storage), opened from its row; any other section shown leaves it */
+  const [sub, setSub] = React.useState<'storage' | null>(null);
+  const setSection = (id: SettingsSection) => { setSectionNow(id); setSub(null); };
   const [query, setQuery] = React.useState('');
   const search = React.useRef<HTMLInputElement>(null);
 
-  React.useEffect(() => { if (open) { setSection(opening ?? 'general'); setQuery(''); } }, [open, opening]);
+  React.useEffect(() => { if (open) { setSectionNow(opening ?? 'general'); setSub(null); setQuery(''); } }, [open, opening]);
 
   /* the sections a search finds: by their names and by every phrase on them */
   const words = React.useMemo(() => Object.fromEntries((Object.keys(SECTION_WORDS) as SettingsSection[]).map((id) => [
@@ -114,8 +118,19 @@ export function SettingsModal({ open, onClose, section: opening }: SettingsModal
         </>
       )}>
       {/* one column in the middle of whatever room the window gives */}
-      <LargeDialogPage pageKey={showing ?? 'none'} titleId="settings-title" title={showing ? t(`settings.sections.${showing}`) : undefined}>
-        {showing === 'general' && <GeneralSection />}
+      <LargeDialogPage pageKey={`${showing ?? 'none'}${showing === 'general' && sub ? `/${sub}` : ''}`} titleId="settings-title"
+        title={showing === 'general' && sub ? (
+          /* a page under General: the way back to it, then its own name */
+          <span className="flex items-center gap-1.5">
+            <button type="button" onClick={() => setSub(null)} data-settings-back=""
+              className="-ml-2 flex items-center gap-0.5 rounded-[8px] px-2 py-0.5 text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]">
+              <ChevronLeft size={20} aria-hidden />{t('settings.sections.general')}
+            </button>
+            <span className="text-[var(--text-faint)]">/</span>
+            {t('settings.storage.group')}
+          </span>
+        ) : showing ? t(`settings.sections.${showing}`) : undefined}>
+        {showing === 'general' && (sub === 'storage' ? <StorageGroup titled={false} /> : <GeneralSection onStorage={() => setSub('storage')} />)}
         {showing === 'agents' && <AgentsSection />}
         {showing === 'models' && <ModelsSection />}
         {showing === 'developer' && <DeveloperSection />}
@@ -126,7 +141,7 @@ export function SettingsModal({ open, onClose, section: opening }: SettingsModal
   );
 }
 
-function GeneralSection() {
+function GeneralSection({ onStorage }: { onStorage: () => void }) {
   const t = useT();
   const [mode, setMode] = useThemeMode();
   const [language, setLanguage] = useLanguageChoice();
@@ -167,6 +182,10 @@ function GeneralSection() {
             />
           )}
         />
+      </SettingsGroup>
+      {/* what OpenFilm takes on this computer, and where its projects live: one row, its page a click away */}
+      <SettingsGroup title={t('settings.storage.group')}>
+        <StorageEntry onOpen={onStorage} />
       </SettingsGroup>
       {studioHost?.update?.onState ? <AppAboutGroup /> : <AboutGroup />}
     </SettingsPage>

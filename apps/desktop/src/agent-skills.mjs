@@ -39,6 +39,7 @@ import { pathToFileURL } from 'node:url';
 const require = createRequire(import.meta.url);
 /* by its file URL: import() takes no Windows path (`D:\…`) */
 const skillsLib = () => import(pathToFileURL(require.resolve('openfilm/skills')).href);
+const pluginsLib = () => import(pathToFileURL(require.resolve('openfilm/plugins')).href);
 
 /** The agents whose own skills can be hidden in OpenFilm (byok: the app's own agent, Pi). */
 export const FILTERED_AGENTS = Object.freeze(['claude', 'codex', 'opencode', 'qwen', 'openfilm', 'byok']);
@@ -270,11 +271,12 @@ const makerOf = (skill) => {
 /**
  * A skill given to the agent by its full name (agentNames, `owner-name`): a folder of its own whose SKILL.md says that
  * name and, first in its text, its full name and who made it; links to everything else the skill has, so what it names
- * by path is there.
+ * by path is there. Its `npx openfilm` (a skill written for a terminal) is the app's `openfilm`.
  */
+const NPX_OPENFILM = /\bnpx (?:-y )?openfilm(?:@latest)?(?=[\s`'"]|$)/g;
 function renamedSkill(skill, to, link) {
   mkdirSync(to);
-  const text = readFileSync(skill.file, 'utf8');
+  const text = readFileSync(skill.file, 'utf8').replace(NPX_OPENFILM, 'openfilm');
   const head = /^(\uFEFF?---\r?\n)([\s\S]*?)(\r?\n---\r?\n?)/.exec(text);
   const note = `> OpenFilm skill \`${skill.uid}\`, by ${makerOf(skill)}.\n\n`;
   const named = !head ? `---\nname: ${skill.as}\n---\n\n${note}${text}`
@@ -297,7 +299,7 @@ function defaultsFile(dir, name, settings) {
 
 /**
  * What a session of `agent` is started with for its skills and MCP servers: `{ claude?, codexConfig?,
- * additionalDirectories?, env?, args?, piSkills?, buildsOn?, log }` (agents.mjs puts each where it goes; `buildsOn`: what
+ * additionalDirectories?, env?, args?, piSkills?, buildsOn?, connectors?, log }` (agents.mjs puts each where it goes; `buildsOn`: what
  * the skills given build on, for the app's own agent's system prompt). `log`: what the turn log
  * says of it (agents.mjs `opened.skills`). `allowed`, `mcpAllowed`: the person's own let in, by name.
  * @param {string} agent
@@ -306,8 +308,15 @@ function defaultsFile(dir, name, settings) {
  * @param {{ cwd: string, env?: Record<string, string>, dataDir: string, mine?: string, prefsHome?: string, allowed?: string[],
  *   mcpAllowed?: string[], home?: string }} o
  */
-export async function sessionSkills(agent, { cwd, env = {}, dataDir, mine, prefsHome, allowed = [], mcpAllowed = [], home = homedir() }) {
-  const { buildsOnLine, mySkillsDir, offeredSkills } = await skillsLib();
+export async function sessionSkills(agent, o) {
+  const [given, connectors] = await Promise.all([skillsOf(agent, o), pluginsLib().then((p) => p.connectorServers(o.prefsHome), () => [])]);
+  /* the connectors on (openfilm/plugins connectorServers): their MCP servers, given to the session (agents.mjs acpServers) */
+  return connectors.length ? { ...given, connectors, log: { ...given.log, connectors: connectors.map((c) => c.name) } } : given;
+}
+
+/** @param {string} agent @param {Parameters<typeof sessionSkills>[1]} o */
+async function skillsOf(agent, { cwd, env = {}, dataDir, mine, prefsHome, allowed = [], mcpAllowed = [], home = homedir() }) {
+  const { buildsOnLine, mySkillsDir, offeredSkills, pluginsOffLine } = await skillsLib();
   /* OpenFilm's own first (those the plugins on bring and require, a skill after those it builds on); then those
      installed and on. Each by the name the agent is given it by: its own, but a second of a name told apart by whose
      it is */
@@ -357,8 +366,9 @@ export async function sessionSkills(agent, { cwd, env = {}, dataDir, mine, prefs
         log,
       };
     case 'openfilm': case 'byok':
-      /* what builds on what, told in its system prompt: Pi lists the skills itself (agents.mjs ownAgentPrompt) */
-      return { piSkills: { paths: [join(dir, 'skills')], names }, buildsOn: buildsOnLine(openfilm), log };
+      /* what builds on what, and the plugins off, told in its system prompt as `openfilm` tells others: Pi lists the
+         skills itself (agents.mjs ownAgentPrompt) */
+      return { piSkills: { paths: [join(dir, 'skills')], names }, buildsOn: [buildsOnLine(openfilm), pluginsOffLine(prefsHome)].filter(Boolean).join('\n\n'), log };
     default:
       return { log };
   }

@@ -15,14 +15,13 @@ async function wordsOn(platform: string, file: string, name: string): Promise<st
   }
 }
 
-test('the trash is named as the system names it: the Recycle Bin on Windows, the Trash on a Mac', async () => {
-  const zhWin = await wordsOn('Win32', 'zh-CN.ts', 'zhCN');
-  assert.ok(zhWin.includes('移到回收站') && !zhWin.includes('废纸篓'));
-  const zhMac = await wordsOn('MacIntel', 'zh-CN.ts', 'zhCN');
-  assert.ok(zhMac.includes('移到废纸篓') && !zhMac.includes('回收站'));
-  const enWin = await wordsOn('Win32', 'en.ts', 'en');
-  assert.ok(enWin.includes('moves to the Recycle Bin') && !/trash/i.test(enWin));
-  assert.ok((await wordsOn('MacIntel', 'en.ts', 'en')).includes('moves to the Trash'));
-  assert.ok((await wordsOn('Win32', 'ja.ts', 'ja')).includes('ごみ箱'));
-  assert.ok((await wordsOn('Win32', 'es.ts', 'es')).includes('la Papelera de reciclaje'));
+test('OpenFilm’s recycle bin has one name on every system', async () => {
+  for (const platform of ['Win32', 'MacIntel', 'Linux x86_64']) {
+    const zh = await wordsOn(platform, 'zh-CN.ts', 'zhCN');
+    assert.ok(zh.includes('移到回收站') && !zh.includes('废纸篓'), platform);
+    const en = await wordsOn(platform, 'en.ts', 'en');
+    assert.ok(en.includes('moves to the Recycle Bin') && !/trash/i.test(en), platform);
+    assert.ok((await wordsOn(platform, 'ja.ts', 'ja')).includes('ごみ箱'), platform);
+    assert.ok((await wordsOn(platform, 'es.ts', 'es')).includes('la Papelera de reciclaje'), platform);
+  }
 });

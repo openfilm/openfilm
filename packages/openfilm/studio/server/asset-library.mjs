@@ -1,6 +1,6 @@
 // @ts-check
-/** Personal-library organization and last-seen directory records, kept with Saved. File bytes remain under Saved's
- * existing access rules. Collections and stars only change this record; they never move media. */
+/** The library's record, kept with Saved: each file's identity (what a project took from it remembers it by) and the
+ * folders seen last. File bytes remain under Saved's existing access rules. */
 import { randomUUID } from 'node:crypto';
 import { lstat, mkdir, readFile, readlink, stat } from 'node:fs/promises';
 import { dirname, isAbsolute, join } from 'node:path';
@@ -11,12 +11,11 @@ import { HttpError } from './http.mjs';
 import { listProjects, TOOL_DIR } from './projects.mjs';
 import { readProjectFilm } from './film.mjs';
 
-/** @typedef {{ id: string, path: string, starred: boolean, collections: string[] }} AssetMeta */
-/** @typedef {{ id: string, name: string }} Collection */
+/** @typedef {{ id: string, path: string }} AssetMeta */
 /** @typedef {Awaited<ReturnType<typeof listLibrary>>} Listing */
-/** @typedef {{ version: 1, items: Record<string, AssetMeta>, collections: Collection[], snapshot: Listing | null }} Catalog */
+/** @typedef {{ version: 1, items: Record<string, AssetMeta>, snapshot: Listing | null }} Catalog */
 /** @returns {Catalog} */
-const empty = () => ({ version: 1, items: {}, collections: [], snapshot: null });
+const empty = () => ({ version: 1, items: {}, snapshot: null });
 const beneath = (/** @type {string} */ path, /** @type {string} */ parent) =>
   path === parent || path.startsWith(`${parent}/`);
 const catalogFile = async () => join(await libraryRoot(), '.openfilm-library.json');
@@ -29,7 +28,7 @@ async function readCatalog() {
     const info = await stat(file);
     if (memo?.file === file && memo.mtime === info.mtimeMs && memo.size === info.size) return memo.catalog;
     const raw = JSON.parse(await readFile(file, 'utf8'));
-    if (raw.version !== 1 || !raw.items || !Array.isArray(raw.collections)) return empty();
+    if (raw.version !== 1 || !raw.items) return empty();
     memo = { file, mtime: info.mtimeMs, size: info.size, catalog: raw, json: JSON.stringify(raw) };
     return raw;
   } catch { return empty(); }
@@ -71,8 +70,7 @@ const emptyListing = () => ({ files: [], folders: [], made: [], pages: [], links
 
 /** Metadata reads never walk the filesystem. Listing a directory registers its own immediate children. */
 export async function assetCatalog() {
-  const catalog = await readCatalog();
-  return { items: catalog.items, collections: catalog.collections };
+  return { items: (await readCatalog()).items };
 }
 
 /** Register newly created aliases while their source is explicitly being connected, not on later sidebar reads.
@@ -100,7 +98,7 @@ export async function registerLibraryLinks(paths) {
       } else {
         const file = entry.bundle ?? { path: entry.path, kind: kindOf(entry.path), size: entry.info?.size ?? 0, mtime: Math.round((entry.info ?? entry.own).mtimeMs), added: Math.round(entry.own.mtimeMs) };
         snapshot.files = [...snapshot.files.filter(file => file.path !== entry.path), file];
-        catalog.items[entry.path] ??= { id: randomUUID(), path: entry.path, starred: false, collections: [] };
+        catalog.items[entry.path] ??= { id: randomUUID(), path: entry.path };
       }
     }
     catalog.snapshot = snapshot;
@@ -135,7 +133,7 @@ export async function catalogListing(at = '', view = '', query = '') {
     const links = Object.fromEntries(Object.entries(previous.links).filter(([path]) => keep(path)));
     for (const file of live.files) {
       files.set(file.path, file); dirs.delete(file.path);
-      catalog.items[file.path] ??= { id: randomUUID(), path: file.path, starred: false, collections: [] };
+      catalog.items[file.path] ??= { id: randomUUID(), path: file.path };
     }
     for (const folder of live.folders) { dirs.add(folder); files.delete(folder); }
     // Preserve ancestors so a pinned or remembered deep directory can be opened directly.
@@ -151,9 +149,6 @@ export async function catalogListing(at = '', view = '', query = '') {
   const inScope = (/** @type {string} */ path) => query.trim() ? beneath(path, scope) : parentOf(path) === scope;
   let files = snapshot.files.filter(file => {
     if (view === 'computer' || view === 'recent') return true;
-    if (view === 'starred') return catalog.items[file.path]?.starred;
-    if (view === 'offline') return Object.entries(snapshot.links).some(([path, link]) => link.missing && beneath(file.path, path));
-    if (view.startsWith('collection:')) return catalog.items[file.path]?.collections.includes(view.slice(11));
     return inScope(file.path) && (!query.trim() || file.path.split('/').at(-1)?.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()));
   });
   if (view === 'computer' || view === 'recent') files = files.sort((a, b) => b.added - a.added || b.mtime - a.mtime).slice(0, 40);
@@ -165,66 +160,11 @@ export async function catalogListing(at = '', view = '', query = '') {
   return {
     ...snapshot, files, folders: [...dirs], made: [...dirs], links, at: scope, missing: currentMissing,
     scanned: view ? [] : [scope],
-    catalog: { items: Object.fromEntries(files.flatMap(file => catalog.items[file.path] ? [[file.path, catalog.items[file.path]]] : [])), collections: catalog.collections },
+    catalog: { items: Object.fromEntries(files.flatMap(file => catalog.items[file.path] ? [[file.path, catalog.items[file.path]]] : [])) },
   };
 }
 
-/** @param {unknown} asked */
-export async function editAssetCatalog(asked) {
-  const body = /** @type {{ paths?: unknown, starred?: unknown, collectionId?: unknown, add?: unknown }} */ (
-    asked ?? {}
-  );
-  if (
-    !Array.isArray(body.paths) ||
-    !body.paths.length ||
-    body.paths.length > 50_000 ||
-    body.paths.some((path) => typeof path !== 'string')
-  )
-    throw new HttpError(400, 'Choose library files.');
-  if (body.starred !== undefined && typeof body.starred !== 'boolean')
-    throw new HttpError(400, 'starred must be true or false.');
-  return update(async (catalog) => {
-    const collectionId = typeof body.collectionId === 'string' ? body.collectionId : null;
-    if (collectionId && !catalog.collections.some((c) => c.id === collectionId))
-      throw new HttpError(404, 'Collection not found.');
-    const paths = /** @type {string[]} */ (body.paths);
-    if (paths.some((path) => !Object.hasOwn(catalog.items, path))) throw new HttpError(404, 'Asset not found.');
-    for (const path of paths) {
-      const item = catalog.items[path];
-      if (typeof body.starred === 'boolean') item.starred = body.starred;
-      if (collectionId)
-        item.collections =
-          body.add === false
-            ? item.collections.filter((id) => id !== collectionId)
-            : [...new Set([...item.collections, collectionId])];
-    }
-    return { items: Object.fromEntries(paths.map(path => [path, catalog.items[path]])), collections: catalog.collections };
-  });
-}
-
-/** @param {unknown} name */
-export async function createAssetCollection(name) {
-  if (typeof name !== 'string' || !name.trim() || name.trim().length > 80)
-    throw new HttpError(400, 'A collection name, up to 80 characters.');
-  const clean = name.trim();
-  return update(async (catalog) => {
-    if (catalog.collections.some((c) => c.name.toLocaleLowerCase() === clean.toLocaleLowerCase()))
-      throw new HttpError(409, 'That collection already exists.');
-    const collection = { id: randomUUID(), name: clean };
-    catalog.collections.push(collection);
-    return collection;
-  });
-}
-
-/** @param {unknown} id */
-export async function removeAssetCollection(id) {
-  return update(async (catalog) => {
-    catalog.collections = catalog.collections.filter((c) => c.id !== id);
-    for (const item of Object.values(catalog.items)) item.collections = item.collections.filter((cid) => cid !== id);
-  });
-}
-
-/** Preserve organization through the existing library's physical rename/move operation. */
+/** Keep each file's identity through the library's physical rename/move operation. */
 export async function moveAssetCatalog(/** @type {string} */ from, /** @type {string} */ to) {
   await update(async (catalog) => {
     for (const [path, item] of Object.entries(catalog.items))

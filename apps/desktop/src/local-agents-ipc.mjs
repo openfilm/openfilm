@@ -242,7 +242,7 @@ export function registerLocalAgentIpc(ipcMain, { trusted, binDir = null, fallbac
     let session;
     try {
       let options = null;
-      session = new AgentSession({ agent, cwd: probeFolder(), binDir, fallbackDir, env, harness: await harnessFor(agent),
+      session = new AgentSession({ agent, cwd: probeFolder(), binDir, fallbackDir, env, harness: await harnessFor(agent), forget: true,
         onUpdate: (update) => { if (update?.sessionUpdate === 'config_option_update') options = update.configOptions ?? null; } });
       let info = await session.start();
       if (options) info = { ...info, configOptions: options };
@@ -501,7 +501,7 @@ export function registerLocalAgentIpc(ipcMain, { trusted, binDir = null, fallbac
   return {
     /** Quiet sessions for the shared background catalog; never reused by a conversation. */
     openProbeSession: async (agent, onOptions) => new AgentSession({
-      agent, cwd: probeFolder(), binDir, fallbackDir, env, harness: await harnessFor(agent),
+      agent, cwd: probeFolder(), binDir, fallbackDir, env, harness: await harnessFor(agent), forget: true,
       onUpdate: (update) => { if (update?.sessionUpdate === 'config_option_update') onOptions(update.configOptions); },
     }),
     isBusy: () => activePrompts > 0,
@@ -522,7 +522,7 @@ export function registerLocalAgentIpc(ipcMain, { trusted, binDir = null, fallbac
       if (!isChatAgent(agent)) throw new Error(`Unknown agent: ${String(agent)}`);
       let said = '';
       const session = new AgentSession({
-        agent, cwd: probeFolder(), binDir, fallbackDir, env, harness: await harnessFor(agent), answerOnly: true,
+        agent, cwd: probeFolder(), binDir, fallbackDir, env, harness: await harnessFor(agent), answerOnly: true, forget: true,
         onUpdate: (update) => {
           if (update?.sessionUpdate !== 'agent_message_chunk' || update.content?.type !== 'text' || !update.content.text) return;
           said += update.content.text;

@@ -225,9 +225,13 @@ export const es: Words = {
     service: 'Servicio',
   },
   project: {
-    assets: 'Recursos',
+    assets: 'Biblioteca',
     backToChat: 'Volver al chat',
-    addAttachment: 'Añadir archivos',
+    addAttachment: 'Añadir archivos o fotos',
+    addMenu: 'Añadir',
+    addFolder: "Añadir carpeta",
+    addSkillRef: "Habilidades",
+    addReference: "Referencias",
     plugins: 'Comunidad',
     close: 'Cerrar',
     composerPlaceholder: 'Di qué cambiar. Escribe @ para un archivo, una skill, un momento o lo que seleccionaste',
@@ -260,8 +264,8 @@ export const es: Words = {
     unpin: 'Dejar de fijar',
   },
   starter: {
-    more: 'Más skills',
-    examples: 'Empezar desde un ejemplo',
+    community: 'Comunidad: añade plugins, habilidades y material',
+    library: 'Biblioteca: importa medios, busca plantillas, música y efectos',
     title: '¿Qué quieres hacer?',
   },
   turnAsk: {

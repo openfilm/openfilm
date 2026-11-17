@@ -12,7 +12,7 @@
  * `topBar`), after the edit's. The layout's menu (shell/layout) is the page's: it is the first of the buttons on the right.
  */
 import * as React from 'react';
-import { MonitorDown, Puzzle, Scissors, Workflow } from 'lucide-react';
+import { MonitorDown, Puzzle } from 'lucide-react';
 import { api, ApiError, type ProjectFilm } from '@/api';
 import { useT } from '@/i18n';
 import { readCanvasDoc } from '@/lib/canvas';
@@ -34,7 +34,6 @@ import { UpdateButton, WebUpdateButton } from '@/components/UpdateButton';
 import { commandTo, topBarTools } from '@/studio/hub';
 import type { useProjectFrame } from './ProjectFrame';
 import { useWiring } from './frame';
-import { RESOURCE_CENTER_EVENT } from '@/lib/asset-library';
 import { useHistoryWindow } from './history';
 import { LayoutMenu } from './layout';
 
@@ -52,12 +51,7 @@ export function usePageWindows(loaded: ProjectFilm | null) {
   React.useEffect(() => studioHost?.tabs?.onPick(() => setProjectsOpen(true)), []);
   React.useEffect(() => { if (title) studioHost?.tabs?.report({ title }); }, [title]);
   /* the projects window: closed, open on the projects (true), or on the examples (and one example's page) */
-  const [projectsOpen, setProjectsOpen] = React.useState<boolean | { example?: string; assets?: boolean }>(false);
-  React.useEffect(() => {
-    const show = () => setProjectsOpen({ assets: true });
-    window.addEventListener(RESOURCE_CENTER_EVENT, show);
-    return () => window.removeEventListener(RESOURCE_CENTER_EVENT, show);
-  }, []);
+  const [projectsOpen, setProjectsOpen] = React.useState<boolean | { example?: string }>(false);
   const [settingsOpen, setSettingsOpen] = useSettings();
   const [desktopOpen, setDesktopOpen] = React.useState(false);
   return { title, projectsOpen, setProjectsOpen, settingsOpen, setSettingsOpen, desktopOpen, setDesktopOpen };
@@ -75,7 +69,7 @@ function Bar({ frame, loaded }: { frame: ReturnType<typeof useProjectFrame>; loa
   const bar = useWiring('topBar')?.topBar;
   const {
     projectId, setLoaded, toast, reveal, title, setProjectsOpen, setSettingsOpen, desktopOpen, setDesktopOpen,
-    canvasOpen, setCanvasOpen, surface, showWorkbench, benchPlugins, pickBench, canToggleCanvas,
+    canvasOpen, setCanvasOpen, surface, showWorkbench, benchPlugins, pickBench, canToggleCanvas, colorOpen,
     /* the page's panels are being rearranged (shell/layout): the workbench shown stays the one it is meanwhile */
     layoutEditing,
   } = frame;
@@ -144,12 +138,11 @@ function Bar({ frame, loaded }: { frame: ReturnType<typeof useProjectFrame>; loa
         {bar?.tools}
         {/* the buttons plugins put on the bar (openfilm/studio topBar) */}
         <PluginTools />
-        {/* the edit or the canvas, in the panes' place: the one shown, its icon and name, and a click for the other */}
-        {pickBench ? <ModeSwitcher now={surface ?? (canvasOpen ? 'canvas' : 'edit')} plugins={benchPlugins} onPick={showWorkbench} disabled={layoutEditing} />
+        {/* the edit or the canvas, in the panes' place: the one shown, by its name, and a click for the other */}
+        {pickBench ? <ModeSwitcher now={surface ?? (canvasOpen ? 'canvas' : colorOpen ? 'color' : 'edit')} plugins={benchPlugins} onPick={showWorkbench} disabled={layoutEditing} />
           : canToggleCanvas ? <Tooltip label={t(canvasOpen ? 'canvas.toEdit' : 'canvas.toCanvas')} action="work-mode" side="bottom">
           <button type="button" aria-label={t(canvasOpen ? 'canvas.toEdit' : 'canvas.toCanvas')} data-work-mode={canvasOpen ? 'canvas' : 'edit'} disabled={layoutEditing} onClick={() => setCanvasOpen(!canvasOpen)}
-            className="flex h-[26px] shrink-0 items-center gap-1.5 rounded-md bg-[var(--bg-hover)] px-2.5 text-[12.5px] font-medium text-[var(--text)] transition hover:bg-[var(--bg-pressed)]">
-            {canvasOpen ? <Workflow size={14} /> : <Scissors size={14} />}
+            className="flex h-[26px] shrink-0 items-center rounded-md bg-[var(--bg-hover)] px-2.5 text-[12.5px] font-medium text-[var(--text)] transition hover:bg-[var(--bg-pressed)]">
             {t(canvasOpen ? 'canvas.title' : 'canvas.editTitle')}
           </button>
         </Tooltip> : null}
@@ -182,14 +175,12 @@ function PluginTools() {
 /** The projects window and Settings: over the page, before the library's pane. */
 export function PageWindows({ frame }: { frame: ReturnType<typeof useProjectFrame> }) {
   const t = useT();
-  const library = useWiring('library')?.library;
   const { projectId, loaded, failure, toast, projectsOpen, setProjectsOpen, settingsOpen, setSettingsOpen, setCanvasOpen } = frame;
   if (!loaded || failure) return null;
   return (
     <>
       <ProjectsPopover open={projectsOpen !== false} currentProjectId={projectId}
-        {...(typeof projectsOpen === 'object' ? projectsOpen.assets ? { assets: true } : { examples: projectsOpen } : {})}
-        {...(library ? { onInsertAsset: (file: import('@/lib/workspace-resources').WorkspaceResource) => { library.add(file, true); setProjectsOpen(false); } } : {})}
+        {...(typeof projectsOpen === 'object' ? { examples: projectsOpen } : {})}
         onOpen={(id) => { if (!studioHost?.tabs) setProjectsOpen(false); openProject(id); }} onCurrentRemoved={leaveProject} onClose={() => setProjectsOpen(false)}
         onUseCanvas={(example) => {
           setProjectsOpen(false);

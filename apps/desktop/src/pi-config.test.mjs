@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { IMAGE_BUDGET, THINKING, TOO_LARGE, contextLength, contextUsed, effortOption, failureText, fitImages, modelEffort, modelOption, modelsJson, outOfBalance, providerOf, retryNotice, stopReason, toolCall, toolContent } from './pi-config.mjs';
+import { IMAGE_BUDGET, THINKING, TOO_LARGE, agentTools, contextLength, contextUsed, effortOption, failureText, fitImages, modelEffort, modelOption, modelsJson, outOfBalance, providerOf, retryNotice, stopReason, toolCall, toolContent } from './pi-config.mjs';
 
 /** One of the person's own models, as the roster's harness gives it. */
 const own = (id, over = {}) => ({ id, name: id.toUpperCase(), api: 'openai-completions', baseUrl: `https://${id}.test/v1`, keyEnv: `K_${id}`, model: `${id}-model`, levels: ['auto'], effort: 'auto', ...over });
@@ -34,6 +34,11 @@ test("a model's context length is its window in Pi, and a quarter of it its answ
   assert.deepEqual([32_000, 10_000_000, 31_999, 4_000, 10_000_001, 150_000.5, '200000', null].map(contextLength), [32_000, 10_000_000, null, null, null, null, null, null]);
 });
 
+test('the app\'s own agent runs its commands in PowerShell on Windows, which has no bash of its own, and in bash elsewhere', () => {
+  assert.deepEqual(agentTools('win32'), ['read', 'powershell', 'edit', 'write', 'ask']);
+  for (const platform of ['darwin', 'linux']) assert.deepEqual(agentTools(platform), ['read', 'bash', 'edit', 'write', 'ask']);
+});
+
 test("the chat's menu reads the person's models by their names, each picked by its id", () => {
   assert.deepEqual(modelOption([own('a'), own('b')], 'b'), {
     id: 'model', name: 'Model', category: 'model', type: 'select', currentValue: 'b',
@@ -43,6 +48,7 @@ test("the chat's menu reads the person's models by their names, each picked by i
 
 test('what Pi does reads in the chat as Codex\'s did: a command\'s kind and title, a file\'s path, the result\'s text and pictures', () => {
   assert.deepEqual(toolCall('bash', { command: 'openfilm look' }), { kind: 'execute', title: 'openfilm look', rawInput: { command: 'openfilm look' } });
+  assert.deepEqual(toolCall('powershell', { command: 'openfilm look' }), { kind: 'execute', title: 'openfilm look', rawInput: { command: 'openfilm look' } });
   assert.deepEqual(toolCall('read', { path: 'film.html' }), { kind: 'read', title: 'Read film.html', rawInput: { path: 'film.html' } });
   assert.equal(toolCall('write', { path: 'a.html' }).kind, 'edit');
   assert.deepEqual(toolContent({ content: [{ type: 'text', text: 'ok' }, { type: 'image', data: 'AA', mimeType: 'image/png' }] }), [

@@ -68,15 +68,18 @@ const APPEARANCE = [
   'z-index',
   'backface-visibility',
 ];
-function sync(c, state) {
-  if (!state.canvas) return;
+/** A canvas drawn in a video clip's place: its look as the video's (APPEARANCE), shown while the clip is, just after it. */
+export function followVideo(c, canvas) {
   const css = getComputedStyle(c.el);
   for (const key of APPEARANCE) {
     const value = css.getPropertyValue(key);
-    if (state.canvas.style.getPropertyValue(key) !== value) state.canvas.style.setProperty(key, value);
+    if (canvas.style.getPropertyValue(key) !== value) canvas.style.setProperty(key, value);
   }
-  state.canvas.style.visibility = c.shown && c.el.style.visibility === 'visible' ? 'visible' : 'hidden';
-  if (state.canvas.previousElementSibling !== c.el) c.el.after(state.canvas);
+  canvas.style.visibility = c.shown && c.el.style.visibility === 'visible' ? 'visible' : 'hidden';
+  if (canvas.previousElementSibling !== c.el) c.el.after(canvas);
+}
+function sync(c, state) {
+  if (state.canvas) followVideo(c, state.canvas);
 }
 export function videoEffectsOn(c) { const css = getComputedStyle(c.el); return hasVideoEffects(videoEffects((k) => css.getPropertyValue(k))); }
 export function videoEffectsState(c) {

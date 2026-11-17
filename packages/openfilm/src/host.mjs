@@ -74,7 +74,7 @@ const TYPES = {
   '.glsl': 'text/plain', '.txt': 'text/plain',
 };
 
-/** @typedef {(file: string, luts: string[]) => { key: string } | { making: true } | null | Promise<{ key: string } | { making: true } | null>} Grade */
+/** @typedef {(file: string, luts: string[], time: [number, number] | null) => { key: string, from?: number } | { making: true } | null | Promise<{ key: string, from?: number } | { making: true } | null>} Grade */
 
 /**
  * A handler that serves the files of `root` for one request, at `path` (the part of the URL inside the folder): HTML
@@ -87,8 +87,9 @@ const TYPES = {
  * `?of-grade=` its key); not for `?film-facts`, which asks what the file is.
  * `missed(file)` is told of a file in the folder asked for and not there, or refused (a link out of the folder): a
  * render keys its chunks on those too, as the page would draw otherwise once the file is there.
- * `grade(file, luts)` says a video graded by LUT files (SPEC.md `--of-lut`): the key of its graded copy (seekable.mjs
- * gradeKey) once it is made, `making` while it is, null when it is played as it is. Without it, every video is.
+ * `grade(file, luts, time)` says a video graded by LUT files (SPEC.md `--of-lut`), of which a clip plays `time` ([in,
+ * out] source seconds, or null): the key of its graded copy (seekable.mjs gradeKey) and the source second it starts at
+ * (`from`) once it is made, `making` while it is, null when it is played as it is. Without it, every video is.
  * @param {string} root @param {{ inject?: string, timelineInject?: string, headers?: Record<string, string>, swap?: (file: string, query?: URLSearchParams, source?: string) => string | null, missed?: (file: string) => void, grade?: Grade }} [options]
  */
 export function folderFiles(root, { inject = `<script>${HOST_FLAG}</script>`, timelineInject = inject, headers: extraHeaders = {}, swap, missed, grade } = {}) {
@@ -144,16 +145,18 @@ export function folderFiles(root, { inject = `<script>${HOST_FLAG}</script>`, ti
     }
     if (path.endsWith('/__film/graded')) {
       /* a video clip graded by LUTs (SPEC.md --of-lut): where to play it from, its graded copy (`src`, from the film's
-         folder, as `of` is), or null (as it is), `making` while its copy is made; `?of=` the video, `&lut=` each LUT,
-         in order, all from the film's folder */
+         folder, as `of` is, and `from`, the source second its picture starts at), or null (as it is), `making` while
+         its copy is made; `?of=` the video, `&lut=` each LUT, in order, all from the film's folder, `&t=in,out` the
+         part of it the clip plays */
       const base = path.slice(0, -'/__film/graded'.length);
       const of = query?.get('of') ?? '';
       const file = fileInRoot(root, `${base}/${of}`);
       const luts = (query?.getAll('lut') ?? []).map((lut) => fileInRoot(root, `${base}/${lut}`));
-      const answer = (/** @type {{ key: string } | { making: true } | null} */ said) => res.writeHead(200, { ...extraHeaders, 'content-type': 'application/json', 'cache-control': 'no-store' })
-        .end(JSON.stringify(said && 'key' in said ? { src: `${of}?of-grade=${said.key}` } : { src: null, making: Boolean(said?.making) }));
+      const time = (query?.get('t') ?? '').split(',').map(Number);
+      const answer = (/** @type {{ key: string, from?: number } | { making: true } | null} */ said) => res.writeHead(200, { ...extraHeaders, 'content-type': 'application/json', 'cache-control': 'no-store' })
+        .end(JSON.stringify(said && 'key' in said ? { src: `${of}?of-grade=${said.key}`, from: said.from ?? 0 } : { src: null, making: Boolean(said?.making) }));
       if (!grade || !file || !luts.length || luts.some((lut) => !lut)) answer(null);
-      else void Promise.resolve(grade(file, /** @type {string[]} */ (luts))).then(answer, () => answer(null));
+      else void Promise.resolve(grade(file, /** @type {string[]} */ (luts), time.length === 2 && time.every(Number.isFinite) ? time : null)).then(answer, () => answer(null));
       return true;
     }
     let rel;
@@ -562,6 +565,9 @@ const OPEN_TRIES = 3;
 /** How long a frame's picture may take once it is drawn. */
 const CAPTURE_MS = 30_000;
 
+/** How many times a frame's picture is asked for when Chromium has none to give (FilmPage.capture). */
+const CAPTURE_TRIES = 4;
+
 /** A frame that threw inside the page: the film's fault, reported as such rather than as a crash of the tool. */
 export class FrameError extends Error {}
 /** A film whose video frames this browser never showed, drawn again in browsers that show video another way. */
@@ -772,9 +778,20 @@ export class FilmPage {
     const clip = { x: 0, y: 0, width: this.meta.width, height: this.meta.height, scale: this.scale };
     // Fast compression, for a PNG too: the same pixels in a larger file, two to four times sooner (a 4K frame of
     // footage: 240 ms instead of a second).
-    const { data } = await inTime(this.cdp.send('Page.captureScreenshot', { format, quality, clip, fromSurface: true, optimizeForSpeed: true }),
-      CAPTURE_MS, `the picture did not come within ${CAPTURE_MS / 1000} s`);
-    return Buffer.from(data, 'base64');
+    for (let tries = 1; ; tries++) {
+      try {
+        const { data } = await inTime(this.cdp.send('Page.captureScreenshot', { format, quality, clip, fromSurface: true, optimizeForSpeed: true }),
+          CAPTURE_MS, `the picture did not come within ${CAPTURE_MS / 1000} s`);
+        return Buffer.from(data, 'base64');
+      } catch (e) {
+        /* Chromium had no picture to give (its compositor had none ready, or the GPU's readback failed: a busy machine
+           drawing heavy footage): asked again after two more frames. Still none, the render is drawn again in new
+           browsers (browserFailed) */
+        if (tries >= CAPTURE_TRIES || !/Unable to capture screenshot/i.test(e instanceof Error ? e.message : '')) throw e;
+        await inTime(this.page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => r(undefined))))),
+          CAPTURE_MS, `the picture did not come within ${CAPTURE_MS / 1000} s`);
+      }
+    }
   }
 
   /** What the page leaves unpainted from now on: clear (a capture keeps it transparent), else black. */

@@ -4,8 +4,8 @@
  * Type `@` in the sentence to pick something and insert it.
  *
  * The host's providers decide what can be picked (see mention-menu). This plugin
- * recognizes the `@`, places the menu above the composer, and replaces the typed `@xxx`
- * with a pill.
+ * recognizes the `@` (and `/`, for the providers it opens), places the menu above the composer, and replaces the
+ * typed `@xxx` with a pill.
  *
  * Built on Lexical's LexicalTypeaheadMenuPlugin, which handles anchoring, repositioning
  * on scroll, arrow keys and Enter. Only the trigger is our own: Lexical's requires
@@ -37,6 +37,7 @@ import {
   matchMentionTrigger,
   type MentionEntry,
   type MentionProvider,
+  type MentionTriggerChar,
 } from './mention-menu';
 import { chatLayer } from '@/lib/chat-layer';
 
@@ -66,10 +67,16 @@ class MentionMenuOption extends MenuOption {
 export function MentionMenuPlugin({ providers, label, onOpen }: MentionMenuConfig) {
   const [editor] = useLexicalComposerContext();
   const [query, setQuery] = React.useState('');
+  /* which character opened the menu: `@` points at things, `/` names a skill */
+  const [char, setChar] = React.useState<MentionTriggerChar>('@');
+  /* the characters some provider answers to */
+  const chars = React.useMemo(() => [...new Set(providers.map((p) => p.trigger ?? '@'))], [providers]);
+  const charsRef = React.useRef(chars);
+  charsRef.current = chars;
 
   const options = React.useMemo(
-    () => buildMentionMenu(providers, query).map((entry) => new MentionMenuOption(entry)),
-    [providers, query],
+    () => buildMentionMenu(providers, query, char).map((entry) => new MentionMenuOption(entry)),
+    [providers, query, char],
   );
 
   /* These callbacks must be stable. The host re-renders often (20 times a second during
@@ -84,11 +91,12 @@ export function MentionMenuPlugin({ providers, label, onOpen }: MentionMenuConfi
   const handleQueryChange = React.useCallback((value: string | null) => setQuery(value ?? ''), []);
 
   const triggerFn = React.useCallback((text: string): MenuTextMatch | null => {
-    const trigger = matchMentionTrigger(text);
+    const trigger = matchMentionTrigger(text, charsRef.current);
     if (!trigger) return null;
     /* No matches, no menu: an open menu takes the arrow keys, so an empty one would lock
        them while the user probably wants to move the caret. */
-    if (buildMentionMenu(providersRef.current, trigger.query).length === 0) return null;
+    if (buildMentionMenu(providersRef.current, trigger.query, trigger.char).length === 0) return null;
+    setChar(trigger.char);
     return {
       leadOffset: trigger.leadOffset,
       matchingString: trigger.query,

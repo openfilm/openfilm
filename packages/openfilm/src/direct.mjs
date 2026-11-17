@@ -17,7 +17,7 @@ import { execFile, spawn } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { readVtt } from './captions.mjs';
-import { clipFade, clipSpan, kindOf, readFilmFile, srcHref } from './film-doc.mjs';
+import { clipFade, clipSpan, kindOf, lutsOf, readFilmFile, srcHref } from './film-doc.mjs';
 import { hardwareDecoding } from './encoders.mjs';
 import { ffmpegRate } from './rate.mjs';
 import { ffmpeg, fileOf } from './shared.mjs';
@@ -124,12 +124,15 @@ const pageFacts = () => {
 
 /**
  * The film's pictures as its page has them: every clip that is drawn (its track not hidden, itself not disabled), from
- * the top track down, and for a video that is plain (see the head of this file) its file. Null when the page is not a
- * film's, or says something this reading does not know: the film is drawn in the browser.
+ * the top track down, and for a video that is plain (see the head of this file) its file. A video graded by `--of-lut`
+ * and otherwise plain is read from its graded copy (`graded`: the copy of a file graded by those LUTs, of the part
+ * `time` plays, and the source second it starts at; seekable.mjs), which is what its page plays too. Null when the
+ * page is not a film's, or says something this reading does not know: the film is drawn in the browser.
  * @param {{ page: import('playwright-core').Page }} film the film's page, ready @param {string} root the folder served @param {string} entry film.html, from it
+ * @param {(file: string, luts: string[], time: number[] | null) => { file: string, from: number } | null} [graded]
  * @returns {Promise<Layers | null>}
  */
-export async function layersOf(film, root, entry) {
+export async function layersOf(film, root, entry, graded) {
   const text = readFileSync(join(root, decodeURI(entry)), 'utf8');
   const doc = readFilmFile(text).doc;
   const facts = doc && await film.page.evaluate(pageFacts);
@@ -163,15 +166,23 @@ export async function layersOf(film, root, entry) {
       if (el.fit !== 'contain' && el.fit !== 'cover') continue;
       /* its box is the stage */
       if ([el.rect[0], el.rect[1], el.rect[2] - stage.w, el.rect[3] - stage.h].some((d) => Math.abs(d) > 0.5)) continue;
-      /* no fade, and no effect a host makes of its custom properties (a cutout, a retouch, a place in 3D) */
-      if (clipFade(clip) || /--(of|fx)-/.test(`${clip.style ?? ''}`)) continue;
-      const file = layer.file;
-      if (/^[a-z][a-z0-9+.-]*:|^\/\//i.test(clip.src) || !existsSync(file)) continue;
+      /* no fade, and no effect a host makes of its custom properties (a cutout, a retouch, a place in 3D), but a grade:
+         its graded copy is the picture */
+      const luts = lutsOf(clip);
+      if (clipFade(clip) || /--(of|fx)-/.test(`${clip.style ?? ''}`.replace(/--of-lut\s*:[^;]*;?/g, ''))) continue;
+      if (/^[a-z][a-z0-9+.-]*:|^\/\//i.test(clip.src) || !existsSync(layer.file)) continue;
+      let copy = null;
+      if (luts.length) {
+        try { copy = graded?.(layer.file, luts.map((lut) => fileOf(root, entry, srcHref(lut))), clip.time?.length === 2 ? clip.time : null) ?? null; } catch { copy = null; }
+        if (!copy) continue;
+      }
+      const file = copy?.file ?? layer.file;
+      if (copy) layer.file = file;
       if (!files.has(file)) files.set(file, probed(file).then(footageOf));
       const footage = await /** @type {Promise<Footage | null>} */ (files.get(file));
       if (!footage) continue;
       const cut = clipSpan(clip, span.native ?? NaN);
-      Object.assign(layer, { footage: { ...footage }, fit: el.fit, from: cut.from, speed: cut.speed });
+      Object.assign(layer, { footage: { ...footage }, fit: el.fit, from: cut.from - (copy?.from ?? 0), speed: cut.speed });
     }
   }
   /* the caption tracks: when each cue is on, and whether a cue stands still while it is (no animation in the file's

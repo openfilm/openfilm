@@ -55,6 +55,13 @@ const DRAWN: Record<string, Draw> = {
       <path d="M7 12.4h5.2M14.6 12.4H17M7 15.6h2.6M12 15.6h5" {...ink} />
     </>
   ),
+  /* a cover: a picture standing up, its title across its foot */
+  cover: ({ fill, ink }) => (
+    <>
+      <path d="M7.6 3h8.8A2.6 2.6 0 0 1 19 5.6v12.8a2.6 2.6 0 0 1-2.6 2.6H7.6A2.6 2.6 0 0 1 5 18.4V5.6A2.6 2.6 0 0 1 7.6 3Z" {...fill} />
+      <path d="M8.4 14.4h7.2M8.4 17.2h4.4" {...ink} />
+    </>
+  ),
   /* a sticker: its corner peeling */
   sticker: ({ fill, ink }) => (
     <>

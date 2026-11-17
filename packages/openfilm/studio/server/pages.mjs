@@ -151,7 +151,7 @@ export async function startPages({ port, editorOrigin, secret, projects }) {
       return (proxies.on || undecodable(root, rel) ? readyProxy(root, rel, proxies.height) : null) ?? madeCopy(referenceSource(root, file) ?? file, root);
     },
     /* a video graded by LUTs: its graded copy begun in the project's cache, the preview playing it as it is meanwhile */
-    grade: (file, luts) => gradeSoon(file, luts, root),
+    grade: (/** @type {string} */ file, /** @type {string[]} */ luts, /** @type {[number, number] | null} */ time) => gradeSoon(file, luts, root, time),
   });
 
   /** a project's playable copies (UNPLAYABLE), served as its files are */

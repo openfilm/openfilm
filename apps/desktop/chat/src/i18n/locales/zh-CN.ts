@@ -225,9 +225,13 @@ export const zhCN: Words = {
     service: '服务',
   },
   project: {
-    assets: '素材',
+    assets: '素材库',
     backToChat: '返回到对话',
-    addAttachment: '添加文件',
+    addAttachment: '添加文件或图片',
+    addMenu: '添加',
+    addFolder: "添加文件夹",
+    addSkillRef: "技能",
+    addReference: "引用",
     plugins: '社区',
     close: '关闭',
     composerPlaceholder: '说说要改什么。输入 @ 可指向文件、skill、某个时刻或当前选中的内容',
@@ -260,8 +264,8 @@ export const zhCN: Words = {
     unpin: '取消置顶',
   },
   starter: {
-    more: '更多技能',
-    examples: '从示例开始',
+    community: '社区：添加插件、技能和素材',
+    library: '素材库：导入素材，找模板、音乐和特效',
     title: '你想做什么？',
   },
   turnAsk: {

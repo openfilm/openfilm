@@ -7,7 +7,7 @@ import { dirname, join, relative, sep } from 'node:path';
 import { filmHtml } from './film-doc.mjs';
 import { launch, serve } from './host.mjs';
 import { render } from './render.mjs';
-import { copyNeed, firstFrame, gradedCopies, gradeKey, hasAlpha, madeCopy, seekableCopies, slowSeeking } from './seekable.mjs';
+import { copyNeed, firstFrame, gradedCopies, gradeKey, gradeRange, hasAlpha, madeCopy, seekableCopies, slowSeeking } from './seekable.mjs';
 import { hash } from './shared.mjs';
 import { look } from './look.mjs';
 
@@ -404,9 +404,10 @@ test('a video clip graded by a LUT is drawn through a copy graded at its own bit
     ] }] }));
     const done = await render([dir], { out: join(dir, 'out.mp4'), workers: 1, silent: true, onProgress() {} });
     const seek = join(dir, '.film/cache/seek');
-    const copyOf = (/** @type {string} */ file, /** @type {string} */ lut) => join(seek, `${gradeKey(file, [join(dir, 'looks', lut)])}.mp4`);
+    /* each clip plays its file's first half second: its copy is of that part (and a second after it) */
+    const copyOf = (/** @type {string} */ file, /** @type {string} */ lut) => join(seek, `${gradeKey(file, [join(dir, 'looks', lut)], false, gradeRange([0, 0.5]))}.mp4`);
     assert.ok(existsSync(copyOf(flat, 'swap.cube')) && existsSync(copyOf(ramp, 'push.cube')), 'each graded clip has its graded copy');
-    assert.deepEqual(readdirSync(seek).filter((f) => f.endsWith('.mp4')).length, 2, 'and no other: ProRes graded needs no copy as it is');
+    assert.deepEqual(readdirSync(seek).filter((f) => f.endsWith('.mp4')).length, 2, `and no other: ProRes graded needs no copy as it is: ${readdirSync(seek).join(', ')}`);
     const tags = execFileSync('ffprobe', ['-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=pix_fmt,color_space,color_transfer,color_primaries', '-of', 'csv=p=0', copyOf(ramp, 'push.cube')]).toString().trim();
     assert.equal(tags, 'yuv420p,bt709,iec61966-2-1,bt709', '8-bit, BT.709, with sRGB\'s transfer');
     /* the colour, as the LUT says: red and blue swapped */
@@ -427,6 +428,61 @@ test('a video clip graded by a LUT is drawn through a copy graded at its own bit
     assert.ok(eightBitFirst.step >= 6 && eightBitFirst.bands >= 0.3, `graded after 8 bits, the gradient breaks into bands: ${said}`);
     assert.ok(ideal.step <= 2.5 && ideal.bands <= 0.05, `graded at 10 bits, it does not: ${said}`);
     for (const got of [copy, drawn]) assert.ok(got.step <= ideal.step + 3 && got.bands <= 0.1, `nor through the graded copy: ${said}`);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a clip playing a part of a long file gets a graded copy of that part only, and plays it at the right seconds, drawn or read straight', { ...ffmpeg, timeout: 240_000 }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'of-seekable-range-'));
+  try {
+    const w = 320, h = 180;
+    /* red for its first six seconds, blue for the four after */
+    execFileSync('ffmpeg', ['-v', 'error', '-y', '-f', 'lavfi', '-i', `color=c=red:size=${w}x${h}:rate=30:d=6`, '-f', 'lavfi', '-i', `color=c=blue:size=${w}x${h}:rate=30:d=4`,
+      '-filter_complex', '[0][1]concat=n=2:v=1', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-g', '30', join(dir, 'long.mp4')]);
+    cube(join(dir, 'swap.cube'), 17, (r, g, b) => [b, g, r]);
+    /* 5.5 to 6.5 s of it: red then blue, swapped by the grade to blue then red */
+    writeFileSync(join(dir, 'film.html'), filmHtml({ stage: { w, h }, tracks: [{ clips: [{ id: 'part', src: 'long.mp4', at: 0, time: [5.5, 6.5], style: '--of-lut: url(swap.cube)' }] }] }));
+    for (const straight of [true, false]) {
+      const done = await render([dir], { out: join(dir, `out-${straight}.mp4`), workers: 1, silent: true, straight, onProgress() {} });
+      const at = (/** @type {number} */ t) => rgbAt(done.out, t, w, h)(w / 2, h / 2);
+      const [early, late] = [at(0.2), at(0.8)];
+      assert.ok(early[2] > 200 && early[0] < 60, `${straight ? 'read straight' : 'drawn'}: at 5.7 s of the file, red graded blue: ${early}`);
+      assert.ok(late[0] > 200 && late[2] < 60, `${straight ? 'read straight' : 'drawn'}: at 6.3 s of the file, blue graded red: ${late}`);
+    }
+    const key = /** @type {string} */ (gradeKey(join(dir, 'long.mp4'), [join(dir, 'swap.cube')], false, gradeRange([5.5, 6.5])));
+    const copy = join(dir, '.film/cache/seek', `${key}.mp4`);
+    const length = Number(execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', copy]).toString());
+    assert.ok(Math.abs(length - 4) < 0.1, `a copy of 4.5 to 7.5 s rounded out to whole seconds (4 to 8), not of all ten: ${length}`);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a list naming a color transform file is evaluated whole into one LUT: the copy is graded by it, and changing a file makes another', { ...ffmpeg, timeout: 120_000 }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'of-seekable-ctf-'));
+  try {
+    execFileSync('ffmpeg', ['-v', 'error', '-y', '-f', 'lavfi', '-i', 'color=c=0x808080:size=320x180:rate=30', '-t', '1', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', join(dir, 'grey.mp4')]);
+    const ctf = (/** @type {number} */ slope) => `<?xml version="1.0" encoding="UTF-8"?>
+<ProcessList version="2.5" id="t">
+  <ASC_CDL inBitDepth="32f" outBitDepth="32f" style="Fwd"><SOPNode><Slope>${slope} 1 0.5</Slope><Offset>0 0 0</Offset><Power>1 1 1</Power></SOPNode></ASC_CDL>
+</ProcessList>
+`;
+    writeFileSync(join(dir, 'warm.ctf'), ctf(1.25));
+    const file = join(dir, 'grey.mp4'), luts = [join(dir, 'warm.ctf')];
+    const key = /** @type {string} */ (gradeKey(file, luts));
+    const copy = (await gradedCopies([{ file, luts }], dir)).get(key);
+    assert.ok(copy, 'made');
+    const [r, g, b] = rgbAt(/** @type {string} */ (copy), 0.5, 320, 180)(160, 90);
+    /* 128 (mid grey) by the CDL's slopes: red up a quarter, blue halved */
+    assert.ok(Math.abs(r - 160) < 6 && Math.abs(g - 128) < 6 && Math.abs(b - 64) < 6, `graded by the file: ${r},${g},${b}`);
+    assert.ok(readdirSync(join(dir, '.film/cache/seek')).some((f) => /^grade-[0-9a-f]{16}\.cube$/.test(f)), 'the list baked into one LUT');
+    writeFileSync(join(dir, 'warm.ctf'), ctf(1));
+    assert.notEqual(gradeKey(file, luts), key, 'a file changed in place makes another copy');
+    writeFileSync(join(dir, 'bad.ctf'), '<ProcessList><Nonsense/></ProcessList>');
+    const failed = [];
+    await gradedCopies([{ file, luts: [join(dir, 'bad.ctf')] }], dir, { failed: (grade) => failed.push(grade.file) });
+    assert.deepEqual(failed, [file], 'one that can\'t be evaluated is said');
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

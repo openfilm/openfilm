@@ -344,6 +344,12 @@ test('fades are checked: seconds 0 or more, one entry of the clip\'s own, in + o
   assert.match(said(page([[`<video src="a.mp4#t=0,1" overrides='[{"fade":[1,1]}]'></video>`]])), /^film\.html:8: fade \[1, 1\] is longer than the clip/);
 });
 
+test('a page clip keeps a change for every layer the person changed, however many its page has', () => {
+  const many = Array.from({ length: 500 }, (_, i) => ({ at: `#d${i}`, t: [5, 5] }));
+  assert.equal(problems(film({ src: 'birthday.html', overrides: many })), '');
+  assert.match(problems(film({ src: 'birthday.html', overrides: { at: '#d0' } })), /overrides has to be a list\./);
+});
+
 test('fadeGain: a straight ramp in and out, fitted to the clip when longer than it', () => {
   assert.equal(fadeGain(0, 4, [1, 2]), 0);
   assert.equal(fadeGain(0.5, 4, [1, 2]), 0.5);

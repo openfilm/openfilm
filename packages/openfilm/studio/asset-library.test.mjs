@@ -1,355 +1,115 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { copyFile, lstat, mkdir, mkdtemp, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { chromium } from 'playwright-core';
-import { filmHtml, readFilmFile } from '../src/film-doc.mjs';
+import { filmHtml } from '../src/film-doc.mjs';
 import { openProject } from './server/projects.mjs';
 import { startStudio } from './server/server.mjs';
 
-const screenshotDir = process.env.OPENFILM_ASSET_SCREENSHOTS;
-
-test('the shared asset library organizes originals, survives an offline drive, and adds separately from inserting', { timeout: (process.env.OPENFILM_BROWSER_TIMEOUT_MS ? 180_000 : 90_000) }, async () => {
-  const scratch = await mkdtemp(join(tmpdir(), 'of-asset-browser-'));
-  const names = ['HOME', 'SHARED_HOME', 'LIBRARY', 'SAVED', 'EXPORTS', 'TRASH_DIR'];
-  const before = new Map(names.map(name => [`OPENFILM_${name}`, process.env[`OPENFILM_${name}`]]));
+test('the library drawer: the media are folders, the project and the person’s own in one list; other categories fold their groups; deletes go to the recycle bin', { timeout: (process.env.OPENFILM_BROWSER_TIMEOUT_MS ? 180_000 : 90_000) }, async () => {
+  const scratch = await mkdtemp(join(tmpdir(), 'of-library-folders-'));
+  const names = ['HOME', 'SHARED_HOME', 'LIBRARY', 'SAVED', 'EXPORTS'];
+  const before = new Map([...names, 'TRASH_DIR'].map(name => [`OPENFILM_${name}`, process.env[`OPENFILM_${name}`]]));
   for (const name of names) process.env[`OPENFILM_${name}`] = join(scratch, name.toLowerCase());
+  /* deletes go to OpenFilm's own recycle bin, in the shared home above */
+  delete process.env.OPENFILM_TRASH_DIR;
   let studio, browser;
   try {
-    const external = join(scratch, 'Camera');
-    await mkdir(join(external, 'Day 1'), { recursive: true });
     await mkdir(process.env.OPENFILM_SAVED, { recursive: true });
-    await mkdir(process.env.OPENFILM_TRASH_DIR, { recursive: true });
     const svg = (color) => `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360"><rect width="640" height="360" fill="${color}"/></svg>`;
     await writeFile(join(process.env.OPENFILM_SAVED, 'Brand.svg'), svg('#cc7755'));
-    await writeFile(join(process.env.OPENFILM_SAVED, 'Background.svg'), svg('#245954'));
-    await writeFile(join(external, 'Day 1', 'Frame.svg'), svg('#396398'));
+    await mkdir(join(process.env.OPENFILM_SAVED, 'Sounds'));
+    await writeFile(join(process.env.OPENFILM_SAVED, 'Sounds', 'tick.wav'), Buffer.alloc(64));
+    await writeFile(join(process.env.OPENFILM_SAVED, 'Sounds', 'cover.svg'), svg('#245954'));
     const root = join(process.env.OPENFILM_LIBRARY, 'Spring campaign');
     await mkdir(root, { recursive: true });
     await writeFile(join(root, 'film.html'), filmHtml({ stage: { w: 1280, h: 720 }, tracks: [] }));
     const project = await openProject(root);
     studio = await startStudio({ port: 0, openBrowser: () => {} });
-    const api = async (path, method = 'GET', body) => {
-      const r = await fetch(`${studio.origin}/api/${path}`, { method, headers: { 'x-studio-key': studio.key, ...(body ? { 'content-type': 'application/json' } : {}) }, ...(body ? { body: JSON.stringify(body) } : {}) });
-      assert.ok(r.ok, `${path}: ${r.status}`);
-      return r.json();
-    };
     browser = await chromium.launch({ headless: true, args: ['--use-angle=swiftshader'] });
     const page = await browser.newPage({ viewport: { width: 1440, height: 960 }, locale: 'en-US', reducedMotion: 'reduce' });
     page.setDefaultTimeout(Number(process.env.OPENFILM_BROWSER_TIMEOUT_MS) || 8000);
     const errors = [];
-    const transfersRequested = [];
-    page.on('request', request => { if (request.url().endsWith('/api/saved/files/transfer')) transfersRequested.push(request.postDataJSON()); });
     page.on('pageerror', error => errors.push(error.message));
-    await page.addInitScript((external) => {
+    await page.addInitScript(() => {
       if (!localStorage.getItem('openfilm.language')) localStorage.setItem('openfilm.language', 'en');
       localStorage.setItem('openfilm.project.assets', '1');
-      if (!localStorage.getItem('openfilm.resource-center.pins')) localStorage.setItem('openfilm.resource-center.pins', '[]');
-      window.pickFolder = external;
-      window.openfilmHost = { version: 1, folders: { pick: async () => window.pickFolder } };
-    }, external);
+    });
     await page.route('**/api/examples', route => route.fulfill({ json: { examples: [] } }));
-    // The launcher can be opened without the desktop tabs bridge when a project is already open.
     await page.goto(`${studio.origin}/projects/${project.id}?key=${studio.key}`);
-    const open = page.getByRole('button', { name: 'Open resource center', exact: true });
-    await open.click();
-    let library = page.locator('[data-asset-library]');
-    const item = path => library.locator(`[data-media-path="saved/${path}"]`);
-    const sidebar = () => page.locator('[data-resource-sidebar]');
-    const projectShortcut = () => sidebar().locator('[data-fixed-place="projects:"] button');
-    const libraryShortcut = () => sidebar().locator('[data-fixed-place="assets:"] button');
-    const showHome = () => sidebar().getByRole('button', { name: 'Resource center', exact: true }).click();
-    const showStarred = async () => { await showHome(); await library.getByRole('button', { name: 'Starred', exact: true }).click(); };
-    const showOffline = async () => { await showHome(); await library.getByRole('button', { name: 'Offline', exact: true }).click(); };
-    await page.getByRole('tablist', { name: 'Projects', exact: true }).waitFor();
-    assert.equal(await sidebar().getByRole('button', { name: 'Home', exact: true }).count(), 0);
-    /* 项目 and 素材库 are OpenFilm's own places: always first, in that order, never moved or unpinned */
-    assert.deepEqual(await sidebar().locator('[data-fixed-place]').evaluateAll((rows) => rows.map((r) => r.getAttribute('data-fixed-place'))), ['projects:', 'assets:']);
-    for (const key of ['projects:', 'assets:']) {
-      const place = sidebar().locator(`[data-fixed-place="${key}"]`);
-      assert.equal(await place.getAttribute('draggable'), null, 'a fixed place is not dragged');
-      await place.getByRole('button').click({ button: 'right' });
-      assert.equal(await page.getByRole('menuitem', { name: 'Unpin from Quick access', exact: true }).count(), 0, 'built-in roots cannot be unpinned');
-    }
-    await sidebar().evaluate(element => { window.resourceSidebar = element; });
-    const sidebarLabels = await sidebar().innerText();
-    await projectShortcut().click();
-    const projectTabs = page.getByRole('tablist', { name: 'Projects', exact: true });
-    await projectTabs.getByRole('tab', { name: 'Examples', exact: true }).click();
-    assert.equal(await sidebar().getByRole('button', { name: 'Examples', exact: true }).count(), 0, 'examples belong to the project tabs');
-    assert.equal(await sidebar().innerText(), sidebarLabels, 'sidebar contents remain stable in examples');
-    await projectTabs.getByRole('tab', { name: 'Examples', exact: true }).focus();
-    await page.keyboard.press('ArrowLeft');
-    assert.equal(await projectTabs.getByRole('tab', { name: 'Projects', exact: true }).getAttribute('aria-selected'), 'true');
-    await page.keyboard.press('ArrowRight');
-    assert.equal(await projectTabs.getByRole('tab', { name: 'Examples', exact: true }).getAttribute('aria-selected'), 'true');
-    await page.keyboard.press('ArrowLeft');
-    const chooseView = async (label, mode) => {
-      await page.locator('[data-resource-view]:visible').click();
-      await page.getByRole('menuitem', { name: label, exact: true }).click();
-      await page.locator(`[data-resource-view="${mode}"]:visible`).waitFor();
-    };
-    const projectCard = page.locator('[data-browser-item^="project:"]').first();
-    await chooseView('Large icons', 'large');
-    const large = await projectCard.boundingBox();
-    await chooseView('Small icons', 'small');
-    const small = await projectCard.boundingBox();
-    assert.ok(large.width > small.width + 60, 'the icon size changes the actual project cards');
-    await chooseView('Details', 'list');
-    await libraryShortcut().click();
-    await library.locator('[data-layout="list"]').waitFor();
-    assert.equal(await sidebar().evaluate(element => element === window.resourceSidebar), true, 'the same sidebar survives domain and project-tab changes');
-    assert.equal(await sidebar().innerText(), sidebarLabels);
-    await chooseView('Large icons', 'large');
-    const largeAsset = await item('Brand.svg').boundingBox();
-    await chooseView('Small icons', 'small');
-    const smallAsset = await item('Brand.svg').boundingBox();
-    assert.ok(largeAsset.width > smallAsset.width + 60, 'the shared sizes also change asset cards');
-    await chooseView('Medium icons', 'medium');
-    const beforeSelection = await item('Brand.svg').boundingBox();
-    await item('Brand.svg').click();
-    await library.getByText('1 selected', { exact: true }).waitFor();
-    const afterSelection = await item('Brand.svg').boundingBox();
-    assert.ok(Math.abs(beforeSelection.y - afterSelection.y) < 1, 'selecting an asset keeps its grid position stable');
-    const details = () => library.getByRole('complementary', { name: 'Asset details' });
-    await details().getByRole('button', { name: 'Close details', exact: true }).click();
-    await details().waitFor({ state: 'detached' });
-    await library.getByRole('button', { name: 'Asset details', exact: true }).click();
-    await details().getByRole('heading', { name: 'Brand.svg', exact: true }).waitFor();
-    await item('Brand.svg').click();
-    const order = await library.locator('[data-media-path]').evaluateAll(items => items.map(item => item.dataset.mediaPath.split('/').at(-1)));
-    await page.keyboard.press('Home');
-    await details().getByRole('heading', { name: order[0], exact: true }).waitFor();
-    await page.keyboard.press('ArrowRight');
-    await details().getByRole('heading', { name: order[1], exact: true }).waitFor();
-    await page.keyboard.press('Shift+ArrowLeft');
-    await library.getByText('2 selected', { exact: true }).first().waitFor();
-    await item('Brand.svg').click();
-    await page.keyboard.press('Space');
-    await page.getByRole('dialog', { name: 'Preview asset', exact: true }).waitFor();
-    await page.keyboard.press('Escape');
-    await page.getByRole('dialog', { name: 'Preview asset', exact: true }).waitFor({ state: 'detached' });
-    await page.waitForFunction(() => document.activeElement?.getAttribute('data-media-path') === 'saved/Brand.svg');
-    await details().getByRole('button', { name: 'Star', exact: true }).click();
-    await showStarred();
-    await item('Brand.svg').waitFor();
-    assert.equal(await item('Background.svg').count(), 0);
-    await item('Brand.svg').click();
-    /* adding to a collection is about what is picked: its right-click menu, not the bar */
-    await item('Brand.svg').click({ button: 'right' });
-    await page.getByRole('menuitem', { name: 'Add to collection', exact: true }).hover();
-    await page.getByRole('menuitem', { name: 'New collection', exact: true }).click();
-    await page.getByRole('dialog', { name: 'New collection', exact: true }).getByRole('textbox', { name: 'Collection name' }).fill('Brand kit');
-    await page.getByRole('dialog', { name: 'New collection', exact: true }).getByRole('button', { name: 'Create', exact: true }).click();
-    await library.getByRole('navigation', { name: 'Folder path' }).getByRole('button', { name: 'Brand kit', exact: true }).waitFor();
-    await item('Brand.svg').waitFor();
-    await item('Brand.svg').dblclick();
-    const preview = page.getByRole('dialog', { name: 'Preview asset', exact: true });
-    await preview.waitFor();
-    await preview.locator('img').waitFor();
-    await page.keyboard.press('Escape');
-    await preview.waitFor({ state: 'detached' });
-    assert.equal(await library.isVisible(), true, 'Escape closes the preview first');
-    await details().getByRole('button', { name: 'Add to project', exact: true }).and(page.locator(':not([aria-haspopup])')).click();
-    await details().getByRole('button', { name: 'Already in project', exact: true }).waitFor();
-    const clips = async () => readFilmFile(await readFile(join(root, 'film.html'), 'utf8')).doc.tracks.flatMap(t => t.clips);
-    assert.equal((await clips()).length, 0, 'adding leaves the timeline unchanged');
-    assert.equal((await readdir(join(root, 'assets'))).filter(name => name.endsWith('.svg')).length, 1);
-    await item('Brand.svg').click({ button: 'right' });
-    await page.getByRole('menuitem', { name: 'Remove from collection', exact: true }).click();
-    await item('Brand.svg').waitFor({ state: 'detached' });
-    await library.getByText('No assets in this collection', { exact: true }).waitFor();
-    assert.ok(await readFile(join(process.env.OPENFILM_SAVED, 'Brand.svg'), 'utf8'));
-    await libraryShortcut().click();
-    await item('Brand.svg').waitFor();
-    assert.equal(await library.locator('[data-explorer-toolbar]').count(), 1);
-    await showHome();
-    const unopenedRequests = [];
-    const noteUnopened = request => { const url = new URL(request.url()); if (url.pathname === '/api/saved/files' && url.searchParams.get('at')?.startsWith('saved/Camera') || url.pathname.startsWith('/api/saved/media') && url.searchParams.get('path')?.startsWith('saved/Camera/')) unopenedRequests.push(request.url()); };
-    page.on('request', noteUnopened);
-    await library.locator('[data-explorer-toolbar]').getByRole('button', { name: 'Connect folder…', exact: true }).click();
-    await sidebar().getByRole('button', { name: 'Camera', exact: true }).waitFor();
-    assert.equal(unopenedRequests.length, 0, 'connecting a folder does not enumerate or probe its contents');
-    page.off('request', noteUnopened);
-    await sidebar().getByRole('button', { name: 'Camera', exact: true }).click();
-    await library.locator('[data-media-key="saved/Camera/Day 1"]').dblclick();
-    await item('Camera/Day 1/Frame.svg').waitFor();
-    await page.keyboard.press('Control+f');
-    const folderSearch = library.getByRole('textbox', { name: 'Search media', exact: true });
-    await folderSearch.fill('Brand');
-    assert.equal(await item('Brand.svg').count(), 0, 'search in a folder does not return files above that folder');
-    await folderSearch.fill('Frame');
-    await item('Camera/Day 1/Frame.svg').waitFor();
-    await folderSearch.fill('');
-    await library.getByRole('button', { name: 'Back', exact: true }).click();
-    await library.locator('[data-media-key="saved/Camera/Day 1"]').waitFor();
-    await library.getByRole('button', { name: 'Forward', exact: true }).click();
-    await item('Camera/Day 1/Frame.svg').waitFor();
-    await library.getByRole('button', { name: 'Up one level', exact: true }).click();
-    await library.locator('[data-media-key="saved/Camera/Day 1"]').click({ button: 'right' });
-    await page.getByRole('menuitem', { name: 'Pin to Quick access', exact: true }).click();
-    const dayPin = () => sidebar().locator('[data-quick-pin="assets:Camera/Day 1"] button');
-    await dayPin().click();
-    await item('Camera/Day 1/Frame.svg').waitFor();
-    await page.reload();
-    await open.click();
-    await dayPin().click();
-    await item('Camera/Day 1/Frame.svg').waitFor();
-    await dayPin().click({ button: 'right' });
-    await page.getByRole('menuitem', { name: 'Unpin from Quick access', exact: true }).click();
-    assert.equal(await dayPin().count(), 0);
-    assert.ok(await readFile(join(external, 'Day 1', 'Frame.svg'), 'utf8'), 'unpinning preserves the original');
-    assert.equal(await library.getByRole('button', { name: 'Import media', exact: true }).isDisabled(), true, 'connected folders offer browsing without writes to the originals');
-    // Copy/paste and links use known source paths; the NAS originals remain untouched.
-    /* the resource center lists only places connected from outside; a new folder is made in the library itself */
-    await libraryShortcut().click();
-    await library.locator('[data-explorer-toolbar]').getByRole('button', { name: 'New folder', exact: true }).click();
-    const newFolder = library.getByRole('textbox').and(page.locator(':focus'));
-    await newFolder.fill('Transfers');
+    const drawer = page.locator('[data-studio-library]');
+    const line = key => drawer.locator(`[data-rail-line="${key}"]`);
+    const lines = () => drawer.locator('[data-rail-line]').evaluateAll(rows => rows.map(r => r.getAttribute('data-rail-line')));
+    const LIB = 'Asset library';
+
+    /* the first time: what lay loose at the library's top moves into its first folder; the folders are lines */
+    await line(`saved/${LIB}`).waitFor();
+    assert.deepEqual(await lines(), ['project', `saved/${LIB}`, 'saved/Sounds']);
+    assert.ok(await readFile(join(process.env.OPENFILM_SAVED, LIB, 'Brand.svg'), 'utf8'));
+    await line('saved/Sounds').click();
+    await drawer.locator('[data-media-path="saved/Sounds/cover.svg"]').waitFor();
+
+    /* the media's side bar is the folders; folders and packs keep one order the person drags */
+    await line('saved/Sounds').dragTo(line(`saved/${LIB}`));
+    for (let i = 0; i < 50 && (await lines()).indexOf('saved/Sounds') > (await lines()).indexOf(`saved/${LIB}`); i++) await page.waitForTimeout(100);
+    assert.ok((await lines()).indexOf('saved/Sounds') < (await lines()).indexOf(`saved/${LIB}`), 'the folder moved up');
+    const kept = JSON.parse(await readFile(join(process.env.OPENFILM_SAVED, '.openfilm-shelf.json'), 'utf8'));
+    assert.ok(kept.shelf.indexOf('saved/Sounds') < kept.shelf.indexOf(`saved/${LIB}`), 'the order is kept in the library folder');
+
+    /* any other category's side bar is namespaces: OpenFilm's opens to its packs; no folders */
+    await drawer.getByRole('button', { name: 'Music', exact: true }).click();
+    const section = drawer.locator('[data-rail-section="openfilm"] > button[aria-expanded]');
+    await section.waitFor();
+    assert.equal(await line('saved/Sounds').count(), 0, 'no folders outside the media');
+    assert.equal(await line('project').count(), 0, 'no project line outside the media');
+    const packs = await drawer.locator('[data-rail-kind="pack"]').evaluateAll(rows => rows.map(r => r.getAttribute('data-rail-line')));
+    assert.ok(packs.length > 0, 'the music category has packs');
+    await section.click();
+    await line(packs[0]).waitFor({ state: 'detached' });
+    await section.click();
+    await line(packs[0]).waitFor();
+    /* a pack taken out of the library, then put back from "+ Add" */
+    await line(packs[0]).click({ button: 'right' });
+    await page.getByRole('menuitem', { name: 'Remove from the library', exact: true }).click();
+    await line(packs[0]).waitFor({ state: 'detached' });
+    await drawer.locator('[data-rail-add]').click();
+    assert.equal(await page.getByRole('menuitem', { name: 'Get from the Community', exact: true }).count(), 1, 'more from the Community, one of "+ Add"');
+    await page.getByRole('menuitem', { name: 'Removed packs', exact: true }).hover();
+    await page.getByRole('menuitem').filter({ hasText: /./ }).last().click();
+    await line(packs[0]).waitFor();
+
+    /* "+": a new folder, named in place */
+    await drawer.getByRole('button', { name: 'Media', exact: true }).click();
+    await drawer.locator('[data-rail-add]').click();
+    await page.getByRole('menuitem', { name: 'New folder', exact: true }).click();
+    await drawer.getByRole('textbox', { name: 'Rename', exact: true }).fill('Logos');
     await page.keyboard.press('Enter');
-    await library.locator('[data-media-key="saved/Transfers"]').waitFor();
-    await page.reload(); await open.click();
-    await sidebar().getByRole('button', { name: 'Camera', exact: true }).click();
-    await library.locator('[data-media-key="saved/Camera/Day 1"]').dblclick();
-    await item('Camera/Day 1/Frame.svg').click();
-    await page.keyboard.press('Control+c');
-    await libraryShortcut().click();
-    await library.locator('[data-media-key="saved/Transfers"]').dblclick();
-    await page.keyboard.press('Control+v');
-    await item('Transfers/Frame.svg').waitFor();
-    assert.equal((await lstat(join(process.env.OPENFILM_SAVED, 'Transfers/Frame.svg'))).isSymbolicLink(), false);
-    await library.locator('[data-explorer-toolbar]').getByRole('button', { name: 'More', exact: true }).click();
-    await page.getByRole('menuitem', { name: 'Paste link', exact: true }).click();
-    await page.waitForFunction(() => document.querySelectorAll('[data-media-path^="saved/Transfers/"]').length === 2);
-    const transfers = await readdir(join(process.env.OPENFILM_SAVED, 'Transfers'));
-    const transferStats = await Promise.all(transfers.map(name => lstat(join(process.env.OPENFILM_SAVED, 'Transfers', name))));
-    assert.equal(transferStats.filter(info => info.isSymbolicLink()).length, 1);
-    const linkedName = transfers[transferStats.findIndex(info => info.isSymbolicLink())];
-    await item('Transfers/Frame.svg').click();
-    await page.keyboard.press('Control+x');
-    assert.equal(await item('Transfers/Frame.svg').getAttribute('data-cut'), 'true');
-    await libraryShortcut().click(); await page.keyboard.press('Control+v');
-    await item('Frame.svg').waitFor();
-    assert.equal(await item('Transfers/Frame.svg').count(), 0);
-    await item('Frame.svg').click(); await page.keyboard.press('Control+x');
-    await library.locator('[data-media-key="saved/Transfers"]').dblclick();
-    await page.keyboard.press('Control+v'); await item('Transfers/Frame.svg').waitFor();
-    await sidebar().getByRole('button', { name: 'Camera', exact: true }).click();
-    await library.locator('[data-media-key="saved/Camera/Day 1"]').dblclick();
-    await item('Camera/Day 1/Frame.svg').click({ button: 'right' });
-    await page.getByRole('menuitem', { name: 'Copy to…', exact: true }).click();
-    const destination = page.getByRole('dialog', { name: 'Copy to…', exact: true });
-    await destination.getByRole('button', { name: 'Transfers', exact: true }).click();
-    await destination.getByRole('button', { name: 'Copy here', exact: true }).click();
-    await page.waitForFunction(() => [...document.querySelectorAll('[role=status]')].some(el => el.textContent.includes('1 items copied to Transfers.')));
-    const afterCopies = (await readdir(join(process.env.OPENFILM_SAVED, 'Transfers'))).filter(name => !name.startsWith('.'));
-    assert.equal(afterCopies.length, 3, JSON.stringify({ afterCopies, transfersRequested }));
-    assert.equal(transfersRequested.length, 3, 'each copy/link action runs once; cuts use a move');
-    assert.ok(await readFile(join(external, 'Day 1', 'Frame.svg'), 'utf8'));
-    if (screenshotDir) { await mkdir(screenshotDir, { recursive: true }); await page.screenshot({ path: join(screenshotDir, 'source-connected-en.png') }); }
-    await libraryShortcut().click();
-    await library.locator('[data-media-key="saved/Transfers"]').dblclick();
-    await item(`Transfers/${linkedName}`).click({ button: 'right' });
-    await page.getByRole('menuitem', { name: 'Remove link', exact: true }).click();
-    await page.getByRole('dialog', { name: 'Remove link', exact: true }).getByRole('button', { name: 'Remove link', exact: true }).click();
-    await item(`Transfers/${linkedName}`).waitFor({ state: 'detached' });
-    assert.ok(await readFile(join(external, 'Day 1', 'Frame.svg'), 'utf8'), 'removing a library link preserves the NAS original');
-    await api(`saved/files?path=${encodeURIComponent('saved/Transfers')}`, 'DELETE');
-    const moved = join(scratch, 'Camera moved');
-    await rename(external, moved);
-    await page.reload();
-    await open.click();
-    await sidebar().getByRole('button', { name: 'Camera', exact: true }).click();
-    await library.getByText('Location offline', { exact: true }).first().waitFor();
-    await showOffline();
-    await item('Camera/Day 1/Frame.svg').click();
-    assert.equal(await details().getByRole('button', { name: 'Add to project', exact: true }).and(page.locator(':not([aria-haspopup])')).isDisabled(), true);
-    await page.evaluate(moved => { window.pickFolder = moved; }, moved);
-    await sidebar().getByRole('button', { name: 'Camera', exact: true }).click({ button: 'right' });
-    await page.getByRole('menuitem', { name: 'Reconnect folder…', exact: true }).click();
-    await sidebar().getByRole('button', { name: 'Camera', exact: true }).click();
-    await library.locator('[data-media-key="saved/Camera/Day 1"]').dblclick();
-    await item('Camera/Day 1/Frame.svg').waitFor();
-    await sidebar().getByRole('button', { name: 'Camera', exact: true }).click({ button: 'right' });
-    await page.getByRole('menuitem', { name: 'Disconnect folder', exact: true }).click();
-    await page.getByRole('dialog', { name: 'Disconnect folder', exact: true }).getByRole('button', { name: 'Disconnect folder', exact: true }).click();
-    await sidebar().getByRole('button', { name: 'Camera', exact: true }).waitFor({ state: 'detached' });
-    assert.ok(await readFile(join(moved, 'Day 1', 'Frame.svg'), 'utf8'));
-    await showStarred();
-    await item('Brand.svg').click();
-    await details().getByRole('button', { name: 'Insert into timeline', exact: true }).click();
-    await library.waitFor({ state: 'detached' });
-    for (let i = 0; i < 50 && !(await clips()).length; i++) await page.waitForTimeout(100);
-    assert.equal((await clips()).length, 1, 'inserting explicitly adds a timeline clip');
-    assert.equal((await readdir(join(root, 'assets'))).filter(name => name.endsWith('.svg')).length, 1, 'inserting reuses the project copy');
-    await open.click();
-    await libraryShortcut().click();
-    await item('Brand.svg').click();
-    await page.keyboard.press('Control+a');
-    await details().getByRole('button', { name: 'Add 2 assets to project', exact: true }).click();
-    for (let i = 0; i < 50 && (await readdir(join(root, 'assets'))).filter(name => name.endsWith('.svg')).length < 2; i++) await page.waitForTimeout(100);
-    assert.equal((await readdir(join(root, 'assets'))).filter(name => name.endsWith('.svg')).length, 2, 'batch addition prepares every selected file');
-    assert.equal((await clips()).length, 1, 'batch addition leaves the existing timeline unchanged');
-    // A larger library renders in batches; search still includes files beyond the mounted cards.
-    await library.getByRole('button', { name: 'Close', exact: true }).first().click();
-    await Promise.all(Array.from({ length: 420 }, (_, index) => writeFile(join(process.env.OPENFILM_SAVED, `Note ${String(index).padStart(3, '0')}.txt`), 'Reference notes')));
-    await open.click();
-    await libraryShortcut().click();
-    await item('Brand.svg').waitFor();
-    assert.ok(await library.locator('[data-media-path]').count() <= 160, 'initial DOM is bounded');
-    const search = library.getByRole('textbox').first();
-    await search.fill('Note 419');
-    await item('Note 419.txt').waitFor();
-    assert.equal(await library.locator('[data-media-path]').count(), 1, 'search reaches unmounted cards');
-    await search.fill('');
-    if (screenshotDir) {
-      await mkdir(screenshotDir, { recursive: true });
-      await Promise.all(Array.from({ length: 420 }, (_, index) => rm(join(process.env.OPENFILM_SAVED, `Note ${String(index).padStart(3, '0')}.txt`))));
-      for (const [preset, name] of [
-        ['productSet', '产品陈列'], ['lightGolden', '暖色光线'], ['panorama', '场景参考'],
-        ['background', '背景素材'], ['outfit', '人物造型'], ['lightWindow', '窗边人像'],
-        ['concept', '概念草图'], ['faces', '人物参考'],
-      ]) await copyFile(new URL(`./ui/src/components/canvas/presets/${preset}.webp`, import.meta.url), join(process.env.OPENFILM_SAVED, `${name}.webp`));
-      const camera = join(scratch, '摄影素材');
-      await rename(moved, camera);
-      await api('saved/files/bring', 'POST', { into: 'saved', paths: [camera], mode: 'link' });
-      const catalog = await api('saved/catalog');
-      await api('saved/catalog', 'PATCH', { paths: ['saved/产品陈列.webp', 'saved/Brand.svg'], collectionId: catalog.collections[0].id, starred: true });
-      await page.evaluate(() => localStorage.setItem('openfilm.language', 'zh-CN'));
-      await page.reload();
-      await page.getByRole('button', { name: '打开资源中心', exact: true }).click();
-      await item('产品陈列.webp').click();
-      await library.getByRole('heading', { name: '产品陈列.webp', exact: true }).waitFor();
-      await page.waitForFunction(() => { const images = [...document.querySelectorAll('[data-asset-library] img')]; return images.length >= 10 && images.every(image => image.complete && image.naturalWidth > 0); });
-      await page.screenshot({ path: join(screenshotDir, 'asset-library-zh.png') });
-      await page.evaluate(() => localStorage.setItem('openfilm.theme', 'light'));
-      await page.reload();
-      await page.getByRole('button', { name: '打开资源中心', exact: true }).click();
-      await item('产品陈列.webp').click();
-      await page.waitForFunction(() => { const images = [...document.querySelectorAll('[data-asset-library] img')]; return images.length >= 10 && images.every(image => image.complete && image.naturalWidth > 0); });
-      await page.screenshot({ path: join(screenshotDir, 'asset-library-light-zh.png') });
-      await sidebar().getByRole('button', { name: '此电脑', exact: true }).click();
-      await library.locator('[data-resource-home]').waitFor();
-      await page.screenshot({ path: join(screenshotDir, 'asset-home-light-zh.png') });
-      await sidebar().getByRole('button', { name: '此电脑', exact: true }).click();
-      await page.screenshot({ path: join(screenshotDir, 'asset-computer-light-zh.png') });
-      await libraryShortcut().click();
-      await page.setViewportSize({ width: 700, height: 780 });
-      const bar = library.locator('[data-explorer-toolbar]');
-      assert.equal(await bar.evaluate(el => el.scrollWidth > el.clientWidth), false, 'the toolbar stays on one row within a narrow window');
-      await page.screenshot({ path: join(screenshotDir, 'asset-library-narrow-zh.png') });
-      assert.equal(await library.evaluate(el => el.scrollWidth > el.clientWidth), false, 'the browser fits a narrow window');
-    }
+    await line('saved/Logos').waitFor();
+    /* a file of a folder dropped on another folder's line moves there */
+    await line(`saved/${LIB}`).click();
+    await drawer.locator(`[data-media-path="saved/${LIB}/Brand.svg"]`).dragTo(line('saved/Logos'));
+    await line('saved/Logos').click();
+    await drawer.locator('[data-media-path="saved/Logos/Brand.svg"]').waitFor();
+
+    /* a folder deleted goes to OpenFilm's recycle bin, and comes back from it */
+    await line('saved/Logos').click({ button: 'right' });
+    await page.getByRole('menuitem', { name: 'Delete', exact: true }).click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Delete', exact: true }).click();
+    await line('saved/Logos').waitFor({ state: 'detached' });
+    assert.equal((await readdir(join(process.env.OPENFILM_SHARED_HOME, 'recycle'))).length, 1);
+    await page.getByRole('button', { name: 'Switch project', exact: true }).click();
+    await page.getByRole('button', { name: /All projects/ }).click();
+    await page.locator('[data-open-recycle-bin]').click();
+    const bin = page.locator('[data-recycle-bin]');
+    await bin.locator('[data-recycled="Logos"]').click({ button: 'right' });
+    await page.getByRole('menuitem', { name: 'Restore', exact: true }).click();
+    await bin.getByText('The Recycle Bin is empty', { exact: true }).waitFor();
+    assert.ok(await readFile(join(process.env.OPENFILM_SAVED, 'Logos', 'Brand.svg'), 'utf8'), 'restored where it was');
+    await bin.getByRole('button', { name: 'Back', exact: true }).click();
+    await page.locator('[data-open-recycle-bin]').waitFor();
     assert.deepEqual(errors, []);
-    assert.equal((await api('saved/catalog')).collections[0].name, 'Brand kit');
-  } catch (error) {
-    if (screenshotDir && browser) {
-      await mkdir(screenshotDir, { recursive: true });
-      const current = browser.contexts()[0]?.pages()[0];
-      if (current) { await current.screenshot({ path: join(screenshotDir, 'asset-failure.png') }); await writeFile(join(screenshotDir, 'asset-failure.txt'), await current.locator('body').innerText()); }
-    }
-    throw error;
   } finally {
     await browser?.close();
     await studio?.close();

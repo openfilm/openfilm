@@ -15,6 +15,7 @@ import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { nodeProxyVariables } from './environment.mjs';
 
 const ENTRY = fileURLToPath(new URL('./studio-process.mjs', import.meta.url));
 const QUIT_WAIT_MS = 10_000;
@@ -92,7 +93,7 @@ function fork({ port, env, secrets = null, onOpen, onBrowser, onAsk, onRelease, 
   return new Promise((resolve, reject) => {
     const child = utilityProcess.fork(ENTRY, [], {
       serviceName: 'OpenFilm Studio',
-      env: { ...env, OPENFILM_STUDIO_PORT: String(port) },
+      env: { ...env, ...nodeProxyVariables(env), OPENFILM_STUDIO_PORT: String(port) },
       stdio: 'pipe',
     });
     child.stdout?.on('data', (d) => log(String(d)));

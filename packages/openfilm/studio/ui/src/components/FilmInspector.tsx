@@ -57,7 +57,7 @@ import type { Motion } from '../../../../src/clip-motion.mjs';
 import { KeyframesSection } from './KeyframesSection';
 import { staticTransform, transformEdits } from '@/lib/clip-transform';
 import {
-  AdjustSection, AdvancedSection, AppearanceSection, CropSection, EffectsSection, FillSection, FilterSection, MaskSection, NEUTRAL, StrokeSection,
+  AdjustSection, AdvancedSection, AppearanceSection, CropSection, EffectsSection, FillSection, FilterSection, MaskSection, NEUTRAL, StrokeSection, cssColorTouched,
   TypographySection, camelOf,
   isNeutral, kebabOf, rawDeclarations,
 } from './inspector-look';
@@ -69,6 +69,8 @@ import type { FoundKind } from '@/lib/transitions';
 import { PictureInput, PropertiesSection, type PropsHost } from './PropertiesSection';
 import { TextInspector } from './TextInspector';
 import { isFilterLayer, isTextClip } from '@/lib/library';
+import type { ColorHost } from '@/lib/color-files';
+import { ClipColorSection } from './inspector-color';
 import { FilterLayerSection } from './FilterLayerSection';
 import { propOf, withProp, withoutProp, type ComponentProp } from '@/lib/component-props';
 import { layerTarget } from '@/lib/stage-layers';
@@ -182,6 +184,7 @@ export const FilmInspector = React.memo(function FilmInspector({
   motionSection,
   clipLookOf,
   onPreviewLook,
+  colorHost,
   stage,
   onStartCrop,
   onEditMask,
@@ -266,6 +269,8 @@ export const FilmInspector = React.memo(function FilmInspector({
   clipLookOf?: (clipLoc: string) => { css: string; look: ClipLook | null; cls?: string } | null;
   /** Shows a clip in CSS not kept yet while a look value is dragged (null: its own again). */
   onPreviewLook?: (clipLoc: string, css: string | null) => void;
+  /** A video clip's color, its files read, shown and written (lib/color-files): its color sections are given it. */
+  colorHost?: ColorHost;
   /** The film's stage (for a clip's place when it is not on screen). */
   stage?: { w: number; h: number } | null;
   /** Crop & fill's Crop button: the picture's crop on the picture itself. */
@@ -359,6 +364,7 @@ export const FilmInspector = React.memo(function FilmInspector({
             {...(motionSection ? { motionSection } : {})}
             {...(clipLookOf ? { clipLookOf } : {})}
             {...(onPreviewLook ? { onPreviewLook } : {})}
+            {...(colorHost ? { colorHost } : {})}
             {...(onStartCrop ? { onStartCrop } : {})}
             {...(onEditMask ? { onEditMask } : {})}
             {...(maskAsk && maskAsk.clipLoc === clip.loc ? { maskAsk } : {})}
@@ -379,6 +385,7 @@ export const FilmInspector = React.memo(function FilmInspector({
             {...(fades ? { fades } : {})}
             {...(clipLookOf ? { clipLookOf } : {})}
             {...(onPreviewLook ? { onPreviewLook } : {})}
+            {...(colorHost ? { colorHost } : {})}
             {...(templateSection ? { templateSection } : {})}
           />
         ) : transition ? (
@@ -1406,8 +1413,9 @@ function clipsLook(
  */
 function ClipPanel({
   block, onMain, speedFloor, geometry, stage, onEdit, onPreviewClip, onAnimate, pageChangesOf, replaceEntries, templateSection, motionSection, clipLookOf, onPreviewLook, onStartCrop, onEditMask, maskAsk,
-  onMaskAsked, fades, propsHostOf, motion, fps = 30, visionStatus, visionPreview,
+  onMaskAsked, fades, propsHostOf, motion, fps = 30, visionStatus, visionPreview, colorHost,
 }: {
+  colorHost?: ColorHost;
   visionStatus?: VisionStatusReader;
   visionPreview?: PreviewRenderControl;
   fades?: ReadonlyMap<string, FadeMs>;
@@ -1560,8 +1568,20 @@ function ClipPanel({
               {block.kind === 'video' && block.clipId ? <VideoEffectsSection look={look} clipId={block.clipId} readStatus={visionStatus} previewControl={visionPreview} /> : null}
               <StrokeSection look={look} t={t} />
               <EffectsSection look={look} t={t} />
-              <FilterSection look={look} t={t} />
-              <AdjustSection look={look} t={t} />
+              {/* a video's color is files of the project, graded at its own depth (inspector-color); what it had in
+                  CSS before is still shown, to be taken off */}
+              {colorHost && block.kind === 'video' && block.clipId ? (
+                <>
+                  <FilterSection look={look} t={t} />
+                  <ClipColorSection clips={[{ id: block.clipId, style: lookOf?.css }]} host={colorHost} t={t} />
+                  {cssColorTouched(look) ? <AdjustSection look={look} t={t} /> : null}
+                </>
+              ) : (
+                <>
+                  <FilterSection look={look} t={t} />
+                  <AdjustSection look={look} t={t} />
+                </>
+              )}
             </>
           ) : null}
           {block.anchor?.move || block.anchor?.resize === 'end' ? <TimingSection t={t} block={block} onMain={onMain} {...(speedFloor != null ? { speedFloor } : {})} commit={commit} /> : null}
@@ -2166,8 +2186,9 @@ function placedOf(block: TimelineBlock, stage: { w: number; h: number }): Placed
  * "Mixed" where they differ.
  */
 function MultiClipPanel({
-  blocks, onEdit, stage, clipLookOf, onPreviewLook, fades, templateSection,
+  blocks, onEdit, stage, clipLookOf, onPreviewLook, fades, templateSection, colorHost,
 }: {
+  colorHost?: ColorHost;
   fades?: ReadonlyMap<string, FadeMs>;
   templateSection?: (blocks: readonly TimelineBlock[]) => React.ReactNode;
   blocks: readonly TimelineBlock[];
@@ -2292,8 +2313,18 @@ function MultiClipPanel({
           <AppearanceSection look={look} t={t} radius />
           <StrokeSection look={look} t={t} />
           <EffectsSection look={look} t={t} />
-          <FilterSection look={look} t={t} />
-          <AdjustSection look={look} t={t} />
+          {colorHost && blocks.every((b) => b.kind === 'video' && b.clipId) ? (
+            <>
+              <FilterSection look={look} t={t} />
+              <ClipColorSection clips={blocks.map((b) => ({ id: b.clipId!, style: clipLookOf?.(b.loc!)?.css }))} host={colorHost} t={t} />
+              {cssColorTouched(look) ? <AdjustSection look={look} t={t} /> : null}
+            </>
+          ) : (
+            <>
+              <FilterSection look={look} t={t} />
+              <AdjustSection look={look} t={t} />
+            </>
+          )}
         </>
       ) : null}
       {volumeAll ? (

@@ -7,7 +7,7 @@ import { get } from 'node:http';
 import { syncBuiltinESMExports } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { launch, listenLocal, presentsVideo, serve, vulkanFirst } from './host.mjs';
+import { FilmPage, launch, listenLocal, presentsVideo, serve, vulkanFirst } from './host.mjs';
 import { locate } from './shared.mjs';
 
 test('analysis fingerprints distinguish replaced media even when its name, size and modified date match', async () => {
@@ -333,4 +333,32 @@ test('a browser shows a paused video\'s frame once sought; one that never presen
   } finally {
     await browser.close();
   }
+});
+
+/** A FilmPage whose CDP session fails `fails` times with `error`, then gives a picture. */
+const flakyCapture = (fails, error) => {
+  const page = Object.create(FilmPage.prototype);
+  page.meta = { width: 4, height: 2 };
+  page.scale = 1;
+  page.asked = 0;
+  page.waited = 0;
+  page.cdp = { send: async () => { page.asked++; if (page.asked <= fails) throw new Error(error); return { data: Buffer.from('png').toString('base64') }; } };
+  page.page = { evaluate: async () => { page.waited++; } };
+  return page;
+};
+
+test('a frame whose picture Chromium could not give is asked for again after two frames', async () => {
+  const empty = 'cdpSession.send: Protocol error (Page.captureScreenshot): Unable to capture screenshot';
+  const page = flakyCapture(2, empty);
+  assert.equal(String(await page.capture()), 'png');
+  assert.equal(page.asked, 3);
+  assert.equal(page.waited, 2, 'two frames waited before each new ask');
+  /* none at all: it fails with Chromium's words, which draw the render again in new browsers (browserFailed) */
+  const never = flakyCapture(Infinity, empty);
+  await assert.rejects(never.capture(), /Unable to capture screenshot/);
+  assert.equal(never.asked, 4);
+  /* another error is not asked again */
+  const other = flakyCapture(1, 'cdpSession.send: Target closed');
+  await assert.rejects(other.capture(), /Target closed/);
+  assert.equal(other.asked, 1);
 });

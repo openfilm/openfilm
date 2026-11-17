@@ -32,7 +32,7 @@ import { usePublishFrame, wiringStore } from './frame';
 import { Arrangement } from './arrangement';
 import { LayoutOver, useLayout } from './layout';
 import { LibraryPlace, useLibraryShown } from './library';
-import { openPlugins } from '@/lib/plugins-window';
+import { openPlugins, setExampleOpener } from '@/lib/plugins-window';
 import { useProjectRead } from './project-read';
 import { PageAsks, PageWindows, TopBar, usePageWindows } from './top-bar';
 import { AmongPanes, InPanesPlace, useWorkbenchShown } from './workbenches';
@@ -332,14 +332,16 @@ export function useProjectFrame(projectId: string) {
     if (command.type === 'show-examples') {
       /* the Community window: on Discover, on its skills ("More skills"), or on a skill's page; an example: the projects window's examples */
       const open = command.open;
-      if (open?.kind === 'plugins' || open?.kind === 'discover' || open?.kind === 'skill') {
-        openPlugins(open.kind === 'skill' ? { page: open.name } : open.kind === 'discover' ? { line: 'kind:skills' } : {});
+      if (open?.kind === 'plugins' || open?.kind === 'discover' || open?.kind === 'skill' || open?.kind === 'community') {
+        openPlugins(open.kind === 'skill' ? { page: open.name } : open.kind === 'discover' ? { line: 'kind:skills' } : open.kind === 'community' ? { line: open.tab } : {});
       } else windows.setProjectsOpen({ example: open?.kind === 'example' ? open.id : undefined });
       return;
     }
     tellCommand(command);
   };
   React.useEffect(() => { studioHost?.onCommand?.((command) => appCommand.current(command)); }, []);
+  /* an example opened in the Community: its page in the projects window */
+  React.useEffect(() => { setExampleOpener((id) => windows.setProjectsOpen({ example: id })); return () => setExampleOpener(null); }, [windows.setProjectsOpen]);
   /* what was asked of a workbench that was not there yet (studio/hub) is not given to one of the next project */
   React.useEffect(() => forgetAsked, [projectId]);
 

@@ -665,6 +665,7 @@ function words(/** @type {string} */ key) {
     case 'style': return `clip ${id} ${at(name)} style.${more}`;
     case 'track': return `clip ${id} track`;
     case 'flag': return `a track ${name === 'hidden' ? 'shown or hidden' : name === 'muted' ? 'muted or not' : 'locked or not'}`;
+    case 'captions': return `the caption track ${id}`;
     case 'order': return 'the tracks\' order';
     case 'film': return 'film.html as a whole (your write could not be merged; it is kept aside in the project\'s history)';
     default: return 'the stage size';

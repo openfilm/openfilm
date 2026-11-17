@@ -6,7 +6,7 @@
  * (lib/local-agent-run's saved turns).
  */
 import React from 'react';
-import { ArrowDown, ChevronLeft, Coins, CornerDownLeft, LibraryBig, Loader2, Plus, Shapes, Square } from 'lucide-react';
+import { ArrowDown, AtSign, Blocks, ChevronLeft, Coins, CornerDownLeft, Folder, LibraryBig, Loader2, Paperclip, Plus, Shapes, Square } from 'lucide-react';
 import { buildPromptDisplay, type Turn } from '@openfilm/shared';
 import { useT, useUiLocale } from '@/i18n';
 import { ConversationBar } from '@/components/ConversationSessionBar';
@@ -15,6 +15,7 @@ import type { ProjectVersion } from '@/components/project-version';
 import { ProjectStarters } from '@/components/ProjectStarters';
 import { AttachmentPreview, type AttachmentPreviewItem } from '@/components/AttachmentPreview';
 import { ModelPopover } from '@/components/ModelPopover';
+import { Popover } from '@/components/Popover';
 import { AddSkillDialog, type PickedSkill } from '@/components/AddSkill';
 import { SKILLS_CHANGED } from 'openfilm/studio-ui/lib/project-sources.ts';
 import { CardActions, CardButton, ComposerCard } from '@/components/ComposerCard';
@@ -359,6 +360,31 @@ function ChatPane({ project, banners, selection, assetsOpen, assetsOverlay }: { 
   /* a file of the message being written, opened to look at */
   const [openedFile, setOpenedFile] = React.useState<AttachmentPreviewItem | null>(null);
   const attachInputRef = React.useRef<HTMLInputElement>(null);
+  /* the composer's Add menu, and one of its lines (its key, or the character that opens the same, on the right) */
+  const [addOpen, setAddOpen] = React.useState(false);
+  const addItem = (icon: React.ReactNode, text: string, run: () => void, keys?: string) => (
+    <button type="button" role="menuitem" onClick={() => { setAddOpen(false); run(); }}
+      className="flex h-[30px] w-full items-center gap-2 rounded-[7px] px-2 text-left text-[13px] leading-none text-[var(--text)] outline-none hover:bg-[var(--bg-hover)] focus-visible:bg-[var(--bg-hover)]">
+      <span className="flex w-4 shrink-0 justify-center text-[var(--text-muted)]">{icon}</span><span className="min-w-0 flex-1 truncate">{text}</span>
+      {keys ? <span className="shrink-0 pl-3 text-[12px] tracking-[0.04em] text-[var(--text-faint)]">{keys}</span> : null}
+    </button>
+  );
+  const attachKeys = /mac/i.test(navigator.platform) ? '⌘ U' : 'Ctrl+U';
+  /* a folder of this computer, as a pill (the agent is given its path; nothing is copied) */
+  const attachFolder = async () => {
+    const path = await app.pickFolder?.({ title: t('project.addFolder') });
+    if (path) { const added = composerFiles.addPaths([path]); if (added.length) composerRef.current?.insertReferences(added.map(attachmentPill)); }
+  };
+  /* ⌘U (Ctrl+U): files or photos, as the Add menu's first line says */
+  React.useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'u') { e.preventDefault(); attachInputRef.current?.click(); }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+  /* Skills and references open as typing `/` and `@` does, where the caret is */
+  const typeTrigger = (char: '/' | '@') => { composerRef.current?.focus(); composerRef.current?.insertText(char); };
   const [dropping, setDropping] = React.useState(false);
   /** files of the project pointed at with @ (their pills turn back into their paths when sent) */
   const [fileRefs, setFileRefs] = React.useState<PromptReference[]>([]);
@@ -527,6 +553,8 @@ function ChatPane({ project, banners, selection, assetsOpen, assetsOverlay }: { 
         id: 'skills',
         groupLabel: t('skills.button'),
         limit: Infinity,
+        /* `/` names a skill; `@` points at things */
+        trigger: '/',
         items: nameableSkills.map((skill) => {
           const words = skillWords(skill.name, skill.description);
           return {
@@ -1052,7 +1080,26 @@ function ChatPane({ project, banners, selection, assetsOpen, assetsOverlay }: { 
         }`}
       >
         {openedFile ? <AttachmentPreview item={openedFile} onClose={() => setOpenedFile(null)} /> : null}
-        <div className="flex items-end gap-1 py-2.5 pl-3.5 pr-2">
+        <div className="flex items-end gap-1.5 py-2.5 pl-2 pr-2">
+          {/* Add, at the start of the line as in other agent apps: files and pictures for this message, and what
+              OpenFilm can do more (the Community's plugins and skills) */}
+          <Popover open={addOpen} onOpenChange={setAddOpen} placement="top" align="start" bare
+            trigger={(
+              <Tooltip label={addOpen ? undefined : t('project.addMenu')}>
+                <button type="button" aria-haspopup="menu" aria-expanded={addOpen} onClick={() => setAddOpen(!addOpen)} aria-label={t('project.addMenu')}
+                  className={`-my-[3px] flex h-7 w-7 shrink-0 items-center justify-center rounded-[8px] text-[var(--text-muted)] transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[var(--text)] ${addOpen ? 'bg-[var(--bg-hover)] text-[var(--text)]' : ''}`}>
+                  <Plus size={18} strokeWidth={1.75} />
+                </button>
+              </Tooltip>
+            )}>
+            <div role="menu" aria-label={t('project.addMenu')}
+              className="flex w-[224px] flex-col rounded-[10px] border border-[var(--border)] bg-[var(--bg-raised)] p-[5px] shadow-[0_8px_24px_rgba(0,0,0,0.22),0_1px_3px_rgba(0,0,0,0.1)]">
+              {addItem(<Paperclip size={15} strokeWidth={1.5} />, t('project.addAttachment'), () => attachInputRef.current?.click(), attachKeys)}
+              {app.pickFolder ? addItem(<Folder size={15} strokeWidth={1.5} />, t('project.addFolder'), () => void attachFolder()) : null}
+              {addItem(<Blocks size={15} strokeWidth={1.5} />, t('project.addSkillRef'), () => typeTrigger('/'), '/')}
+              {addItem(<AtSign size={15} strokeWidth={1.5} />, t('project.addReference'), () => typeTrigger('@'), '@')}
+            </div>
+          </Popover>
           <div className="min-w-0 flex-1">
             <PromptEditor
               ref={composerRef}
@@ -1107,13 +1154,7 @@ function ChatPane({ project, banners, selection, assetsOpen, assetsOverlay }: { 
           hidden
           onChange={(event) => { attachFiles(Array.from(event.target.files ?? [])); event.target.value = ''; }}
         />
-        <Tooltip label={t('project.addAttachment')}>
-          <button type="button" onClick={() => attachInputRef.current?.click()} className="openfilm-composer-tool" aria-label={t('project.addAttachment')}>
-            <Plus size={16} strokeWidth={1.75} />
-          </button>
-        </Tooltip>
-
-        {/* the community: what there is to add to OpenFilm, and what was added, in Studio's Community window */}
+        {/* the Community: what there is to add to OpenFilm, and what was added, in Studio's Community window */}
         {app.showExamples ? (
           <Tooltip label={t('project.plugins')}>
             <button type="button" onClick={() => app.showExamples?.({ kind: 'plugins' })} className="openfilm-composer-tool" aria-label={t('project.plugins')}>
@@ -1121,7 +1162,6 @@ function ChatPane({ project, banners, selection, assetsOpen, assetsOverlay }: { 
             </button>
           </Tooltip>
         ) : null}
-
         <Tooltip label={t('project.assets')}>
           <button type="button" onClick={() => app.setAssetsOpen(!assetsOpen)} aria-pressed={assetsOpen} className="openfilm-composer-tool" aria-label={t('project.assets')}>
             <LibraryBig size={16} strokeWidth={1.75} />
@@ -1171,7 +1211,7 @@ function ChatPane({ project, banners, selection, assetsOpen, assetsOverlay }: { 
                   >
                     {blank ? (
                       <div ref={thread.contentRef}>
-                        <ProjectStarters onSkill={pickSkill} />
+                        <ProjectStarters />
                       </div>
                     ) : (
                       <div ref={thread.contentRef} className="min-w-0 shrink-0">
@@ -1212,6 +1252,7 @@ function ChatPane({ project, banners, selection, assetsOpen, assetsOverlay }: { 
               {/* Measure the whole footer so the drawer keeps its controls clear of the return action and composer. */}
               <div ref={composerBlockRef} className={`relative flex shrink-0 flex-col px-4 pb-1.5 ${assetsOverlay ? 'bg-[linear-gradient(to_bottom,transparent_var(--back-row,0px),var(--bg-panel)_var(--back-row,0px))]' : ''}`}>
                 {assetsOverlay ? (
+                  /* 4 px over the button, 8 under it: the drawer's foot beside it is set to meet its middle (Studio LibraryDrawer footInset) */
                   <div ref={backRowRef} className="flex justify-center pb-2 pt-1">
                     <button type="button" className="pointer-events-auto openfilm-chat-pill" style={{ background: 'var(--bg-panel)' }}
                       onClick={() => { app.setAssetsOpen(false); composerRef.current?.focus(); }}>

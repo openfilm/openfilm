@@ -10,7 +10,7 @@ import { memoryError } from './browser-memory.mjs';
 import { encoderWait } from './encoder-wait.mjs';
 import { FilmPage, launch, SOFTWARE_GL } from './host.mjs';
 import { exactRate, ffmpegRate } from './rate.mjs';
-import { browserCopies, filmGrades, filmVideos, gradedCopies, gradeKey } from './seekable.mjs';
+import { browserCopies, filmGrades, filmVideos, gradedCopies, gradeKey, gradeRange } from './seekable.mjs';
 import { ffmpeg, filmSound, fmt, kill, locate, mix, open, outDir, parseTarget, shown, UsageError, write } from './shared.mjs';
 import { burned } from './burn.mjs';
 import { renderSelection, selectionClips, selectionFrame } from './render-ranges.mjs';
@@ -127,10 +127,11 @@ export async function render(args, opts = {}) {
   };
   /* a video graded by LUTs plays its graded copy, made before any frame is drawn; its LUTs are what its chunks are
      drawn from too */
-  const grade = (/** @type {string} */ file, /** @type {string[]} */ luts) => {
+  const grade = (/** @type {string} */ file, /** @type {string[]} */ luts, /** @type {number[] | null} */ time = null) => {
     for (const lut of luts) if (!used.has(lut)) used.set(lut, signature(lut));
-    const key = gradeKey(file, luts, !!opts.fine);
-    return key && graded.has(key) ? { key } : null;
+    const range = gradeRange(time);
+    const key = gradeKey(file, luts, !!opts.fine, range);
+    return key && graded.has(key) ? { key, from: range?.from ?? 0 } : null;
   };
   /* `browsers` (a BrowserPool): the render borrows `workers` of its browsers, draws in a tab of its own in each, and
      gives them back; else it starts its own and closes them */
@@ -167,12 +168,38 @@ export async function render(args, opts = {}) {
     captionPages.clear();
     await Promise.allSettled(open.map((page) => page.then((p) => p.close())));
   };
+  const film = isFilm ? entry : opts.root ? FILM_FILE : null;
+  /* the film's videos graded by LUTs (SPEC.md --of-lut) get their graded copies, the ones the preview plays (a master
+     export's of its own, as its other copies); one that can't be made is drawn as it is, and said. Made before the
+     footage is looked at: a graded clip's copy is what is read straight (direct.mjs), and what its frame is drawn
+     from when the two are compared */
+  const grades = film ? filmGrades(root, film) : [];
+  /** @type {string[]} the videos of grades that failed: played as they are, so they may need a copy as they are */
+  const ungraded = [];
+  if (grades.length) {
+    try {
+      graded = await gradedCopies(grades, root, { signal: opts.signal, fine: !!opts.fine, failed: ({ file, luts }) => {
+        ungraded.push(file);
+        console.error(`openfilm render: ${shown(file)}: its copy graded by ${luts.map(shown).join(', ')} could not be made, so it is drawn as it is`);
+      } });
+    } catch (e) {
+      await probe.close();
+      await pool?.give(lent, { retire: true });
+      throw e;
+    }
+  }
   /* a film's footage that is its whole picture is read straight from its files, not drawn here (direct.mjs): which
      clips are plain footage is read from the film's page while it is open, and a frame of each file drawn both ways
      has to be the same picture. Not for a picture with alpha, frames mixed for motion blur, or a film in pieces */
   const footage = opts.straight !== false && isFilm && meta.duration != null && !opts.alpha && !opts.ranges && !(Number(opts.samples ?? (opts.blur ? 8 : 1)) > 1)
     ? await (async () => {
-      const film = await layersOf(probe.film, root, entry);
+      /* a graded clip's footage is its graded copy, made above */
+      const film = await layersOf(probe.film, root, entry, (file, luts, time) => {
+        const range = gradeRange(time);
+        const key = gradeKey(file, luts, !!opts.fine, range);
+        const copy = key ? graded.get(key) : null;
+        return copy ? { file: copy, from: range?.from ?? 0 } : null;
+      });
       if (film?.layers.some((l) => l.footage)) await settle(probe.film, film, rate, meta.duration);
       if (!film?.layers.some((l) => l.footage)) return null;
       /* its captions, drawn alone and laid over the footage, have to come to the picture the page draws: told on
@@ -272,30 +299,16 @@ export async function render(args, opts = {}) {
      for a render of more than a moment those that seek slowly (seekable.mjs). A film's video clips load only when
      their time comes, so they are read from film.html (a page drawn around the project's film, as a burned-in
      subtitle export is, reads the project's); a page's own videos are the ones it asked for */
-  const film = isFilm ? entry : opts.root ? FILM_FILE : null;
-  /* the film's videos graded by LUTs (SPEC.md --of-lut) get their graded copies, the ones the preview plays (a master
-     export's of its own, as its other copies); one that can't be made is drawn as it is, and said */
-  const grades = film ? filmGrades(root, film) : [];
-  /** @type {string[]} the videos of grades that failed: played as they are, so they may need a copy as they are */
-  const ungraded = [];
-  if (grades.length) {
-    try {
-      graded = await gradedCopies(grades, root, { signal: opts.signal, fine: !!opts.fine, failed: ({ file, luts }) => {
-        ungraded.push(file);
-        console.error(`openfilm render: ${shown(file)}: its copy graded by ${luts.map(shown).join(', ')} could not be made, so it is drawn as it is`);
-      } });
-    } catch (e) {
-      await probe.close();
-      await pool?.give(lent, { retire: true });
-      throw e;
-    }
-  }
   if (opts.seekable !== false) {
     /* a video only ever graded plays its graded copy: it needs no other; a file whose every frame in this render is
        read straight needs no copy: no browser plays it */
     const drawn = new Set(footage?.layers.filter((l) => l.file && chunks.some((c) => !plans.has(c) && l.at < c.b / fps && l.end > c.a / fps)).map((l) => l.file));
     const straightOnly = new Set(footage?.layers.filter((l) => l.file && !drawn.has(l.file)).map((l) => l.file));
-    const files = [...new Set([...videos, ...(film ? filmVideos(root, film, { ungraded: true }) : []), ...ungraded])].filter((file) => !straightOnly.has(file));
+    /* a file played only graded needs no copy as it is, though the page may have opened it before its graded copy was
+       made (that copy is made first, above) */
+    const plain = new Set(film ? filmVideos(root, film, { ungraded: true }) : []);
+    const gradedOnly = new Set(grades.map((g) => g.file).filter((file) => !plain.has(file) && !ungraded.includes(file)));
+    const files = [...new Set([...[...videos].filter((file) => !gradedOnly.has(file)), ...plain, ...ungraded])].filter((file) => !straightOnly.has(file));
     /* one the browser does not decode then fails its first frame, by its clip (timeline.mjs): never drawn black */
     const failed = (/** @type {string} */ file) => {
       uncopied.push(file);

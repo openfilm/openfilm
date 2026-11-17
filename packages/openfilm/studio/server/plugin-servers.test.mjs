@@ -119,4 +119,9 @@ test('an own plugin\'s routes: the key needed, a project\'s file read and writte
   assert.deepEqual(await (await api(note)).json(), { text: 'hello', plugin: 'example-api' });
   assert.equal((await api(note, { method: 'POST', body: { text: 'again' } })).status, 200);
   assert.equal(readFileSync(join(project.path, 'notes', 'example.txt'), 'utf8'), 'again');
+  /* removed (on: null): one OpenFilm comes with is only turned off, so it is refused; anything else is not an answer */
+  const removed = await api('/api/plugins/example-api', { method: 'PUT', body: { on: null } });
+  assert.equal(removed.status, 409);
+  assert.match((await removed.json()).error, /comes with OpenFilm/);
+  assert.equal((await api('/api/plugins/example-api', { method: 'PUT', body: { on: 'yes' } })).status, 400);
 });

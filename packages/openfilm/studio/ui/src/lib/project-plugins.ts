@@ -8,7 +8,7 @@
  * workbench, and its switch is the skill's.
  */
 import { useEffect, useMemo, useState } from 'react';
-import { usePlugins, type Plugin } from './plugins.ts';
+import { inPersonsOrder, usePlugins, useWorkbenchOrder, type Plugin } from './plugins.ts';
 import { seenSkills, watchSkills, type SkillEntry } from './project-sources.ts';
 
 /**
@@ -20,7 +20,7 @@ export const pluginOfSkill = (skill: SkillEntry): Plugin => {
   const surface = skill.tab ? {} : { workbench: skill.uid, ...(skill.blocks ? { blocks: skill.blocks } : {}) };
   return {
     id: skill.uid, title: skill.shown?.title ?? { en: skill.name }, summary: skill.shown?.summary ?? { en: skill.description },
-    ...(skill.icon ? { icon: skill.icon } : {}), skills: [skill.name], on: !skill.off, skill: skill.uid,
+    ...(skill.icon ? { icon: skill.icon } : {}), ...(skill.appIcon ? { appIcon: skill.appIcon } : {}), skills: [skill.name], on: !skill.off, skill: skill.uid,
     ...(skill.commands?.length ? { commands: skill.commands } : {}), ...(skill.tab ? { tab: skill.tab } : {}),
     ...(skill.surface ? { ...surface, page: skill.surface } : {}), ...(skill.files ? { files: skill.files } : {}),
     ...(skill.program ? { ...surface, program: true, runs: Boolean(skill.runs) } : {}),
@@ -34,13 +34,15 @@ export const isPlugin = (skill: SkillEntry): boolean => Boolean(skill.surface ||
 /** The skills of a list that are plugins, installed. */
 export const skillPlugins = (skills: readonly SkillEntry[]): Plugin[] => skills.filter((k) => isPlugin(k) && k.installed !== false).map(pluginOfSkill);
 
+/** OpenFilm's own and those someone made, in the order the person put them in (Community › Mine). */
 export function usePluginsOf(projectId: string | null): readonly Plugin[] {
   const plugins = usePlugins();
+  const order = useWorkbenchOrder();
   const [skills, setSkills] = useState<SkillEntry[]>(() => seenSkills(projectId) ?? []);
   useEffect(() => {
     let live = true;
     const stop = watchSkills(projectId, (list) => { if (live) setSkills(list); });
     return () => { live = false; stop(); };
   }, [projectId]);
-  return useMemo(() => [...plugins, ...skillPlugins(skills)], [plugins, skills]);
+  return useMemo(() => inPersonsOrder([...plugins, ...skillPlugins(skills)], order), [plugins, skills, order]);
 }

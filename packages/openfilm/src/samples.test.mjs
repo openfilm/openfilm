@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { sheetTimes } from './samples.mjs';
+import { MOMENT_FRAMES, momentTimes, sheetTimes } from './samples.mjs';
 
 test('a sheet takes both ends of the stretch, not one step short of the last', () => {
   const times = sheetTimes(0, 12, 12);
@@ -30,4 +30,11 @@ test('a count that is not a whole number is rounded, and one below one still dra
   assert.equal(sheetTimes(0, 10, 2.6).length, 3);
   assert.deepEqual(sheetTimes(0, 10, 0), [0]);
   assert.deepEqual(sheetTimes(0, 10, Number.NaN), [0]);
+});
+
+test('several moments are drawn in their order: a time once, a range its start, middle and end (or --count frames)', () => {
+  assert.equal(MOMENT_FRAMES, 3);
+  assert.deepEqual(momentTimes([[8, 9], 26.5, [36, 37]]), [8, 8.5, 9, 26.5, 36, 36.5, 37]);
+  assert.deepEqual(momentTimes([[8, 9], 26.5], 2), [8, 9, 26.5]);
+  assert.deepEqual(momentTimes([4, 2]), [4, 2], 'as given, not sorted');
 });

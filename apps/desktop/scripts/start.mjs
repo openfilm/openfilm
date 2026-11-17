@@ -16,7 +16,8 @@
  */
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
-import { copyFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { copyFileSync, createReadStream, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { launcherEnvironment, loginShellEnvironment } from '../src/environment.mjs';
@@ -68,17 +69,17 @@ if (!process.argv.includes('--no-build')) {
 }
 
 const electron = require('electron');
-let executable = electron;
+/** OpenFilm Dev.app (macOS) */
+let bundle = '';
 if (process.platform === 'darwin') {
   const version = require('electron/package.json').version;
   const productVersion = require('../package.json').version;
   /* .dev/ is git-ignored */
   const runtime = join(desktop, '.dev', 'runtime', `${version}-openfilm-dev-v2-${productVersion}${process.env.OPENFILM_DEV_LANE ? `-${process.env.OPENFILM_DEV_LANE}` : ''}`);
-  const bundle = join(runtime, `${identity.productName}.app`);
+  bundle = join(runtime, `${identity.productName}.app`);
   const marker = join(runtime, 'ready');
   /* the executable keeps Electron's own name: Electron decides `app.isPackaged` from it. The name people see comes
      from CFBundleName and app.setName. */
-  executable = join(bundle, 'Contents/MacOS/Electron');
   if (!existsSync(marker)) {
     mkdirSync(runtime, { recursive: true });
     const source = resolve(electron, '../../..');
@@ -114,10 +115,38 @@ if (process.env.OPENFILM_DEV_LANE) {
 }
 
 const { PATH } = await loginShellEnvironment();
-const child = spawn(executable, [desktop, ...args], { stdio: 'inherit', env: launcherEnvironment(process.env, PATH) });
-/* Ctrl-C already reaches Electron (same foreground group); a SIGINT to this process alone is passed on later, once
-   the app has had time to stop Studio on its own */
-process.on('SIGINT', () => { setTimeout(() => { if (child.exitCode === null && child.signalCode === null) child.kill('SIGTERM'); }, 12_000).unref(); });
-process.on('SIGTERM', () => child.kill('SIGTERM'));
-child.on('error', (error) => { console.error(error); process.exitCode = 1; });
-child.on('exit', (code, signal) => { process.exitCode = code ?? (signal ? 1 : 0); });
+const env = launcherEnvironment(process.env, PATH);
+if (process.platform === 'darwin') {
+  /* opened by LaunchServices, not as a child of this process: macOS holds a child to what its parent (the terminal,
+     Claude Code, Codex) may do, so where that one was refused the microphone, recording was refused too without the
+     question ever being asked. Opened, OpenFilm Dev asks macOS for itself, as an installed OpenFilm does. Its output
+     comes back through two pipes; `open -W` returns once it has quit. */
+  const pipes = mkdtempSync(join(tmpdir(), 'openfilm-dev-'));
+  const [out, err] = [join(pipes, 'out'), join(pipes, 'err')];
+  execFileSync('/usr/bin/mkfifo', [out, err]);
+  const streams = [createReadStream(out), createReadStream(err)];
+  streams[0].pipe(process.stdout);
+  streams[1].pipe(process.stderr);
+  const vars = Object.entries(env).filter(([, value]) => value != null).flatMap(([key, value]) => ['--env', `${key}=${value}`]);
+  const child = spawn('/usr/bin/open', ['-n', '-W', '-a', bundle, ...vars, '--stdout', out, '--stderr', err, '--args', desktop, ...args], { stdio: 'ignore' });
+  /* Ctrl-C no longer reaches the app on its own: it is asked to quit as from its menu, stopping its Studio first */
+  const quit = () => { for (const pid of running()) { try { process.kill(pid, 'SIGTERM'); } catch { /* gone already */ } } };
+  process.on('SIGINT', quit);
+  process.on('SIGTERM', quit);
+  child.on('error', (error) => { console.error(error); process.exitCode = 1; });
+  child.on('exit', (code) => {
+    process.exitCode = code ?? 1;
+    /* a pipe the app never opened would keep this process waiting */
+    for (const stream of streams) stream.destroy();
+    rmSync(pipes, { recursive: true, force: true });
+    setTimeout(() => process.exit(), 200).unref();
+  });
+} else {
+  const child = spawn(electron, [desktop, ...args], { stdio: 'inherit', env });
+  /* Ctrl-C already reaches Electron (same foreground group); a SIGINT to this process alone is passed on later, once
+     the app has had time to stop Studio on its own */
+  process.on('SIGINT', () => { setTimeout(() => { if (child.exitCode === null && child.signalCode === null) child.kill('SIGTERM'); }, 12_000).unref(); });
+  process.on('SIGTERM', () => child.kill('SIGTERM'));
+  child.on('error', (error) => { console.error(error); process.exitCode = 1; });
+  child.on('exit', (code, signal) => { process.exitCode = code ?? (signal ? 1 : 0); });
+}

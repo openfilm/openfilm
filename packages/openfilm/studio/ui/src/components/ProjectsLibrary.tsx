@@ -33,14 +33,12 @@ import { FolderBrowserDialog, GitHubDialog } from './ProjectSources';
 import { ExamplesGallery, type ExamplePart } from './ExamplesGallery';
 import { ProjectCoverContext, posterUrl, useProjectCover } from './ProjectCover';
 import { LARGE_DIALOG_SIZE, LARGE_DIALOG_SURFACE } from './dialog-chrome';
-import type { WorkspaceResource } from '@/lib/workspace-resources';
 import resourceStyles from './ProjectsView.module.css';
-import { ResourceCenterSidebar } from './ResourceCenterSidebar';
-import { StoragePane } from './ProjectsStorage';
-import { useSavedListing, savedActions, SAVED } from '@/lib/saved';
-import { readResourcePins, isDefaultResourcePin, normalizeResourcePins, pinKey, RESOURCE_PINS_KEY, readResourceView, RESOURCE_VIEW_KEY, type ResourceNavigation, type ResourceAssetLocation, type ResourcePin, type ResourceSourceRequest } from '@/lib/resource-center';
-
-const AssetLibraryView = React.lazy(() => import('./AssetLibraryView').then(module => ({ default: module.AssetLibraryView })));
+import { RecycleBinView } from './RecycleBinView';
+import { ProjectsSidebar } from './ProjectsSidebar';
+import sideStyles from './ProjectsSidebar.module.css';
+import { openOn } from '@/lib/workbench-start';
+import { readResourceView, RESOURCE_VIEW_KEY } from '@/lib/resource-center';
 
 
 /* each card's picture: its own cover, else the film's middle frame, drawn by Studio (cached until film.html changes);
@@ -236,7 +234,7 @@ function useProjectLibrary(open: boolean) {
 }
 
 /** The resource center's project, asset-library, and example views, picked in its sidebar. */
-export type LauncherView = 'projects' | 'examples' | 'assets' | 'storage';
+export type LauncherView = 'projects' | 'examples' | 'recycle';
 
 /** How long the projects window waits for the tab it opened to cover it before it closes anyway. */
 const COVER_WAIT_MS = 4000;
@@ -250,7 +248,6 @@ export function ProjectsPopover({
   onClose,
   examples,
   onUseCanvas,
-  onInsertAsset,
 }: {
   open: boolean;
   /** The project open in the editor ("" when none: Studio has no project to show, and this window is all there is). */
@@ -268,59 +265,25 @@ export function ProjectsPopover({
   examples?: { example?: string };
   /** over a film: an example's canvas laid down on its own */
   onUseCanvas?: (example: Example) => void;
-  assets?: boolean;
-  onInsertAsset?: (file: WorkspaceResource) => void;
 }) {
   const t = useT();
   const lib = useProjectLibrary(open);
   const { flash } = lib;
   const cover = useProjectCover(lib.coverChanged, React.useCallback(() => flash(t('projects.coverFailed')), [flash, t]));
   /* each time it opens: the projects (the examples are a project tab away), or the examples when asked for */
-  const [view, setView] = React.useState<LauncherView>(() => readResourcePins()[0]?.kind === 'assets' ? 'assets' : 'projects');
-  const showView = setView;
+  const [view, setView] = React.useState<LauncherView>('projects');
   React.useLayoutEffect(() => {
     if (!open) return;
     const previous = document.activeElement as HTMLElement | null;
     return () => { if (previous?.isConnected) previous.focus({ preventScroll: true }); };
   }, [open]);
-  const assetHistory = React.useRef<{ entries: ResourceAssetLocation[]; index: number }>({ entries: ['all'], index: 0 });
-  const [assetNavigation, setAssetNavigation] = React.useState<ResourceNavigation>({ location: 'all', seq: 0 });
   const [display, setDisplay] = React.useState(readResourceView);
   const [projectNavigation, setProjectNavigation] = React.useState({ folderId: null as string | null, seq: 0 });
-  const [projectFolder, setProjectFolder] = React.useState<string | null>(null);
-  const [pins, setPins] = React.useState(readResourcePins);
-  const onPin = (pin: ResourcePin) => setPins(old => old.some(p => pinKey(p) === pinKey(pin)) ? old : [...old, pin]);
-  const onUnpin = (pin: ResourcePin) => { if (!isDefaultResourcePin(pin)) setPins(old => normalizeResourcePins(old.filter(p => pinKey(p) !== pinKey(pin)))); };
-  React.useEffect(() => { try { localStorage.setItem(RESOURCE_PINS_KEY, JSON.stringify(pins)); } catch { /* preferences unavailable */ } }, [pins]);
-  const navigateProjects = (folderId: string | null = null) => { setProjectFolder(folderId); setProjectNavigation(old => ({ folderId, seq: old.seq + 1 })); setView('projects'); setSidebarNotice(''); };
-  const assetFolderChanged = React.useCallback((path: string) => {
-    const location: ResourceAssetLocation = path ? `location:${path}` : 'all';
-    const kept = assetHistory.current;
-    if (kept.entries[kept.index] !== location) assetHistory.current = { entries: [...kept.entries.slice(0, kept.index + 1), location], index: kept.index + 1 };
-    setAssetNavigation(old => ({ ...old, location }));
-  }, []);
-  const [sidebarNotice, setSidebarNotice] = React.useState('');
-  const [sourceRequest, setSourceRequest] = React.useState<ResourceSourceRequest | null>(null);
-  const clearSourceRequest = React.useCallback(() => setSourceRequest(null), []);
-  const [collectionRequest, setCollectionRequest] = React.useState<string[] | null>(null);
-  const clearCollectionRequest = React.useCallback(() => setCollectionRequest(null), []);
-  const [assetQuery, setAssetQuery] = React.useState('');
-  const assetLocation = view === 'assets' ? assetNavigation.location : 'computer';
-  const physicalAssets = assetLocation === 'all' || assetLocation === 'managed' || assetLocation.startsWith('location:');
-  const listing = useSavedListing(open, view === 'assets' && physicalAssets, { at: assetLocation.startsWith('location:') ? assetLocation.slice(9) : '', view: physicalAssets ? '' : assetLocation === 'home' ? 'computer' : assetLocation, query: view === 'assets' ? assetQuery : '' });
-  const library = { listing, catalog: listing.libraryCatalog, error: listing.error, catalogReady: listing.ready };
-  const navigateAssets = React.useCallback((location: ResourceAssetLocation) => {
-    const kept = assetHistory.current;
-    if (kept.entries[kept.index] !== location) assetHistory.current = { entries: [...kept.entries.slice(0, kept.index + 1), location], index: kept.index + 1 };
-    setAssetQuery(''); setAssetNavigation(old => ({ location: location === 'home' ? 'computer' : location, seq: old.seq + 1 })); setView('assets'); setSidebarNotice('');
-  }, []);
+  const navigateProjects = (folderId: string | null = null) => { setProjectNavigation(old => ({ folderId, seq: old.seq + 1 })); setView('projects'); };
   React.useLayoutEffect(() => {
     if (!open) return;
     if (examples) { setView('examples'); return; }
-    const first = pins[0];
-    if (first?.kind === 'assets') navigateAssets(first.path ? `location:${first.path}` : 'all');
-    else navigateProjects(first?.folderId ?? null);
-    // Reordering while browsing only changes the next opening, not the current location.
+    navigateProjects(null);
   }, [open, Boolean(examples), examples?.example]);
   React.useEffect(() => { try { localStorage.setItem(RESOURCE_VIEW_KEY, display); } catch { /* private window */ } }, [display]);
   const [pendingDelete, setPendingDelete] = React.useState<string[] | null>(null);
@@ -395,11 +358,15 @@ export function ProjectsPopover({
     if (wasOpen.current) latestClose.current();
   }, [currentProjectId]);
 
-  /** A new project in `folderId` (null: the top level), named as Studio names it (Untitled, Untitled 2…), opened at once: it is renamed later. */
-  async function newProject(folderId: string | null) {
+  /**
+   * A new project in `folderId` (null: the top level), named as Studio names it (Untitled, Untitled 2…), opened at once:
+   * it is renamed later. `workbench`: the one it opens on.
+   */
+  async function newProject(folderId: string | null, workbench?: 'edit' | 'canvas') {
     setBusy('creating');
     try {
       const project = await newProjectIn(folderId, { create: () => api.newProject(t('project.untitled'), readLastSubtitleStyle() ?? undefined), move: folderApi.move });
+      if (workbench) openOn(project.id, workbench);
       go(project.id, 'creating');
     } catch {
       setBusy(null);
@@ -552,80 +519,86 @@ export function ProjectsPopover({
         <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
           {cover.picker}
           <div className={resourceStyles.resourceFrame}>
-            <ResourceCenterSidebar library={library} active={view === 'assets' ? assetNavigation.location : null} projectFolder={projectFolder} folders={lib.folders}
-              pins={pins} onPin={onPin} onUnpin={onUnpin} onReorder={(from, to) => setPins(old => { const next = [...old]; const a = next.findIndex(p => pinKey(p) === from); const b = next.findIndex(p => pinKey(p) === to); if (a < 0 || b < 0) return old; next.splice(b, 0, ...next.splice(a, 1)); return next; })}
-              onProjects={navigateProjects} onAssets={navigateAssets} storage={view === 'storage'} onStorage={() => { setView('storage'); setSidebarNotice(''); }} onNotice={setSidebarNotice}
-              sourceRequest={sourceRequest} onSourceHandled={clearSourceRequest} collectionRequest={collectionRequest} onRequestHandled={clearCollectionRequest} />
-            <div className={resourceStyles.resourceContent}>
-              {sidebarNotice ? <div role="status" className={resourceStyles.resourceNotice}><span>{sidebarNotice}</span><button type="button" className={resourceStyles.iconButton} aria-label={t('media.dismiss')} onClick={() => setSidebarNotice('')}><X size={13} /></button></div> : null}
-          {view === 'storage' ? <StoragePane onClose={onClose} /> : view === 'assets' ? (
-            <React.Suspense fallback={<div className="flex flex-1 items-center justify-center text-[var(--text-faint)]"><Loader2 size={20} className="animate-spin" /></div>}>
-              <AssetLibraryView projects={lib.projects} currentProjectId={currentProjectId}
-              library={library} onSearch={setAssetQuery} onSourceRequest={setSourceRequest} onMove={async (from, to) => { const result = await savedActions.move(from, to); if (result === 'ok') setPins(old => old.map(pin => { if (pin.kind !== 'assets') return pin; const path = `${SAVED}/${pin.path}`; return path === from || path.startsWith(`${from}/`) ? { ...pin, path: `${to}${path.slice(from.length)}`.slice(SAVED.length + 1) } : pin; })); return result; }} history={{ canBack: assetHistory.current.index > 0, canForward: assetHistory.current.index < assetHistory.current.entries.length - 1, go: step => { const kept = assetHistory.current; kept.index = Math.max(0, Math.min(kept.entries.length - 1, kept.index + step)); setAssetNavigation(old => ({ location: kept.entries[kept.index]!, seq: old.seq + 1 })); } }} pins={pins} onPin={onPin} onUnpin={onUnpin} onProjects={navigateProjects} folders={lib.folders} onFolder={assetFolderChanged} navigation={assetNavigation} onNavigate={navigateAssets} onNewCollection={setCollectionRequest} display={display} onDisplay={setDisplay} onClose={onClose}
-              onOpenProject={(id) => go(id, 'opening')} onInsert={onInsertAsset} />
-            </React.Suspense>
-          ) : lib.loaded ? (
-            <ProjectCoverContext.Provider value={cover.actions}>
-            <ProjectsView
-              pane={view}
-              onPane={showView}
-              examplesPane={gallery}
-              display={display} onDisplay={setDisplay} navigation={projectNavigation} onFolder={setProjectFolder} pins={pins} onPin={onPin} onUnpin={onUnpin}
-              projects={lib.projects}
-              creating={busy !== null}
-              onNewProject={(folderId) => void newProject(folderId)}
-              onOpenFolder={() => void openFolder()}
-              onGetFromGitHub={() => setGithub({})}
-              onLocate={(project) => void locate(project)}
-              /* presence is checked again before opening the editor */
-              onOpen={(project) => { void openListed(project); }}
-              onRename={(projectId, name) => void lib.renameProject(projectId, name)}
-              onDuplicate={(project) => void duplicateProject(project)}
-              /* an agent working in one: said at once, before asking (the server refuses it too) */
-              onDelete={(ids) => void lib.workingIn(ids).then((working) => {
-                if (working) lib.flash(lib.agentRunning(working, ids.length));
-                else setPendingDelete(ids);
-              })}
-              onDeleteItems={(projectIds, folderIds) => {
-                const selectedFolders = lib.folders.filter(f => folderIds.includes(f.id));
-                const held = new Set(lib.folders.filter(f => folderTrail(lib.folders, f.id).some(up => folderIds.includes(up.id))).map(f => f.id));
-                const allIds = [...new Set([...projectIds, ...lib.projects.filter(p => p.folderId && held.has(p.folderId)).map(p => p.id)])];
-                void lib.workingIn(allIds).then(working => {
-                  if (working) lib.flash(lib.agentRunning(working, allIds.length));
-                  else setPendingBatch({ projectIds, folders: selectedFolders });
-                });
-              }}
-              folders={lib.folders}
-              onCreateFolder={lib.createFolder}
-              onRenameFolder={lib.renameFolder}
-              onDeleteFolder={(folder) => {
-                const held = new Set(lib.folders.filter(f => folderTrail(lib.folders, f.id).some(up => up.id === folder.id)).map(f => f.id));
-                const inside = lib.projects.filter((p) => p.folderId && held.has(p.folderId)).map((p) => p.id);
-                void lib.workingIn(inside).then((working) => {
-                  if (working) lib.flash(lib.agentRunning(working, inside.length));
-                  else setPendingFolder(folder);
-                });
-              }}
-              onMoveToFolder={lib.moveProject}
-              onMoveFolder={lib.moveFolder}
-              onClose={onClose}
+            <ProjectsSidebar
+              place={view === 'recycle' ? 'projects' : view}
+              onPlace={(place) => (place === 'projects' ? navigateProjects(null) : setView(place))}
+              onStart={(workbench) => void newProject(null, workbench)}
+              starting={busy !== null}
             />
-            </ProjectCoverContext.Provider>
-          ) : view === 'examples' ? gallery : lib.loadFailed ? (
-            <div role="alert" className="flex flex-1 flex-col items-center justify-center gap-3 text-[13px] text-[var(--text-muted)]">
-              {t('projects.loadFailed')}
-              <button
-                type="button"
-                onClick={lib.retryLoad}
-                className="h-8 rounded-lg bg-[var(--bg-field)] px-3 text-[12.5px] font-medium text-[var(--text)] transition hover:bg-[var(--bg-hover)]"
-              >
-                {t('projects.loadRetry')}
-              </button>
-            </div>
-          ) : (
-            <div className="flex flex-1 items-center justify-center text-[var(--text-muted)]">
-              <Loader2 size={18} className="animate-spin" />
-            </div>
+            <div className={resourceStyles.resourceContent}>
+          {/* OpenFilm's recycle bin (the projects' toolbar opens it): back to the projects from it */}
+          {view === 'recycle' ? <RecycleBinView onBack={() => setView('projects')} onClose={onClose} onRestored={lib.retryLoad} /> : (
+            <>
+              {/* the place's name and the way out of the window */}
+              <header className={sideStyles.pageHead}>
+                <h2>{t(view === 'examples' ? 'projects.sideExamples' : 'projects.sideProjects')}</h2>
+                <span className={sideStyles.pageTools}>
+                  {onClose ? <button type="button" className={sideStyles.pageClose} aria-label={t('project.close')} onClick={onClose}><X size={17} /></button> : null}
+                </span>
+              </header>
+              {view === 'examples' ? gallery : null}
+              {lib.loaded ? (
+            <ProjectCoverContext.Provider value={cover.actions}>
+              <ProjectsView
+                shown={view === 'projects'}
+                onBin={() => setView('recycle')}
+                  display={display} onDisplay={setDisplay} navigation={projectNavigation}
+                projects={lib.projects}
+                creating={busy !== null}
+                onNewProject={(folderId) => void newProject(folderId)}
+                onOpenFolder={() => void openFolder()}
+                onGetFromGitHub={() => setGithub({})}
+                onLocate={(project) => void locate(project)}
+                /* presence is checked again before opening the editor */
+                onOpen={(project) => { void openListed(project); }}
+                onRename={(projectId, name) => void lib.renameProject(projectId, name)}
+                onDuplicate={(project) => void duplicateProject(project)}
+                /* an agent working in one: said at once, before asking (the server refuses it too) */
+                onDelete={(ids) => void lib.workingIn(ids).then((working) => {
+                  if (working) lib.flash(lib.agentRunning(working, ids.length));
+                  else setPendingDelete(ids);
+                })}
+                onDeleteItems={(projectIds, folderIds) => {
+                  const selectedFolders = lib.folders.filter(f => folderIds.includes(f.id));
+                  const held = new Set(lib.folders.filter(f => folderTrail(lib.folders, f.id).some(up => folderIds.includes(up.id))).map(f => f.id));
+                  const allIds = [...new Set([...projectIds, ...lib.projects.filter(p => p.folderId && held.has(p.folderId)).map(p => p.id)])];
+                  void lib.workingIn(allIds).then(working => {
+                    if (working) lib.flash(lib.agentRunning(working, allIds.length));
+                    else setPendingBatch({ projectIds, folders: selectedFolders });
+                  });
+                }}
+                folders={lib.folders}
+                onCreateFolder={lib.createFolder}
+                onRenameFolder={lib.renameFolder}
+                onDeleteFolder={(folder) => {
+                  const held = new Set(lib.folders.filter(f => folderTrail(lib.folders, f.id).some(up => up.id === folder.id)).map(f => f.id));
+                  const inside = lib.projects.filter((p) => p.folderId && held.has(p.folderId)).map((p) => p.id);
+                  void lib.workingIn(inside).then((working) => {
+                    if (working) lib.flash(lib.agentRunning(working, inside.length));
+                    else setPendingFolder(folder);
+                  });
+                }}
+                onMoveToFolder={lib.moveProject}
+                onMoveFolder={lib.moveFolder}
+              />
+              </ProjectCoverContext.Provider>
+              ) : view !== 'projects' ? null : lib.loadFailed ? (
+                <div role="alert" className="flex flex-1 flex-col items-center justify-center gap-3 text-[13px] text-[var(--text-muted)]">
+                  {t('projects.loadFailed')}
+                  <button
+                    type="button"
+                    onClick={lib.retryLoad}
+                    className="h-8 rounded-lg bg-[var(--bg-field)] px-3 text-[12.5px] font-medium text-[var(--text)] transition hover:bg-[var(--bg-hover)]"
+                  >
+                    {t('projects.loadRetry')}
+                  </button>
+                </div>
+              ) : (
+                <div className="flex flex-1 items-center justify-center text-[var(--text-muted)]">
+                  <Loader2 size={18} className="animate-spin" />
+                </div>
+              )}
+            </>
           )}
             </div>
           </div>

@@ -133,12 +133,11 @@ export function VoicesPane({ group, query, favorites, onServices, onAll, onMyVoi
   return (
     /* focused by a click in it, so Enter and Esc reach it */
     <div className="flex min-h-0 flex-1 flex-col outline-none" tabIndex={-1} onKeyDown={onKey}>
-      {group === MY_VOICES ? <div className="flex items-center gap-2 px-3 pb-3" data-my-voices-actions="">
-        <span className="mr-auto text-[12px] font-medium text-[var(--text)]">{t('myVoices.title')}</span>
+      {group === MY_VOICES && mine.voices.length ? <div className="flex items-center gap-2 px-3 pb-2" data-my-voices-actions="">
         <button type="button" disabled={busy || mine.loading} onClick={() => openDialog()} className="flex h-7 items-center gap-1.5 rounded-lg bg-[var(--bg-field)] px-2.5 text-[12px] text-[var(--text)] hover:bg-[var(--bg-hover)] disabled:opacity-50"><Plus size={13} />{t('myVoices.clone')}</button>
       </div> : null}
       {problem || (group === MY_VOICES && mine.error) ? <p role="alert" className="px-3 pb-2 text-[11.5px] text-[var(--err)]">{problem ?? mine.error}</p> : null}
-      <div className="flex items-center gap-3 px-3 pb-2">
+      <div className={`flex items-center gap-3 px-3 pb-2 ${group === MY_VOICES ? 'hidden' : ''}`}>
         <div className="min-w-0 max-w-[150px] flex-1">
           <MenuSelect label={t('assetDrawer.language')} value={language} onPick={setLanguage}
             groups={[{ choices: [{ value: '', label: t('assetDrawer.anyLanguage') }, ...languages.map((l) => ({ value: l, label: languageName(l) }))] }]}

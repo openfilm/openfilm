@@ -17,8 +17,10 @@
  */
 import * as React from 'react';
 import type { CaptionsActions } from '@/components/library/CaptionsPane';
+import type { CoversActions } from '@/components/library/CoversPane';
 import type { LibraryActions } from '@/components/library/LibraryDrawer';
 import type { SpeakVoice } from '@/lib/library-voices';
+import type { Recorder } from '@/components/RecordPane';
 import type { BlockSizer } from '@/lib/workspace-preview';
 import type { WorkspaceResource } from '@/lib/workspace-resources';
 import type { useProjectFrame } from './ProjectFrame';
@@ -157,8 +159,12 @@ export interface Wiring {
     preview: { bar: HTMLDivElement | null; picture: HTMLDivElement | null; dismissRef: React.RefObject<() => boolean>; begin: () => void };
     /** Where a caption track comes from (components/library/CaptionsPane). */
     captions: CaptionsActions;
+    /** The film's covers and the looks one takes (components/library/CoversPane). */
+    covers: CoversActions;
     /** Words spoken in a voice of the library, put on the film at the playhead: null, or why not. */
     speak: SpeakVoice;
+    /** Recording from the microphone (the voice-over's Record line), the workbench's own: it goes on while the drawer shows other things. */
+    recorder: Recorder;
   };
 }
 

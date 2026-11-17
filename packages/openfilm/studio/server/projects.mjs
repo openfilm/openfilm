@@ -16,6 +16,7 @@
  * Each part is a folder of its own, so the project's export (exports.mjs, kind 'project') takes or leaves it.
  */
 import { moveToTrash } from './trash.mjs';
+import { recycle } from './recycle-bin.mjs';
 import { createHmac, randomBytes } from 'node:crypto';
 import { constants, existsSync, mkdirSync, readFileSync, realpathSync, statSync, writeFileSync } from 'node:fs';
 import { cp, mkdir, mkdtemp, readFile, readdir, readlink, rename, rm, stat, symlink, unlink, writeFile } from 'node:fs/promises';
@@ -548,7 +549,7 @@ export async function renameProject(id, name, { release, win = process.platform 
 }
 
 /**
- * Delete a project: its folder goes to the system's Trash (where the person can still take it back), and it leaves the
+ * Delete a project: its folder goes to the recycle bin (recycle-bin.mjs, where the person can still take it back), and it leaves the
  * list. An unavailable project just leaves the list; any remaining files are kept.
  */
 export async function deleteProject(/** @type {string} */ id) {
@@ -556,7 +557,7 @@ export async function deleteProject(/** @type {string} */ id) {
   if (!found) throw new ProjectError('no such project', 404);
   const canonical = (/** @type {string} */ path) => { try { return realpathSync(path); } catch { return resolve(path); } };
   if ([libraryRoot(), savedRoot()].some(path => canonical(path) === canonical(found.path))) throw new ProjectError('Library roots cannot be deleted.', 403);
-  if (!projectMissing(found.path)) await moveToTrash(found.path);
+  if (!projectMissing(found.path)) await recycle(found.path, 'project');
   await forgetProject(id);
 }
 

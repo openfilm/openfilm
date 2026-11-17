@@ -133,7 +133,7 @@ test('skills are listed from the project, yours and the official ones, each by i
   assert.equal(findSkill('openfilm/brand', { mine, official }).description, 'Official brand', 'by uid: that one');
   assert.equal(findSkill('nothing', { mine, official }), null);
   const text = skillText(lyric);
-  assert.match(text, /^<skill name="local-lyric-pv" full-name="local\/lyric-pv" folder=".*mine[\\/]lyric-pv">\n---/);
+  assert.match(text, /^<skill name="local-lyric-pv" full-name="local\/lyric-pv" folder=".*mine[\\/]lyric-pv">\n(?!---)/, 'its front matter left out: the tag names it');
   assert.match(text, /Use the engine\.\n<\/skill>$/);
 });
 
@@ -358,7 +358,9 @@ test('where the person\'s skills came from: a folder, or the address commitSkill
   const { staging } = await previewSkills('https://github.com/someone/lyrics', { mine, fetch: async (_url, into) => { const to = join(into, 'lyrics'); cpSync(fetched, to, { recursive: true }); return to; } });
   await commitSkills(staging, { mine });
   assert.deepEqual((({ from, address }) => ({ from, address }))(skillOrigins(mine).lyrics), { from: 'link', address: 'https://github.com/someone/lyrics' });
-  await removeSkill('cards', { mine });
+  /* what is removed goes to a trash folder of the test's own, not the person's */
+  process.env.OPENFILM_TRASH_DIR = join(root, 'trash');
+  try { await removeSkill('cards', { mine }); } finally { delete process.env.OPENFILM_TRASH_DIR; }
   assert.equal(skillOrigins(mine).cards, undefined);
   assert.ok(skillOrigins(mine).lyrics);
 });
@@ -384,11 +386,11 @@ test("a cover's format is what its bytes are, and a cover chosen before goes whe
 test("OpenFilm's own skills: in order, each listed after the system prompt, printed with the command as run here, never in the library", async () => {
   const manual = promptSkills(mkdtempSync(join(tmpdir(), 'of-prompt-skills-')));
   const core = coreSkills();
-  assert.deepEqual(core.map((s) => s.uid), ['openfilm/film', 'openfilm/media', 'openfilm/canvas', 'openfilm/motion', 'openfilm/color', 'openfilm/stage'], 'in the order they are listed');
+  assert.deepEqual(core.map((s) => s.uid), ['openfilm/film', 'openfilm/media', 'openfilm/canvas', 'openfilm/color'], 'in the order they are listed');
   for (const s of core) {
     assert.ok(s.shown?.title['zh-CN'] && s.shown.summary.en, `${s.name} has a title and a summary for people`);
     /* the skills of plugins off at first are not listed until they are on */
-    if (!['motion', 'color', 'stage'].includes(s.name)) assert.ok(manual.includes(`- \`${s.name}\`${s.requires ? ` (after ${s.requires.map((n) => `\`${n}\``).join(', ')})` : ''}: ${s.description}`), `the list names ${s.name} by what it says it is for`);
+    if (s.name !== 'color') assert.ok(manual.includes(`- \`${s.name}\`${s.requires ? ` (after ${s.requires.map((n) => `\`${n}\``).join(', ')})` : ''}: ${s.description}`), `the list names ${s.name} by what it says it is for`);
     assert.ok(s.description.length > 40, `${s.name} says when it is read`);
   }
   assert.ok(manual.split(/\s+/).length < 400, 'a line for each: how a film is made is in the skill');
@@ -396,7 +398,6 @@ test("OpenFilm's own skills: in order, each listed after the system prompt, prin
   assert.match(text('film'), /The one rule: the picture depends only on t/);
   assert.match(text('media'), /--take <id>/);
   assert.match(text('canvas'), /canvas apply/);
-  assert.match(text('motion'), /<clip id>--<property>/);
   assert.match(text('color'), /openfilm color look/);
   /* read from their files, they say the command on the PATH (the app's own, or the one installed) */
   for (const s of core) assert.ok(!readFileSync(s.file, 'utf8').includes('npx openfilm'), `${s.name} says \`openfilm\``);
@@ -410,8 +411,8 @@ test("OpenFilm's own skills: in order, each listed after the system prompt, prin
   /* named as before it was the film's own skill, it is still found */
   assert.equal(findSkill('edit')?.uid, 'openfilm/film');
   /* printed, it says what it builds on: read those first */
-  const motion = await skillCommand(['motion'], 'openfilm', { cwd: tmpdir() });
-  assert.match(motion.lines[0], /^<skill name="openfilm-motion" [^>]* requires="film">/);
+  const color = await skillCommand(['color'], 'openfilm', { cwd: tmpdir() });
+  assert.match(color.lines[0], /^<skill name="openfilm-color" [^>]* requires="film">/);
   assert.ok(!listSkills().some((s) => core.some((c) => c.name === s.name)), 'in no library');
 });
 

@@ -174,6 +174,17 @@ test('two skills of a name are both given, each by its full name (owner-name), i
   assert.match(readFileSync(join(pi.piSkills.paths[0], 'project-brand', 'SKILL.md'), 'utf8'), /brand skill/, 'the project\'s');
 });
 
+test("a skill written for a terminal (`npx openfilm`) reaches an agent in the app with the app's `openfilm`; its own file untouched", async () => {
+  const w = world();
+  const mine = skill(join(w.openfilmHome, 'skills', 'reel'), 'reel', 'A reel');
+  writeFileSync(join(mine, 'SKILL.md'), '---\nname: reel\ndescription: A reel\n---\n\nRun `npx openfilm look`, then `npx -y openfilm@latest render`.\n');
+  const pi = await sessionSkills('byok', { cwd: w.project, home: w.home, dataDir: w.dataDir, mine: join(w.openfilmHome, 'skills'), prefsHome: w.openfilmHome });
+  const given = readFileSync(join(pi.piSkills.paths[0], 'local-reel', 'SKILL.md'), 'utf8');
+  assert.match(given, /Run `openfilm look`, then `openfilm render`\./);
+  assert.ok(!given.includes('npx'));
+  assert.match(readFileSync(join(mine, 'SKILL.md'), 'utf8'), /npx openfilm look/);
+});
+
 test("OpenFilm's own skill for terminal agents is known, never offered, and always off in the app", async () => {
   const w = world();
   skill(join(w.home, '.claude', 'skills', 'openfilm'), 'openfilm', 'Make videos as web pages with OpenFilm.');

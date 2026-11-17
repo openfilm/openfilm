@@ -79,6 +79,8 @@ export type SkillEntry = {
   profile?: Profile;
   /** addresses of its cover picture and preview video, when it has them */
   cover?: string; preview?: string;
+  /** the address of its app icon (components/AppIcon), when its folder brings one */
+  appIcon?: string;
   /** it has a surface (a page of its own), which makes it a plugin (lib/project-plugins): the page's address; listed
    *  for a project, where that project's files are for the page; and whether the person lets it change them */
   surface?: string; files?: string; writes?: true;
@@ -120,6 +122,14 @@ export type ExampleSegment = { title: string; from: number; to: number };
 export type Example = {
   id: string; title: string; description: string; poster: string | null; video: string | null; duration: number | null; url: string;
   category: string | null; segments: ExampleSegment[];
+  /** its publisher in the Community (`openfilm`: OpenFilm's own) */
+  owner?: string;
+};
+/** The Community's news (studio/server/examples.mjs readNews): its words by language, English always there. */
+export type News = {
+  id: string; title: Record<string, string>; text: Record<string, string>; image: string | null;
+  /** an https address, or `openfilm://community/<line>` */
+  link: string | null; from: string; until: string | null;
 };
 
 export class SourceError extends Error {
@@ -179,6 +189,7 @@ export const sourcesApi = {
   startFetch: (url: string) => call<{ job: FetchJob }>('projects/fetch', 'POST', { url }).then((r) => r.job),
   fetchJob: (id: string) => call<{ job: FetchJob }>(`projects/fetch/${encodeURIComponent(id)}`).then((r) => r.job),
   cancelFetch: (id: string) => call<object>(`projects/fetch/${encodeURIComponent(id)}`, 'DELETE'),
+  news: () => call<{ news: News[] }>('news').then((r) => r.news, () => [] as News[]),
   examples: () => call<{ examples: Example[] }>('examples').then((r) => (seen.examples = r.examples), () => seen.examples ?? []),
   /** an example's folder on this computer, fetched when needed (for an agent to read how it is made) */
   exampleFolder: (id: string) => call<{ folder: string }>(`examples/${encodeURIComponent(id)}/folder`, 'POST').then((r) => r.folder),

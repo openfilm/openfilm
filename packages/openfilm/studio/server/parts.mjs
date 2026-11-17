@@ -7,7 +7,7 @@ import { existsSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import { FILM_FILE, filmHtml, readFilm, readFilmFile } from '../../src/film-doc.mjs';
-import { PARTS, srcInto } from './compound.mjs';
+import { COVERS, PARTS, srcInto } from './compound.mjs';
 
 /** @typedef {import('./ops.mjs').FilmValue} FilmValue */
 
@@ -47,13 +47,14 @@ export async function writePartFilm(root, name, film) {
 }
 
 /**
- * The project a folder is the compound clip of (its film in `<project>/parts/<name>`), out to the outermost; the folder
+ * The project a folder is the compound clip or the cover of (its film in `<project>/parts/<name>` or
+ * `<project>/covers/<name>`), out to the outermost; the folder
  * itself when it is none's. Its films name their files from there (`../../assets/a.mp4`), so they are served from it.
  * @param {string} folder
  */
 export function compoundOuter(folder) {
   let at = resolve(folder);
-  while (basename(dirname(at)) === PARTS && existsSync(join(dirname(dirname(at)), FILM_FILE))) at = dirname(dirname(at));
+  while ((basename(dirname(at)) === PARTS || basename(dirname(at)) === COVERS) && existsSync(join(dirname(dirname(at)), FILM_FILE))) at = dirname(dirname(at));
   return at;
 }
 

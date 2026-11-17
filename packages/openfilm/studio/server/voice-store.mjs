@@ -7,7 +7,7 @@ import { mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { studioHome } from './projects.mjs';
 import { writeAtomic } from './atomic.mjs';
-import { moveToTrash } from './trash.mjs';
+import { recycle } from './recycle-bin.mjs';
 
 export const VOICE_UID = /^[a-f0-9-]{36}$/;
 export const voicesRoot = () => join(studioHome(), 'voices');
@@ -59,7 +59,7 @@ export async function keepVoice(asset) {
 }
 
 /** A local removal only. The remote voice and the provider's billing remain the person's to manage. */
-export const removeVoice = (/** @type {string} */ uid) => moveToTrash(voiceFolder(uid));
+export const removeVoice = (/** @type {string} */ uid) => recycle(voiceFolder(uid), 'voice');
 
 /** The extra IDs that can be starred, including temporarily disconnected voices. */
 export const ownVoiceKeys = () => voiceAssets().map((v) => `voice:${v.provider}/my:${v.uid}`);

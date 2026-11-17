@@ -1,8 +1,9 @@
 /**
  * The assets drawer's library (in the app's panel, over the chat, its composer under it), laid out as an editor's
  * library is: the categories along the top — the media (the project's and Saved, the media pane as it was), the
- * voices to speak a voice-over in, then OpenFilm's own sounds, music, text,
- * the captions a caption track is made with (CaptionsPane), stickers, filters, effects and transitions (lib/library),
+ * voices to speak a voice-over in or a recording from the microphone (VoicesPane, RecordPane), the captions a caption
+ * track is made with (CaptionsPane), then OpenFilm's own templates, sounds, music, text, stickers, filters, effects and
+ * transitions (lib/library),
  * then the tabs plugins bring (plugin-tabs) — and down the left the starred ones and the library's own,
  * its groups under it (a plugin's tab is its own, whole). What is shown is in
  * the accent color; a category's icon fills faintly too.
@@ -13,24 +14,23 @@
  */
 import { onRevealInLibrary, takeRevealed, type Revealed } from '@/lib/library-reveal';
 import React from 'react';
-import { ChevronDown, ChevronsLeft, ChevronsRight, FolderOpen, Plus, Search, Star, Users, X } from 'lucide-react';
+import { ChevronDown, ChevronsLeft, ChevronsRight, CircleHelp, FolderOpen, FolderPlus, Link2, Package, Pencil, Plus, Search, Star, Trash2, Upload, X } from 'lucide-react';
 import { useLanguage, useT } from '@/i18n';
 import { studioHost } from '@/lib/host';
-import { openResourceCenter } from '@/lib/asset-library';
+import { copyFromLibrary, inOrder, packKey, shelfActions, useLibraryPlaces } from '@/lib/library-places';
+import { pickFromComputer, SAVED, savedActions } from '@/lib/saved';
+import { safeName, type MediaLink } from '@/lib/workspace-resources';
 import {
-  BUILT_IN, TEXT_COMPONENT, askHere, builtInItem, prepareLibraryItem, isLibraryItemReady, libraryDragItem, libraryUrl, mayNeedFetch, nameOf, posterUrl, prepareTemplatePreview, previewUrl, templateExamplePath, templatePreviewUrl, toggleFavorite,
+  BUILT_IN, TEXT_COMPONENT, askHere, toggleFavorite, builtInItem, prepareLibraryItem, isLibraryItemReady, libraryDragItem, libraryUrl, mayNeedFetch, nameOf, posterUrl, prepareTemplatePreview, previewUrl, setAdded, templateExamplePath, templatePreviewUrl,
   inLibrary, useLibraryAdded, useLibraryFavorites, useLibraryHere, useLibraryIndex, type HereState, type LibraryCategory, type LibraryItem,
 } from '@/lib/library';
 import { openPlugins } from '@/lib/plugins-window';
-import { FEATURE_KINDS } from '../feature-kinds';
+import { COMMUNITY_ICON as Community, FEATURE_KINDS } from '../feature-kinds';
+import { ConfirmDialog } from '../ConfirmDialog';
 import { ContextMenu, type ContextMenuItem } from '../ContextMenu';
-import { clearResourceDrag, dragPicture, setResourceDragData } from '@/lib/resource-drag';
-import { useLibraryVoices, type SpeakVoice } from '@/lib/library-voices';
-import { MY_VOICES } from '@/lib/private-voices';
+import { clearResourceDrag, dragPicture, peekResourceDrag, RESOURCE_DRAG_TYPE, setResourceDragData, type ResourceKind } from '@/lib/resource-drag';
 import { ADD_COLOR, AudioArtwork, FOOT_ROOM, HereButton, MiniPlayer, MusicCard, ROUND, SoundRow, usePlayer, type LibraryHover } from './AudioList';
-import { CaptionsPane, type CaptionsActions } from './CaptionsPane';
 import { Empty } from './icons';
-import { STARRED, VoicesPane, type VoiceSample } from './VoicesPane';
 import { CategoryMark, useCategoryName, usePluginTabs, withTabs } from './plugin-tabs';
 import { PluginSurface } from '../surfaces';
 import { SourceBadge, SourceChips, sourcesIn, type Source } from './SourceChips';
@@ -40,19 +40,33 @@ import { arrangedCategories } from '@/lib/library-categories';
 import { PLAIN } from './OnPicture';
 import { isClipMotion } from '@/lib/clip-presets';
 import { useLibraryArrangement } from './arrangement';
+import { RecordPane, type Recorder } from '../RecordPane';
+import { useLibraryVoices, type SpeakVoice } from '@/lib/library-voices';
+import { MY_VOICES } from '@/lib/private-voices';
 import { providerName } from '@/lib/providers';
-import { Tooltip } from '../Tooltip';
+import { CaptionsPane, type CaptionsActions, type CaptionsSource } from './CaptionsPane';
+import { STARRED, VoicesPane, type VoiceSample } from './VoicesPane';
+import { CoversPane, type CoversActions, type CoversGroup } from './CoversPane';
 
-type OwnCategory = 'media' | 'voice' | 'captions' | LibraryCategory;
+type OwnCategory = 'media' | 'voice' | 'captions' | 'cover' | LibraryCategory;
 /** One of OpenFilm's own categories, or a plugin's tab (by its plugin's id). */
 type Category = OwnCategory | (string & {});
-/* OpenFilm's order (the person's own in Settings › Advanced, lib/library-categories): the media, then the templates,
-   the most a film is made with at once; the plugins' tabs come after these (the plugins themselves have a window of
-   their own, PluginsWindow) */
-export const CATEGORIES: OwnCategory[] = ['media', 'voice', 'captions', 'template', 'sound', 'music', 'text', 'sticker', 'filter', 'effect', 'transition'];
+/* OpenFilm's order (the person's own in Settings › Advanced, lib/library-categories): the media, the voice-over and the
+   captions, then the templates, the most a film is made with at once; the plugins' tabs come after these (the plugins
+   themselves have a window of their own, PluginsWindow) */
+export const CATEGORIES: OwnCategory[] = ['media', 'voice', 'captions', 'cover', 'template', 'sound', 'music', 'text', 'sticker', 'filter', 'effect', 'transition'];
+/** The voice-over's line that records from the microphone. */
+const RECORD = 'record';
 
-/** The side bar's starred line: a category's things the person starred ('' is all of it, else one of its groups). */
-const FAVORITES = STARRED;
+/** What of a folder a category shows: all of it for the media; sounds for music and sound effects; pictures for
+ * stickers; pages (and clips saved as pages) for what goes on the film as a page. */
+const kindsOf = (cat: Category): readonly ResourceKind[] | null =>
+  cat === 'media' ? null : cat === 'music' || cat === 'sound' ? ['audio'] : cat === 'sticker' ? ['image'] : ['mg'];
+/** Where the Community says how to make a thing of the library and send it in. */
+const MAKING_GUIDE = 'https://github.com/openfilm/community/tree/main/assets#readme';
+
+/** A line of the side bar: a new line of words, this project, the person's text looks, one of their folders, a pack. */
+type Line = { key: string; kind: 'new' | 'project' | 'presets' | 'folder' | 'pack'; name: string; group?: string; link?: MediaLink; official?: boolean };
 
 /* rows of a long list drawn at first, and more each time it is scrolled near its end */
 const PAGE = 80;
@@ -68,32 +82,22 @@ const NEW_TEXT = 'new';
 const PRESETS = 'presets';
 const ART = 'art';
 const TEMPLATES = 'tpl';
-type TextSection = 'mine' | typeof ART | typeof TEMPLATES;
-/* the sticker category's lines: the starred; the moving ones (`live:<group>` one of their groups); the still ones (the
-   emoji, `still:<group>`) */
-const LIVE = 'live';
-const STILL = 'still';
-type StickerSection = typeof LIVE | typeof STILL;
-const stickerSectionOf = (line: string): StickerSection | null =>
-  line === LIVE || line.startsWith(`${LIVE}:`) ? LIVE : line === STILL || line.startsWith(`${STILL}:`) ? STILL : null;
+type TextSection = typeof ART | typeof TEMPLATES;
 /** What a thing of the text category is to its lines: the new line, a look, a template, or none (a motion). */
 const textKind = (item: LibraryItem): 'new' | typeof ART | typeof TEMPLATES | null =>
   item.id === TEXT_COMPONENT ? 'new' : item.kind === 'textstyle' ? ART : item.kind === 'page' ? TEMPLATES : null;
 /** The section a line of the text category is under. */
 const sectionOf = (line: string): TextSection | null =>
-  line === FAVORITES || line === PRESETS ? 'mine' : line === ART || line.startsWith(`${ART}:`) ? ART : line === TEMPLATES || line.startsWith(`${TEMPLATES}:`) ? TEMPLATES : null;
+  line === ART || line.startsWith(`${ART}:`) ? ART : line === TEMPLATES || line.startsWith(`${TEMPLATES}:`) ? TEMPLATES : null;
 
-/* the category shown, the line picked in each, and whether the library's own groups are folded, kept while the
-   drawer closes and opens again */
+/* the category shown and the line picked in each, kept while the drawer closes and opens again */
 const SHOWN = {
-  cat: 'media' as Category, group: {} as Partial<Record<Category, string>>, folded: false,
-  /* the text category's sections opened, and which of the person's starred things are shown (looks or templates) */
-  textOpen: { mine: false, art: true, tpl: false } as Record<TextSection, boolean>, starredText: ART as typeof ART | typeof TEMPLATES,
-  /* the sticker category's sections opened */
-  stickerOpen: { live: true, still: false } as Record<StickerSection, boolean>,
+  cat: 'media' as Category, group: {} as Partial<Record<Category, string>>,
+  /* the line picked in each category, by its key */
+  line: {} as Partial<Record<Category, string>>,
 };
-/* the line a category opens on the first time: a new line of words for the text, the moving stickers */
-const firstLine = (cat: Category) => cat === 'voice' && SHOWN.group[cat] === 'featured' ? '' : SHOWN.group[cat] ?? (cat === 'text' ? NEW_TEXT : cat === 'sticker' ? LIVE : '');
+/* the line a category opens on the first time: a new line of words for the text, captions of what is said */
+const firstLine = (cat: Category) => SHOWN.group[cat] ?? (cat === 'text' ? NEW_TEXT : cat === 'captions' ? 'speech' : '');
 
 export interface LibraryActions {
   /** Enter or "+": a page or a sound at the playhead (a transition on the cut), a look on the clip. */
@@ -103,11 +107,23 @@ export interface LibraryActions {
 }
 
 
-export function LibraryDrawer({ media, mediaScope, onMediaScope, mediaRequest, actions, tried, templateStatus, previewBar, previewPicture, dismissRef, onPreviewStart, onDownloadFailed, captions, speak, onServices, projectId = null, folder = '', under = 0, beside = under, shown: isShown = true }: {
-  media: React.ReactNode;
-  /** the project's own media, or Mine (the person's own, for every film) */
-  mediaScope: 'project' | 'saved';
-  onMediaScope: (next: 'project' | 'saved') => void;
+/**
+ * How far the side's foot (its 32 px way out: the Resource Center, more in the Community) stands off the drawer's
+ * bottom. Under the app's chat, the way back to it stands in the composer's top row (`under` less `beside`: 4 px over
+ * the button, 8 px under it), and the foot's middle meets that button's middle; elsewhere 10 px over what covers it.
+ */
+export const footInset = (under: number, beside: number): number => (under > beside ? Math.round((under + beside) / 2 - 14) : beside + 10);
+
+export function LibraryDrawer({ media, mediaScope, onMediaScope, onUpload, onKeep, mediaRequest, actions, tried, templateStatus, previewBar, previewPicture, dismissRef, onPreviewStart, onDownloadFailed, captions, covers, speak, recorder, onServices, projectId = null, folder = '', under = 0, beside = under, shown: isShown = true }: {
+  /** the media pane on the project's files or one of the person's folders (`mediaScope`), showing only `kinds` (null: all) */
+  media: (kinds: readonly ResourceKind[] | null) => React.ReactNode;
+  /** the project's own media, or a place of the person's shelf (lib/library-places), by its `saved/` path */
+  mediaScope: string;
+  onMediaScope: (next: string) => void;
+  /** files of this computer put in the project (`project`) or one of the person's folders (its `saved/` path) */
+  onUpload: (files: File[], into: string) => void;
+  /** a file of the project kept in one of the person's folders (dropped on it) */
+  onKeep: (path: string, name: string, into: string) => void;
   mediaRequest?: number;
   actions: LibraryActions;
   tried?: string | null;
@@ -117,10 +133,14 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, mediaRequest, a
   dismissRef: React.RefObject<() => boolean>;
   onPreviewStart: () => void;
   onDownloadFailed: () => void;
-  /** where a caption track comes from: what is said, a file, or new (none: no workbench makes captions, and they are not shown) */
+  /** where a caption track comes from: what is said, a file, or by hand (none: no workbench makes captions, and they are not shown) */
   captions?: CaptionsActions;
+  /** the film's covers and the looks one takes (none: the workbench makes none, and they are not shown) */
+  covers?: CoversActions;
   /** words spoken in a voice of the library, put on the film at the playhead (VoicesPane): null, or why not */
   speak?: SpeakVoice;
+  /** recording from the microphone, the workbench's own so it goes on while another category is shown (RecordPane) */
+  recorder?: Recorder;
   /** Settings › Services: where a voice's service is connected */
   onServices: () => void;
   /** the project shown, for its own skills */
@@ -137,26 +157,25 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, mediaRequest, a
   const t = useT();
   const lang = useLanguage();
   const index = useLibraryIndex(true);
-  const favorites = useLibraryFavorites();
   /* the community's packs and things the person added: in the library beside OpenFilm's own */
   const added = useLibraryAdded();
-  const voices = useLibraryVoices();
+  /* the person's folders, the order of the side bar, OpenFilm's own packs taken out */
+  const { folders, order, hidden } = useLibraryPlaces();
   /* the categories shown, in the person's order, the tabs of the plugins on among them */
   const arranged = useLibraryArrangement();
   const tabs = usePluginTabs(projectId);
   const categoryName = useCategoryName(tabs);
-  const categories = arrangedCategories(withTabs(CATEGORIES, tabs), arranged).filter((c) => c.on && (c.id !== 'captions' || captions)).map((c) => c.id);
+  const categories = arrangedCategories(withTabs(CATEGORIES, tabs), arranged)
+    .filter((c) => c.on && (c.id !== 'captions' || captions) && (c.id !== 'cover' || covers) && (c.id !== 'voice' || speak)).map((c) => c.id);
   const [shownCat, setCat] = React.useState<Category>(SHOWN.cat);
   /* one turned off while it was shown: the media in its place */
   const cat: Category = categories.includes(shownCat) ? shownCat : 'media';
   /* the plugin whose tab is shown */
   const tab = tabs.find((p) => p.id === cat);
   const [group, setGroup] = React.useState<string>(firstLine(SHOWN.cat));
-  const [textOpen, setTextOpen] = React.useState(SHOWN.textOpen);
-  const [starredText, setStarredText] = React.useState(SHOWN.starredText);
-  const [stickerOpen, setStickerOpen] = React.useState(SHOWN.stickerOpen);
+  /* the line picked in this category, by its key (the media's is the media pane's: `mediaScope`) */
+  const [lineKey, setLineKey] = React.useState<string | undefined>(SHOWN.line[SHOWN.cat]);
   const [presets, , dropPreset] = useSavedLooks();
-  const [folded, setFolded] = React.useState(SHOWN.folded);
   const [query, setQuery] = React.useState('');
   /* the source the list is narrowed to (SourceChips), all of them by default */
   const [source, setSource] = React.useState<Source | ''>('');
@@ -165,7 +184,11 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, mediaRequest, a
   const tryOut = React.useRef(actions.tryOut);
   tryOut.current = actions.tryOut;
   const player = usePlayer<LibraryItem>(onDownloadFailed);
+  /* the voices: the services' (each a line), the person's own, the starred; one heard plays over the picture */
+  const voices = useLibraryVoices();
+  const favorites = useLibraryFavorites();
   const voicePlayer = usePlayer<VoiceSample>(onDownloadFailed, (sample) => sample.voice.sample ?? sample.id, true);
+  const recording = recorder?.state === 'recording';
   const [hoverVisual, setHoverVisual] = React.useState<string | null>(null);
   const hovering = React.useRef<{ id: string; timer: number } | null>(null);
   const stopHover = React.useCallback(() => {
@@ -214,7 +237,10 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, mediaRequest, a
     };
     return () => { dismissRef.current = () => false; };
   }, [dismissRef, closePreview, stopHover, picked, tried, player.item, voicePlayer.item]);
-  const show = (next: Category) => { SHOWN.cat = next; setCat(next); setGroup(firstLine(next)); setQuery(''); setSource(''); closePreview(); };
+  /* the voice-over opened while recording: on the recording */
+  const show = (next: Category) => {
+    SHOWN.cat = next; setCat(next); setGroup(next === 'voice' && recording ? RECORD : firstLine(next)); setLineKey(SHOWN.line[next]); setQuery(''); setSource(''); closePreview();
+  };
   /* a category asked for from elsewhere (the Community's page of a thing in it): shown, as the drawer opens or after */
   const showRef = React.useRef<(asked: Revealed) => void>(() => {});
   showRef.current = (asked: Revealed) => { show(asked.category); if (asked.group) { SHOWN.group[asked.category] = asked.group; setGroup(asked.group); } };
@@ -224,25 +250,10 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, mediaRequest, a
     return onRevealInLibrary((next) => { takeRevealed(); showRef.current(next); });
   }, []);
   const pickGroup = (next: string) => { SHOWN.group[cat] = next; setGroup(next); setQuery(''); closePreview(); };
-  /* a section of the text category opened or closed; opened, it shows its first line unless one of its lines is shown */
-  const toggleText = (section: TextSection) => {
-    const open = !textOpen[section];
-    SHOWN.textOpen = { ...textOpen, [section]: open };
-    setTextOpen(SHOWN.textOpen);
-    if (open && sectionOf(group) !== section) pickGroup(section === 'mine' ? FAVORITES : section);
-  };
-  const showStarred = (kind: typeof ART | typeof TEMPLATES) => { SHOWN.starredText = kind; setStarredText(kind); };
-  const toggleSticker = (section: StickerSection) => {
-    const open = !stickerOpen[section];
-    SHOWN.stickerOpen = { ...stickerOpen, [section]: open };
-    setStickerOpen(SHOWN.stickerOpen);
-    if (open && stickerSectionOf(group) !== section) pickGroup(section);
-  };
   React.useEffect(() => {
     if (mediaRequest != null && cat !== 'media') show('media');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mediaRequest]);
-  const fold = () => { SHOWN.folded = !folded; setFolded(!folded); };
   const bar = useSideways();
   const [rail, setRail] = React.useState(railWidth);
   /* the drawer closed: what was tried goes with it */
@@ -275,18 +286,17 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, mediaRequest, a
   }, [index, cat]);
   const shown = React.useMemo(() => {
     const [section, of] = group.split(':');
-    const starred = group === FAVORITES ? new Set(favorites) : null;
     return (index?.items ?? []).filter((item) => {
-      if (item.cat !== cat || isClipMotion(item) || !inLibrary(item, added)) return false;
+      if (item.cat !== cat || isClipMotion(item) || !inLibrary(item, added) || hidden.includes(packKey(item.group))) return false;
       const text = cat === 'text' ? textKind(item) : null;
       if (cat === 'text' && !text) return false;
       if (q) return Object.values(item.name).some((n) => n?.toLowerCase().includes(q)) || item.tags?.some((tag) => tag.toLowerCase().includes(q));
-      if (starred) return starred.has(item.id) && (cat !== 'text' || text === starredText);
+      /* the starred of this category, whatever their groups */
+      if (group === STARRED) return favorites.includes(item.id);
       if (cat === 'text') return text === section && (!of || item.group === of);
-      if (cat === 'sticker') return (section === STILL || section === LIVE) && (section === STILL) === Boolean(item.still) && (!of || item.group === of);
-      return !group || item.group === group;
+      return item.group === group;
     }).sort((a, b) => Number(Boolean(a.still)) - Number(Boolean(b.still)));
-  }, [index, cat, q, group, starredText, favorites, added]);
+  }, [index, cat, q, group, added, hidden, favorites]);
   const sources = React.useMemo(() => sourcesIn(shown.map(sourceOf)), [shown]);
   const items = React.useMemo(() => source && sources.includes(source) ? shown.filter((item) => sourceOf(item) === source) : shown, [source, sources, shown]);
   const presetItems = React.useMemo(() => presets.map((p, i): LibraryItem => ({
@@ -337,22 +347,29 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, mediaRequest, a
     if (e.key === 'Enter') { e.preventDefault(); addWhenHere(pickedItem); }
   };
 
-  /* the library's own lines under its fold: all of it, then its groups (a voice's: the services) */
-  const own = cat === 'voice'
-    ? (voices?.providers ?? []).map((s) => ({ id: s.id, name: providerName(s, lang) }))
-    : (index?.groups[cat as LibraryCategory] ?? []).filter((g) => !g.by && !clipMotionGroups.has(g.id)).map((g) => ({ id: g.id, name: nameOf(g.name, lang) }))
-      /* the groups of what moves first, those of stills (the emoji's) after them */
-      .sort((a, b) => Number(stillGroup(a.id)) - Number(stillGroup(b.id)));
-  /* the community's packs added, each a line of its own under the library's */
-  const addedPacks = cat === 'voice' ? [] : (index?.groups[cat as LibraryCategory] ?? [])
+  /* OpenFilm's own groups of this category (each a pack of the library), the moving ones before the stills; a group its
+     things name that the index does not list is a pack too, by its id, so nothing of the library is out of reach */
+  const listed = index?.groups[cat as LibraryCategory] ?? [];
+  const unlisted = [...new Set((index?.items ?? []).filter((it) => it.cat === cat && !it.by && it.group && !isClipMotion(it)).map((it) => it.group))]
+    .filter((id) => !listed.some((g) => g.id === id));
+  const own = [...listed.filter((g) => !g.by && !clipMotionGroups.has(g.id)).map((g) => ({ id: g.id, name: nameOf(g.name, lang) })),
+    ...unlisted.map((id) => ({ id, name: id }))]
+    .sort((a, b) => Number(stillGroup(a.id)) - Number(stillGroup(b.id)));
+  /* the community's packs added (one the index does not list, by its id) */
+  const addedPacks = [...listed
     .filter((g) => g.by && (index?.items ?? []).some((it) => it.cat === cat && it.group === g.id && inLibrary(it, added)))
-    .map((g) => ({ id: g.id, name: nameOf(g.name, lang) }));
-  /* a pack's line, the pack taken out of the library: all of the category instead */
-  const packGone = Boolean(group) && (index?.groups[cat as LibraryCategory] ?? []).some((g) => g.by && g.id === group) && !addedPacks.some((g) => g.id === group);
-  React.useEffect(() => { if (packGone) { SHOWN.group[cat] = ''; setGroup(''); } }, [packGone, cat]);
+    .map((g) => ({ id: g.id, name: nameOf(g.name, lang) })),
+    ...[...new Set((index?.items ?? []).filter((it) => it.cat === cat && it.by && it.group && inLibrary(it, added)).map((it) => it.group))]
+      .filter((id) => !listed.some((g) => g.id === id)).map((id) => ({ id, name: id }))];
   /* a kind the Community has: more of it found there, and a thing's page there (its preview, its pack) */
   const inCommunity = (FEATURE_KINDS as readonly string[]).includes(cat);
   const [menu, setMenu] = React.useState<{ x: number; y: number; items: ContextMenuItem[] } | null>(null);
+  /* the side bar's own: a line's menu (or the "+" one), a folder being renamed, one being made */
+  const [railMenu, setRailMenu] = React.useState<{ x: number; y: number; flipTo?: number; items: ContextMenuItem[] } | null>(null);
+  const [renaming, setRenaming] = React.useState<string | null>(null);
+  const [making, setMaking] = React.useState(false);
+  const [gone, setGone] = React.useState<Line | null>(null);
+  const uploadRef = React.useRef<HTMLInputElement>(null);
   const onListMenu = (e: React.MouseEvent) => {
     const id = (e.target as HTMLElement).closest<HTMLElement>('[data-library-card], [data-library-audio]');
     const thing = id?.dataset.libraryCard ?? id?.dataset.libraryAudio;
@@ -361,47 +378,238 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, mediaRequest, a
     setMenu({ x: e.clientX, y: e.clientY, items: [{ id: 'details', label: t('assetDrawer.seeDetails'),
       onSelect: () => openPlugins({ line: `kind:${cat as LibraryCategory}`, page: `asset:${thing}` }) }] });
   };
-  /* the text category's groups, under Word art or Templates by what they hold */
+  /* the text category's groups, word art or templates by what they hold */
   const textGroups = React.useMemo(() => {
     const of = { [ART]: new Set<string>(), [TEMPLATES]: new Set<string>() };
     for (const item of index?.items ?? []) {
       const kind = item.cat === 'text' ? textKind(item) : null;
       if (kind === ART || kind === TEMPLATES) of[kind].add(item.group);
     }
-    const named = (ids: Set<string>) => (index?.groups.text ?? []).filter((g) => ids.has(g.id)).map((g) => ({ id: g.id, name: nameOf(g.name, lang) }));
+    const named = (ids: Set<string>) => (index?.groups.text ?? []).filter((g) => ids.has(g.id)).map((g) => ({ id: g.id, name: nameOf(g.name, lang), by: g.by }));
     return { [ART]: named(of[ART]), [TEMPLATES]: named(of[TEMPLATES]) };
   }, [index, lang]);
-  const textSection = (section: typeof ART | typeof TEMPLATES, label: string) => {
-    const inIt = sectionOf(group) === section && !q;
-    return (
-      <>
-        <SideBox on={inIt && !textOpen[section]} holds={inIt && textOpen[section]} open={textOpen[section]} onClick={() => toggleText(section)}>{label}</SideBox>
-        {textOpen[section] ? (
-          <div className="flex flex-col pb-1">
-            <SideLine on={group === section && !q} onClick={() => pickGroup(section)}>{t('assetDrawer.all')}</SideLine>
-            {textGroups[section].map((g) => <SideLine key={g.id} on={group === `${section}:${g.id}` && !q} onClick={() => pickGroup(`${section}:${g.id}`)}>{g.name}</SideLine>)}
-          </div>
-        ) : null}
-      </>
-    );
+  /* a folder or a pack held and moved up or down the side bar: it follows the pointer while the others make room, and
+     takes its place as it is let go (Esc: back where it was) */
+  const railNav = React.useRef<HTMLElement>(null);
+  const [railDrag, setRailDrag] = React.useState<{ key: string; dy: number; from: number; to: number; step: number } | null>(null);
+  /* a press that became a drag is not also a click */
+  const railDragged = React.useRef(false);
+  /* the side bar's lines: first what is the person's here (a new line of words, this project, their looks), then their
+     folders and the packs as one list in their order */
+  /* the media's side bar is where the person's files are (this project, their folders); every other category's is its
+     groups, in folding sections (OpenFilm's, the Community's added packs; the text's looks and templates) */
+  const sectioned = cat !== 'media' && cat !== 'voice' && cat !== 'captions' && cat !== 'cover';
+  const head: Line[] = [
+    ...(cat === 'text' ? [{ key: NEW_TEXT, kind: 'new' as const, name: t('assetDrawer.textNew') }] : []),
+    ...(sectioned ? [] : [{ key: 'project', kind: 'project' as const, name: t('assetDrawer.mediaProject') }]),
+    ...(cat === 'text' ? [{ key: PRESETS, kind: 'presets' as const, name: t('assetDrawer.textPresets') }] : []),
+  ];
+  const packs: Line[] = cat === 'text'
+    ? [ART, TEMPLATES].flatMap((section) => textGroups[section as TextSection]
+      .filter((g) => !g.by || added.includes(g.id) || (index?.items ?? []).some((it) => it.cat === 'text' && it.group === g.id && inLibrary(it, added)))
+      .map((g) => ({ key: packKey(g.id), kind: 'pack' as const, name: g.name, group: `${section}:${g.id}`, official: !g.by })))
+    /* the media's packs are folders of the person's own once added (studio/server/saved.mjs savePack), never lines */
+    : cat === 'media' ? []
+    : [...own.map((g) => ({ key: packKey(g.id), kind: 'pack' as const, name: g.name, group: g.id, official: true })),
+      ...addedPacks.map((g) => ({ key: packKey(g.id), kind: 'pack' as const, name: g.name, group: g.id }))];
+  const packsShown = packs.filter((p, i) => !hidden.includes(p.key) && packs.findIndex((o) => o.key === p.key) === i);
+  const movable = sectioned ? packsShown : inOrder([
+    ...folders.map((f): Line => ({ key: f.path, kind: 'folder', name: f.name, ...(f.link ? { link: f.link } : {}) })),
+    ...packsShown,
+  ], (line) => line.key, order);
+  /* the sections of a category's side bar, each folded or open as the person left it */
+  const sections: { id: string; name: string; lines: Line[] }[] = !sectioned ? [] : cat === 'text' ? [
+    { id: ART, name: t('assetDrawer.textArt'), lines: packsShown.filter((p) => p.group?.startsWith(`${ART}:`)) },
+    { id: TEMPLATES, name: t('assetDrawer.textTemplates'), lines: packsShown.filter((p) => p.group?.startsWith(`${TEMPLATES}:`)) },
+  ] : [
+    { id: 'openfilm', name: t('assetDrawer.railOfficial'), lines: packsShown.filter((p) => p.official) },
+    { id: 'community', name: t('assetDrawer.railCommunity'), lines: packsShown.filter((p) => !p.official) },
+  ];
+  const [folded, setFolded] = React.useState<Record<string, boolean>>(readFolded);
+  const fold = (id: string) => setFolded((was) => { const next = { ...was, [`${cat}:${id}`]: !was[`${cat}:${id}`] }; keepFolded(next); return next; });
+  const lines = [...head, ...movable];
+  const holdLine = (e: React.PointerEvent<HTMLElement>, key: string) => {
+    if (e.button !== 0 || renaming) return;
+    const keys = movable.map((l) => l.key);
+    const rows = keys.map((k) => railNav.current?.querySelector<HTMLElement>(`[data-rail-line="${CSS.escape(k)}"]`)?.getBoundingClientRect());
+    const from = keys.indexOf(key);
+    if (from < 0 || rows.some((r) => !r)) return;
+    const mids = rows.map((r) => r!.top + r!.height / 2);
+    const step = rows.length > 1 ? rows[1]!.top - rows[0]!.top : rows[0]!.height + 4;
+    const y = e.clientY;
+    let to = from, started = false;
+    const move = (ev: PointerEvent) => {
+      const dy = ev.clientY - y;
+      if (!started && Math.abs(dy) < 4) return;
+      started = true;
+      const middle = mids[from]! + dy;
+      to = mids.filter((m, i) => i !== from && m < middle).length;
+      setRailDrag({ key, dy, from, to, step });
+    };
+    const end = (commit: boolean) => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', cancel);
+      window.removeEventListener('keydown', escape, true);
+      if (!started) return;
+      railDragged.current = true;
+      window.setTimeout(() => { railDragged.current = false; });
+      if (commit && to !== from) {
+        const next = keys.filter((k) => k !== key);
+        next.splice(to, 0, key);
+        void shelfActions.arrange(next);
+      }
+      setRailDrag(null);
+    };
+    const up = () => end(true);
+    const cancel = () => end(false);
+    const escape = (ev: KeyboardEvent) => { if (ev.key === 'Escape' && started) { ev.preventDefault(); ev.stopPropagation(); end(false); } };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', cancel);
+    window.addEventListener('keydown', escape, true);
   };
-  const stickerSection = (section: StickerSection, label: string) => {
-    const inIt = stickerSectionOf(group) === section && !q;
-    const groups = own.filter((g) => stillGroup(g.id) === (section === STILL));
-    return (
-      <>
-        <SideBox on={inIt && !stickerOpen[section]} holds={inIt && stickerOpen[section]} open={stickerOpen[section]} onClick={() => toggleSticker(section)}>{label}</SideBox>
-        {stickerOpen[section] ? (
-          <div className="flex flex-col pb-1">
-            <SideLine on={group === section && !q} onClick={() => pickGroup(section)}>{t('assetDrawer.all')}</SideLine>
-            {groups.map((g) => <SideLine key={g.id} on={group === `${section}:${g.id}` && !q} onClick={() => pickGroup(`${section}:${g.id}`)}>{g.name}</SideLine>)}
-          </div>
-        ) : null}
-      </>
-    );
+  /* where a line is drawn while one is dragged: the one held under the pointer, the ones it passed a line over */
+  const railShift = (i: number, key: string): React.CSSProperties | undefined => {
+    if (!railDrag) return undefined;
+    const { from, to, step, dy } = railDrag;
+    if (key === railDrag.key) return { transform: `translateY(${dy}px)`, position: 'relative', zIndex: 10 };
+    const by = from < to && i > from && i <= to ? -step : from > to && i >= to && i < from ? step : 0;
+    return { transform: `translateY(${by}px)`, transition: 'transform 150ms cubic-bezier(.2,.8,.2,1)' };
   };
+  /* the voice-over and the captions have lines of their own, not the library's folders */
+  const ownLines = cat === 'voice' || cat === 'captions' || cat === 'cover';
+  /* the line picked: the media's is the media pane's; elsewhere the one picked last, else the first pack */
+  const picking = cat === 'media' ? mediaScope : lineKey;
+  const current = lines.find((line) => line.key === picking)
+    ?? (cat === 'media' ? head[0] : lines.find((line) => line.kind === 'new') ?? movable.find((line) => line.kind === 'pack') ?? head[0])!;
+  const ownShown = !ownLines && (current.kind === 'project' || current.kind === 'folder');
+  const lineOn = (line: Line) => line.key === current.key && !(q && !ownShown) && !(sectioned && group === STARRED);
+  const pickLine = (line: Line) => {
+    SHOWN.line[cat] = line.key; setLineKey(line.key);
+    if (line.kind === 'project' || line.kind === 'folder') onMediaScope(line.key);
+    else pickGroup(line.kind === 'new' ? NEW_TEXT : line.kind === 'presets' ? PRESETS : line.group ?? '');
+  };  /* the side bar as namespaces (all but the media's): a box picks, or opens to the lines it holds */
+  type RailNode = { key: string; name: string; on?: boolean; onPick?: () => void; line?: Line; children?: RailNode[] };
+  const railPick = (id: string): RailNode => ({ key: id || 'all', name: '', on: group === id && !(q && id !== RECORD), onPick: () => pickGroup(id) });
+  const ofLine = (line: Line): RailNode => ({ key: line.key, name: line.name, on: lineOn(line), onPick: () => pickLine(line), line });
+  /* the voice-over's own: the person's (recording, then their voices cloned), the starred, the services */
+  const inMine = cat === 'voice' && (group === MY_VOICES || group === RECORD);
+  const nodes: RailNode[] = cat === 'voice' ? [
+    { key: 'mine', name: t('assetDrawer.railMine'), on: inMine && !q, onPick: () => pickGroup(MY_VOICES) },
+    { ...railPick(STARRED), name: t('assetDrawer.favorites') },
+    { key: 'services', name: t('assetDrawer.railServices'), children: [
+      { ...railPick(''), name: t('assetDrawer.all') },
+      ...(voices?.providers ?? []).map((s) => ({ ...railPick(s.id), name: providerName(s, lang) })),
+    ] },
+  ] : cat === 'cover' ? [
+    { ...railPick(''), name: t('covers.allLooks') },
+    { ...railPick('frame'), name: t('covers.groupFrame') },
+    { ...railPick('design'), name: t('covers.groupDesign') },
+  ] : cat === 'captions' ? [
+    { ...railPick('speech'), name: t('assetDrawer.captionsFromSpeech') },
+    { ...railPick('file'), name: t('assetDrawer.captionsFromFile') },
+    { ...railPick('hand'), name: t('assetDrawer.captionsByHand') },
+  ] : [
+    /* the starred of the category first, then its own lines (the text's), then its namespaces */
+    { ...railPick(STARRED), name: t('assetDrawer.favorites') },
+    ...head.map(ofLine),
+    ...sections.filter((sec) => sec.lines.length).map((sec) => ({ key: sec.id, name: sec.name, children: sec.lines.map(ofLine) })),
+  ];
+
+  /* the line shown is the pack's or the folder's it says (as the drawer opens, as the category changes) */
+  React.useEffect(() => {
+    if (ownLines) return;
+    if ((current.kind === 'project' || current.kind === 'folder') && mediaScope !== current.key) onMediaScope(current.key);
+    const want = current.kind === 'pack' ? current.group ?? '' : current.kind === 'new' ? NEW_TEXT : current.kind === 'presets' ? PRESETS : null;
+    if (want != null && want !== group) { SHOWN.group[cat] = want; setGroup(want); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [current.key, cat]);
+  /* a folder of the person's renamed in place: the folder itself, and the line picked follows it */
+  const renameFolder = (line: Line, raw: string) => {
+    const name = safeName(raw);
+    const to = `${line.key.slice(0, line.key.lastIndexOf('/'))}/${name}`;
+    if (!name || to === line.key) return;
+    void savedActions.move(line.key, to).then((result) => { if (result === 'ok' && current.key === line.key) pickLine({ ...line, key: to }); });
+  };
+  const makeFolder = async (raw: string) => {
+    const name = safeName(raw);
+    if (!name) return;
+    if (await savedActions.newFolder(`${SAVED}/${name}`) === 'ok') pickLine({ key: `${SAVED}/${name}`, kind: 'folder', name });
+  };
+  /* a line's menu: a folder of the person's renamed, shown in the file manager, taken away (a linked one: its link
+     only), sent to the Community; a pack taken out of the library (the Community's go back to it) */
+  const lineMenu = (line: Line): ContextMenuItem[] => line.kind === 'folder' ? [
+    { id: 'rename', label: t('assets.rename'), icon: <Pencil size={14} />, onSelect: () => setRenaming(line.key) },
+    { id: 'reveal', label: t('projects.revealFolder'), icon: <FolderOpen size={14} />, onSelect: () => savedActions.reveal(line.key, Boolean(line.link)) },
+    { id: 'publish', label: t('assetDrawer.contribute'), icon: <Upload size={14} />, onSelect: () => openPlugins({ line: 'publish' }) },
+    { id: 'delete', label: t(line.link ? 'resourceCenter.removeLink' : 'assets.delete'), icon: <Trash2 size={14} />, danger: true, onSelect: () => setGone(line) },
+  ] : line.kind === 'pack' ? [
+    ...(inCommunity ? [{ id: 'community', label: t('assetDrawer.seeInCommunity'), icon: <Community size={14} />, onSelect: () => openPlugins({ line: `kind:${cat as LibraryCategory}` }) }] : []),
+    { id: 'remove', label: t('assetDrawer.removePack'), icon: <Trash2 size={14} />, onSelect: () => { if (line.official) void shelfActions.hide(line.key, true); else setAdded(line.key.slice(5), false); } },
+  ] : [];
+  /* what is dropped on one of the person's folders goes in it: files of this computer brought in, the folder's own moved,
+     a file of the project kept there, a thing of the library or a pack copied there */
+  const dropOn = (line: Line) => ({
+    accepts: (data: DataTransfer) => [...data.types].includes('Files') || [...data.types].includes(RESOURCE_DRAG_TYPE) || Boolean(peekResourceDrag()),
+    onDrop: (e: React.DragEvent) => {
+      const files = [...e.dataTransfer.files];
+      const thing = peekResourceDrag();
+      clearResourceDrag();
+      if (files.length && !thing) { onUpload(files, line.key); return; }
+      if (!thing) return;
+      const name = thing.path.split('/').at(-1) ?? thing.name;
+      if (thing.path.startsWith(`${SAVED}/`)) void savedActions.move(thing.path, `${line.key}/${name}`);
+      else if (thing.saved?.startsWith(`${BUILT_IN}/`) || thing.path.startsWith(`${BUILT_IN}/`)) {
+        void copyFromLibrary(thing.saved ?? thing.path, line.key).catch((error: unknown) => setNotice(error instanceof Error ? error.message : String(error)));
+      } else onKeep(thing.path, thing.name, line.key);
+    },
+  });
+  /* where "Upload files…" puts them: the folder or the project shown, else the project */
+  const uploadInto = ownShown ? current.key : 'project';
+  const kindName = categoryName(cat);
+  /* the media's "+ Add": folders made or linked, more from the Community, how to make media and contributing them (a
+     folder's own upload is in its pane) */
+  const addMenu = (): ContextMenuItem[] => [
+    { id: 'folder', label: t('assets.newFolder'), icon: <FolderPlus size={14} />, onSelect: () => setMaking(true) },
+    { id: 'link', label: t('assetDrawer.linkFolder'), note: t('resourceCenter.networkHint'), icon: <Link2 size={14} />, onSelect: () => void linkFolder() },
+    { id: 'community', label: t('assetDrawer.getMore'), icon: <Community size={14} />, onSelect: () => openPlugins(inCommunity ? { line: `kind:${cat as LibraryCategory}` } : {}) },
+    { id: 'how', label: t('assetDrawer.howToMake').replace('{kind}', kindName), icon: <CircleHelp size={14} />, onSelect: () => { window.open(MAKING_GUIDE, '_blank', 'noreferrer'); } },
+    { id: 'publish', label: t('assetDrawer.contribute'), icon: <Upload size={14} />, onSelect: () => openPlugins({ line: 'publish' }) },
+  ];
+  /* OpenFilm's own packs taken out of this category: the menu that puts them back */
+  const hiddenBack = (): ContextMenuItem[] => hidden.some((key) => packs.some((p) => p.key === key && p.official))
+    ? [{ id: 'hidden', label: t('assetDrawer.removedPacks'), icon: <Package size={14} />,
+      submenu: packs.filter((p) => p.official && hidden.includes(p.key)).map((p) => ({ id: p.key, label: p.name, onSelect: () => void shelfActions.hide(p.key, false) })) }]
+    : [];
+  /* "+ Add" of a category's side bar: more of it from the Community, how to make it, sending one, and OpenFilm's packs
+     taken out, put back */
+  const kindMenu = (): ContextMenuItem[] => [
+    { id: 'community', label: t('assetDrawer.getMore'), icon: <Community size={14} />, onSelect: () => openPlugins(inCommunity ? { line: `kind:${cat as LibraryCategory}` } : {}) },
+    { id: 'how', label: t('assetDrawer.howToMake').replace('{kind}', kindName), icon: <CircleHelp size={14} />, onSelect: () => { window.open(MAKING_GUIDE, '_blank', 'noreferrer'); } },
+    { id: 'publish', label: t('assetDrawer.contribute'), icon: <Upload size={14} />, onSelect: () => openPlugins({ line: 'publish' }) },
+    ...hiddenBack(),
+  ];
+  /* one of the person's folders (or a pack) in the media's side bar: renamed in place, held and moved, dropped on */
+  const mineLine = (line: Line, i: number, look: 'box' | 'child') => renaming === line.key ? (
+    <RailName key={line.key} value={line.name} onDone={(name) => { setRenaming(null); renameFolder(line, name); }} onCancel={() => setRenaming(null)} />
+  ) : (
+    <RailLine key={line.key} look={look} label={look === 'box' ? t('assetDrawer.railMine') : undefined} line={line} on={lineOn(line)}
+      onPick={() => { if (!railDragged.current) pickLine(line); }}
+      onMenu={(e) => { e.preventDefault(); setRailMenu({ x: e.clientX, y: e.clientY, items: lineMenu(line) }); }}
+      onHold={look === 'child' ? (e) => holdLine(e, line.key) : undefined} held={railDrag?.key === line.key} style={look === 'child' ? railShift(i, line.key) : undefined}
+      drop={line.kind === 'folder' ? dropOn(line) : undefined} />
+  );
+  const linkFolder = async () => {
+    const picked = await pickFromComputer(t('assetLibrary.connectFolder'), true);
+    if (picked === 'no-dialog') { setNotice(t('media.noDialog')); return; }
+    if (!picked.length) return;
+    const [landed] = await savedActions.bring(picked, SAVED, 'link');
+    if (landed) pickLine({ key: landed, kind: 'folder', name: landed.split('/').at(-1) ?? landed });
+  };
+  const [notice, setNotice] = React.useState('');
   /* square cards for the looks (and the person's), wide ones for the templates */
-  const textSquare = cat === 'text' && (sectionOf(group) === ART || group === PRESETS || group === NEW_TEXT || (group === FAVORITES && starredText === ART));
+  const textSquare = cat === 'text' && (sectionOf(group) === ART || group === PRESETS || group === NEW_TEXT);
   const askMusic = studioHost?.ask;
   const groupName = (id: string) => own.find((g) => g.id === id)?.name ?? '';
   const dragProps = (item: LibraryItem) => ({ onDragStart: dragOf(item, nameOf(item.name, lang)), onDragEnd: () => clearResourceDrag() });
@@ -439,12 +647,13 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, mediaRequest, a
   return (
     /* a drag let go back in the drawer ends at once (lib/resource-drag) */
     <div className="flex h-full min-h-0 min-w-0 flex-col outline-none" tabIndex={-1} onKeyDown={onKey} onPointerDownCapture={stopHover} onDragStartCapture={stopHover} data-drag-home="" data-studio-library=""
-      style={{ '--drawer-under': `${under}px`, '--drawer-beside': `${beside}px` } as React.CSSProperties}>
-      {isShown && previewPicture && voicePlayer.item ? (
-        <AudioArtwork target={previewPicture} voice={voicePlayer.item.voice} name={voicePlayer.item.voice.name} playing={voicePlayer.playing} readLevel={voicePlayer.readLevel} />
-      ) : isShown && previewPicture && player.item ? (
+      style={{ '--drawer-under': `${under}px`, '--drawer-beside': `${beside}px`, '--drawer-foot': `${footInset(under, beside)}px` } as React.CSSProperties}>
+      {isShown && previewPicture && player.item ? (
         <AudioArtwork target={previewPicture} item={player.item} name={nameOf(player.item.name, lang)} playing={player.playing}
           progress={player.duration > 0 ? Math.min(1, player.time / player.duration) : 0} />
+      ) : null}
+      {isShown && previewPicture && voicePlayer.item ? (
+        <AudioArtwork target={previewPicture} voice={voicePlayer.item.voice} name={voicePlayer.item.voice.name} playing={voicePlayer.playing} readLevel={voicePlayer.readLevel} />
       ) : null}
       {/* the categories, as high as the inspector's tabs beside it (40 px) so their lines meet; they keep their own
           spacing however wide the panel is, and more than fit scroll sideways (a wheel too), fading at the edge while
@@ -465,8 +674,11 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, mediaRequest, a
               aria-pressed={cat === id}
               className={`relative my-1 flex min-w-[46px] shrink-0 flex-col items-center justify-center gap-px whitespace-nowrap rounded-md px-2 text-[10.5px] leading-[13px] ${cat === id ? 'font-semibold text-[var(--accent)]' : 'font-medium text-[var(--text)] hover:text-[var(--accent)]'}`}
             >
-              {/* the one shown: its icon and name in the accent, nothing else */}
-              <CategoryMark id={id} tabs={tabs} on={cat === id} size={18} />
+              {/* the one shown: its icon and name in the accent, nothing else; the voice-over's with a red dot while it records */}
+              <span className="relative flex">
+                <CategoryMark id={id} tabs={tabs} on={cat === id} size={18} />
+                {id === 'voice' && recording ? <span data-recording="" className="absolute -right-[3px] -top-[1px] h-[7px] w-[7px] animate-pulse rounded-full bg-[var(--err)]" aria-hidden /> : null}
+              </span>
               {categoryName(id)}
             </button>
           ))}
@@ -489,80 +701,99 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, mediaRequest, a
         {/* as wide as the person dragged its edge (RAIL), kept for next time */}
         <div className="relative flex shrink-0" style={{ width: rail }}>
           <RailEdge width={rail} onWidth={setRail} />
-          <nav data-studio-host-panel="" className="flex min-w-0 flex-1 flex-col gap-1 overflow-y-auto border-r border-[var(--border)] px-2 pb-[calc(var(--drawer-beside,0px)+10px)] pt-2.5">
-            {cat === 'media' ? (
-              <>
-                {/* this project's media; Mine, the person's own for every film (what they keep there, in their folders) */}
-                <SideBox on={mediaScope === 'project'} onClick={() => onMediaScope('project')}>{t('assetDrawer.mediaProject')}</SideBox>
-                <SideBox on={mediaScope === 'saved'} onClick={() => onMediaScope('saved')}>{t('assetDrawer.mine')}</SideBox>
-              </>
-            ) : cat === 'text' ? (
-              <>
-                {/* a new line of words; the person's own; the library's looks and its templates */}
-                <SideBox on={group === NEW_TEXT && !q} onClick={() => pickGroup(NEW_TEXT)}>{t('assetDrawer.textNew')}</SideBox>
-                <SideBox on={sectionOf(group) === 'mine' && !textOpen.mine && !q} holds={sectionOf(group) === 'mine' && textOpen.mine && !q} open={textOpen.mine} onClick={() => toggleText('mine')}>
-                  {t('assetDrawer.textMine')}
-                </SideBox>
-                {textOpen.mine ? (
-                  <div className="flex flex-col pb-1">
-                    <SideLine on={group === FAVORITES && !q} onClick={() => pickGroup(FAVORITES)}>{t('assetDrawer.favorites')}</SideLine>
-                    <SideLine on={group === PRESETS && !q} onClick={() => pickGroup(PRESETS)}>{t('assetDrawer.textPresets')}</SideLine>
+          <nav ref={railNav} data-studio-host-panel="" className="flex min-w-0 flex-1 flex-col gap-1 overflow-y-auto border-r border-[var(--border)] px-2 pb-[var(--drawer-foot)] pt-2.5">
+            {/* the side bar is the library's folders: this project's, the person's own (the library folder's), the packs
+                of the Community (OpenFilm's own among them), as one list in the person's order; the right side shows
+                what of this category the line picked holds */}
+            {/* the voice-over's, the captions' and every category's but the media's: namespaces, as boxes; one that holds
+                others opens to them, each a line of its words (the media's are its folders, below) */}
+            {ownLines || sectioned ? <div className="flex flex-col gap-2">{nodes.map((node) => node.children ? (() => {
+              const open = !folded[`${cat}:${node.key}`];
+              const lit = node.children.some((c) => c.on);
+              return (
+                <div key={node.key} className="flex flex-col" data-rail-section={node.key}>
+                  <button type="button" aria-expanded={open} onClick={() => fold(node.key)}
+                    className={`${RAIL_BOX} ${lit ? 'text-[var(--accent)]' : 'text-[var(--text)]'}`}>
+                    <span className="min-w-0 flex-1 truncate">{node.name}</span>
+                    <ChevronDown size={13} aria-hidden className={`shrink-0 transition-transform duration-150 ${open ? 'rotate-180' : ''}`} />
+                  </button>
+                  {open ? node.children.map((child) => (
+                    <button key={child.key} type="button" onClick={child.onPick} aria-pressed={child.on} title={child.name}
+                      data-rail-line={child.line?.key} data-rail-kind={child.line?.kind}
+                      onContextMenu={child.line ? (e) => { e.preventDefault(); setRailMenu({ x: e.clientX, y: e.clientY, items: lineMenu(child.line!) }); } : undefined}
+                      className={`${RAIL_CHILD} ${child.on ? 'text-[var(--accent)]' : 'text-[var(--text)] hover:text-[var(--accent)]'}`}>
+                      <span className="min-w-0 flex-1 truncate">{child.name}</span>
+                    </button>
+                  )) : null}
+                </div>
+              );
+            })() : (
+              <button key={node.key} type="button" onClick={node.onPick} aria-pressed={node.on} title={node.name}
+                data-rail-line={node.line?.key} data-rail-kind={node.line?.kind}
+                className={`${RAIL_BOX} ${node.on ? 'text-[var(--accent)]' : 'text-[var(--text)]'}`}>
+                <span className="min-w-0 flex-1 truncate">{node.name}</span>
+              </button>
+            ))}</div> : (
+              /* the media's: Import (this project), then Mine (the person's folders; one alone is Mine itself) */
+              <div className="flex flex-col gap-2">
+                {head.map((line) => <RailLine key={line.key} look="box" line={line} on={lineOn(line)} onPick={() => pickLine(line)} />)}
+                {movable.length === 1 && renaming !== movable[0]!.key ? mineLine(movable[0]!, 0, 'box') : movable.length ? (
+                  <div className="flex flex-col" data-rail-section="mine">
+                    <button type="button" aria-expanded={!folded[`${cat}:mine`]} onClick={() => fold('mine')}
+                      className={`${RAIL_BOX} ${movable.some(lineOn) ? 'text-[var(--accent)]' : 'text-[var(--text)]'}`}>
+                      <span className="min-w-0 flex-1 truncate">{t('assetDrawer.railMine')}</span>
+                      <ChevronDown size={13} aria-hidden className={`shrink-0 transition-transform duration-150 ${folded[`${cat}:mine`] ? '' : 'rotate-180'}`} />
+                    </button>
+                    {folded[`${cat}:mine`] ? null : movable.map((line, i) => mineLine(line, i, 'child'))}
                   </div>
                 ) : null}
-                {textSection(ART, t('assetDrawer.textArt'))}
-                {textSection(TEMPLATES, t('assetDrawer.textTemplates'))}
-              </>
-            ) : cat === 'sticker' ? (
-              <>
-                {/* the starred; the moving stickers; the still ones (the emoji) */}
-                <SideBox on={group === FAVORITES && !q} onClick={() => pickGroup(FAVORITES)}>{t('assetDrawer.favorites')}</SideBox>
-                {stickerSection(LIVE, t('assetDrawer.stickersLive'))}
-                {stickerSection(STILL, t('assetDrawer.stickersStill'))}
-              </>
-            ) : cat === 'captions' ? (
-              <>
-                {/* caption tracks made here; their look is the caption inspector's */}
-                <SideBox on onClick={() => pickGroup('')}>{t('assetDrawer.captionsNewLine')}</SideBox>
-              </>
-            ) : (
-              <>
-                <SideBox on={group === FAVORITES && !q} onClick={() => pickGroup(FAVORITES)}>{t('assetDrawer.favorites')}</SideBox>
-                {cat === 'voice' ? <SideBox on={group === MY_VOICES && !q} onClick={() => pickGroup(MY_VOICES)}>{t('myVoices.title')}</SideBox> : null}
-                <SideBox on={group !== FAVORITES && group !== MY_VOICES && folded && !q} holds={group !== FAVORITES && group !== MY_VOICES && !folded && !q} open={!folded} onClick={fold}>
-                  {t(cat === 'voice' ? 'assetDrawer.services' : 'assetDrawer.library')}
-                </SideBox>
-                {folded ? null : (
-                  <div className="flex flex-col pb-1">
-                    <SideLine on={!group && !q} onClick={() => pickGroup('')}>{t('assetDrawer.all')}</SideLine>
-                    {own.map((g) => <SideLine key={g.id} on={group === g.id && !q} onClick={() => pickGroup(g.id)}>{g.name}</SideLine>)}
-                  </div>
-                )}
-                {/* the community's packs the person added, under their own heading */}
-                {addedPacks.length ? (
-                  <>
-                    <div className="px-2.5 pb-0.5 pt-2 text-[11px] text-[var(--text-faint)]">{t('assetDrawer.addedPacks')}</div>
-                    {addedPacks.map((g) => <SideLine key={g.id} on={group === g.id && !q} onClick={() => pickGroup(g.id)}>{g.name}</SideLine>)}
-                  </>
-                ) : null}
-              </>
+              </div>
             )}
-            {/* at the side bar's foot, a way out of the drawer: the Resource Center for the media; more of this kind, in the
-                Community */}
-            {cat === 'media' || inCommunity ? (
-              /* said short beside its icon (the rail is narrow), in full to the pointer and to a screen reader */
-              <Tooltip label={cat === 'media' ? t('resourceCenter.open') : t('assetDrawer.findMore')}>
-                <button type="button" onClick={cat === 'media' ? openResourceCenter : () => openPlugins({ line: `kind:${cat as LibraryCategory}` })}
-                  aria-label={cat === 'media' ? t('resourceCenter.open') : t('assetDrawer.findMore')}
-                  className="mt-auto flex h-8 shrink-0 items-center gap-2 rounded-md px-2.5 text-left text-[12px] text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)] focus-visible:outline focus-visible:outline-1 focus-visible:outline-[var(--accent)]">
-                  {cat === 'media' ? <FolderOpen size={14} aria-hidden className="shrink-0" /> : <Users size={14} aria-hidden className="shrink-0" />}
-                  <span className="truncate">{cat === 'media' ? t('resourceCenter.title') : t('assetDrawer.moreOf').replace('{kind}', categoryName(cat))}</span>
-                </button>
-              </Tooltip>
-            ) : null}
+            {making ? <RailName value={t('assets.newFolder')} onDone={(name) => { setMaking(false); void makeFolder(name); }} onCancel={() => setMaking(false)} /> : null}
+            {railMenu ? <ContextMenu x={railMenu.x} y={railMenu.y} flipTo={railMenu.flipTo} items={railMenu.items} onClose={() => setRailMenu(null)} /> : null}
+            {notice ? <div role="status" className="rounded-md bg-[var(--bg-hover)] px-2 py-1.5 text-[11px] text-[var(--text-muted)]" onClick={() => setNotice('')}>{notice}</div> : null}
+            <ConfirmDialog open={Boolean(gone)} danger={!gone?.link}
+              title={gone?.link ? t('resourceCenter.removeLink') : t('media.deleteFolderTitle').replace('{name}', gone?.name ?? '')}
+              description={gone?.link ? t('resourceCenter.removeLinkHint') : t('assets.deleteConfirm')}
+              confirmLabel={gone?.link ? t('resourceCenter.removeLink') : t('assets.delete')} cancelLabel={t('confirm.cancel')}
+              onCancel={() => setGone(null)}
+              onConfirm={() => { const line = gone; setGone(null); if (line) void savedActions.remove(line.key).then((result) => { if (result === 'ok' && current.key === line.key) pickLine(head.find((l) => l.kind === 'project')!); }); }} />
+            {/* at the side bar's foot: adding to the library (files, a folder, a linked one, more from the Community) */}
+            <input ref={uploadRef} type="file" multiple className="hidden" onChange={(e) => { const files = [...(e.target.files ?? [])]; e.target.value = ''; if (files.length) onUpload(files, uploadInto); }} />
+            {/* a category's: more of it from the Community; the media's: "+ Add", said beside its sign */}
+            {sectioned ? (
+              <button type="button" data-rail-add=""
+                onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); setRailMenu({ x: r.left, y: r.bottom, flipTo: r.top - 4, items: kindMenu() }); }}
+                className="mt-auto flex h-8 shrink-0 items-center gap-2 rounded-md px-2 text-left text-[12px] font-medium text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)] focus-visible:outline focus-visible:outline-1 focus-visible:outline-[var(--accent)]">
+                <Plus size={14} aria-hidden className="shrink-0" />
+                <span className="truncate">{t('assetDrawer.addMenu')}</span>
+              </button>
+            ) : ownLines ? null : (
+              <button type="button" data-rail-add=""
+                onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); setRailMenu({ x: r.left, y: r.bottom, flipTo: r.top - 4, items: addMenu() }); }}
+                className="mt-auto flex h-8 shrink-0 items-center gap-2 rounded-md px-2 text-left text-[12px] font-medium text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)] focus-visible:outline focus-visible:outline-1 focus-visible:outline-[var(--accent)]">
+                <Plus size={14} aria-hidden className="shrink-0" />
+                <span className="truncate">{t('assetDrawer.addMenu')}</span>
+              </button>
+            )}
           </nav>
         </div>
-        <div className="relative flex min-h-0 min-w-0 flex-1 flex-col" data-studio-host-panel={cat === 'media' ? undefined : ''}>
-          {cat === 'media' ? media : cat === 'captions' && captions ? <CaptionsPane actions={captions} /> : (
+        <div className="relative flex min-h-0 min-w-0 flex-1 flex-col" data-studio-host-panel={ownShown ? undefined : ''}>
+          {ownShown ? media(kindsOf(cat)) : cat === 'captions' ? (captions ? <CaptionsPane actions={captions} source={group as CaptionsSource} /> : null)
+            : cat === 'cover' ? (covers ? <CoversPane actions={covers} group={(group === 'frame' || group === 'design' ? group : '') as CoversGroup} /> : null)
+            : (
+            <>
+              {/* the person's own voice-over: recording at the top, then cloning their voice (and those cloned) */}
+              {inMine ? (
+                <div className="min-h-0 flex-1 overflow-y-auto pb-4" data-voice-mine="">
+                  <h3 className="px-3 pb-2 pt-3 text-[12px] font-semibold text-[var(--text)]">{t('assetDrawer.voiceRecord')}</h3>
+                  {recorder ? <RecordPane recorder={recorder} compact /> : null}
+                  <h3 className="px-3 pb-2 pt-5 text-[12px] font-semibold text-[var(--text)]">{t('assetDrawer.mineClone')}</h3>
+                  <VoicesPane group={MY_VOICES} query="" favorites={favorites} onServices={onServices} onAll={() => pickGroup('')} speak={speak}
+                    onMyVoices={() => pickGroup(MY_VOICES)} projectId={projectId}
+                    player={voicePlayer} previewBar={previewBar} picked={picked} onPick={(id) => { setPicked(id); onPreviewStart(); }} onClosePreview={closePreview} />
+                </div>
+              ) : (
             <>
               {/* a page has its own way back instead */}
               <div className="flex gap-2 px-3 pb-2 pt-2.5">
@@ -577,20 +808,8 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, mediaRequest, a
                 </label>
               </div>
               {cat !== 'voice' && !(cat === 'text' && (group === NEW_TEXT || group === PRESETS)) ? <SourceChips sources={sources} value={source} onChange={setSource} /> : null}
-              {/* the starred things of the text category: its looks, or its templates */}
-              {cat === 'text' && group === FAVORITES && !q ? (
-                <div className="flex gap-1.5 px-3 pb-2">
-                  {([ART, TEMPLATES] as const).map((kind) => (
-                    <button key={kind} type="button" aria-pressed={starredText === kind} onClick={() => showStarred(kind)}
-                      className={`h-7 rounded-full px-3 text-[12px] font-medium ${starredText === kind ? 'bg-[var(--bg-pressed)] text-[var(--text)]' : 'text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)]'}`}>
-                      {t(kind === ART ? 'assetDrawer.textStarredArt' : 'assetDrawer.textStarredTemplates')}
-                    </button>
-                  ))}
-                </div>
-              ) : null}
               {cat === 'voice' ? <VoicesPane group={group} query={query} favorites={favorites} onServices={onServices} onAll={() => pickGroup('')} speak={speak}
-                  onMyVoices={() => pickGroup(MY_VOICES)}
-                  projectId={projectId}
+                  onMyVoices={() => pickGroup(MY_VOICES)} projectId={projectId}
                   player={voicePlayer} previewBar={previewBar} picked={picked} onPick={(id) => { setPicked(id); onPreviewStart(); }} onClosePreview={closePreview} /> : (
               <>
               {/* a click on nothing lets the picked thing go */}
@@ -609,25 +828,23 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, mediaRequest, a
                   ) : <Empty icon="star" text={t('assetDrawer.textNoPresets')} />
                 ) : !items.length ? (
                   q ? <Empty icon="search" text={t('assetDrawer.nothing').replace('{q}', query.trim())} />
-                    : cat === 'text' && group === FAVORITES ? <Empty icon="star" text={t('assetDrawer.noFavorites')}
-                      action={t(starredText === ART ? 'assetDrawer.textGoArt' : 'assetDrawer.textGoTemplates')} onAction={() => { if (!textOpen[starredText]) toggleText(starredText); else pickGroup(starredText); }} />
-                    : group === FAVORITES ? <Empty icon="star" text={t('assetDrawer.noFavorites')} action={t('assetDrawer.seeAll')} onAction={() => pickGroup('')} />
-                      : cat === 'music' ? <Empty icon="music" text={t('assetDrawer.musicSoon')} action={askMusic ? t('assetDrawer.musicMake') : undefined}
+                    : group === STARRED ? <Empty icon="star" text={t('assetDrawer.noFavorites')} />
+                    : cat === 'music' ? <Empty icon="music" text={t('assetDrawer.musicSoon')} action={askMusic ? t('assetDrawer.musicMake') : undefined}
                         onAction={() => askMusic?.({ text: t('assetDrawer.musicAsk'), refs: [] })} />
                         : null
                 ) : cat === 'sound' ? (
                   <div className="flex flex-col gap-0.5">
                     {items.slice(0, drawn).map((it) => (
-                      <SoundRow key={it.id} item={it} name={nameOf(it.name, lang)} group={groupName(it.group)} picked={picked === it.id} player={player}
-                        kept={favorites.includes(it.id)} addTip={addTip(it, t)} onPick={() => pick(it)} onAdd={() => addWhenHere(it)} drag={dragProps(it)}
+                      <SoundRow key={it.id} item={it} name={nameOf(it.name, lang)} group={groupName(it.group)} picked={picked === it.id} player={player} kept={favorites.includes(it.id)}
+                        addTip={addTip(it, t)} onPick={() => pick(it)} onAdd={() => addWhenHere(it)} drag={dragProps(it)}
                         here={hereOf(it.id)} />
                     ))}
                   </div>
                 ) : cat === 'music' ? (
                   <div className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-2">
                     {items.slice(0, drawn).map((it) => (
-                      <MusicCard key={it.id} item={it} name={nameOf(it.name, lang)} group={groupName(it.group)} picked={picked === it.id} player={player}
-                        kept={favorites.includes(it.id)} addTip={addTip(it, t)} onPick={() => pick(it)} onAdd={() => addWhenHere(it)} drag={dragProps(it)}
+                      <MusicCard key={it.id} item={it} name={nameOf(it.name, lang)} group={groupName(it.group)} picked={picked === it.id} player={player} kept={favorites.includes(it.id)}
+                        addTip={addTip(it, t)} onPick={() => pick(it)} onAdd={() => addWhenHere(it)} drag={dragProps(it)}
                         here={hereOf(it.id)} />
                     ))}
                   </div>
@@ -650,12 +867,39 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, mediaRequest, a
               </>
               )}
             </>
+              )}
+            </>
           )}
         </div>
       </div>
       )}
     </div>
   );
+}
+
+/** A thing's star: kept among the favorites of its category, for every project. */
+function StarButton({ item, kept, className }: { item: LibraryItem; kept: boolean; className: string }) {
+  const t = useT();
+  return (
+    <button type="button" aria-label={t(kept ? 'assetDrawer.unstar' : 'assetDrawer.star')} aria-pressed={kept}
+      onClick={(e) => { e.stopPropagation(); toggleFavorite(item.id); }} className={className}>
+      {/* hollow until starred, then filled in the star's own color */}
+      <Star size={11} fill={kept ? 'currentColor' : 'none'} strokeWidth={kept ? 0 : 2.2} />
+    </button>
+  );
+}
+
+/** A namespace of the side bar, as a box (one that opens, its heading); a line under one that opened. */
+const RAIL_BOX = 'flex h-7 w-full shrink-0 select-none items-center gap-1 rounded-[6px] bg-[var(--bg-field)] px-2.5 text-left text-[12px] font-semibold transition-colors hover:bg-[var(--bg-pressed)]';
+const RAIL_CHILD = 'flex h-8 w-full shrink-0 items-center px-2.5 text-left text-[12px] font-semibold transition-colors';
+
+/** The sections of the side bars folded, by category and section, kept on this computer. */
+const FOLDED_KEY = 'openfilm.library.folded';
+function readFolded(): Record<string, boolean> {
+  try { return JSON.parse(localStorage.getItem(FOLDED_KEY) ?? '{}') as Record<string, boolean>; } catch { return {}; }
+}
+function keepFolded(folded: Record<string, boolean>): void {
+  try { localStorage.setItem(FOLDED_KEY, JSON.stringify(folded)); } catch { /* for this time only */ }
 }
 
 /** How wide the side bar may be dragged, and where its width is kept on this computer. */
@@ -706,44 +950,50 @@ function RailEdge({ width, onWidth }: { width: number; onWidth: (w: number) => v
   );
 }
 
-/** A line of the side bar of its own (the starred, the library's own, the media's two): a box. `open`: it folds the lines under it. */
-function SideBox({ on, holds = false, open, onClick, children }: {
-  on: boolean;
-  /** a heading whose line under it is the one shown (it is open): in the accent too */
-  holds?: boolean;
-  open?: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
+/**
+ * A line of the media's side bar, its name alone: a box (Import; Mine when it is one folder, `label`) or a line under
+ * Mine (each of the person's folders). A folder is held and moved to another place among them (`onHold`; `held` while it
+ * is, drawn where `style` says), and takes what is dropped on it (`drop`).
+ */
+function RailLine({ line, on, onPick, onMenu, onHold, held = false, style, drop, look = 'child', label }: {
+  line: Line; on: boolean; onPick: () => void; onMenu?: (e: React.MouseEvent) => void;
+  look?: 'box' | 'child'; label?: string;
+  onHold?: (e: React.PointerEvent<HTMLElement>) => void; held?: boolean; style?: React.CSSProperties;
+  drop?: { accepts: (data: DataTransfer) => boolean; onDrop: (e: React.DragEvent) => void };
 }) {
+  const [over, setOver] = React.useState(false);
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={open === undefined ? on : undefined}
-      aria-expanded={open}
-      title={typeof children === 'string' ? children : undefined}
-      /* each a box on its own grey; the one shown, or the heading whose line is, in the accent */
-      className={`flex h-8 shrink-0 items-center justify-between gap-1 rounded-md bg-[var(--bg-field)] px-2.5 text-left text-[12px] font-semibold hover:bg-[var(--bg-pressed)] ${on || holds ? 'text-[var(--accent)]' : 'text-[var(--text)]'}`}
-    >
-      <span className="truncate whitespace-nowrap">{children}</span>
-      {open === undefined ? null : <ChevronDown size={13} className={`shrink-0 transition-transform ${on || holds ? 'text-[var(--accent)]' : 'text-[var(--text)]'} ${open ? 'rotate-180' : ''}`} />}
+    <button type="button" onClick={onPick} onContextMenu={onMenu} aria-pressed={on} title={line.link?.to ?? line.name}
+      data-rail-line={line.key} data-rail-kind={line.kind} data-rail-held={held ? '' : undefined} style={style}
+      /* held by the pointer, not the browser's own drag (no ghost picture, and the list moves as it goes) */
+      draggable={false} onPointerDown={onHold}
+      onDragOver={(e) => { if (!drop?.accepts(e.dataTransfer)) return; e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = 'copy'; setOver(true); }}
+      /* left for another line, not for one of its own parts */
+      onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setOver(false); }}
+      onDrop={(e) => {
+        setOver(false);
+        if (drop?.accepts(e.dataTransfer)) { e.preventDefault(); e.stopPropagation(); drop.onDrop(e); }
+      }}
+      /* the one shown in the accent; a folder something is dragged over, ringed; the one held, lifted */
+      className={`${look === 'box' ? RAIL_BOX : `${RAIL_CHILD} rounded-md`} ${on ? 'text-[var(--accent)]' : `text-[var(--text)] ${look === 'child' ? 'hover:text-[var(--accent)]' : ''}`} ${held ? 'cursor-grabbing bg-[var(--bg-raised)] shadow-[0_6px_18px_rgba(0,0,0,0.28)] ring-1 ring-[var(--border-strong)]' : ''} ${over ? 'ring-1 ring-[var(--accent)]' : ''} ${line.link?.missing ? 'opacity-60' : ''}`}>
+      <span className="min-w-0 flex-1 truncate">{label ?? line.name}</span>
     </button>
   );
 }
 
-/** A line under the library's own: all of it, or a group. */
-function SideLine({ on, onClick, children }: { on: boolean; onClick: () => void; children: React.ReactNode }) {
+/** A folder's name typed in the side bar: a new one's, or one renamed. Enter or leaving it keeps it; Esc does not. */
+function RailName({ value, onDone, onCancel }: { value: string; onDone: (name: string) => void; onCancel: () => void }) {
+  const t = useT();
+  const done = React.useRef(false);
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={on}
-      title={typeof children === 'string' ? children : undefined}
-      /* the one shown in the accent, no fill */
-      className={`truncate whitespace-nowrap rounded-md px-2.5 py-1.5 text-left text-[12px] ${on ? 'font-semibold text-[var(--accent)]' : 'font-medium text-[var(--text)] hover:text-[var(--accent)]'}`}
-    >
-      {children}
-    </button>
+    <input autoFocus defaultValue={value} aria-label={t('assets.rename')} maxLength={120}
+      onFocus={(e) => e.currentTarget.select()}
+      onKeyDown={(e) => {
+        if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); done.current = true; onCancel(); }
+        if (e.key === 'Enter') { e.preventDefault(); e.currentTarget.blur(); }
+      }}
+      onBlur={(e) => { if (done.current) return; done.current = true; onDone(e.currentTarget.value); }}
+      className="h-8 shrink-0 rounded-md bg-[var(--bg-field)] px-2.5 text-[12px] font-medium text-[var(--text)] outline-none ring-1 ring-[var(--accent)]" />
   );
 }
 
@@ -788,22 +1038,6 @@ function PresetCard({ item, lang, picked, onPick, onAdd, onDrop }: {
   );
 }
 
-function StarButton({ item, kept, className }: { item: LibraryItem; kept: boolean; className: string }) {
-  const t = useT();
-  return (
-    <button
-      type="button"
-      aria-label={t(kept ? 'assetDrawer.unstar' : 'assetDrawer.star')}
-      aria-pressed={kept}
-      onClick={(e) => { e.stopPropagation(); toggleFavorite(item.id); }}
-
-      className={className}
-    >
-      {/* hollow until starred, then filled in the star's own color */}
-      <Star size={11} fill={kept ? 'currentColor' : 'none'} strokeWidth={kept ? 0 : 2.2} />
-    </button>
-  );
-}
 
 
 function AddButton({ item, onAdd, className }: { item: LibraryItem; onAdd: () => void; className: string }) {
@@ -894,8 +1128,8 @@ function Card({ item, lang, picked, kept, square, here, hover, previewing, onPic
         ) : null}
         {/* the star and the download or add control side by side */}
         <span className="absolute bottom-1 right-1 flex items-center gap-1">
-          <StarButton item={item} kept={kept} className={`${ROUND} bg-black/55 ${kept ? 'grid text-[#ffd35a]' : 'hidden text-white group-hover:grid'}`} />
           {/* the download badge changes to an add button when the asset is ready */}
+          <StarButton item={item} kept={kept} className={`${ROUND} bg-black/55 ${kept ? 'grid text-[#ffd35a]' : 'hidden text-white group-hover:grid'}`} />
           <HereButton here={here} addTip={addTip(item, t)} onAdd={onAdd} onRetry={onPick} className={`${ROUND} bg-black/55 text-white`} show={picked ? 'grid' : 'hidden group-hover:grid'} />
         </span>
         {item.kind === 'group' ? <TemplateBadge item={item} /> : null}

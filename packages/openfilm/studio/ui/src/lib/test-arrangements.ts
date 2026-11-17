@@ -5,7 +5,7 @@ import { arrangementSpecs } from './blocks.ts';
 import { defaultWorkspace, type ArrangementSpec } from './workspaces.ts';
 
 const manifest = (id: string) => JSON.parse(readFileSync(new URL(`../../../../plugins/${id}/openfilm.json`, import.meta.url), 'utf8')) as { workbench: string; blocks?: unknown };
-export const SPECS = arrangementSpecs(['edit', 'canvas', 'motion'].map((id) => { const m = manifest(id); return { workbench: m.workbench, blocks: readBlocks(m.blocks) }; }));
+export const SPECS = arrangementSpecs(['edit', 'canvas'].map((id) => { const m = manifest(id); return { workbench: m.workbench, blocks: readBlocks(m.blocks) }; }));
 export const EDIT: ArrangementSpec = SPECS.get('edit')!;
 export const CANVAS: ArrangementSpec = SPECS.get('canvas')!;
 export const DEFAULT_WORKSPACE = defaultWorkspace(EDIT);

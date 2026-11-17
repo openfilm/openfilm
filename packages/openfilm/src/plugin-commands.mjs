@@ -56,7 +56,9 @@ export function pluginCommand(words, { cwd = '.', home, plugins = pluginsDir(), 
   const whole = names.length === 1 && names[0] === plugin.name;
   const command = whole ? plugin.name : after[0];
   if (!command || !commands[command]) {
-    return { status: after[0] === '--help' || after[0] === '-h' ? 0 : 2, error: `${command && !command.startsWith('-') ? `The ${plugin.name} ${plugin.kind} has no command ${command}. ` : ''}Its commands: ${names.map((n) => `\`openfilm ${key} ${n}\``).join(', ')}. \`openfilm skill ${plugin.uid}\` says what each does.` };
+    /* what says what each does: its skill, or, for one of OpenFilm's own that brings none (the edit), each one's --help */
+    const says = plugin.source === 'own' && !own?.skills.length ? `\`openfilm ${key} <command> --help\` says what one does` : `\`openfilm skill ${plugin.uid}\` says what each does`;
+    return { status: after[0] === '--help' || after[0] === '-h' ? 0 : 2, error: `${command && !command.startsWith('-') ? `The ${plugin.name} ${plugin.kind} has no command ${command}. ` : ''}Its commands: ${names.map((n) => `\`openfilm ${key} ${n}\``).join(', ')}. ${says}.` };
   }
   return { plugin, command, file: join(plugin.folder, commands[command]), rest: whole ? after : after.slice(1), project };
 }

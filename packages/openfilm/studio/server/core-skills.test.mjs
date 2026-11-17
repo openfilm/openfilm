@@ -22,19 +22,15 @@ test("Studio lists OpenFilm's own skills first, in their order, installed, and o
     body: body ? JSON.stringify(body) : undefined,
   });
   const listed = async () => (await (await api('/api/skills')).json()).skills;
-  const core = (await listed()).slice(0, 6);
+  const core = (await listed()).slice(0, 4);
   assert.deepEqual(core.map((s) => [s.uid, s.as, s.core, s.installed]), [
     ['openfilm/film', 'openfilm-film', true, true], ['openfilm/media', 'openfilm-media', true, true], ['openfilm/canvas', 'openfilm-canvas', true, true],
-    /* Motion is off until the person turns it on: its skill is listed, off with its plugin, and no agent calls it */
-    ['openfilm/motion', undefined, true, true],
-    /* so is the color workbench's */
-    ['openfilm/color', undefined, true, true], ['openfilm/stage', undefined, true, true],
+    /* the color workbench is off until the person turns it on: its skill is listed, off with its plugin, and no agent calls it */
+    ['openfilm/color', undefined, true, true],
   ]);
   assert.equal(core[0].shown.title['zh-CN'], '影片');
-  assert.deepEqual([core[3].off, core[3].plugin], [true, 'motion']);
-  assert.deepEqual([core[4].off, core[4].plugin], [true, 'color']);
-  assert.deepEqual([core[5].off, core[5].plugin], [true, 'stage']);
-  assert.ok((await listed()).slice(6).every((s) => !s.core), 'the library\'s are not');
+  assert.deepEqual([core[3].off, core[3].plugin], [true, 'color']);
+  assert.ok((await listed()).slice(4).every((s) => !s.core), 'the library\'s are not');
   assert.equal((await api('/api/skills/openfilm%2Fcanvas/on', { method: 'PUT', body: { on: false } })).status, 200);
   assert.equal((await listed()).find((s) => s.uid === 'openfilm/canvas').off, true);
   assert.equal((await api('/api/skills/openfilm%2Fcanvas/installed', { method: 'PUT', body: { installed: false } })).status, 404, 'never uninstalled');

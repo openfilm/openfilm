@@ -1,5 +1,6 @@
 /**
- * The projects window's storage card (ProjectsStorage, at the foot of its sidebar): the projects library, the folder
+ * Settings → General → Storage: a row above About (StorageEntry, what OpenFilm takes and what is free) opens its page
+ * (StorageGroup): the projects library, the folder
  * every project is a folder of (studio/server's locations, src/locations.mjs). It shows its folder and the free space
  * on its disk, and can be changed (the system's folder dialog), opened in the file manager, or set back to its default.
  * When projects are in it, a change asks whether they move too; left behind, they stay where they are, and in the list.
@@ -12,7 +13,7 @@
  * and fills in when the folders are measured (the server keeps that a moment).
  */
 import React from 'react';
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, HardDrive } from 'lucide-react';
 import { useT } from '@/i18n';
 import { api, type ProjectUsage, type StorageUsage, type StudioLocation, type StudioLocations } from '@/api';
 import { studioHost } from '@/lib/host';
@@ -138,6 +139,34 @@ function ProjectList({ projects }: { projects: ProjectUsage[] }) {
         </li>
       ))}
     </ul>
+  );
+}
+
+/** General's row: how much OpenFilm takes and how much is free on the disk, the storage page a click away. */
+export function StorageEntry({ onOpen }: { onOpen: () => void }) {
+  const t = useT();
+  const [usage, setUsage] = React.useState<StorageUsage | null>(null);
+  const [free, setFree] = React.useState<number | null>(null);
+  React.useEffect(() => {
+    let live = true;
+    void api.storage().then((u) => { if (live) setUsage(u); }, () => {});
+    void api.locations().then((l) => { if (live) setFree(l.projects.free ?? null); }, () => {});
+    return () => { live = false; };
+  }, []);
+  const total = usage ? Object.values(byKind(usage)).reduce((a, b) => a + b, 0) : null;
+  const line = [
+    `${t('settings.storage.ours')} ${total == null ? '…' : amount(total)}`,
+    ...(free != null ? [t('settings.storage.free').replace('{size}', size(free))] : []),
+  ].join(' · ');
+  return (
+    <button type="button" onClick={onOpen} data-storage-row="" className="-mx-3 flex w-[calc(100%+24px)] items-center gap-4 rounded-[10px] px-3 py-4 text-left transition hover:bg-[var(--bg-hover)]">
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[8px] bg-[var(--bg-field)] text-[var(--text)]"><HardDrive size={17} strokeWidth={1.7} aria-hidden /></span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-[15px] text-[var(--text)]">{t('settings.storage.manage')}</span>
+        <span className="mt-1 block text-[14px] tabular-nums text-[var(--text-muted)]">{line}</span>
+      </span>
+      <ChevronRight size={18} className="shrink-0 text-[var(--text-faint)]" aria-hidden />
+    </button>
   );
 }
 

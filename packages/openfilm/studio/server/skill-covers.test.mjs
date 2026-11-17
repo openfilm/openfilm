@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { addSkills } from '../../src/skills.mjs';
@@ -220,8 +220,8 @@ test('a plugin someone made: its page on the plugins\' origin, the project read 
   const stub = await fetch(edit.element, { headers: { origin: studio.origin } });
   assert.match(await stub.text(), /export \{ default \} from 'openfilm\/workbench\/edit';/);
   assert.equal(stub.headers.get('access-control-allow-origin'), studio.origin);
-  /* the canvas brings its own; Motion, a view of the edit, brings the edit's */
-  for (const [id, workbench] of [['canvas', 'canvas'], ['motion', 'edit']]) {
+  /* the canvas brings its own */
+  for (const [id, workbench] of [['canvas', 'canvas']]) {
     const own = ours.find((p) => p.id === id);
     assert.ok(own.element.startsWith(`${studio.pluginOrigin}/s/`) && own.element.endsWith('/ui.js'), own.element);
     assert.ok((await (await fetch(own.element, { headers: { origin: studio.origin } })).text()).includes(`export { default } from 'openfilm/workbench/${workbench}';`));
@@ -285,4 +285,28 @@ test('a plugin someone made: its page on the plugins\' origin, the project read 
   assert.equal((await api('/api/skills/local%2Fboard/writes', { method: 'PUT', body: { on: false } })).status, 200);
   assert.equal((await put('notes/first.md', 'after')).status, 403);
   assert.equal((await fetch(new URL('notes/first.md', board.files))).status, 200);
+});
+
+test('a plugin\'s app icon has a new URL when its file changes, so the page does not keep the old one', async (t) => {
+  const root = mkdtempSync(join(tmpdir(), 'of-plugin-icon-'));
+  const plugins = join(root, 'plugins');
+  cpSync(join(import.meta.dirname, '..', '..', 'plugins'), plugins, { recursive: true });
+  const variables = { OPENFILM_HOME: join(root, 'home'), OPENFILM_LIBRARY: join(root, 'library'), OPENFILM_SHARED_HOME: join(root, 'home'), OPENFILM_PLUGINS: plugins };
+  const previous = Object.fromEntries(Object.keys(variables).map((key) => [key, process.env[key]]));
+  Object.assign(process.env, variables);
+  t.after(() => {
+    for (const [key, value] of Object.entries(previous)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; }
+    rmSync(root, { recursive: true, force: true });
+  });
+  const studio = await startStudio({ port: 0, openBrowser: () => {} });
+  t.after(() => studio.close());
+  const api = (path) => fetch(studio.origin + path, { headers: { 'x-studio-key': studio.key } });
+  const iconOf = async () => (await (await api('/api/plugins')).json()).plugins.find((p) => p.id === 'edit').appIcon;
+  const before = await iconOf();
+  assert.ok(before);
+  const drawn = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 8"><rect width="8" height="8" fill="#123456"/></svg>';
+  writeFileSync(join(plugins, 'edit', 'icon.svg'), drawn);
+  const after = await iconOf();
+  assert.notEqual(after, before);
+  assert.equal(await (await api(after)).text(), drawn);
 });

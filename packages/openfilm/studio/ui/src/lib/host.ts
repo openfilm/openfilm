@@ -475,7 +475,9 @@ export type StudioCommand =
  * `discover`, OpenFilm's skills to install (an empty project's "More skills"); or `examples`, the examples to start
  * from (its "Start from an example").
  */
-export type CommunityItem = { kind: 'skill'; name: string } | { kind: 'example'; id: string } | { kind: 'discover' } | { kind: 'plugins' } | { kind: 'examples' };
+export type CommunityItem = { kind: 'skill'; name: string } | { kind: 'example'; id: string } | { kind: 'discover' } | { kind: 'plugins' } | { kind: 'examples' }
+  /* the Community's plugins or skills: what the person has of them, then what there is to add */
+  | { kind: 'community'; tab: 'plugins' | 'skills' };
 
 const hostOfPage = (): StudioHost | null => (globalThis as { openfilmHost?: StudioHost }).openfilmHost ?? null;
 /**

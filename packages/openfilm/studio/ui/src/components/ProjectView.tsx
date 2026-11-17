@@ -8,7 +8,7 @@
  */
 import * as React from 'react';
 import * as ReactDOM from 'react-dom';
-import { BookmarkPlus, ChartSpline, ChevronDown, ChevronRight, ClipboardCopy, ClipboardPaste, Diamond, Eye, EyeOff, FolderOpen, Layers, Lock, LockOpen, MessageSquarePlus, Plus, Settings2, Spline, TriangleAlert, Upload } from 'lucide-react';
+import { BookmarkPlus, ChartSpline, Columns2, ChevronDown, ChevronRight, ClipboardCopy, ClipboardPaste, Diamond, Eye, EyeOff, FolderOpen, Layers, Lock, LockOpen, MessageSquarePlus, Plus, Settings2, Spline, TriangleAlert, Upload } from 'lucide-react';
 import { applyOps } from '../../../server/ops.mjs';
 import { EFFECTS, MOTION_PROPS, animationsOf, effectsOf, readMotion, valueAt, withAnimations, withEffects, withPreset, type EffectProp, type KeyedProp, type Motion, type MotionProp } from '../../../../src/clip-motion.mjs';
 import { copiedKeys, easeOfBezier, easedMotion, effectsModel, type EffectsChange, keyId, keyedBox, movedKeys, parseKeyId, pastedKeys, poseAt, withoutKeys, type CopiedKeys, type EaseCommand } from '@/lib/motion-keys';
@@ -26,13 +26,21 @@ import { declarations } from '../../../../src/film-doc.mjs';
 import { PARTS, compoundFolder, compoundOf, dissolvedOf, srcInto, srcOutOf } from '../../../server/compound.mjs';
 import type { FilmValue } from '../../../server/ops.mjs';
 import { api, ApiError, projectEvents, type Clip, type Film, type Listing, type MediaMade, type Op, type ProjectSettings, type SavedGroupClip } from '@/api';
+import { coversApi, frameMoment, shapeOf, type CoverInfo, type CoverLook, type CoverLooks, type CoverShape } from '@/lib/covers';
+import { receiptOf } from '@/lib/canvas';
+import type { CoversActions } from './library/CoversPane';
+import { CoverBar, CoverSafeArea } from './CoverBar';
 import { useLanguage, useT } from '@/i18n';
 import { useFilm, type OutsideStep, type Step } from '@/editor/use-film';
 import { Player } from '@/editor/player';
 import { Preview, type FilmInfo, type PlayedReport, type PreviewHandle } from '@/editor/Preview';
 import { usePreviewRenders } from '@/editor/use-preview-renders';
 import { filmShape, type MediaFacts } from '@/lib/film-shape';
-import { changesPicture } from '@/lib/picture-files';
+import { changesPicture, colorFiles } from '@/lib/picture-files';
+import { STANDARD, colorFilesChanged, readColorTexts, writeColorFiles, type ColorHost } from '@/lib/color-files';
+import { draftOf, filterWrite } from '@/lib/clip-color';
+import { ColorDesk, type GradedClip } from '@/plugins/color/ColorDesk';
+import { filterUrl } from '../../../../src/color/adjust.mjs';
 import { SPEED_MAX } from '@/lib/playback-speed';
 import { replaceClip, type ReplaceFamily } from '@/lib/clip-replace';
 import { fillFor, filmLength, filmTemplate, isSlotSrc, markedClips, placeFrame, retimedTemplate, templateFolderOf, templateMark, templateMarks, templateOf, templateOfFolder, withPlaceFrame } from '@/lib/template-instance';
@@ -143,6 +151,8 @@ import { pasteTargets, targetById } from '@/lib/layer-paste-target';
 import { PropertiesSection, type PropsHost } from './PropertiesSection';
 import type { LayerPropsActions } from './FilmInspector';
 import { savedSources } from '@/lib/saved';
+import { useRecorder } from './RecordPane';
+import { saveToEntry } from '@/lib/library-places';
 import { deliveryGainDb, deliveryLoudness, onDeliveryLoudness } from '@/lib/delivery-loudness';
 import { groupInsertAt, groupInsertOps, keyframesOps } from '@/lib/saved-insert';
 import { pageClips, pageMayHave, similarEdits } from '@/lib/similar-layers';
@@ -156,6 +166,9 @@ import { isTextField, isTypingTarget } from './typing-target';
    shell's frame and wiring, OpenFilm-internal, for the rest */
 import { blocks, chat, onCommand, openSettings, provide } from '@/studio';
 import { attachedBlocks, blockKey, TOP_BTN, useFrame, usePublishWiring, useSteady } from '@/studio/internal';
+
+/** No covers yet: the same empty list each time. */
+const NO_COVERS: CoverInfo[] = [];
 
 /** How far a caption track's translation sits above it (% of the frame): about a line. */
 const TRANSLATION_LIFT_PCT = 7;
@@ -236,7 +249,7 @@ export function ProjectView({ projectId, onProject }: {
     projectApi, onPick, onBring, onImport, coverSet,
     slots,
     canvasOpen, setCanvasOpen, motionOpen, workMode, setWorkMode, workModes,
-    libraryIndex, setRevealMedia, showFile, saveThings, onLibraryDownloadFailed,
+    libraryIndex, setRevealMedia, showFile, saveThings, folders, onLibraryDownloadFailed,
     title,
     arrangement, openBlock,
   } = useFrame(projectId);
@@ -269,6 +282,11 @@ export function ProjectView({ projectId, onProject }: {
          (an agent's notes and scripts) leaves the picture as it is (lib/picture-files) */
       const used = new Set(blocksRef.current.map((b) => b.src).filter(Boolean));
       if (changesPicture(event.paths, used)) preview.current?.reload?.();
+      else {
+        const graded = colorFiles(event.paths);
+        if (graded.length) void preview.current?.stage?.('regraded', { paths: graded });
+      }
+      colorFilesChanged(projectId, event.paths);
     });
     return () => { stop(); };
   }, [projectId]);
@@ -355,6 +373,8 @@ export function ProjectView({ projectId, onProject }: {
   const stopAtRef = React.useRef<number | null>(null);
   /* loop playback (⇧L, the viewer's button): the range marked, else the whole film, over and over */
   const [loop, setLoop] = React.useState(false);
+  /* the picture's videos shown as their files are, their color grades left off: a before and after (⇧D) */
+  const [ungraded, setUngraded] = React.useState(false);
   const loopRef = React.useRef(loop);
   loopRef.current = loop;
   /* the speed picked in the viewer's playback settings: what plays once a J/K/L shuttle is let go */
@@ -549,6 +569,10 @@ export function ProjectView({ projectId, onProject }: {
      written: a layer pasted into it, or the agent's edit), and when a page that came on is shown (it is in the tree
      only once drawn; the picture says so, and nothing else is rebuilt for it) */
   const [pageShown, setPageShown] = React.useState(0);
+  /* the picture drawn again (a reload) is told again whether its grades are left off */
+  /* the color workbench's before and after split across the picture, and where its line is (0–1 across) */
+  const [split, setSplit] = React.useState<number | null>(null);
+  React.useEffect(() => { void preview.current?.stage?.('compare', { off: ungraded, split }); }, [ungraded, split, pageShown]);
   const layersKey = React.useMemo(() => ({}), [film.film, info, pageShown]); // eslint-disable-line react-hooks/exhaustive-deps
   /* a file's length draws a clip that plays to its end before the preview places it (a split's second half, a drop) */
   const mediaFacts = React.useMemo<MediaFacts>(() => new Map([...facts].map(([path, f]) => [path, { audio: f.audio, ...(f.durationMs ? { duration: f.durationMs / 1000 } : {}) }])), [facts]);
@@ -2074,7 +2098,21 @@ export function ProjectView({ projectId, onProject }: {
     const clipIds = () => new Set(blocksRef.current.flatMap((b) => (b.clipId ? [b.clipId] : [])));
     const look = (item: LibraryItem, on: { loc: string; style: string | undefined }[]) => {
       if (!on.length) { toast.show(t('assetDrawer.pickClips')); return; }
-      void editBlocks(on.map((c) => ({ loc: c.loc, prop: 'style', value: withLook(c.style, item.filter ?? null) }))).then((err) => {
+      /* a video wears it as a file of the project, graded at its own depth (lib/clip-color); a picture or a page in CSS */
+      const videos = on.flatMap((c) => {
+        const block = blocksRef.current.find((b) => b.loc === c.loc);
+        return block?.kind === 'video' && block.clipId && item.grade ? [{ id: block.clipId, style: c.style, loc: c.loc }] : [];
+      });
+      const rest = on.filter((c) => !videos.some((v) => v.loc === c.loc));
+      void (async () => {
+        if (videos.length && item.grade) {
+          const filter = { id: item.id, title: nameOf(item.name, 'en'), grade: item.grade };
+          const text = await readColorTexts(projectId, [filterUrl(item.id, 1), ...Object.keys(STANDARD)]);
+          const err = await colorHost.commit(filterWrite(videos, text, filter, 1, STANDARD), 'history.stepColor');
+          if (err) return err;
+        }
+        return rest.length ? editBlocks(rest.map((c) => ({ loc: c.loc, prop: 'style', value: withLook(c.style, item.filter ?? null) }))) : null;
+      })().then((err) => {
         if (err) toast.showError(err);
         else toast.show(t('assetDrawer.looked').replace('{name}', nameOf(item.name, language)).replace('{n}', String(on.length)));
       });
@@ -2244,7 +2282,7 @@ export function ProjectView({ projectId, onProject }: {
     };
     return { actions, applyDrop, lookTargets, place };
   }, [language, selectedClips, editModel, projectId, addMedia, timelineTracks, edit, filmClipOf, editBlocks, editClips, playTextMotion, askTransition, t, toast, insertTemplate]);
-  const saveBlocks = React.useCallback((blocks: readonly TimelineBlock[], together = false) => {
+  const saveBlocks = React.useCallback((blocks: readonly TimelineBlock[], into: string, together = false) => {
     const kept = blocks.filter((b) => b.clipId);
     /* several as one: laid out as they are, from the first one's start to the last one's end */
     if (together && kept.length > 1) {
@@ -2257,7 +2295,7 @@ export function ProjectView({ projectId, onProject }: {
       const w = top.box?.w ?? top.size?.w;
       const h = top.box?.h ?? top.size?.h;
       const name = `${top.title}${kept.length > 1 ? ` +${kept.length - 1}` : ''}`;
-      void saveThings({ groups: [{ ids: kept.map((b) => b.clipId!), name, durationMs: endMs - startMs, ...(w ? { w } : {}), ...(h ? { h } : {}) }] }, 1);
+      void saveThings({ groups: [{ ids: kept.map((b) => b.clipId!), name, durationMs: endMs - startMs, ...(w ? { w } : {}), ...(h ? { h } : {}) }], into }, 1);
       return;
     }
     const clips = kept.map((b) => {
@@ -2265,16 +2303,18 @@ export function ProjectView({ projectId, onProject }: {
       const h = b.box?.h ?? b.size?.h;
       return { id: b.clipId!, name: b.title, durationMs: Math.max(0, b.endMs - b.startMs), ...(w ? { w } : {}), ...(h ? { h } : {}) };
     });
-    void saveThings({ clips }, clips.length);
+    void saveThings({ clips, into }, clips.length);
   }, [saveThings]);
   /* one clip, or several as one (each one alone, too) */
   const saveEntry = (blocks: readonly TimelineBlock[]): ContextMenuEntry[] => {
     const n = blocks.filter((b) => b.clipId).length;
     if (!n) return [];
-    if (n === 1) return [{ id: 'save', label: t('saved.add'), icon: <BookmarkPlus size={14} />, onSelect: () => saveBlocks(blocks) }];
+    /* to a place of the person's shelf (lib/library-places): the one there, or picked from them */
+    const icon = <BookmarkPlus size={14} />;
+    if (n === 1) return saveToEntry(folders, { id: 'save', label: t('saved.add'), many: t('saved.addTo'), icon, pick: (into) => saveBlocks(blocks, into) });
     return [
-      { id: 'save', label: t('saved.addTogether').replace('{n}', String(n)), icon: <BookmarkPlus size={14} />, onSelect: () => saveBlocks(blocks, true) },
-      { id: 'save-each', label: t('saved.addEach'), icon: <BookmarkPlus size={14} />, onSelect: () => saveBlocks(blocks) },
+      ...saveToEntry(folders, { id: 'save', label: t('saved.addTogether').replace('{n}', String(n)), many: t('saved.addTogetherTo').replace('{n}', String(n)), icon, pick: (into) => saveBlocks(blocks, into, true) }),
+      ...saveToEntry(folders, { id: 'save-each', label: t('saved.addEach'), many: t('saved.addEachTo'), icon, pick: (into) => saveBlocks(blocks, into) }),
     ];
   };
   /* caption tracks' edits are steps of the editor's history; a file written, the picture reads it again */
@@ -3786,6 +3826,79 @@ export function ProjectView({ projectId, onProject }: {
   };
   const previewClip = React.useCallback((clipLoc: string, patch: Partial<MgTransform> | null) => clipPreviewRef.current?.(clipLoc, patch), []);
   const previewLook = React.useCallback((clipLoc: string, css: string | null) => lookPreviewRef.current?.(clipLoc, css), []);
+  /* a video clip's color (inspector-color): shown on the picture as dragged, baked there from the files as changed;
+     written as the files and film.html's styles in one undo step, the draft kept on the picture until that is drawn */
+  const colorHost = React.useMemo<ColorHost>(() => ({
+    projectId,
+    preview(write, ids) {
+      for (const id of ids) void preview.current?.stage?.('grade', { id, draft: write ? draftOf(write, id) : null });
+    },
+    async commit(write, label) {
+      const current = filmRef.current;
+      const clips = current?.tracks.flatMap((tr) => tr.clips) ?? [];
+      const locked = write.styles.some((w) => current?.tracks.some((tr) => tr.locked && tr.clips.some((c) => c.id === w.id)));
+      if (locked) return t('timeline.trackLocked');
+      const changed = write.styles.filter((w) => (clips.find((c) => c.id === w.id)?.style ?? null) !== w.style);
+      const step = await writeColorFiles(projectId, write.files);
+      if (typeof step === 'string') return step;
+      const ops: Op[] = changed.length ? [{ op: 'props', edits: changed.map((w) => ({ clip: w.id, prop: 'style', value: w.style as never })) }] : [];
+      const failed = ops.length ? await edit(ops, label, false, step) : (filmRecord(label ?? 'history.stepEdit', step), null);
+      if (failed) { await step.undo(); return failed; }
+      for (const w of write.styles) void preview.current?.stage?.('grade', { id: w.id, draft: { written: true } });
+      return null;
+    },
+  }), [projectId, edit, filmRecord, t]);
+  /* the edit graded (plugins/color): its panel in the inspector's place, on the clips picked or the one at the playhead */
+  const colorMode = workMode === 'color';
+  React.useEffect(() => { if (!colorMode) setSplit(null); }, [colorMode]);
+  const gradedClips = React.useMemo<GradedClip[]>(() => (colorMode ? (film.film?.tracks ?? []).flatMap((track) => (track.captions ? [] : track.clips.flatMap((c) => (
+    !c.sound && filmSrcKind(c.src) === 'video' ? [{ id: c.id, style: c.style, src: c.src, at: c.at ?? 0, time: c.time ?? null, speed: c.speed ?? 1 }] : []
+  )))) : []), [colorMode, film.film]);
+  const colorCurrent = React.useMemo(() => {
+    if (!colorMode) return [];
+    const picked = selectedBlocks.flatMap((b) => (b.clipId && gradedClips.some((c) => c.id === b.clipId) ? [b.clipId] : []));
+    if (picked.length) return picked;
+    /* none picked: the top one playing at the playhead */
+    const t = timeMs / 1000;
+    for (const track of film.film?.tracks ?? []) {
+      if (track.hidden) continue;
+      for (const c of track.clips) {
+        const g = gradedClips.find((x) => x.id === c.id);
+        if (!g) continue;
+        const length = g.time?.length === 2 ? (g.time[1]! - g.time[0]!) / (g.speed || 1) : Infinity;
+        if (t >= g.at && t < g.at + length) return [g.id];
+      }
+    }
+    return [];
+  }, [colorMode, selectedBlocks, gradedClips, timeMs, film.film]);
+  /* a point asked for on the picture (the color workbench's white-balance picker), and given when clicked */
+  const [pointWanted, setPointWanted] = React.useState<{ done: (p: { x: number; y: number } | null) => void } | null>(null);
+  const pickPoint = React.useCallback((done: (p: { x: number; y: number } | null) => void) => {
+    setPointWanted((was) => { was?.done(null); return { done }; });
+  }, []);
+  React.useEffect(() => { if (!colorMode) setPointWanted((was) => { was?.done(null); return null; }); }, [colorMode]);
+  const referShots = React.useCallback((ids: readonly string[]) => {
+    for (const b of blocksRef.current) if (b.clipId && ids.includes(b.clipId)) chat.refer?.(refOfBlock(b));
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  /* one shot picked in the strip stays the one graded while the playhead is on it; moved off it (← →, ↑ ↓, a scrub), the
+     shot under the playhead is */
+  React.useEffect(() => {
+    if (!colorMode || selectedKeys.length !== 1) return;
+    const c = gradedClips.find((x) => x.id === selectedKeys[0]);
+    if (!c) return;
+    const length = c.time?.length === 2 ? (c.time[1]! - c.time[0]!) / (c.speed || 1) : Infinity;
+    const t = timeMs / 1000;
+    if (t < c.at - 0.001 || t >= c.at + length) setSelectedKeys([]);
+  }, [colorMode, timeMs, selectedKeys, gradedClips]);
+  /* a shot taken in the color workbench's strip: picked (with those picked already, with a modifier), the playhead on it */
+  const takeShot = React.useCallback((id: string, more: boolean) => {
+    if (more) { setSelectedKeys((was) => (was.includes(id) ? was.filter((k) => k !== id) : [...was, id])); return; }
+    setSelectedKeys([id]);
+    const c = gradedClips.find((x) => x.id === id);
+    /* the playhead stays where it is when it is on the shot already */
+    const length = c?.time?.length === 2 ? (c.time[1]! - c.time[0]!) / (c.speed || 1) : Infinity;
+    if (c && !(timeMs / 1000 >= c.at && timeMs / 1000 < c.at + length)) seek(c.at * 1000);
+  }, [gradedClips, timeMs, seek]);
   /* the inspector's Crop: crop mode on the picture, for the video or still in hand there */
   const startStageCrop = React.useCallback(() => { stageControl.current?.startCrop(); }, []);
   const editStageMask = React.useCallback((session: MaskSession | null) => { stageControl.current?.editMask(session); }, []);
@@ -4481,11 +4594,12 @@ export function ProjectView({ projectId, onProject }: {
       return why;
     } };
   }, [loaded, edit, toast, t]);
-  const recorder = React.useMemo(() => ({
+  /* recording from the microphone (voice-over's Record tab): the edit's own, so it goes on while that panel is closed */
+  const recorder = useRecorder(React.useMemo(() => ({
     now: () => snapToFrame(timeRef.current),
     onSave: (file: File, atMs: number) => importAndPlace([file], (items) => (
       assetRunInsert(items, tracksRef.current, soundLaneHit(tracksRef.current, atMs, assetRunMs(items)), atMs))),
-  }), [importAndPlace]);
+  }), [importAndPlace]));
   /* on the picture: at the playhead, pictures on a new track on top, sounds on a sound track */
   const dropFilesOnPicture = React.useCallback((all: File[]) => {
     const atMs = snapToFrame(timeRef.current);
@@ -4772,6 +4886,10 @@ export function ProjectView({ projectId, onProject }: {
         take();
         if (once) setLoop((on) => !on);
         return;
+      case 'compare-grades':
+        take();
+        if (once) setUngraded((on) => !on);
+        return;
       case 'play-range':
         if (!(totalMs > 0)) return;
         take();
@@ -4928,6 +5046,122 @@ export function ProjectView({ projectId, onProject }: {
     void api.setCover(projectId, { ms: Math.max(0, Math.min(totalMs - 1, timeRef.current)) })
       .then(coverSet, () => toast.showError(t('projects.coverFailed')));
   };
+  /* ── the film's covers (lib/covers, studio/server/covers.mjs): listed and made in the library's Covers, each opened
+     as a compound clip's film is; while one is open, its bar stands where the timeline is ── */
+  const coverOuter = loaded?.outer?.kind === 'cover' ? loaded.outer : null;
+  /* the project the covers are of: the film's, also while one of them is open */
+  const coversOf = coverOuter ? coverOuter.id : projectId;
+  const coverHere = coverOuter ? `covers/${coverOuter.folder}` : null;
+  /* the film's folder on this computer, where what is made for a cover is kept (its assets) */
+  const coverRoot = coverOuter && loaded ? loaded.project.path.replace(/[\\/]covers[\\/][^\\/]+[\\/]?$/, '') : null;
+  const [coverList, setCoverList] = React.useState<{ covers: CoverInfo[]; looks: CoverLooks } | null>(null);
+  const [coverBusy, setCoverBusy] = React.useState<string | null>(null);
+  const [coverSafe, setCoverSafe] = React.useState(true);
+  const [coverFilmSeconds, setCoverFilmSeconds] = React.useState<number | null>(null);
+  /* read again as a cover changes (its card's picture), a moment after the last change */
+  const coverChanged = coverOuter ? film.film : null;
+  React.useEffect(() => {
+    let live = true;
+    const read = () => void coversApi.list(coversOf).then((r) => { if (live) setCoverList(r); }, () => {});
+    const timer = window.setTimeout(read, coverChanged ? 700 : 0);
+    return () => { live = false; window.clearTimeout(timer); };
+  }, [coversOf, coverChanged]);
+  React.useEffect(() => {
+    if (!coverOuter) return;
+    let live = true;
+    void coversApi.length(coverOuter.id).then((s) => { if (live) setCoverFilmSeconds(s); });
+    return () => { live = false; };
+  }, [coverOuter?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  /** the cover's clip whose file `match`es, and its track */
+  const coverClip = (match: (c: Clip) => boolean) => {
+    for (const [track, tr] of (film.film?.tracks ?? []).entries()) for (const c of tr.clips) if (match(c)) return { clip: c, track };
+    return null;
+  };
+  const isCoverPicture = (c: Clip) => c.id === 'frame' || /(?:^|\/)frame-\d+\.jpg$/.test(c.src);
+  const coverFailed = (e: unknown) => toast.showError(t('covers.failed').replace('{error}', e instanceof Error ? e.message : String(e)));
+  const coverEdited = (why: string | null) => { if (why) toast.showError(why); };
+  const openCover = (cover: CoverInfo | string) => {
+    void coversApi.open(coversOf, typeof cover === 'string' ? cover : cover.folder).then(({ project }) => onProject(project.id), coverFailed);
+  };
+  const makeCover = (shape: CoverShape, frame: boolean, look: CoverLook | null) => {
+    setCoverBusy(look?.id ?? 'new');
+    const stage = { w: shape.w, h: shape.h };
+    const at = frame && totalMs > 0 ? Math.max(0, Math.min(totalMs - 1, timeRef.current)) / 1000 : undefined;
+    const ask = coverHere ? { name: shape.id, stage, from: coverHere }
+      : { name: shape.id, stage, ...(at != null ? { at } : {}), ...(look ? { look: look.id } : {}) };
+    void coversApi.make(coversOf, ask).then(({ folder }) => openCover(folder), coverFailed).finally(() => setCoverBusy(null));
+  };
+  const applyCoverLook = (look: CoverLook) => {
+    if (!coverHere) return;
+    setCoverBusy(look.id);
+    void coversApi.look(coversOf, coverHere, look.id).then(async ({ clip }) => {
+      const had = coverClip((c) => c.id === 'look' || /^look-[^/]+\.html$/.test(c.src));
+      coverEdited(await edit(had
+        ? [{ op: 'set', clip: had.clip.id, field: 'src', value: clip.src }, { op: 'fields', clip: had.clip.id, fields: { attrs: clip.attrs ?? null } }]
+        : [{ op: 'insert', clip, track: { insert: 0 } }], 'covers.stepLook'));
+    }, coverFailed).finally(() => setCoverBusy(null));
+  };
+  /** the cover's picture in place of the one it had (or under everything, when it had none) */
+  const putCoverPicture = async (clip: Partial<Clip> & { src: string; box?: { x: number; y: number; w: number; h: number } }, label: string) => {
+    const had = coverClip(isCoverPicture);
+    coverEdited(await edit(had
+      ? [{ op: 'set', clip: had.clip.id, field: 'src', value: clip.src }, { op: 'fields', clip: had.clip.id, fields: { box: clip.box ?? null } }]
+      : [{ op: 'insert', clip: { id: 'frame', time: [0, 1], ...clip }, track: { insert: film.film?.tracks.length ?? 0 } }], label));
+  };
+  const coverMoment = (seconds: number) => {
+    if (!coverHere) return;
+    setCoverBusy('frame');
+    void coversApi.frame(coversOf, coverHere, seconds).then(({ clip }) => putCoverPicture(clip, 'covers.stepFrame'), coverFailed).finally(() => setCoverBusy(null));
+  };
+  /** the cover's picture as the film's folder names it (what a service is given to work from) */
+  const coverPictureFile = () => {
+    const had = coverClip(isCoverPicture);
+    if (!had || !coverHere) return null;
+    const src = had.clip.src.split('#')[0]!;
+    return { ...had, file: src.startsWith('../../') ? src.slice(6) : `${coverHere}/${src}` };
+  };
+  /** what a service made for the cover, by its receipt: the file, as the cover names it */
+  const madeForCover = (text: string) => {
+    const r = receiptOf<{ src?: string; images?: { src?: string }[] }>(text);
+    const made = r.src ?? r.images?.[0]?.src;
+    if (!made) throw new Error(t('covers.nothingMade'));
+    return `../../${made}`;
+  };
+  const coverCutout = () => {
+    const picture = coverPictureFile();
+    if (!picture || !coverRoot || !coverOuter) return;
+    setCoverBusy('cutout');
+    void api.make(coverRoot, 'cutout', { src: picture.file, out: `cover-${coverOuter.folder}-subject` }, {}).then(async (text) => {
+      const src = madeForCover(text);
+      coverEdited(await edit([{ op: 'insert', clip: { src, time: [0, 1], ...(picture.clip.box ? { box: picture.clip.box } : {}) }, track: { insert: picture.track } }], 'covers.stepCutout'));
+    }, coverFailed).finally(() => setCoverBusy(null));
+  };
+  const coverPicture = (words: string) => {
+    if (!coverRoot || !coverOuter || !film.film) return;
+    const stageNow = film.film.stage ?? { w: 1920, h: 1080 };
+    const picture = coverPictureFile();
+    setCoverBusy('picture');
+    /* the words of a picture made for a cover: OpenFilm's own, in English, as every model reads it, then the person's */
+    const lead = picture
+      ? 'Make a striking video cover picture from the reference picture: keep its people and main subject recognizable, a bold clear composition with one focal point, high contrast and rich light, readable at a small size, and no words, letters or logos anywhere in it. '
+      : 'Make a striking video cover picture: a bold clear composition with one focal point, high contrast and rich light, readable at a small size, and no words, letters or logos anywhere in it. ';
+    void api.make(coverRoot, 'image', {
+      out: `cover-${coverOuter.folder}-picture`, prompt: `${lead}${words}`, ratio: shapeOf(stageNow).ratio, quality: 'high',
+      ...(picture ? { ref: [picture.file] } : {}),
+    }, {}).then((text) => putCoverPicture({ src: madeForCover(text), box: { x: 0, y: 0, w: stageNow.w, h: stageNow.h } }, 'covers.stepPicture'), coverFailed)
+      .finally(() => setCoverBusy(null));
+  };
+  const exportCovers = (all: boolean) => {
+    const folders = all ? (coverList?.covers ?? []).map((c) => c.folder) : coverHere ? [coverHere] : [];
+    if (!folders.length) return;
+    setCoverBusy('export');
+    void coversApi.draw(coversOf, folders).then(({ files }) => toast.show(t('covers.exported').replace('{n}', String(files.length))), coverFailed)
+      .finally(() => setCoverBusy(null));
+  };
+  const coversActions = useSteady<CoversActions>({
+    projectId: coversOf, covers: coverList?.covers ?? NO_COVERS, looks: coverList?.looks ?? null, current: coverHere,
+    busy: coverBusy, open: (c) => openCover(c), make: makeCover, apply: applyCoverLook,
+  });
   /* captions of what is said (the library's captions): what went wrong, shown there; with no service to transcribe, it opens Services */
   const [subtitleProblem, setSubtitleProblem] = React.useState<{ text: string; connect: boolean } | null>(null);
   const [captionsMaking, setCaptionsMaking] = React.useState(false);
@@ -5070,7 +5304,7 @@ export function ProjectView({ projectId, onProject }: {
     },
     usedSrcs, onDropClipsForAssets: dropClipsForAssets, litPath: chatPoint?.file ?? null,
     actions: library.actions, tried: libraryTrial?.id ?? null, templateStatus,
-    preview: libraryPreview, captions: libraryCaptions, speak: speakVoice,
+    preview: libraryPreview, captions: libraryCaptions, covers: coversActions, speak: speakVoice, recorder,
   });
   /* the top bar is the shell's (shell/top-bar); what the edit has on it is given here, and drawn there in the shell's
      own React root: the edit's own buttons (its export and the exports' tray: the
@@ -5275,7 +5509,8 @@ export function ProjectView({ projectId, onProject }: {
                             onInfo={onInfo} onKey={previewKey} onError={setPreviewError} onPlayed={onPlayed} onUndecoded={onUndecoded} waiting={agentWorking}
                             onSpans={(next) => setInfo((had) => (had ? { ...had, spans: next } : had))}
                             onShown={() => setPageShown((n) => n + 1)}>
-                            {!fullscreen ? (
+                            {/* grading, the picture is looked at, not arranged: no picking or moving layers on it */}
+                            {!fullscreen && !colorMode ? (
                               <FilmStageSelect
                                 previewRef={preview}
                                 stage={shownStage}
@@ -5313,7 +5548,17 @@ export function ProjectView({ projectId, onProject }: {
                               />
                             ) : null}
                             {!fullscreen ? <CaptionStage previewRef={preview} projectId={projectId} stage={shownStage} timeMs={timeMs} onPick={showCaptionLook} onPause={pause} /> : null}
+                            {pointWanted && colorMode ? <PickPoint hint={t('project.pickWhiteHint')} onPick={(pt) => { setPointWanted(null); pointWanted.done(pt); }} /> : null}
+                            {split != null && workMode === 'color' ? <SplitLine at={split} onMove={setSplit} label={t('project.splitCompare')} before={t('project.compareOriginal')} after={t('project.compareGraded')} /> : null}
+                            {ungraded ? (
+                              <button type="button" onClick={() => setUngraded(false)}
+                                className="absolute left-2 top-2 z-20 rounded-full bg-black/70 px-2.5 py-1 text-[11px] font-medium text-white backdrop-blur-sm transition hover:bg-black/80">
+                                {t('project.ungraded')}<span className="ml-1.5 text-white/55">{keyHint('compare-grades')}</span>
+                              </button>
+                            ) : null}
                           </Preview>
+                          {/* a cover: where the platforms' buttons fall over it */}
+                          {coverOuter && coverSafe && !fullscreen ? <CoverSafeArea stage={shownStage} /> : null}
                           {/* a thing of the library tried from the assets drawer: over the picture, nothing written */}
                           {libraryTrial && !fullscreen ? <LibraryTrial key={libraryTrialRound} item={libraryTrial} frame={libraryFrame}
                             target={libraryPreviewBar} onLetGo={() => dismissLibraryPreview.current()} onTemplateState={onTemplateState}
@@ -5371,12 +5616,32 @@ export function ProjectView({ projectId, onProject }: {
                       onSpeed: setSpeed,
                     }}
                     onFullscreen={toggleFullscreen}
-                    extra={<ViewerZoomButton store={viewerZoom} />}
+                    extra={<>
+                      {workMode === 'color' ? (
+                        /* the grade against the footage: graded, split (the footage left of a line), the footage alone (⇧D) */
+                        <div role="radiogroup" aria-label={t('project.splitCompare')} className="flex h-7 items-center rounded-md bg-[var(--bg-field)] p-0.5">
+                          {([['graded', t('project.compareGraded'), null], ['split', t('project.compareSplit'), null], ['original', t('project.compareOriginal'), keyHint('compare-grades')]] as const).map(([k, label, hint]) => {
+                            const on = k === 'original' ? ungraded : k === 'split' ? !ungraded && split != null : !ungraded && split == null;
+                            return (
+                              <button key={k} type="button" role="radio" aria-checked={on}
+                                onClick={() => { setUngraded(k === 'original'); setSplit(k === 'split' ? (split ?? 0.5) : null); }}
+                                className={`flex h-6 items-center rounded-[5px] px-2 text-[11.5px] transition ${on ? 'bg-[var(--bg-selected)] text-[var(--text)]' : 'text-[var(--text-muted)] hover:text-[var(--text)]'}`}>
+                                {label}{hint ? <span className="ml-1 text-[var(--text-faint)]">{hint}</span> : null}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      ) : null}
+                      <ViewerZoomButton store={viewerZoom} />
+                    </>}
                   />
                 </div>
               </div>
               </InBlock>
 
+              {/* the color workbench draws its own blocks (scopes, shots, tools) round the edit's viewer */}
+              {colorMode ? <ColorDesk projectId={projectId} host={colorHost} clips={gradedClips} current={colorCurrent} timeMs={timeMs} onShot={takeShot}
+                onPickPoint={pickPoint} onRefer={chat.refer ? referShots : undefined} /> : null}
               {inspectorShown ? (
                 <InBlock id="inspector">
                   <div className={`${PANE} flex-1 bg-[var(--bg-panel)]`} data-workspace-inspector>
@@ -5448,6 +5713,7 @@ export function ProjectView({ projectId, onProject }: {
                         return preview.current?.stage?.('vision', { id });
                       }}
                       onPreviewLook={previewLook}
+                      colorHost={colorHost}
                       onStartCrop={startStageCrop}
                       onEditMask={editStageMask}
                       maskAsk={maskAsk}
@@ -5485,7 +5751,15 @@ export function ProjectView({ projectId, onProject }: {
               <div className={`${PANE} flex-1 bg-[var(--bg-panel)]`} data-workspace-timeline
                 onPointerDownCapture={() => { dismissLibraryPreview.current(); if (pickedMedia) pickMedia(null); }}>
                 <div className="absolute inset-0 flex min-h-0 min-w-0 flex-col" data-timeline-scope="main" style={{ right: METERS_W }}>
-                  {motionOpen && compBlock && compTracks ? (
+                  {coverOuter && coverHere ? (
+                  /* a cover: the film's moments to take its picture from, the film's covers, what is done with this one */
+                  <CoverBar outerId={coverOuter.id} outerName={coverOuter.name} folder={coverHere} stage={film.film?.stage ?? { w: 1920, h: 1080 }}
+                    covers={coverList?.covers ?? NO_COVERS} filmSeconds={coverFilmSeconds}
+                    frameAt={frameMoment(coverClip(isCoverPicture)?.clip.src)} hasPicture={Boolean(coverClip(isCoverPicture))}
+                    busy={coverBusy === 'frame' || coverBusy === 'cutout' || coverBusy === 'picture' || coverBusy === 'export' ? coverBusy : null}
+                    safe={coverSafe} onSafe={setCoverSafe} onBack={() => onProject(coverOuter.id)} onOpen={(c) => openCover(c)}
+                    onMoment={coverMoment} onCutout={coverCutout} onPicture={coverPicture} onExport={exportCovers} />
+                  ) : motionOpen && compBlock && compTracks ? (
                   /* a composition: its page's elements as layers, on the timeline of the page's own time */
                   <Timeline
                     tracks={compTracks.map((r) => r.track)}
@@ -5570,7 +5844,6 @@ export function ProjectView({ projectId, onProject }: {
                     onSelectedChange={onTimelineSelected}
                     waveUrl={waveUrl}
                     history={timelineHistory}
-                    recorder={recorder}
                     {...tools.timeline}
                     /* a file dropped on a template's clip goes in its place there, without ⇧ */
                     dropInto={(b) => templateFolderOf(b.src) != null}
@@ -5677,4 +5950,49 @@ function stableName(text: string): string {
   let h = 2166136261;
   for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 16777619);
   return (h >>> 0).toString(36);
+}
+
+/** A point clicked on the picture (0–1 across and down it), as the color workbench's picker asks; Esc lets go without one. */
+function PickPoint({ hint, onPick }: { hint: string; onPick: (p: { x: number; y: number } | null) => void }) {
+  React.useEffect(() => {
+    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); onPick(null); } };
+    window.addEventListener('keydown', esc, true);
+    return () => window.removeEventListener('keydown', esc, true);
+  }, [onPick]);
+  return (
+    <div className="absolute inset-0 z-30 cursor-crosshair" onPointerDown={(e) => {
+      e.preventDefault(); e.stopPropagation();
+      const r = e.currentTarget.getBoundingClientRect();
+      onPick({ x: Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)), y: Math.min(1, Math.max(0, (e.clientY - r.top) / r.height)) });
+    }}>
+      <span className="pointer-events-none absolute left-1/2 top-2 -translate-x-1/2 whitespace-nowrap rounded-full bg-black/70 px-3 py-1 text-[11.5px] text-white backdrop-blur-sm">
+        {hint}<span className="ml-1.5 text-white/55">Esc</span>
+      </span>
+    </div>
+  );
+}
+
+/** The line a split before and after is drawn at, over the picture: dragged across it, the original on its left. */
+function SplitLine({ at, onMove, label, before, after }: { at: number; onMove: (x: number) => void; label: string; before: string; after: string }) {
+  const box = React.useRef<HTMLDivElement | null>(null);
+  const drag = (e: React.PointerEvent<HTMLDivElement>) => {
+    const parent = box.current?.parentElement?.getBoundingClientRect();
+    if (!parent || !(e.buttons & 1)) return;
+    onMove(Math.round(Math.min(1, Math.max(0, (e.clientX - parent.left) / parent.width)) * 1000) / 1000);
+  };
+  const tag = 'pointer-events-none absolute top-2 z-20 rounded-full bg-black/60 px-2.5 py-1 text-[11px] font-medium text-white backdrop-blur-sm';
+  return (
+    <>
+    {at > 0.08 ? <span className={`${tag} left-2`}>{before}</span> : null}
+    {at < 0.92 ? <span className={`${tag} right-2`}>{after}</span> : null}
+    <div ref={box} role="slider" aria-label={label} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(at * 100)}
+      className="absolute bottom-0 top-0 z-20 w-4 -translate-x-1/2 cursor-ew-resize touch-none" style={{ left: `${at * 100}%` }}
+      onPointerDown={(e) => { e.currentTarget.setPointerCapture(e.pointerId); e.stopPropagation(); }} onPointerMove={drag}
+      onPointerUp={(e) => e.currentTarget.releasePointerCapture(e.pointerId)}>
+      <span className="absolute left-1/2 top-1/2 flex h-6 w-6 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-white text-black shadow-md">
+        <Columns2 size={12} />
+      </span>
+    </div>
+    </>
+  );
 }

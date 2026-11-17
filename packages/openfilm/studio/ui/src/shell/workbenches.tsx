@@ -12,6 +12,7 @@
  * Where these go (the room kept round them, the canvas's own frame where the panels float) is the layout's
  * (shell/layout); what the canvas does to the film is reached through the edit's wiring (plugins/canvas).
  */
+import { CANVAS_KEY, SURFACE_KEY, canvasShown, surfacePicked } from '@/lib/workbench-start';
 import * as React from 'react';
 import { api, projectEvents } from '@/api';
 import { useT } from '@/i18n';
@@ -44,14 +45,10 @@ function useKeptFlag(key: string, initial = true): [boolean, (open: boolean) => 
   }, [key]);
   return [open, keep, setOpen];
 }
-/** The workbenches whose showing the shell holds itself: the edit, Motion (a view of the edit) and the canvas. */
-const HELD_HERE: readonly string[] = ['edit', 'motion', 'canvas'];
-/** whether a project shows its canvas, kept on this computer by project */
-const CANVAS_KEY = 'openfilm.canvas.open';
-const canvasShown = (projectId: string) => { try { return localStorage.getItem(`${CANVAS_KEY}:${projectId}`) === '1'; } catch { return false; } };
-/* the plugin's surface a project was left on (its workbench's name), kept as the canvas being open is */
-const SURFACE_KEY = 'openfilm.surface';
-const surfacePicked = (projectId: string) => { try { return localStorage.getItem(`${SURFACE_KEY}:${projectId}`); } catch { return null; } };
+/** The workbenches whose showing the shell holds itself: the edit, Motion and Color (views of the edit) and the canvas. */
+const HELD_HERE: readonly string[] = ['edit', 'motion', 'color', 'canvas'];
+/* whether a project shows its canvas, and the plugin's surface it was left on, kept on this computer by project
+   (lib/workbench-start) */
 
 /**
  * The workbench shown in the project `projectId`, and files asked onto the canvas. `canvasProject`: the project's
@@ -64,6 +61,8 @@ export function useWorkbenchShown(projectId: string, canvasProject: string | und
   React.useEffect(() => { setCanvasOpenState(canvasShown(projectId)); }, [projectId]);
   /* the edit seen as an animation editor sees it (components/MotionTimeline), in the timeline's place */
   const [motionOpen, keepMotionOpen] = useKeptFlag('openfilm.project.motion', false);
+  /* the edit graded clip by clip (plugins/color): the color panel in the inspector's place */
+  const [colorOpen, keepColorOpen] = useKeptFlag('openfilm.project.color', false);
   /* not while the page's panels are being rearranged; opening it stops the film playing (the panes under it are
      hidden): that is the workbench's, asked of it as this runs */
   const setCanvasOpen = React.useCallback((open: boolean) => {
@@ -72,13 +71,13 @@ export function useWorkbenchShown(projectId: string, canvasProject: string | und
     setCanvasOpenState(open);
     try { localStorage.setItem(`${CANVAS_KEY}:${projectId}`, open ? '1' : '0'); } catch { /* for this launch only */ }
   }, [projectId, rearranging]);
-  const workMode: 'canvas' | 'edit' | 'motion' = canvasOpen ? 'canvas' : motionOpen ? 'motion' : 'edit';
+  const workMode: 'canvas' | 'edit' | 'motion' | 'color' = canvasOpen ? 'canvas' : colorOpen ? 'color' : motionOpen ? 'motion' : 'edit';
   /* the motion view opens what it is worked in (the workbench's own panes) with it */
-  const setWorkMode = React.useCallback((mode: 'canvas' | 'edit' | 'motion') => {
+  const setWorkMode = React.useCallback((mode: 'canvas' | 'edit' | 'motion' | 'color') => {
     setCanvasOpen(mode === 'canvas');
-    if (mode !== 'canvas') keepMotionOpen(mode === 'motion');
+    if (mode !== 'canvas') { keepMotionOpen(mode === 'motion'); keepColorOpen(mode === 'color'); }
     if (mode === 'motion') wiringStore.get()?.motionShown?.();
-  }, [setCanvasOpen, keepMotionOpen]);
+  }, [setCanvasOpen, keepMotionOpen, keepColorOpen]);
   /* the ways of working turned on (Settings → Advanced): one turned off while in use gives way to the first still on */
   const workModes = useWorkModes(projectId);
   /* every plugin off: no workbench is shown, only the library (and the app's chat), which opens */
@@ -98,20 +97,22 @@ export function useWorkbenchShown(projectId: string, canvasProject: string | und
   /* the edit (and Motion, a view of it) and the canvas are held here; any other workbench is a plugin's, picked */
   const heldHere = React.useCallback((workbench: string) => HELD_HERE.includes(workbench), []);
   const showWorkbench = React.useCallback((mode: string) => {
-    if (heldHere(mode)) { setSurface(null); setWorkMode(mode as 'canvas' | 'edit' | 'motion'); } else setSurface(mode);
+    if (heldHere(mode)) { setSurface(null); setWorkMode(mode as 'canvas' | 'edit' | 'motion' | 'color'); } else setSurface(mode);
   }, [setWorkMode, setSurface, heldHere]);
   /* the arrangement laid out among the page's panels: the plugin's picked, when it has one of its own; else the edit's,
      under the canvas and any other plugin's surface too */
   /* one someone made is laid out among the panels once its element may run; until then its surface says why not */
   const surfacePlugin = surface != null ? plugins.find((p) => p.workbench === surface) : undefined;
   const surfaceArrangement = surface != null && (!surfacePlugin?.skill || surfacePlugin.element) ? arrangementOf(surface, plugins) : null;
-  const among = surfaceArrangement != null && !heldHere(surface!) ? surfaceArrangement : 'edit';
+  const among = surfaceArrangement != null && !heldHere(surface!) ? surfaceArrangement
+    /* Color is the edit graded, in an arrangement of its own (the edit's viewer among its scopes, shots and tools) */
+    : surface == null && colorOpen && specs.has('color') ? 'color' : 'edit';
   /* the edit and the canvas are not shown: no workbench is on, or a plugin's surface is in their place */
   const away = noBench || surface != null;
   /* the workbenches to pick from on the top bar (Motion is picked in the edit's timeline); the edit and the canvas
      alone are one button that goes from one to the other */
   const benchPlugins = React.useMemo(() => plugins.filter((p) => p.on && p.workbench && p.workbench !== 'motion'), [plugins]);
-  const pickBench = benchPlugins.length > 1 && benchPlugins.some((p) => !heldHere(p.workbench!));
+  const pickBench = benchPlugins.length > 1 && benchPlugins.some((p) => p.workbench !== 'edit' && p.workbench !== 'canvas');
   const canToggleCanvas = workModes.includes('canvas') && workModes.length > 1;
   /* one turned off while in use gives way to the first still on */
   React.useEffect(() => {
@@ -119,6 +120,8 @@ export function useWorkbenchShown(projectId: string, canvasProject: string | und
   }, [workModes, workMode, surface, showWorkbench]);
   /* the workbench shown, told to the wiring (shell/frame): what the shell reaches is that workbench's first */
   usePublishShown(noBench ? null : surface ?? (canvasOpen ? 'canvas' : 'edit'));
+  /* the workbench as the top bar names it: Color is the edit graded, named as its own */
+  const named = (base: string | null) => (base === 'edit' && workMode === 'color' ? 'color' : base);
   /*
    * The elements of the plugins on, by where the layout puts them: the first plugin on that is laid out there
    * (`on`), and the module of its element (null: none, or not known yet). Where a module is is known once Studio has
@@ -127,7 +130,7 @@ export function useWorkbenchShown(projectId: string, canvasProject: string | und
   const pluginsRead = useStudioPlugins() !== null;
   const arranged = React.useMemo(() => {
     const of = (arrangement: string) => {
-      const there = plugins.filter((p) => p.on && p.workbench && (arrangement === 'canvas' ? p.workbench === 'canvas' : p.workbench === 'edit' || p.workbench === 'motion'));
+      const there = plugins.filter((p) => p.on && p.workbench && (arrangement === 'canvas' ? p.workbench === 'canvas' : p.workbench === 'edit' || p.workbench === 'motion' || p.workbench === 'color'));
       return { on: there.length > 0, element: (pluginsRead ? there.find((p) => p.element)?.element : null) ?? null };
     };
     return { edit: of('edit'), canvas: of('canvas') };
@@ -158,7 +161,7 @@ export function useWorkbenchShown(projectId: string, canvasProject: string | und
    * project has opened and the page has painted, while it is visible: the canvas is then put in its box, hidden. A
    * plugin someone made is loaded only when first shown. Each: its module, and whether it is the canvas's.
    */
-  const toWarm = JSON.stringify((pluginsRead ? plugins : []).filter((p) => !p.skill && p.on && p.workbench && p.element && p.workbench !== 'edit' && p.workbench !== 'motion'
+  const toWarm = JSON.stringify((pluginsRead ? plugins : []).filter((p) => !p.skill && p.on && p.workbench && p.element && p.workbench !== 'edit' && p.workbench !== 'motion' && p.workbench !== 'color'
     && (p.workbench === 'canvas' ? !canvasKept : p.workbench !== surface)).map((p) => [p.element, p.workbench === 'canvas']));
   React.useEffect(() => {
     if (!canvasProject || toWarm === '[]') return;
@@ -180,7 +183,7 @@ export function useWorkbenchShown(projectId: string, canvasProject: string | und
     return () => { live = false; cancel(); document.removeEventListener('visibilitychange', warm); };
   }, [canvasProject, toWarm]);
   /* the workbench shown, and the one shown before it (Motion is the edit's) */
-  const nowShown = noBench ? null : surface ?? (canvasOpen ? 'canvas' : 'edit');
+  const nowShown = named(noBench ? null : surface ?? (canvasOpen ? 'canvas' : 'edit'));
   const before = React.useRef<{ now: string | null; was: string | null }>({ now: nowShown, was: null });
   if (before.current.now !== nowShown) before.current = { now: nowShown, was: before.current.now };
   /* keymap `work-mode` (⌘E): back to the workbench shown before (else the next one); ⌥1, ⌥2… (Alt elsewhere): the
@@ -231,7 +234,7 @@ export function useWorkbenchShown(projectId: string, canvasProject: string | und
     : workbench === 'canvas' ? Boolean(arranged.canvas.element ?? placedNext.canvas) : amongElements.some((e) => e.name === workbench)), [arranged, placedNext.edit, placedNext.canvas, amongElements]);
 
   return {
-    canvasOpen, setCanvasOpen, motionOpen, workMode, setWorkMode, workModes, noBench, surface, showWorkbench, away,
+    canvasOpen, setCanvasOpen, motionOpen, colorOpen, workMode, setWorkMode, workModes, noBench, surface, showWorkbench, away,
     benchPlugins, pickBench, canToggleCanvas, pluginsRead, arranged, placed: placedNext,
     canvasKept, requestCanvasFiles, specs, among, amongElements, inPage, surfaceArrangement,
   };

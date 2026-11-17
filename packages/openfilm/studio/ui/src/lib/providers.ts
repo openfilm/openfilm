@@ -25,6 +25,10 @@ export interface OwnProvider {
   env: string;
   /** it works without a key: connected with one click, a key added for higher limits (then it has `last4`) */
   keyless?: boolean;
+  /** it takes no key at all (a local service): connected and disconnected with one click, never asked for a key */
+  noKey?: boolean;
+  /** one the person (or their agent) added on this computer, not built in */
+  added?: boolean;
   /** where its key comes from: kept by Studio, the environment, or none (not connected) */
   source: 'file' | 'env' | null;
   /** the environment has a key for it, connected or not: connecting can use that one */

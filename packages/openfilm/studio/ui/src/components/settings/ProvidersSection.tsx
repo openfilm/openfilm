@@ -145,7 +145,7 @@ export function ProviderDialog({ provider, hook, onClose }: { provider: OwnProvi
         <DialogIdentity name={provider.name} mark={<ProviderMark id={provider.id} size={24} />}
           website={site ? { href: `https://${site}`, label: site } : undefined} actions={action} status={status} />
       )} />
-      <p className="mt-5 text-[14.5px] leading-relaxed text-[var(--text-muted)]">{t(`settings.providers.about.${provider.id}`)}</p>
+      <p className="mt-5 text-[14.5px] leading-relaxed text-[var(--text-muted)]">{provider.added ? t('settings.providers.aboutAdded') : t(`settings.providers.about.${provider.id}`)}</p>
       <h3 className="mb-1 mt-7 text-[13px] font-medium text-[var(--text-faint)]">{t('settings.providers.makes')}</h3>
       <div className="flex flex-col divide-y divide-[var(--border)] border-y border-[var(--border)]">
         {kinds.map((verb) => {
@@ -190,7 +190,7 @@ function Connection({ provider, hook, header }: {
   const waiting = signing?.provider === provider.id;
   const signIn = provider.signIn && provider.source !== 'env';
   /* a key can be pasted while there is none: not connected, or a keyless one connected without one */
-  const keyWanted = !signIn && (!provider.source || (Boolean(provider.keyless) && !provider.last4));
+  const keyWanted = !signIn && !provider.noKey && (!provider.source || (Boolean(provider.keyless) && !provider.last4));
   const key = azure ? azureKey(region, draft) : draft.trim() ? draft : null;
   const close = () => { setAdding(false); setDraft(''); setRegion(''); };
   const save = async () => { if (key && !busy && await hook.saveKey(provider.id, key)) close(); };
@@ -220,7 +220,7 @@ function Connection({ provider, hook, header }: {
     <SettingsButton variant="quiet" disabled={busy} onClick={() => void hook.cancelSignIn(provider.id)}>{t('settings.providers.cancel')}</SettingsButton>
   ) : adding ? null : (
     <SettingsButton variant="primary" disabled={busy}
-      onClick={() => (signIn ? void hook.signIn(provider.id) : provider.keyless ? void hook.saveKey(provider.id, '') : setAdding(true))}>
+      onClick={() => (signIn ? void hook.signIn(provider.id) : provider.keyless || provider.noKey ? void hook.saveKey(provider.id, '') : setAdding(true))}>
       {t('settings.providers.connect')}
     </SettingsButton>
   );

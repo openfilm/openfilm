@@ -95,11 +95,7 @@ test(
       const surface = dialog.locator('[tabindex="0"][aria-label="Folder contents"]').first();
       await item('Alpine launch').waitFor();
       assert.equal(await dialog.getByRole('button', { name: 'Select', exact: true }).count(), 0);
-      assert.equal(
-        await dialog.getByRole('button', { name: 'New project', exact: true }).count(),
-        1,
-        'new project is in the toolbar',
-      );
+      assert.equal(await dialog.locator('[data-start="new"]').count(), 1, 'new project is the first way to start, at the top');
       await item('Alpine launch').click();
       assert.equal(await selected().count(), 1);
       assert.deepEqual(await page.evaluate(() => window.openedProjects), [], 'a click selects without opening a tab');
@@ -149,21 +145,16 @@ test(
       await page.getByRole('menuitem', { name: 'Cut', exact: true }).waitFor();
       await page.keyboard.press('Escape');
 
-      await item('Clients').click({ button: 'right' });
-      await page.getByRole('menuitem', { name: 'Pin to Quick access', exact: true }).click();
-      const clientPin = dialog.locator('[data-resource-sidebar] [data-quick-pin^="projects:"]').filter({ hasText: 'Clients' }).getByRole('button');
-      await clientPin.click();
+      await item('Clients').dblclick();
       await item('Campaigns').waitFor();
-      await clientPin.click({ button: 'right' });
-      await page.getByRole('menuitem', { name: 'Unpin from Quick access', exact: true }).click();
-      assert.equal(await clientPin.count(), 0, 'unpinning does not remove the project folder');
       assert.equal(await item('Field notes').count(), 0, 'double click stops in the intended folder');
       await dialog.getByRole('button', { name: 'Back', exact: true }).click();
       await item('Clients').waitFor();
       await dialog.getByRole('button', { name: 'Forward', exact: true }).click();
       await item('Campaigns').dblclick();
       await item('Field notes').waitFor();
-      await dialog.getByRole('button', { name: 'Up one level', exact: true }).click();
+      /* one level up: the folder before it on the path */
+      await dialog.getByRole('navigation', { name: 'Folder path', exact: true }).getByRole('button', { name: 'Clients', exact: true }).click();
       await item('Campaigns').waitFor();
       await dialog
         .getByRole('navigation', { name: 'Folder path', exact: true })

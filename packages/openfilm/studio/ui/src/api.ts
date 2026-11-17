@@ -30,8 +30,8 @@ export type Track = { clips: Clip[]; locked?: boolean; hidden?: boolean; muted?:
 export type Film = { stage?: { w: number; h: number }; tracks: Track[]; keyframes?: Record<string, string> };
 /** `value`: film.html as read, every clip named (a clip with no id takes its file's name, as the server and preview do). */
 /** `filmMissing`: the folder is there but film.html is not (read as an empty film; see FolderEvent `film-missing`). */
-/** `outer`: a compound clip's film is in that project (studio/server/parts.mjs), `folder` its own folder's name. */
-export type ProjectFilm = { project: Project; folder: string; text: string; rev: string; value: Film | null; doc: Film | null; problems: string[]; filmMissing?: boolean; outer?: { id: string; name: string; folder: string } };
+/** `outer`: a compound clip's film or a cover is in that project (studio/server/parts.mjs, covers.mjs), `folder` its own folder's name, `kind` which. */
+export type ProjectFilm = { project: Project; folder: string; text: string; rev: string; value: Film | null; doc: Film | null; problems: string[]; filmMissing?: boolean; outer?: { id: string; name: string; folder: string; kind?: 'cover' | 'part' } };
 export type MediaFile = { path: string; kind: 'video' | 'image' | 'audio' | 'page' | 'other'; size: number; mtime: number; added?: number };
 /** A project's editor settings (studio/server/project-settings.mjs). */
 export type MotionBlur = { enabled: boolean; samples: number; shutter: number };

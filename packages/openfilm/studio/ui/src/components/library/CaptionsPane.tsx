@@ -55,26 +55,27 @@ export interface CaptionsActions {
   addTrack: () => Promise<void>;
 }
 
-export function CaptionsPane({ actions }: { actions: CaptionsActions }) {
+/** Where the captions come from, a tab of the captions panel: what is said, a subtitle file, or typed by hand. */
+export type CaptionsSource = 'speech' | 'file' | 'hand';
+
+export function CaptionsPane({ actions, source }: { actions: CaptionsActions; source: CaptionsSource }) {
   return (
-    <div className={`min-h-0 flex-1 overflow-y-auto px-3 pt-2.5 ${FOOT_ROOM}`}>
-      <New actions={actions} />
+    <div className={`min-h-0 flex-1 overflow-y-auto px-3 pt-3 ${FOOT_ROOM}`}>
+      {source === 'hand' ? <ByHand actions={actions} /> : <New actions={actions} source={source} />}
     </div>
   );
 }
 
 const mmss = (ms: number) => { const s = Math.round(ms / 1000); return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`; };
 
-function New({ actions }: { actions: CaptionsActions }) {
+function New({ actions, source }: { actions: CaptionsActions; source: 'speech' | 'file' }) {
   const t = useT();
   const ui = useLanguage();
   const input = React.useRef<HTMLInputElement>(null);
-  const [source, setSource] = React.useState<'speech' | 'file'>('speech');
   const [original, setOriginal] = React.useState(true);
   const [translate, setTranslate] = React.useState<string | null>(null);
   const [file, setFile] = React.useState<File | null>(null);
   const [over, setOver] = React.useState(false);
-  const [addingTrack, setAddingTrack] = React.useState(false);
   const named = React.useMemo(() => { try { return new Intl.DisplayNames([ui], { type: 'language' }); } catch { return null; } }, [ui]);
   const fileOf = (files: FileList | null) => [...(files ?? [])].find((f) => /\.(srt|vtt)$/i.test(f.name)) ?? null;
   const { heard, picked, making, problem, speechTrack, speechAuto, choosing } = actions;
@@ -101,19 +102,9 @@ function New({ actions }: { actions: CaptionsActions }) {
   return (
     <div className="flex flex-col gap-4">
       {/* the captions of speech made by themselves: where they are, and whether they still follow the cuts */}
-      {speechTrack ? (
+      {source === 'speech' && speechTrack ? (
         <Notice text={speechAuto ? t('assetDrawer.captionsAutoOn').replace('{track}', speechTrack) : t('assetDrawer.captionsAutoOff').replace('{track}', speechTrack)} />
       ) : null}
-      <Field label={t('assetDrawer.captionsSource')}>
-        <div role="radiogroup" className="grid grid-cols-2 gap-1 rounded-md bg-[var(--bg-field)] p-0.5">
-          {(['speech', 'file'] as const).map((id) => (
-            <button key={id} type="button" role="radio" aria-checked={source === id} onClick={() => setSource(id)}
-              className={`h-7 rounded-[5px] text-[12px] font-medium ${source === id ? 'bg-[var(--bg-picked)] text-[var(--accent)]' : 'text-[var(--text-muted)] hover:text-[var(--text)]'}`}>
-              {t(id === 'speech' ? 'assetDrawer.captionsFromSpeech' : 'assetDrawer.captionsFromFile')}
-            </button>
-          ))}
-        </div>
-      </Field>
       {source === 'speech' ? (
         heard.length ? (
           <>
@@ -191,18 +182,26 @@ function New({ actions }: { actions: CaptionsActions }) {
         </button>
         {plan && has ? <p data-captions-plan="" className="text-[11px] leading-relaxed text-[var(--text-faint)]">{plan}</p> : null}
       </div>
-      <div className="flex flex-col gap-2 border-t border-[var(--border)] pt-3">
-        <button type="button" data-captions-new-track="" disabled={making || addingTrack}
-          onClick={() => { setAddingTrack(true); void actions.addTrack().finally(() => setAddingTrack(false)); }}
-          className="flex h-8 items-center justify-center gap-1.5 rounded-md bg-[var(--bg-field)] text-[12px] font-medium text-[var(--text)] hover:bg-[var(--bg-hover)] disabled:opacity-50">
-          <Plus size={14} />{t('captionTrack.stepNew')}
-        </button>
-        <p className="text-[11px] leading-relaxed text-[var(--text-faint)]">{t('captionTrack.multiTrackHint')}</p>
-        <button type="button" data-captions-add-one="" disabled={making || addingTrack} onClick={actions.addOne}
-          className="self-start text-left text-[11.5px] text-[var(--text-muted)] hover:text-[var(--text)] hover:underline disabled:opacity-50">
-          {actions.captionTrack ? t('assetDrawer.captionsAddOneOn').replace('{track}', actions.captionTrack) : t('assetDrawer.captionsAddOne')}
-        </button>
-      </div>
+    </div>
+  );
+}
+
+/** Captions typed by hand: a caption track of their own, or one caption at the playhead. */
+function ByHand({ actions }: { actions: CaptionsActions }) {
+  const t = useT();
+  const [addingTrack, setAddingTrack] = React.useState(false);
+  return (
+    <div className="flex flex-col gap-2">
+      <button type="button" data-captions-new-track="" disabled={actions.making || addingTrack}
+        onClick={() => { setAddingTrack(true); void actions.addTrack().finally(() => setAddingTrack(false)); }}
+        className="flex h-8 items-center justify-center gap-1.5 rounded-md bg-[var(--bg-field)] text-[12px] font-medium text-[var(--text)] hover:bg-[var(--bg-hover)] disabled:opacity-50">
+        <Plus size={14} />{t('captionTrack.stepNew')}
+      </button>
+      <p className="text-[11px] leading-relaxed text-[var(--text-faint)]">{t('captionTrack.multiTrackHint')}</p>
+      <button type="button" data-captions-add-one="" disabled={actions.making || addingTrack} onClick={actions.addOne}
+        className="self-start text-left text-[11.5px] text-[var(--text-muted)] hover:text-[var(--text)] hover:underline disabled:opacity-50">
+        {actions.captionTrack ? t('assetDrawer.captionsAddOneOn').replace('{track}', actions.captionTrack) : t('assetDrawer.captionsAddOne')}
+      </button>
     </div>
   );
 }

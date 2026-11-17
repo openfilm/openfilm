@@ -19,9 +19,11 @@ import { useT } from '@/i18n';
 import { HOST_PANEL_WIDTH, studioHost, type HostPanel } from '@/lib/host';
 import { BUILT_IN, fromLibrary, useLibraryIndex } from '@/lib/library';
 import type { Plugin } from '@/lib/plugins';
-import { SAVED, importIntoSaved, refreshSaved, savedActions, savedSources, useSavedListing } from '@/lib/saved';
+import { importIntoSaved, refreshSaved, savedActions, savedSources, useSavedListing } from '@/lib/saved';
+import { relOf, useLibraryPlaces } from '@/lib/library-places';
 import { fileRef, stillUrl } from '@/lib/studio-refs';
 import type { MediaListing, MediaSources, WorkspaceResource } from '@/lib/workspace-resources';
+import type { ResourceKind } from '@/lib/resource-drag';
 import { LibraryDrawer, type LibraryActions } from '@/components/library/LibraryDrawer';
 import { PluginsWindow } from '@/components/PluginsWindow';
 import { openPlugins } from '@/lib/plugins-window';
@@ -32,8 +34,9 @@ import { WorkspaceLibraryPane } from '@/components/WorkspaceLibraryPane';
 import type { useProjectFrame } from './ProjectFrame';
 import { useWiring, wiringStore, type Wiring } from './frame';
 
-/** Which the media pane shows, the project's media, the media library or Saved: kept while Studio is open, across projects. */
-type MediaScope = 'project' | 'saved';
+/** Which the media pane shows, the project's media or a place of the person's shelf (its `saved/` path): kept while
+ * Studio is open, across projects. */
+type MediaScope = string;
 const MEDIA_SCOPE: { current: MediaScope } = { current: 'project' };
 /** where the app's panel starts: under Studio's top bar (its h-8) */
 export const HOST_PANEL_TOP = 32;
@@ -78,17 +81,21 @@ export function useLibraryShown(projectId: string, of: {
     try {
       await api.save(projectId, what);
       refreshSaved();
-      toast.show(n === 1 ? t('saved.added') : t('saved.addedMany').replace('{n}', String(n)));
+      const place = what.into?.split('/').at(-1) ?? '';
+      toast.show((n === 1 ? t('saved.added') : t('saved.addedMany')).replace('{n}', String(n)).replace('{place}', place));
     } catch (e) {
       toast.showError(t('saved.failed').replace('{error}', e instanceof Error ? e.message : String(e)));
     }
   }, [projectId, t, toast]);
-  const saveFiles = React.useCallback((files: WorkspaceResource[]) => {
+  const saveFiles = React.useCallback((files: WorkspaceResource[], into: string) => {
     const list = files.map((f) => ({ path: f.path, name: f.name, ...(f.durationMs ? { durationMs: f.durationMs } : {}), ...(f.w ? { w: f.w } : {}), ...(f.h ? { h: f.h } : {}) }));
-    void saveThings({ files: list }, list.length);
+    void saveThings({ files: list, into }, list.length);
   }, [saveThings]);
   /* the media pane shows the project's media, or Saved (lib/saved): the same pane, the button beside Upload switches */
-  const [mediaScope, setMediaScope] = React.useState<MediaScope>(() => MEDIA_SCOPE.current);
+  const [asked, setMediaScope] = React.useState<MediaScope>(() => MEDIA_SCOPE.current);
+  const { ready: placesRead, folders } = useLibraryPlaces();
+  /* a folder taken away (here or in another window): the project's media again */
+  const mediaScope = asked === 'project' || !placesRead || folders.some((p) => p.path === asked) ? asked : 'project';
   const switchMedia = React.useCallback((next: MediaScope) => { MEDIA_SCOPE.current = next; setMediaScope(next); }, []);
   const [revealMedia, setRevealMedia] = React.useState<{ path: string; seq: number; highlight: boolean; done?: boolean } | null>(null);
   const mediaRevealed = React.useCallback((seq: number) => {
@@ -98,13 +105,13 @@ export function useLibraryShown(projectId: string, of: {
      the library's own category, tried there without being listed here */
   const libraryIndex = useLibraryIndex();
   const scopedListing = React.useMemo(() => {
-    if (!listing || mediaScope === 'saved') return listing;
+    if (!listing || mediaScope !== 'project') return listing;
     const keep = (f: { path: string }) => f.path === revealMedia?.path || !fromLibrary(f.path, libraryIndex?.items ?? null);
     return { ...listing, files: listing.files.filter(keep), pages: listing.pages.filter(keep) };
   }, [listing, mediaScope, libraryIndex, revealMedia?.path]);
   const [savedDirectory, setSavedDirectory] = React.useState('');
   const [savedQuery, setSavedQuery] = React.useState('');
-  const savedListing = useSavedListing(mediaScope === 'saved', true, { at: savedDirectory, query: savedQuery });
+  const savedListing = useSavedListing(mediaScope !== 'project', true, { base: relOf(mediaScope), at: savedDirectory, query: savedQuery });
   const savedImport = React.useCallback((files: File[], into: string, onProgress: ImportProgress) => importIntoSaved(files, into, onProgress, t('assets.uploadFailed')), [t]);
   /* the file a workbench was just asked to take in hand (showFile), with what it gave the library then: the media
      pane is told that file is in hand until the workbench says what is. The shell and a workbench are drawn one after
@@ -128,7 +135,7 @@ export function useLibraryShown(projectId: string, of: {
 
   return {
     refOfFile, referOutside, onLibraryDownloadFailed, saveThings, saveFiles,
-    mediaScope, switchMedia, revealMedia, setRevealMedia, mediaRevealed, libraryIndex, scopedListing, savedListing, savedImport, setSavedDirectory, setSavedQuery,
+    mediaScope, switchMedia, folders, revealMedia, setRevealMedia, mediaRevealed, libraryIndex, scopedListing, savedListing, savedImport, setSavedDirectory, setSavedQuery,
     showFile, askedInHand,
   };
 }
@@ -147,15 +154,16 @@ export function LibraryPlace({ frame }: { frame: ReturnType<typeof useProjectFra
     missingMedia, findMissing, madeWords,
     canvasOpen, setCanvasOpen, requestCanvasFiles,
     refOfFile, referOutside, onLibraryDownloadFailed, saveFiles,
-    mediaScope, switchMedia, revealMedia, mediaRevealed, scopedListing, savedListing, savedImport, setSavedDirectory, setSavedQuery, askedInHand,
-    setSettingsOpen, toast, showWorkbench,
+    mediaScope, switchMedia, folders, revealMedia, mediaRevealed, scopedListing, savedListing, savedImport, setSavedDirectory, setSavedQuery, askedInHand,
+    toast, showWorkbench, setSettingsOpen,
     libraryPane: pane, updateWorkspace, setPanelWidth,
   } = frame;
+  /* Settings › Services, where a voice's service is connected */
+  const openServices = React.useCallback(() => { setSettingsOpen('models'); }, [setSettingsOpen]);
   /* a file of the media pane clicked is taken in hand by the workbench shown (its viewer shows it): by none, nothing */
   const pickFile = React.useCallback((file: WorkspaceResource | null) => { wiringStore.get()?.library?.pick(file); }, []);
   const pickSavedFile = React.useCallback((file: WorkspaceResource | null) => { wiringStore.get()?.library?.pick(file, { saved: true }); }, []);
   const pauseWorkbench = React.useCallback(() => { wiringStore.get()?.pause?.(); }, []);
-  const openServices = React.useCallback(() => { setSettingsOpen('models'); }, [setSettingsOpen]);
   /* a plugin with a workbench turned on in the plugins' window: where it now is (the edit's views, Motion, on its timeline;
      any other on the top bar's switch), with the way to show it */
   const { show: showToast } = toast;
@@ -172,7 +180,7 @@ export function LibraryPlace({ frame }: { frame: ReturnType<typeof useProjectFra
     let live = true;
     void sourcesApi.skills(projectId).then((list) => {
       const waiting = list.filter((k) => k.waits).length;
-      if (live && waiting) showToast(t('assetDrawer.projectSkillsWaiting').replace('{n}', String(waiting)), { label: t('assetDrawer.reviewAndAllow'), run: () => openPlugins({ line: 'added' }) });
+      if (live && waiting) showToast(t('assetDrawer.projectSkillsWaiting').replace('{n}', String(waiting)), { label: t('assetDrawer.reviewAndAllow'), run: () => openPlugins({ line: 'mine' }) });
     }, () => {});
     return () => { live = false; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -192,11 +200,15 @@ export function LibraryPlace({ frame }: { frame: ReturnType<typeof useProjectFra
     },
     tryOut: () => {},
   } : library?.actions ?? { add: nothing, tryOut: nothing };
-  const media = mediaScope === 'saved' ? (
+  /* what of the files a category of the drawer shows (`kinds`, null: all of them) */
+  const only = (kinds: readonly ResourceKind[] | null, of: MediaListing | null): MediaListing | null => (!of || !kinds ? of
+    : { ...of, files: of.files.filter((f) => kinds.includes(f.kind)), pages: kinds.includes('mg') ? of.pages : [] });
+  const media = (kinds: readonly ResourceKind[] | null) => mediaScope !== 'project' ? (
     <MediaPool
-      key="saved"
-      projectId={SAVED}
-      listing={savedListing}
+      key={mediaScope}
+      projectId={mediaScope}
+      rootName={folders.find((p) => p.path === mediaScope)?.name}
+      listing={only(kinds, savedListing)}
       onFolderChange={setSavedDirectory} onSearchChange={setSavedQuery}
       sources={savedSources}
       selectedPath={library?.pickedSaved ? library.pickedPath : null}
@@ -216,7 +228,7 @@ export function LibraryPlace({ frame }: { frame: ReturnType<typeof useProjectFra
     <MediaPool
       key={mediaScope}
       projectId={projectId}
-      listing={scopedListing}
+      listing={only(kinds, scopedListing)}
       sources={mediaSources}
       usedSrcs={library?.usedSrcs}
       selectedPath={asked ?? (library && !library.pickedSaved ? library.pickedPath : null)}
@@ -237,7 +249,8 @@ export function LibraryPlace({ frame }: { frame: ReturnType<typeof useProjectFra
       missing={missingMedia.length}
       onFindMissing={() => void findMissing()}
       wordsOf={madeWords}
-      onSave={saveFiles}
+      onSave={folders.length ? saveFiles : undefined}
+      saveFolders={folders}
       scope="project"
       {...(studioHost?.refer ? { fileRef: refOfFile, onRefer: studioHost.refer } : {})}
       reveal={revealMedia}
@@ -257,9 +270,10 @@ export function LibraryPlace({ frame }: { frame: ReturnType<typeof useProjectFra
           <LibraryDrawer media={media} mediaScope={mediaScope} onMediaScope={switchMedia} mediaRequest={revealMedia?.seq} actions={actions}
             tried={library?.tried ?? null} templateStatus={library?.templateStatus ?? NO_STATUS} previewBar={canvasOpen ? null : library?.preview.bar ?? null} previewPicture={canvasOpen ? null : library?.preview.picture ?? null} dismissRef={library?.preview.dismissRef ?? noDismiss}
             onPreviewStart={canvasOpen ? pauseWorkbench : library?.preview.begin ?? nothing} onDownloadFailed={onLibraryDownloadFailed} shown={pane.open} under={pane.under} beside={pane.beside}
-            captions={library?.captions}
-            speak={library?.speak}
-            onServices={openServices} projectId={projectId} folder={loaded.project.path} />
+            onUpload={(files, into) => { if (into === 'project') void onImport(files, 'assets', () => {}); else void savedImport(files, into, () => {}).catch((e: unknown) => toast.showError(e instanceof Error ? e.message : String(e))); }}
+            onKeep={(path, name, into) => saveFiles([{ path, name } as WorkspaceResource], into)}
+            captions={library?.captions} covers={library?.covers} speak={library?.speak} recorder={library?.recorder} onServices={openServices}
+            projectId={projectId} folder={loaded.project.path} />
       </WorkspaceLibraryPane>
       {/* the plugins, in a window of their own (lib/plugins-window opens it) */}
       <PluginsWindow projectId={projectId} onWorkbenchOn={workbenchOn} />

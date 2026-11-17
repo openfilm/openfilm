@@ -183,12 +183,20 @@ export function effortOption(/** @type {string[]} */ levels, /** @type {string} 
     options: levels.map((l) => ({ value: l, name: EFFORT_NAMES[/** @type {keyof typeof EFFORT_NAMES} */ (l)] ?? l })) };
 }
 
+/**
+ * Pi's tools for the app's own agent. Its commands run in PowerShell on Windows: Pi's `bash` there needs Git Bash,
+ * which most people do not have, and failed every command without it. PowerShell comes with Windows.
+ */
+export function agentTools(platform = process.platform) {
+  return ['read', platform === 'win32' ? 'powershell' : 'bash', 'edit', 'write', 'ask'];
+}
+
 /** A tool call as the chat reads it (ACP): its kind, its title, and what it was run with. */
 export function toolCall(name, args) {
   const a = args && typeof args === 'object' ? args : {};
   const path = typeof a.path === 'string' ? a.path : typeof a.file_path === 'string' ? a.file_path : '';
   switch (name) {
-    case 'bash': return { kind: 'execute', title: String(a.command ?? 'bash'), rawInput: { command: String(a.command ?? '') } };
+    case 'bash': case 'powershell': return { kind: 'execute', title: String(a.command ?? name), rawInput: { command: String(a.command ?? '') } };
     case 'read': return { kind: 'read', title: `Read ${path}`, rawInput: { path } };
     case 'edit': return { kind: 'edit', title: `Edit ${path}`, rawInput: { path } };
     case 'write': return { kind: 'edit', title: `Write ${path}`, rawInput: { path } };

@@ -5,7 +5,6 @@
  * Studio, and when the window comes back (a file may have been put in its folder from the file manager).
  */
 import React from 'react';
-import type { AssetCatalog } from './asset-library';
 import type { ImportProgress } from '@/components/MediaPool';
 import { studioHost } from './host';
 import { mediaFetch } from './media-queue';
@@ -60,19 +59,22 @@ export const savedSources: MediaSources = {
 };
 
 export interface SavedMediaListing extends MediaListing {
-  libraryCatalog: AssetCatalog;
   ready: boolean;
   loading: boolean;
   error: boolean;
 }
-/** Only the current directory is read. Recent/starred/collection views use the already visited index. */
-export function useSavedListing(on: boolean, probe = true, options: { at?: string; view?: string; query?: string } = {}): SavedMediaListing {
+/**
+ * Only the current directory is read; the recent view uses the already visited index. `base`: a folder of the library
+ * (relative to its top) shown as the top, as the media drawer shows a place of the shelf; `at` is then within it.
+ */
+export function useSavedListing(on: boolean, probe = true, options: { at?: string; view?: string; query?: string; base?: string } = {}): SavedMediaListing {
   const seen = useSavedRevision();
-  const at = options.at ?? '';
+  const base = options.base ?? '';
+  const at = base ? (options.at ? `${base}/${options.at}` : base) : options.at ?? '';
   const view = options.view ?? '';
   const query = options.query ?? '';
   const key = JSON.stringify([at, view, query]);
-  type ScopedFiles = FilesListing & { made?: string[]; scanned?: string[]; at?: string; missing?: boolean; catalog?: AssetCatalog };
+  type ScopedFiles = FilesListing & { made?: string[]; scanned?: string[]; at?: string; missing?: boolean };
   const [loaded, setLoaded] = React.useState<{ key: string; revision: number; body: ScopedFiles } | null>(null);
   const [failed, setFailed] = React.useState(false);
   const [facts, setFacts] = React.useState<ReadonlyMap<string, MediaFacts>>(new Map());
@@ -143,12 +145,14 @@ export function useSavedListing(on: boolean, probe = true, options: { at?: strin
     const sameDirectory = loaded && JSON.parse(loaded.key)[0] === at && JSON.parse(loaded.key)[1] === view;
     const body: ScopedFiles = sameDirectory && raw ? raw : { files: [], folders: [], pages: [], links: raw?.links ?? {} };
     const versions = new Map(body.files.map(file => [file.path, file.mtime]));
-    const listing = mediaListingOf(body, path => facts.get(`${path}@${versions.get(path)}`), body.made, SAVED);
+    const listing = mediaListingOf(body, path => facts.get(`${path}@${versions.get(path)}`), body.made, base ? `${SAVED}/${base}` : SAVED);
     const dirs = new Set(directories.current);
     for (let path = at; path; path = path.split('/').slice(0, -1).join('/')) dirs.add(path);
-    return { ...listing, dirs: [...dirs], made: [...dirs], scannedDirs: [...scanned.current], loading: !same || loaded?.revision !== seen,
-      libraryCatalog: raw?.catalog ?? { items: {}, collections: [] }, ready: Boolean(same && loaded?.revision === seen && !failed), error: failed };
-  }, [raw, loaded, key, facts, failed, seen, at]);
+    /* folders as the pane names them: from the top shown */
+    const within = (paths: Iterable<string>) => (base ? [...paths].flatMap(path => (path.startsWith(`${base}/`) ? [path.slice(base.length + 1)] : [])) : [...paths]);
+    return { ...listing, dirs: within(dirs), made: within(dirs), scannedDirs: [...within(scanned.current), ...(base && scanned.current.has(base) ? [''] : [])], loading: !same || loaded?.revision !== seen,
+      ready: Boolean(same && loaded?.revision === seen && !failed), error: failed };
+  }, [raw, loaded, key, facts, failed, seen, at, base]);
 }
 
 const result = async (res: Response): Promise<MediaResult> => (res.ok ? 'ok' : res.status === 409 ? recycleRefusalOf(await res.json().catch(() => null)) ?? 'taken' : 'failed');

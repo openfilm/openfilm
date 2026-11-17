@@ -51,16 +51,23 @@ function projectOf(dir) {
 /** A command written wrong (a range that ends before it starts, a path that is not there): exit status 2. */
 export class UsageError extends Error {}
 
+/**
+ * `moments`: every time and range given, in their order (look draws several in one sheet); `at` and `range` are the
+ * last of each.
+ * @returns {{ film: string, at: number | null, range: [number, number] | null, moments: Array<number | [number, number]> }}
+ */
 export function parseTarget(args) {
   let film = '.';
   let at = null;
   let range = null;
+  /** @type {Array<number | [number, number]>} */
+  const moments = [];
   for (const arg of args) {
-    if (/^\d+(\.\d+)?$/.test(arg)) at = Number(arg);
-    else if (/^\d+(\.\d+)?-\d+(\.\d+)?$/.test(arg)) { const [a, b] = arg.split('-').map(Number); if (!(b > a)) throw new UsageError(`range ${arg}: the end must be after the start`); range = [a, b]; }
+    if (/^\d+(\.\d+)?$/.test(arg)) { at = Number(arg); moments.push(at); }
+    else if (/^\d+(\.\d+)?-\d+(\.\d+)?$/.test(arg)) { const [a, b] = arg.split('-').map(Number); if (!(b > a)) throw new UsageError(`range ${arg}: the end must be after the start`); range = [a, b]; moments.push(range); }
     else film = arg;
   }
-  return { film, at, range };
+  return { film, at, range, moments };
 }
 
 /**
@@ -80,12 +87,15 @@ export async function open(target, opts = {}) {
   const copies = new Map();
   /** @type {Map<string, string>} the graded copies of the film's videos graded by LUTs, by their keys (seekable.mjs) */
   const graded = new Map();
-  /** @type {((file: string, luts: string[]) => string | null) | null} seekable.mjs gradeKey, once it is loaded */
+  /** @type {{ key: typeof import('./seekable.mjs').gradeKey, range: typeof import('./seekable.mjs').gradeRange } | null} seekable.mjs's names of graded copies, once it is loaded */
   let keyOf = null;
   const site = await serve(loc.root, {
     swap: (file, query) => opts.swap?.(file, query) ?? graded.get(query?.get('of-grade') ?? '') ?? copies.get(file) ?? null,
     missed: opts.missed,
-    grade: opts.grade ?? ((file, luts) => { const key = keyOf?.(file, luts); return key && graded.has(key) ? { key } : null; }),
+    grade: opts.grade ?? ((file, luts, time) => {
+      const range = keyOf?.range(time) ?? null, key = keyOf?.key(file, luts, false, range);
+      return key && graded.has(key) ? { key, from: range?.from ?? 0 } : null;
+    }),
   });
   const lent = opts.browser ?? null;
   let browser;
@@ -93,8 +103,8 @@ export async function open(target, opts = {}) {
   catch (e) { await site.close(); throw e; }
   if (opts.playable) {
     try {
-      const { browserCopies, filmGrades, filmVideos, gradedCopies, gradeKey } = await import('./seekable.mjs');
-      keyOf = gradeKey;
+      const { browserCopies, filmGrades, filmVideos, gradedCopies, gradeKey, gradeRange } = await import('./seekable.mjs');
+      keyOf = { key: gradeKey, range: gradeRange };
       const files = Array.isArray(opts.playable) ? opts.playable : loc.isFilm ? filmVideos(loc.root, loc.entry) : [];
       for (const [file, copy] of await browserCopies(browser, site.url, loc.root, files, { signal: opts.signal })) copies.set(file, copy);
       /* the film's videos graded by LUTs, as the preview and an export show them (the project's film, for a page drawn

@@ -48,7 +48,7 @@ A folder:
   - `left`, `top`, `width`, `height` in its `style` (px) and `rotate` (degrees, clockwise): where it sits. Without them, a video or picture is the stage, and a page is its own size, centered. With only `width` or `height`, the other keeps its proportions.
   - Its look is CSS, in `class` or `style`: a video or picture fits whole in its box unless you say otherwise (`object-fit: cover` crops it to the box).
   - It moves by CSS animation: `animation` in its `style`, its `@keyframes` in film.html's `<style>`. Its time starts at the clip's `at`. Move it with `translate` (px, or `vw`/`vh` of the stage), `scale` and `rotate`, never `transform`, `left` or `top`: these go on top of its box, about its center. `--clip-length` is how long the clip is (`4.2s`): time a way out from its end with it. For example a slow push in and a push out to the left:
-    `<style>@keyframes push { from { scale: 1 } to { scale: 1.1 } } @keyframes out { to { translate: -100vw 0 } }</style>` … `style="animation: push var(--clip-length) linear both, out .5s ease-in calc(var(--clip-length) - .5s) both"`. Shots that follow one another go end to end on one track. A transition at a cut is one of the library's (`openfilm get transition`, see media), put over the cut as its `--take` says; one of your own is each shot's way in and out on that same track. Only two clips that must show at once, one fading over the other, overlap on two tracks.
+    `<style>@keyframes push { from { scale: 1 } to { scale: 1.1 } } @keyframes out { to { translate: -100vw 0 } }</style>` … `style="animation: push var(--clip-length) linear both, out .5s ease-in calc(var(--clip-length) - .5s) both"`. Shots that follow one another go end to end on one track. A transition at a cut is each shot's way in and out on that same track. Only two clips that must show at once, one fading over the other, overlap on two tracks.
   - `speed` (video and sound): 0.1 to 100. The clip lasts `(out − in) / speed` seconds. To make it faster or slower, change `speed` only: never make the file again at another speed, nor move its `.vtt`'s times. Its words (the `.vtt` beside it) follow `speed` on their own.
   - `volume` (video and sound): 1 is the file's own level; `muted` silences it.
   - `id`: a name, unique in the film; without it, the file's name.
@@ -77,13 +77,17 @@ A folder:
 - The picture is captured once `frame` returns, or once the Promise it returns resolves. Create a WebGL context with `preserveDrawingBuffer: true`.
 - A page has no sound: every sound is a clip in film.html. A shot's sound effect goes at the film second it plays: the page clip's `at`, plus the page's t, less the clip's in point (a hit at t = 2 in a clip at 5 goes at 7). When you move the page clip, move its sounds with it.
 
-The words of a sound or a video are a WebVTT beside it with the same name (`vo/1.wav` → `vo/1.vtt`): a cue per subtitle line, a timestamp tag at each word. When the first words timed this way come in, Studio adds a caption track of them to film.html by itself (SPEC: Captions); never draw subtitles in a page.
+The words of a sound or a video are a WebVTT beside it with the same name (`vo/1.wav` → `vo/1.vtt`): a cue per subtitle line, a timestamp tag at each word. When the first words timed this way come in, Studio adds a caption track of them to film.html by itself; never draw subtitles in a page.
+
+## Pointing at the film
+
+In the app the person points at the film in Studio, and you point back, with links to film.html: `film.html#s3` a clip by its `id`, `film.html#t=12.5` a moment, `film.html#t=12,16` a stretch, in seconds, and `film.html#t=12.5&xywh=640,200,320,180` a part of the picture then (x, y, width, height in the stage's pixels).
 
 ## Seeing it
 
 Studio plays each change live, as it will be exported: render a video only when the person asks for a file.
 
-`openfilm look`, in the film's folder: a contact sheet of the whole film with its sound, and a check that the same t draws the same picture. `look 4.5` is one frame at full size, `look 3-6` a stretch, `look assets/a.mp4` a media file. After a render, `look --full` watches every frame of the rendered film for white flashes, jumping frames, still pictures and black, and `look --loudness=-14` says how far the mix is from a delivery loudness. Reading a frame it saves shows it to you: check every shot with it after you change the film.
+`openfilm look`, in the film's folder: a contact sheet of the whole film with its sound, and a check that the same t draws the same picture. `look 4.5` is one frame at full size, `look 3-6` a stretch, `look 8.4-8.8 26.5` several moments in one sheet, `look assets/a.mp4` a media file. After a render, `look --full` watches every frame of the rendered film for white flashes, jumping frames, still pictures and black, and `look --loudness=-14` says how far the mix is from a delivery loudness. Reading a picture it saves shows it to you. Each look is a turn: look as closely as the work needs, one moment when one matters, several in one look when they can be judged together, and footage that speaks by its words (`get asr`) before its frames.
 
 A film rendered for the person to publish is rendered with `--loudness=-14`, the loudness Studio exports and previews at, unless they ask for another (`-16` a podcast, `-23` broadcast).
 

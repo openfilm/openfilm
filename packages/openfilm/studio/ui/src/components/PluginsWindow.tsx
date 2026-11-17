@@ -1,33 +1,43 @@
 /**
- * The Community: everything that can be added to OpenFilm and shared, in a large window of its own (components/LargeDialog,
- * as Settings is). The person's own first: Mine (what they have: switches, updates) and Favorites (kept for later); then
- * Discover (a quiet name, in early testing) and under it its kinds (feature-kinds: workbenches, skills, connectors, the library's templates,
- * stickers, sounds…), filters of its one catalog, listed once and open to more; Publish (share what they made) at the
- * foot; a thing added goes back to where it is used (the top
- * right, the conversation, the agent, the library's tabs). Import (a folder or a link, its kind read from what it is) at
- * the side's foot. In early testing, which Discover and Publish say. Opened from the button beside the chat's "+", the
- * OpenFilm menu, and links to a skill (lib/plugins-window). The design and the research behind it: internal/community.md.
+ * The Community: everything that can be added to OpenFilm and shared, in a large window of its own (components/
+ * LargeDialog, as Settings is), laid out as an app store is. Its side: the search; Mine (the person's plugins and
+ * skills, managed as Settings lists things); the Community's plugins, skills, things for the library and examples (whole
+ * projects), each a store page of its own; and at its foot Publish and Add (import a folder or a link, or another catalog to read). A thing added goes back to where it is used (the top right, the conversation, the
+ * agent, the library drawer). Opened from the chat's Community button, the OpenFilm menu and links (lib/plugins-window).
  */
 import React from 'react';
-import { CircleUserRound, Import, Star, Upload } from 'lucide-react';
+import { Blocks, CircleUserRound, Clapperboard, BookOpenText, Import, LibraryBig, Plus, Rss, Upload } from 'lucide-react';
 import { useT } from '@/i18n';
 import { studioHost } from '@/lib/host';
 import type { Plugin } from '@/lib/plugins';
-import { closePlugins, showPluginsLine, showPluginsPage, usePluginsWindow } from '@/lib/plugins-window';
+import { closePlugins, showPluginsLine, showPluginsPage, usePluginsWindow, type PluginsLine } from '@/lib/plugins-window';
+import { ContextMenu, type ContextMenuEntry } from './ContextMenu';
 import { LargeDialog, LargeDialogGroup, LargeDialogPlace, LargeDialogSearch } from './LargeDialog';
-import { FEATURE_KINDS, KindIcon, isCodeKind } from './feature-kinds';
 import { PluginsPane } from './library/PluginsPane';
 
-const ICON = { size: 18, strokeWidth: 1.75 } as const;
+/* the side's marks: thin lines in the text's own colour, as a file browser's side draws its places */
+const ICON = { size: 18, strokeWidth: 1.6 } as const;
 
 export function PluginsWindow({ projectId, onWorkbenchOn }: { projectId: string | null; onWorkbenchOn?: (plugin: Plugin) => void }) {
   const t = useT();
   const { open, line, page } = usePluginsWindow();
   const [query, setQuery] = React.useState('');
+  const [menu, setMenu] = React.useState<{ x: number; y: number; items: ContextMenuEntry[] } | null>(null);
   const search = React.useRef<HTMLInputElement>(null);
   React.useEffect(() => { if (open) setQuery(''); }, [open]);
   if (!open) return null;
   const importAny = studioHost?.skills?.add;
+  const place = (to: PluginsLine, icon: React.ReactNode, name: string, active = line === to) => (
+    <LargeDialogPlace key={to} icon={icon} active={active} onClick={() => showPluginsLine(to)}>{name}</LargeDialogPlace>
+  );
+  /* adding what is elsewhere: a folder or a link (its kind is read from what it is), or another catalog to read */
+  const addMenu = (e: React.MouseEvent<HTMLElement>) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    setMenu({ x: r.left, y: r.top, items: [
+      ...(importAny ? [{ id: 'import', label: t('assetDrawer.importAny'), icon: <Import size={15} />, onSelect: importAny }] : []),
+      { id: 'sources', label: t('assetDrawer.sourcesManage'), note: t('assetDrawer.sourcesLine'), icon: <Rss size={15} />, onSelect: () => showPluginsLine('sources') },
+    ] });
+  };
   return (
     <LargeDialog label={t('assetDrawer.pluginsWindow')} closeLabel={t('assetDrawer.closePlugins')} onClose={closePlugins} focusFirst={search}
       onEscape={() => { if (!page) return false; showPluginsPage(null); return true; }}
@@ -35,25 +45,23 @@ export function PluginsWindow({ projectId, onWorkbenchOn }: { projectId: string 
         <>
           <LargeDialogSearch ref={search} value={query} placeholder={t('assetDrawer.featuresSearch')}
             onChange={(value) => { setQuery(value); if (page) showPluginsPage(null); }} />
-          {/* the person's own first: what they have, what they kept for later */}
+          {/* what the person has: their plugins and skills */}
           <LargeDialogGroup>
-            <LargeDialogPlace icon={<CircleUserRound {...ICON} />} active={line === 'added'} onClick={() => showPluginsLine('added')}>{t('assetDrawer.place_added')}</LargeDialogPlace>
-            <LargeDialogPlace icon={<Star {...ICON} />} active={line === 'favorites'} onClick={() => showPluginsLine('favorites')}>{t('assetDrawer.place_favorites')}</LargeDialogPlace>
+            {place('mine', <CircleUserRound {...ICON} />, t('assetDrawer.place_mine'))}
           </LargeDialogGroup>
-          {/* Discover: its kinds under its quiet name (in early testing, said beside it); listed once, more to come */}
-          <LargeDialogGroup title={<>{t('assetDrawer.place_discover')}<span className="ml-2 rounded-full bg-[var(--bg-field)] px-1.5 text-[11px] leading-[17px]">{t('assetDrawer.communityEarly')}</span></>}>
-            {FEATURE_KINDS.map((k) => (
-              <LargeDialogPlace key={k} icon={<KindIcon kind={k} />} active={line === `kind:${k}`} onClick={() => showPluginsLine(`kind:${k}`)}>
-                {t(isCodeKind(k) ? `assetDrawer.view_${k}` : `assetDrawer.cat_${k}`)}
-              </LargeDialogPlace>
-            ))}
+          {/* the Community: its plugins, its skills, its things for the library (a kind each on that page) */}
+          <LargeDialogGroup title={t('assetDrawer.pluginsWindow')}>
+            {place('plugins', <Blocks {...ICON} />, t('assetDrawer.tab_plugins'))}
+            {place('skills', <BookOpenText {...ICON} />, t('assetDrawer.tab_skills'))}
+            {place('assets', <LibraryBig {...ICON} />, t('assetDrawer.tab_assets'), line === 'assets' || line.startsWith('kind:'))}
+            {place('examples', <Clapperboard {...ICON} />, t('assetDrawer.tab_examples'))}
           </LargeDialogGroup>
-          {/* sharing what one made, and bringing in what is elsewhere (a folder or a link: its kind is read from what it is);
-              the community's other sources are at the foot of Added */}
+          {/* sharing what one made; adding what is elsewhere */}
           <div className="mt-auto flex flex-col gap-0.5 pt-6">
-            <LargeDialogPlace icon={<Upload {...ICON} />} active={line === 'publish'} onClick={() => showPluginsLine('publish')}>{t('assetDrawer.place_publish')}</LargeDialogPlace>
-            {importAny ? <LargeDialogPlace icon={<Import {...ICON} />} active={false} onClick={importAny}>{t('assetDrawer.importAny')}</LargeDialogPlace> : null}
+            {place('publish', <Upload {...ICON} />, t('assetDrawer.place_publish'))}
+            <LargeDialogPlace icon={<Plus {...ICON} />} active={line === 'sources'} onClick={addMenu}>{t('assetDrawer.addMenu')}</LargeDialogPlace>
           </div>
+          {menu ? <ContextMenu x={menu.x} y={menu.y} items={menu.items} onClose={() => setMenu(null)} /> : null}
         </>
       )}>
       <PluginsPane line={line} query={query} projectId={projectId} opened={page} onOpen={showPluginsPage}

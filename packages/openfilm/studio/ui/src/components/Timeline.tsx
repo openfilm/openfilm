@@ -167,7 +167,6 @@ import type { PlaybackClock } from './LiveTime';
 import { inHostPanel, isTypingTarget } from './typing-target';
 import { Popover } from './Popover';
 import { MarkerGlyph } from './TimelineMarkers';
-import { RecordButton, type RecordButtonProps } from './RecordButton';
 import { SoloButton, TrackResizeHandle } from './timeline-head-extras';
 import { clipAtPoint, markReplaceTarget } from './replace-drop';
 import { Tooltip } from './Tooltip';
@@ -721,8 +720,6 @@ export interface TimelineProps {
   markerLane?: { shown: boolean; render: (lane: MarkerLaneView) => React.ReactNode };
   /** The toolbar's Add marker (left of split); M does the same. */
   onAddMarker?: () => void;
-  /** The toolbar's record button (components/RecordButton): sound from the microphone, put on at the playhead. */
-  recorder?: Pick<RecordButtonProps, 'now' | 'onSave'>;
   /** The ruler's own right-click menu, at a moment (film ms): adding a marker there. */
   rulerMenu?: (atMs: number) => ContextMenuEntry[];
   /** Drawn on each row, over its clips (the clips' markers). */
@@ -1042,7 +1039,6 @@ export const Timeline = React.memo(function Timeline({
   solo,
   markerLane,
   onAddMarker,
-  recorder,
   rulerMenu,
   trackOverlay,
   snapPointsMs,
@@ -4344,12 +4340,7 @@ export const Timeline = React.memo(function Timeline({
           ) : null}
         </div>
 
-        {/* the right side: recording first, then the switches (lib/timeline-prefs), in this order: snapping, the
-            main-track magnet and linkage */}
-        {recorder && !layers ? <>
-          <RecordButton now={recorder.now} onSave={recorder.onSave} onProblem={setNotice} />
-          <span className="mx-0.5 h-4 w-px" style={{ background: TL.line }} />
-        </> : null}
+        {/* the right side: the switches (lib/timeline-prefs), in this order: snapping, the main-track magnet and linkage */}
         {onEditOps && layers ? (
           <span data-timeline-snap={snap ? '1' : '0'}>
             <ToolButton onClick={() => togglePref('snap')} active={snap} label={t('timeline.snap')}

@@ -14,14 +14,14 @@ import { useProviders } from '@/lib/providers';
 import { SettingsButton, SettingsGroup, SettingsLinkButton, settingsError } from './ui';
 
 /** The account's picture, else the first letter of its name on the app's color. */
-function Avatar({ src, name }: { src: string | null | undefined; name: string }) {
+export function Avatar({ src, name, size = 40 }: { src: string | null | undefined; name: string; size?: number }) {
   const [failed, setFailed] = React.useState(false);
   React.useEffect(() => setFailed(false), [src]);
   if (src && !failed) {
-    return <img src={src} alt="" referrerPolicy="no-referrer" onError={() => setFailed(true)} className="h-10 w-10 shrink-0 rounded-full object-cover" />;
+    return <img src={src} alt="" referrerPolicy="no-referrer" onError={() => setFailed(true)} style={{ width: size, height: size }} className="shrink-0 rounded-full object-cover" />;
   }
   return (
-    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--primary)] text-[16px] font-semibold uppercase text-[var(--on-primary)]">
+    <span style={{ width: size, height: size, fontSize: Math.round(size * 0.4) }} className="flex shrink-0 items-center justify-center rounded-full bg-[var(--primary)] font-semibold uppercase text-[var(--on-primary)]">
       {[...name][0] ?? ''}
     </span>
   );

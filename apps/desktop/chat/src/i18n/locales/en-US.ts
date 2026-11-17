@@ -226,9 +226,13 @@ export const enUS = {
     service: 'Service',
   },
   project: {
-    assets: 'Assets',
+    assets: 'Library',
     backToChat: 'Back to chat',
-    addAttachment: 'Add files',
+    addAttachment: 'Add files or photos',
+    addMenu: 'Add',
+    addFolder: "Add folder",
+    addSkillRef: "Skills",
+    addReference: "References",
     plugins: 'Community',
     close: 'Close',
     composerPlaceholder: 'Say what to change. Type @ for a file, a skill, a moment or what you selected',
@@ -261,8 +265,8 @@ export const enUS = {
     unpin: 'Unpin',
   },
   starter: {
-    more: 'More skills',
-    examples: 'Start from an example',
+    community: 'Community: add plugins, skills and material',
+    library: 'Library: import media, find templates, music and effects',
     title: 'What do you want to make?',
   },
   turnAsk: {

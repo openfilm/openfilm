@@ -90,7 +90,7 @@ test('OpenFilm\'s own plugins bring commands the same way, named by their id, an
   const found = pluginCommand(['edit', 'add', 'assets/a.mp4'], where);
   assert.deepEqual([found.command, found.file, found.rest, found.plugin.source], ['add', join(pluginsDir(), 'edit', 'add.mjs'), ['assets/a.mp4'], 'own']);
   /* its skill is what says what its commands do */
-  assert.match(pluginCommand(['edit'], where).error, /^Its commands: `openfilm edit add`, `openfilm edit look`\. `openfilm skill edit` says what each does\.$/);
+  assert.match(pluginCommand(['edit'], where).error, /^Its commands: `openfilm edit add`, `openfilm edit look`\. `openfilm edit <command> --help` says what one does\.$/, 'the edit brings no skill: each command says');
   /* one someone made with the same name does not take its place: it is named owner/name */
   plugin(join(where.mine, 'edit'), 'edit', { add: 'add.mjs' }, { 'add.mjs': '' });
   assert.equal(pluginCommand(['edit', 'add'], where).plugin.source, 'own');

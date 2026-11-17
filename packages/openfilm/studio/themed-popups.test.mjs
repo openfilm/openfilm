@@ -45,7 +45,6 @@ test('Studio popups use the same themed controls on Windows and Mac browser prof
     const root = join(process.env.OPENFILM_LIBRARY, 'Popups');
     await mkdir(root, { recursive: true });
     await mkdir(process.env.OPENFILM_SAVED, { recursive: true });
-    await writeFile(join(process.env.OPENFILM_SAVED, 'Popup.svg'), '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><rect width="64" height="64" fill="cyan"/></svg>');
     await writeFile(join(root, 'page.html'), '<!doctype html><body style="margin:0;background:#224"><script>window.film={duration:4,frame(){}}</script>');
     await writeFile(join(root, 'film.html'), filmHtml({ stage: { w: 1280, h: 720 }, tracks: [{ clips: [{ id: 'page', src: 'page.html', time: [0, 4] }] }] }));
     const project = await openProject(root);
@@ -108,40 +107,12 @@ test('Studio popups use the same themed controls on Windows and Mac browser prof
     }
     for (const theme of ['dark', 'light']) assert.deepEqual(colors[`Win32-${theme}`], colors[`MacIntel-${theme}`]);
 
-    await t.test('library menus choose a project and file mode, and an added asset keeps its mode disabled', async () => {
-      const page = await newPage('Win32', 'dark');
-      try {
-        await page.getByRole('button', { name: 'Open resource center', exact: true }).click();
-        const resource = page.getByRole('dialog', { name: 'Resource center', exact: true });
-        await page.locator('[data-resource-sidebar] [data-fixed-place="assets:"] button').click();
-        await page.locator('[data-asset-library] [data-media-path="saved/Popup.svg"]').click();
-        const details = page.getByRole('complementary', { name: 'Asset details', exact: true });
-        const target = details.locator('button[aria-haspopup="listbox"][aria-label="Add to project"]');
-        await target.click();
-        await menuAppearance(page, 'dark');
-        await page.getByRole('option', { name: 'Popups', exact: true }).click();
-        const mode = details.getByRole('button', { name: 'Use files', exact: true });
-        await mode.click();
-        await menuAppearance(page, 'dark');
-        await page.getByRole('option', { name: 'Use at original location', exact: true }).click();
-        assert.match(await mode.innerText(), /Use at original location/);
-        await target.click();
-        await page.keyboard.press('Escape');
-        await page.getByRole('listbox').waitFor({ state: 'detached' });
-        assert.equal(await resource.isVisible(), true);
-        await details.getByRole('button', { name: 'Add to project', exact: true }).last().click();
-        await details.getByRole('button', { name: 'Already in project', exact: true }).waitFor();
-        assert.equal(await mode.isDisabled(), true);
-        if (process.env.OPENFILM_TEST_ARTIFACTS) await page.screenshot({ path: join(process.env.OPENFILM_TEST_ARTIFACTS, 'library-windows.png') });
-      } finally { await page.close(); }
-    });
-
     await t.test('voice dialog menus stay above the overlay and Escape closes only the menu first', async () => {
       const page = await newPage('Win32', 'dark');
       try {
         await page.route('**/api/projects/*/files', route => route.fulfill({ json: { files: [{ kind: 'audio', path: 'assets/reference.wav' }] } }));
         await page.getByRole('button', { name: 'Voices', exact: true }).click();
-        await page.getByRole('button', { name: 'My voices', exact: true }).click();
+        await page.getByRole('button', { name: 'Mine', exact: true }).click();
         await page.getByRole('button', { name: 'Clone voice', exact: true }).first().click();
         const dialog = page.getByRole('dialog', { name: 'Clone voice', exact: true });
         await dialog.waitFor();
@@ -164,27 +135,6 @@ test('Studio popups use the same themed controls on Windows and Mac browser prof
         assert.equal(await dialog.isVisible(), true);
         await page.keyboard.press('Escape');
         await dialog.waitFor({ state: 'detached' });
-      } finally { await page.close(); }
-    });
-
-    await t.test('compact motion menu retains its size and changes the real layer blend', async () => {
-      const page = await newPage('Win32', 'dark');
-      try {
-        const enabled = await page.request.put(`${studio.origin}/api/plugins/motion`, { data: { on: true }, headers: { 'x-studio-key': studio.key } });
-        assert.equal(enabled.ok(), true);
-        await page.reload();
-        await page.getByRole('radio', { name: 'Animate', exact: true }).click();
-        const mode = page.locator('[data-layer-mode="page"]');
-        await mode.waitFor();
-        const bounds = await mode.boundingBox();
-        assert.equal(bounds.height, 18);
-        assert.ok(bounds.width <= 82);
-        await mode.click();
-        await menuAppearance(page, 'dark');
-        await page.getByRole('option', { name: 'Multiply', exact: true }).click();
-        await page.waitForFunction(async id => { const r = await fetch(`/api/projects/${id}`); return r.ok && /multiply/.test(await r.text()); }, project.id);
-        const film = readFilmFile(await readFile(join(root, 'film.html'), 'utf8')).value;
-        assert.match(film.tracks[0].clips[0].style, /mix-blend-mode:\s*multiply/);
       } finally { await page.close(); }
     });
 

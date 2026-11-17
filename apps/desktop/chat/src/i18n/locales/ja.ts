@@ -225,9 +225,13 @@ export const ja: Words = {
     service: 'サービス',
   },
   project: {
-    assets: '素材',
+    assets: '素材ライブラリ',
     backToChat: 'チャットに戻る',
-    addAttachment: 'ファイルを追加',
+    addAttachment: 'ファイルや写真を追加',
+    addMenu: '追加',
+    addFolder: "フォルダを追加",
+    addSkillRef: "スキル",
+    addReference: "参照",
     plugins: 'コミュニティ',
     close: '閉じる',
     composerPlaceholder: '変更したい内容を入力。@ でファイル、スキル、タイミング、選択中のものを指定できます',
@@ -260,8 +264,8 @@ export const ja: Words = {
     unpin: 'ピン留めを外す',
   },
   starter: {
-    more: 'その他のスキル',
-    examples: 'サンプルから始める',
+    community: 'コミュニティ：プラグイン・スキル・素材を追加',
+    library: 'ライブラリ：素材を読み込み、テンプレートや音楽を探す',
     title: '何を作りますか？',
   },
   turnAsk: {

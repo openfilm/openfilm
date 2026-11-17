@@ -42,7 +42,7 @@ import { logSwitches } from './agent-logs.mjs';
 import { afterFirstReading, firstWindowsApps, refreshWindowsApps } from './windows-apps.mjs';
 import { mergeConfig, sessionSkills } from './agent-skills.mjs';
 import { nodeBinary } from './node-runtime.mjs';
-import { openfilmCommand } from './openfilm-command.mjs';
+import { claudeEnvFile, openfilmCommand } from './openfilm-command.mjs';
 import { outOfBalance } from './pi-config.mjs';
 import { AGENT_DEFINITIONS } from './agent-definitions.mjs';
 import { systemPrompt } from 'openfilm/system-prompt';
@@ -155,56 +155,42 @@ export function keyFileRules(homes, platform = process.platform) {
 }
 
 /**
- * How the person points at things in Studio, and how the agent points back: told to every agent, the app's own too.
- * One form both ways, links to the project (Studio's lib/links), only what the web already has after `#`: an id, and
- * W3C Media Fragments' `t=` and `xywh=`, the `#t=` film.html's sources are cut with.
- */
-export const STUDIO_REFERENCES = `What the person points at in Studio comes as numbered links to where it is, with what
-is there after their message. Point back the same way, with Markdown links to the project; they open it in Studio:
-[the logo](film.html#s3) a clip by its id, [here](film.html#t=12.5) a moment, [this](film.html#t=12,16) a stretch in
-seconds, [this part](film.html#t=12.5&xywh=640,200,320,180) a part of the picture then (x, y, width, height in the
-stage's pixels), [the music](assets/music.mp3) a file.`;
-
-/**
  * What an agent of someone else's is told, on top of its own instructions: to run `openfilm`, which prints OpenFilm's
- * system prompt (openfilm/src/system-prompt.mjs) and its skills, and which `openfilm` that is. Nothing of how any
- * work is done: that is the skills'. `command`: the app's `openfilm` by its whole path (openfilmCommand), named in
- * place of the one on the PATH, which the agent's shell may not find first.
+ * system prompt (openfilm/src/system-prompt.mjs) and the skills of the plugins on. Nothing of how any work is done, nor
+ * how Studio is pointed at: the system prompt and those skills say it. `command`: the app's `openfilm` by its whole
+ * path (openfilmCommand), for an agent whose shell may find another `openfilm` first (PATH_KEPT says which do not);
+ * null: the one on the PATH, which is the app's.
  */
 export function agentInstructions(command = null) {
-  const run = command ?? 'openfilm';
   const which = command
-    ? `That is this app's own \`openfilm\` command, on the Studio beside you: run it by
-that path every time, as what it prints does, not as \`openfilm\` (your shell may find another one first) and not as
-\`npx openfilm\`, whatever a skill says.`
-    : `Use the \`openfilm\` command on your PATH (this app's own, on the Studio beside you), not
-\`npx openfilm\`, whatever a skill says.`;
-  return `You are working inside OpenFilm, a desktop app for making videos. Before you do anything, run \`${run}\` with no
-arguments and follow what it prints: how to work here, and the skills that say how each kind of work is done.
-${which} Studio is already open beside this chat on the project in your working directory: you never need
-\`${run} open\` and never open Studio in a browser.
-
-${STUDIO_REFERENCES}`;
+    ? `That path is this app's own \`openfilm\`: run every OpenFilm command by it, also where a skill says \`openfilm\`,
+as your shell may find another one first.`
+    : 'The `openfilm` on your PATH is this app\'s own.';
+  return `You are working inside OpenFilm, a desktop app for making videos, with Studio open beside this chat on the
+project in your working directory. Before you do anything, run \`${command ?? 'openfilm'}\` with no arguments and follow
+what it prints: how to work here, and the skills that say how each kind of work is done. ${which}`;
 }
 
 export const INSTRUCTIONS = agentInstructions();
 
 /**
+ * The agents whose every command runs with the app's `openfilm` first on its PATH, so they are told it by its name:
+ * the app's own (Pi runs commands with the session's PATH), Claude Code (its shell reads the person's profile again,
+ * then CLAUDE_ENV_FILE, which puts the app's first: claudeEnvFile) and Codex (its config keeps the session's PATH:
+ * codexSessionConfig). Any other is told it by its whole path.
+ */
+export const PATH_KEPT = Object.freeze(['openfilm', 'byok', 'claude', 'codex']);
+
+/**
  * The app's own agent's whole system prompt, in place of Pi's (a coding assistant's, with Pi's own docs): OpenFilm's
- * system prompt as an agent in the app has it (openfilm/src/system-prompt.mjs: where it is and how it talks with the
- * person; not INSTRUCTIONS, which tell another agent to go and read it), and how the person points at Studio
- * (STUDIO_REFERENCES). How each kind of work is done is OpenFilm's skills' (openfilm/skills ownSkills), which Pi
- * lists after it and the agent reads when a task needs one; `buildsOn` says which build on which (openfilm/skills
- * buildsOnLine), as `openfilm` says it to other agents.
+ * system prompt as an agent in the app has it (openfilm/src/system-prompt.mjs: where it is, how it talks with the
+ * person and points back at Studio; not INSTRUCTIONS, which tell another agent to go and read it). How each kind of
+ * work is done is OpenFilm's skills' (openfilm/skills ownSkills), which Pi lists after it and the agent reads when a
+ * task needs one; `buildsOn` says which build on which (openfilm/skills buildsOnLine) and which plugins are off
+ * (pluginsOffLine), as `openfilm` says it to other agents.
  */
 export function ownAgentPrompt(buildsOn = '') {
-  return `${systemPrompt('app').trim()}
-
-Run OpenFilm's commands as \`openfilm\`, also where a skill says \`npx openfilm\`.${buildsOn ? ` ${buildsOn}` : ''}
-
-## Pointing at Studio
-
-${STUDIO_REFERENCES}`;
+  return `${systemPrompt('app').trim()}${buildsOn ? `\n\n${buildsOn}` : ''}\n`;
 }
 
 /**
@@ -524,7 +510,7 @@ export function acpSignedIn(id, { fresh = false } = {}) {
   // A sign-in just completed in Terminal: bypass a cached negative result, but share an in-flight probe.
   if (kept && (kept.pending || ((!fresh || kept.signedIn) && Date.now() - kept.at < (kept.signedIn ? SIGNED_IN_FOR_MS : ASKED_FOR_MS)))) return kept.answer;
   const answer = (async () => {
-    const session = new AgentSession({ agent: id, cwd: probeFolder() });
+    const session = new AgentSession({ agent: id, cwd: probeFolder(), forget: true });
     try {
       let timeout;
       try { await Promise.race([session.start(), new Promise((_, fail) => { timeout = setTimeout(() => fail(new Error('timed out')), 30_000); })]); }
@@ -1234,7 +1220,7 @@ export class AgentSession {
    *           onUpdate?: (update: any) => void, onPermission?: (params: any) => Promise<string | null>,
    *           onQuestion?: (ask: { message: string, toolCallId: string | null, questions: any[] }) => Promise<Record<string, { label?: string, text?: string }> | null>,
    *           onExit?: (info: { code: number | null, stderr: string }) => void,
-   *           onSend?: (sent: { prompt: any[], _meta?: any }) => void, stallMs?: number, answerOnly?: boolean }} opts
+   *           onSend?: (sent: { prompt: any[], _meta?: any }) => void, stallMs?: number, answerOnly?: boolean, forget?: boolean }} opts
    * `onSend` hears each message as it goes to the agent, whole (the app's words before the first one's, for an agent
    * told them there); `opened`, once started, says what it was started and opened with.
    * `skills`: the session has its maker's skills and MCP servers, OpenFilm's skills, and of the person's own only those
@@ -1242,6 +1228,9 @@ export class AgentSession {
    * `stallMs`: how long the agent may wait on its model with nothing coming (MODEL_STALL_MS) before the turn is stopped.
  * `answerOnly`: it may only answer (Studio's own questions): every permission it asks is refused, even what the app
  * lets every agent do.
+   * `forget`: a session only for the app's own use (a check, Studio's question), never the person's conversation: it
+   * leaves nothing in the agent's own history, where its app lists it beside the person's own (Claude Code keeps none;
+   * an agent that can delete a session deletes it as it closes, Codex archiving it).
    * `logDir` (Developer mode): an agent whose own record lacks what its model got is started with its own logging
    * switch, writing under this folder (agent-logs.mjs); `opened.log` says where.
    */
@@ -1313,7 +1302,9 @@ export class AgentSession {
     }
     const node = nodeRuntime();
     const path = [this.opts.binDir, shell.PATH, this.opts.fallbackDir].filter(Boolean).join(PATH_SEP);
-    const instructions = agentInstructions(this.opts.binDir ? openfilmCommand(this.opts.binDir) : null);
+    /* the app's `openfilm` as this agent types it (PATH_KEPT): its name, or its whole path; the CLI prints it so too */
+    const run = this.opts.binDir && !PATH_KEPT.includes(this.opts.agent) ? openfilmCommand(this.opts.binDir) : null;
+    const instructions = agentInstructions(run);
     /* the app's own agent: what Pi runs with (its whole system prompt is ours), and the web search of `openfilm get`
        (OPENFILM_GET_WEB lists it). Its models' keys (`harness.env`) are not in its environment, which every command it
        runs inherits and other programs of this user can read (`ps`): they go over a pipe of their own (KEYS_FD) */
@@ -1330,9 +1321,12 @@ export class AgentSession {
     const native = cli && !this.spec.adapter ? starting(cli.path, [...this.spec.args, ...(this.logging?.args ?? []), ...(skills?.args ?? [])]) : null;
     /* what a failure names: the agent's program and its own words, as the person would run it (not our logging or skills) */
     this.command = native ? [cli.path, ...this.spec.args] : null;
-    /* who it is, as `openfilm canvas` marks what it puts on the board (OPENFILM_AGENT) */
+    /* OPENFILM_AGENT stays as the chat set it (`app:<conversation>`: where the CLI says the agent is, and whom Studio
+       gives its notes); its name, as `openfilm canvas` marks what it puts on the board, is OPENFILM_AGENT_NAME */
     const extra = { ...agentDefaults(this.opts.agent, shell), ...this.opts.env, ...(native ? native.env : node.env), ...(cli && this.spec.env ? this.spec.env(cli.path) : {}), ...own, ...skills?.env, ...this.logging?.env,
-      OPENFILM_AGENT: this.spec.label };
+      OPENFILM_AGENT_NAME: this.spec.label,
+      ...(this.opts.binDir ? { OPENFILM_RUN: run ?? 'openfilm' } : {}),
+      ...(() => { const file = this.opts.binDir && this.spec.adapter === AGENTS.claude.adapter ? claudeEnvFile(this.opts.binDir, shell.CLAUDE_ENV_FILE) : null; return file ? { CLAUDE_ENV_FILE: file } : {}; })() };
     /* OpenCode's inline configuration carries both its skills and, in Developer mode, its logging */
     if (skills?.env?.OPENCODE_CONFIG_CONTENT && this.logging?.env?.OPENCODE_CONFIG_CONTENT) {
       extra.OPENCODE_CONFIG_CONTENT = JSON.stringify(mergeConfig(JSON.parse(skills.env.OPENCODE_CONFIG_CONTENT), JSON.parse(this.logging.env.OPENCODE_CONFIG_CONTENT)));
@@ -1401,10 +1395,11 @@ export class AgentSession {
 
     const params = {
       cwd: this.opts.cwd,
-      mcpServers: [],
+      mcpServers: acpServers(skills?.connectors ?? [], init.agentCapabilities?.mcpCapabilities),
       ...(skills?.additionalDirectories ? { additionalDirectories: skills.additionalDirectories } : {}),
       ...(claude ? { _meta: { systemPrompt: { append: instructions }, claudeCode: { options: {
         ...skills?.claude,
+        ...(this.opts.forget ? { persistSession: false } : {}),
         settings: { ...skills?.claude?.settings, permissions: { deny: keyFileRules([this.opts.env?.OPENFILM_HOME, this.opts.env?.OPENFILM_SHARED_HOME, join(homedir(), '.openfilm')]) } },
       } } } } : {}),
     };
@@ -1428,6 +1423,8 @@ export class AgentSession {
     const resumed = Boolean(session);
     session ??= await this.conn.agent.request(acp.methods.agent.session.new, params).catch((e) => { throw signInError(this.spec.label, e, { own: this.spec.login === null }); });
     this.sessionId = session.sessionId;
+    /* a session to forget (`forget`), deleted as it closes where the agent can */
+    this.deletable = Boolean(caps.sessionCapabilities?.delete);
     /* an agent on the protocol's older model and mode lists: the same choices, as config options */
     this.legacy = !session.configOptions && Boolean(session.models || session.modes);
     if (resumed) this.instructions = null;
@@ -1563,13 +1560,27 @@ export class AgentSession {
     return new Promise((done) => { child.once('exit', () => done(undefined)); setTimeout(done, ms).unref?.(); });
   }
 
-  close() {
-    LIVE.delete(this);
-    try { this.conn?.close(); } catch { /* gone already */ }
-    stopTree(this.child);
-    this.logging?.close();
+  /**
+   * End it: its process and all it started. A session to forget (`forget`) is first deleted from the agent's history,
+   * a few seconds at most, unless `now` (the app is quitting).
+   */
+  close({ now = false } = {}) {
+    const end = () => {
+      LIVE.delete(this);
+      try { this.conn?.close(); } catch { /* gone already */ }
+      stopTree(this.child);
+      this.logging?.close();
+    };
+    const id = this.opts.forget && this.deletable && !this.exited ? this.sessionId : null;
+    if (!id || now) return end();
+    this.sessionId = null;
+    const waited = new Promise((done) => { setTimeout(done, FORGET_MS).unref?.(); });
+    void Promise.race([this.conn.agent.request(acp.methods.agent.session.delete, { sessionId: id }).catch(() => {}), waited]).finally(end);
   }
 }
+
+/** How long a session to forget is given to be deleted as it closes. */
+const FORGET_MS = 5000;
 
 /**
  * An agent's process and what it starts (the program under its adapter, its MCP servers, a command it runs) as one:
@@ -1603,7 +1614,21 @@ const LIVE = new Set();
  * app is quitting, and one left would outlive it.
  */
 export function closeEverySession() {
-  for (const session of [...LIVE]) session.close();
+  for (const session of [...LIVE]) session.close({ now: true });
 }
 /* and as the process ends without quitting the usual way: none outlives it */
 process.once('exit', closeEverySession);
+
+/**
+ * The connectors' MCP servers (agent-skills.mjs sessionSkills), as ACP's session/new takes them: a program for every
+ * agent; a remote one only for an agent that says it takes them (`mcpCapabilities.http`), else left out (the session
+ * goes on without it).
+ * @param {({ name: string } & ({ type: 'http', url: string, headers?: Record<string, string> } | { type: 'stdio', command: string, args?: string[], env?: Record<string, string> }))[]} servers
+ * @param {{ http?: boolean } | undefined} caps
+ */
+export function acpServers(servers, caps) {
+  const pairs = (/** @type {Record<string, string> | undefined} */ o) => Object.entries(o ?? {}).map(([name, value]) => ({ name, value }));
+  return servers.flatMap((s) => (s.type === 'http'
+    ? (caps?.http ? [{ type: 'http', name: s.name, url: s.url, headers: pairs(s.headers) }] : [])
+    : [{ name: s.name, command: s.command, args: s.args ?? [], env: pairs(s.env) }]));
+}

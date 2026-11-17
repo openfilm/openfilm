@@ -296,7 +296,7 @@ export const host: StudioHost = {
   name: 'OpenFilm',
   projectChanged,
   ...(mac ? { titlebar: { get inset() { return fullScreen.get() ? 0 : INSET; }, onChange: (listener: Listener<number>) => { fullScreen.on((full) => listener(full ? 0 : INSET)); } } } : {}),
-  ...(windows ? { titlebar: { get inset() { return fullScreen.get() ? 0 : 6; }, insetRight: INSET_RIGHT, onChange: (listener: Listener<number>) => { fullScreen.on(full => listener(full ? 0 : 6)); } } } : {}),
+  ...(windows ? { titlebar: { inset: 0, insetRight: INSET_RIGHT } } : {}),
   /* in order, each with its picture: two pointed at quickly must not swap or share a screenshot */
   refer: (ref) => {
     if (!layout.open) setChatOpen(true);
@@ -392,6 +392,8 @@ function commandFor(ref: StudioRef): StudioCommand {
   platform: native.platform,
   pathForFile: native.pathForFile,
   revealPath: native.revealPath,
+  /* the composer's Add folder */
+  pickFolder: native.pickFolder,
   agents: {
     list: native.agents.list,
     connect: native.agents.connect,
@@ -446,22 +448,6 @@ function commandFor(ref: StudioRef): StudioCommand {
     const id = project.get()?.id;
     if (!id) return { files: [] };
     try { return await (await fetch(`/api/projects/${encodeURIComponent(id)}/files`)).json(); } catch { return { files: [] }; }
-  },
-  /* Studio's skills (its own listing, with their covers), Discover's among them, for the cards of an empty conversation:
-     Discover read first unless it was in the last ten minutes (Studio reads it as it starts), a few seconds at most */
-  async starterSkills() {
-    const id = project.get()?.id;
-    if (!id) return [];
-    type Listed = { name: string; description: string; cover?: string; order?: number; off?: true; shown?: { title: Record<string, string> } };
-    try {
-      await fetch('/api/skills/catalog', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ fresh: 10 * 60 * 1000 }), signal: AbortSignal.timeout(5000) })
-        .catch(() => { /* offline or slow: what Discover read before */ });
-      const body = await (await fetch(`/api/skills?project=${encodeURIComponent(id)}`)).json() as { skills?: Listed[] };
-      return (body.skills ?? [])
-        .filter((s): s is Listed & { cover: string } => Boolean(s.cover) && !s.off)
-        .sort((a, b) => (a.order ?? Number.MAX_SAFE_INTEGER) - (b.order ?? Number.MAX_SAFE_INTEGER))
-        .map((s) => ({ name: s.name, description: s.description, cover: s.cover, title: s.shown?.title ?? null }));
-    } catch { return []; }
   },
   setChatWidth: (width: number, done?: boolean) => setChatWidth(width, done === true),
   setChatOpen,

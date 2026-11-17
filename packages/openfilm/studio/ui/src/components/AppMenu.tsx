@@ -158,7 +158,7 @@ export function AppMenu({ onSettings }: { onSettings: (section: SettingsSection)
       <button type="button" role="menuitem" tabIndex={-1} className={styles.row} onMouseEnter={hideCommunitySoon} onFocus={() => closeCommunity()} onClick={() => { dismiss(true); onSettings('general'); }}>
         <Settings2 size={15} className={styles.icon} aria-hidden /><span className={styles.label}>{t('settings.title')}</span>
       </button>
-      {/* in the app the Community opens from its button beside the chat's "+"; Studio in a browser has no chat: here */}
+      {/* in the app the Community opens from the chat's Add menu (+); Studio in a browser has no chat: here */}
       {studioHost ? null : (
         <button type="button" role="menuitem" tabIndex={-1} className={styles.row} onMouseEnter={hideCommunitySoon} onFocus={() => closeCommunity()} onClick={() => { dismiss(true); openPlugins(); }}>
           <Community size={15} className={styles.icon} aria-hidden /><span className={styles.label}>{t('assetDrawer.pluginsWindow')}</span>

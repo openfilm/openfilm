@@ -45,7 +45,8 @@ test('caption tracks can be added, shown together, emptied by a drag, reused and
     const block = (id) => page.locator('[data-block-kind="caption"]').and(page.locator(`[data-block-id=${JSON.stringify(id)}]`));
     await page.goto(`${studio.origin}/projects/${project.id}?key=${studio.key}`);
     await block('cue:original.vtt#first').waitFor();
-    await page.locator('[data-studio-library]').getByRole('button', { name: 'Captions', exact: true }).click();
+    await page.getByRole('button', { name: 'Captions', exact: true }).click();
+    await page.getByRole('button', { name: 'By hand', exact: true }).click();
     const addTrack = page.locator('[data-captions-new-track]');
     await addTrack.click();
     await until(async () => (await captions()).length === 2, 'the second caption track was created');

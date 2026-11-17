@@ -20,10 +20,13 @@ export type LibraryNames = Partial<Record<Language, string>> & { en: string };
 export interface LibraryItem {
   /** Its place in the library (`effects/snow`, `sounds/whoosh.m4a`). */
   id: string;
-  cat: LibraryCategory;
+  /** its category; `media`: a file of the Community's media, kept in one of the person's folders, never in a tab of its own */
+  cat: LibraryCategory | 'media';
   group: string;
   name: LibraryNames;
-  kind: 'page' | 'sound' | 'look' | 'fade' | 'textstyle' | 'textmotion' | 'group' | 'motion';
+  kind: 'page' | 'sound' | 'look' | 'fade' | 'textstyle' | 'textmotion' | 'group' | 'motion' | 'file';
+  /** a media file (`file`): what it is */
+  media?: 'video' | 'image' | 'audio';
   durationMs?: number;
   /** A page: its clip's page (in its bundle's files/, with the stretch it plays), and a size of its own. */
   src?: string;
@@ -78,6 +81,19 @@ export interface LibraryIndex {
  * the community's are by their makers (`<maker>/<name>`, or one thing listed alone: `lone`), their things in their
  * own order (`items`), each a group of every category it has things in (`group`, the same in each).
  */
+/**
+ * A pack of the Community's media kept as a folder of the person's own (studio/server/saved.mjs savePack): its files
+ * fetched and copied into a new folder named after it, the pack then added. Resolves to the folder's place.
+ */
+export async function savePack(id: string, lang: string): Promise<string> {
+  const response = await fetch('/api/library/packs/save', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ pack: id, lang }) });
+  const body = await response.json().catch(() => ({})) as { path?: string; error?: string };
+  if (!response.ok || !body.path) throw new Error(body.error ?? 'failed');
+  added = [...new Set([...(added ?? []), id])];
+  tellAdded();
+  return body.path;
+}
+
 export interface LibraryPack {
   id: string;
   name: LibraryNames;
@@ -197,7 +213,8 @@ export function defaultTextWords(): string {
 export const libraryUrl = (rel: string): string => `/api/library/file?path=${encodeURIComponent(rel)}&v=2`;
 /** A page of the library, served as a page (for a try over the viewer's picture). */
 export const pageUrl = (item: LibraryItem): string => `/api/library/pages/${`${item.id}/files/${item.src ?? ''}`.split('/').map(encodeURIComponent).join('/')}`;
-export const posterUrl = (item: LibraryItem): string => libraryUrl(item.poster ?? `${item.id}/poster.jpg`);
+/* a media picture is its own poster */
+export const posterUrl = (item: LibraryItem): string => libraryUrl(item.poster ?? (item.kind === 'file' && item.media === 'image' ? item.id : `${item.id}/poster.jpg`));
 export const previewUrl = (item: LibraryItem): string => libraryUrl(`${item.id}/preview.mp4`);
 /** A sound's waveform, beside it in waves/ (`sounds/whoosh.m4a` → `sounds/waves/whoosh.png`). */
 export const waveUrl = (item: LibraryItem): string => libraryUrl(item.id.replace(/([^/]+)\.[^./]+$/, 'waves/$1.png'));

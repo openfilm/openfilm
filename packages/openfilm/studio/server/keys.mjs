@@ -213,8 +213,8 @@ export function changeSettings(/** @type {(s: ProviderSettings) => void} */ edit
  * @returns {{ key: string, source: 'env' | 'file', env: string } | null}
  */
 export function providerKey(provider, settings, env = process.env) {
-  /* one that takes no key (Local services): connected while it can run */
-  if (provider.ready) return provider.ready() ? { key: '', source: 'file', env: '' } : null;
+  /* one that takes no key (Local services): connected while it can run, unless the person disconnected it */
+  if (provider.ready) return !settings.off?.includes(provider.id) && provider.ready() ? { key: '', source: 'file', env: '' } : null;
   const kept = settings.keys[provider.id];
   if (kept) return { key: kept, source: 'file', env: provider.env };
   if (settings.off?.includes(provider.id)) return null;

@@ -105,6 +105,15 @@ const scripts = new Set([
   'vision-refine.mjs',
   'vision-parse.mjs',
   'vision-composite.mjs',
+  /* live grading (video-lut.mjs), and the color transform evaluator its worker bakes a clip's grade with */
+  'video-lut.mjs',
+  'color/live-worker.mjs',
+  'color/ctf.mjs',
+  'color/ops.mjs',
+  'color/grading.mjs',
+  'color/bspline.mjs',
+  'color/fixed-function.mjs',
+  'color/aces2.mjs',
 ]);
 const files = new Set([
   'vision_bundle.mjs',

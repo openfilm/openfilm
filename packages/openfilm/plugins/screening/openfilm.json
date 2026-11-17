@@ -1,5 +1,6 @@
 {
   "order": 0,
+  "beta": true,
   "icon": "projector",
   "title": {
     "en": "Screening",
@@ -17,7 +18,7 @@
   },
   "details": {
     "en": "When to use it: the film is made and you want to watch it through as the audience will, then point at what to change.\nHow it changes: while watching, point at a moment, drag over a stretch or circle part of the picture, say what you want, and your agent changes it.\nTurned off: the edit still plays the film; only this place for watching and pointing is gone.",
-    "zh-CN": "什么时候用：片子做出来了，想像观众一样完整看一遍，再指出哪里要改。\n怎么改：边看边点住某个时刻、拖一段时间，或在画面上圈出一块，说一句要怎么改，智能体去改。\n关掉后：剪辑台照样能看片，只是少了这个专门看片、指着说的地方。",
+    "zh-CN": "什么时候用：片子做出来了，想像观众一样完整看一遍，再指出哪里要改。\n怎么改：边看边点住某个时刻、拖一段时间，或在画面上圈出一块，说一句要怎么改，智能体去改。\n关掉后：剪辑里照样能看片，只是少了这个专门看片、指着说的地方。",
     "ja": "使うとき：映像ができて、観客のように通して見てから直すところを伝えたいとき。\n直し方：見ながら時点を指す、範囲をドラッグする、画面の一部を囲むなどして一言伝えると、エージェントが直します。\nオフにすると：編集でも再生できます。見て指すための場所がなくなるだけです。",
     "ko": "언제 쓰나요: 영상이 완성되어 관객처럼 끝까지 보고 고칠 곳을 짚고 싶을 때.\n고치는 법: 보면서 시점을 짚거나 구간을 드래그하거나 화면 일부를 동그라미 치고 한마디 하면 에이전트가 고칩니다.\n끄면: 편집에서도 재생됩니다. 보고 짚는 전용 공간만 없어집니다.",
     "es": "Cuándo usarlo: el vídeo está hecho y quieres verlo entero como lo verá el público, y señalar qué cambiar.\nCómo se cambia: mientras lo ves, señala un momento, arrastra un tramo o rodea una parte de la imagen, di lo que quieres y tu agente lo cambia.\nSi se desactiva: la edición sigue reproduciendo el vídeo; solo desaparece este lugar para ver y señalar."
@@ -55,6 +56,7 @@
   "on": true,
   "skills": [],
   "requires": [
-    "film"
+    "film",
+    "media"
   ]
 }

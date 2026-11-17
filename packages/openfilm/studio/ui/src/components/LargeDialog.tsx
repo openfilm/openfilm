@@ -38,7 +38,8 @@ export function LargeDialog({ label, labelledBy, onClose, onEscape, side, childr
   onClose: () => void;
   /** Esc: true when it was taken (a page went back), else the window closes */
   onEscape?: () => boolean;
-  side: React.ReactNode;
+  /** its side (none: the page takes the whole window, its own way between places at its top) */
+  side?: React.ReactNode;
   children: React.ReactNode;
   closeLabel: string;
   /** what takes the keys as it opens (its search) */
@@ -89,7 +90,7 @@ export function LargeDialog({ label, labelledBy, onClose, onEscape, side, childr
       {/* Esc pressed in the window is its own, before Studio's keys under it (a picked clip let go, a toast) */}
       <div ref={dialog} role="dialog" aria-modal="true" tabIndex={-1} {...(labelledBy ? { 'aria-labelledby': labelledBy } : { 'aria-label': label })}
         onKeyDown={escape} className={`${LARGE_DIALOG} outline-none`}>
-        <nav aria-label={label} className={`${LARGE_DIALOG_SIDE} overflow-y-auto px-3 pb-4 pt-3`}>{side}</nav>
+        {side ? <nav aria-label={label} className={`${LARGE_DIALOG_SIDE} overflow-y-auto px-3 pb-4 pt-3`}>{side}</nav> : null}
         <div className="relative flex min-w-0 flex-1 flex-col">
           <button type="button" onClick={onClose} aria-label={closeLabel}
             className="absolute right-4 top-4 z-10 flex h-9 w-9 items-center justify-center rounded-[8px] text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]">
@@ -128,7 +129,7 @@ export function LargeDialogGroup({ title, children }: { title?: React.ReactNode;
 
 /** One of the side's places: its icon and its name; the one shown pressed; `inset`: one of the place above it. */
 export function LargeDialogPlace({ icon, active, onClick, children, end, inset }: {
-  icon: React.ReactNode; active: boolean; onClick: () => void; children: React.ReactNode; end?: React.ReactNode; inset?: boolean;
+  icon: React.ReactNode; active: boolean; onClick: (e: React.MouseEvent<HTMLButtonElement>) => void; children: React.ReactNode; end?: React.ReactNode; inset?: boolean;
 }) {
   return (
     <button type="button" aria-current={active ? 'page' : undefined} onClick={onClick}

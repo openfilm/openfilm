@@ -49,6 +49,7 @@ export const ACTIONS = [
   { id: 'uncompound', tab: 'timeline', keys: ['alt+shift+g'] },
   /* the player */
   { id: 'preview-fullscreen', tab: 'player', keys: ['`'] },
+  { id: 'compare-grades', tab: 'player', keys: ['shift+d'] },
   { id: 'play-pause', tab: 'player', keys: ['Space'] },
   { id: 'play-range', tab: 'player', keys: ['shift+Space'] },
   { id: 'loop', tab: 'player', keys: ['shift+l'] },

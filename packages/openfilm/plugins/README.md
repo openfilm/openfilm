@@ -1,8 +1,8 @@
 # Making a plugin
 
 A plugin teaches OpenFilm one more kind of work. It is a folder: what an agent is taught (a skill), and what shows outside the
-conversation (a workbench in Studio, commands). OpenFilm's own plugins are the folders beside this file (`edit`, `canvas`,
-`motion`…), and they are made the same way as anyone's.
+conversation (a workbench in Studio, commands). OpenFilm's own plugins are the folders beside this file (`screening`, `edit`, `canvas`,
+`color`), and they are made the same way as anyone's.
 
 Only in the conversation, it is a skill; also outside it, a plugin.
 

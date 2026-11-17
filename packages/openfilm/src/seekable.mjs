@@ -7,7 +7,10 @@
 //
 // A video clip graded by LUTs (its style's `--of-lut`, SPEC.md) always gets a copy of its own, graded: its picture read
 // at the file's own bit depth into 16-bit RGB, through each LUT in turn, then written as 8-bit H.264 tagged with sRGB's
-// transfer. A browser shows only 8 bits of any video, so the grade is made here, before the picture is cut to 8 bits:
+// transfer. A list naming a color transform file (`.ctf`, `.clf`) is evaluated whole (src/color) and baked into one
+// 65-point LUT, which ffmpeg applies the same way. A clip that plays a part of its file (`#t=`) gets a copy of that part
+// only, a second either side (gradeRange): a change to its grade never makes a long recording again, and clips that
+// play the same part share it. Its picture starts at that part's first second (`from`), which the player adds back. A browser shows only 8 bits of any video, so the grade is made here, before the picture is cut to 8 bits:
 // a gradient keeps the steps it would have graded at 10 bits. The preview and the export play the same copy.
 import { execFile } from 'node:child_process';
 import { createHash, randomBytes } from 'node:crypto';
@@ -263,7 +266,7 @@ export async function seekableCopies(files, root, { signal, plays, slow = true, 
  * What a copy is made as (copyNeed): its frame rate and size (`scaled` when smaller than the video's), its alpha; a
  * graded one (gradeNeed) also the LUTs, by their names in the copy's folder (a 1D one `oneD`), and the matrix its
  * picture is read into RGB with.
- * @typedef {{ fps: number, w: number, h: number, alpha: boolean, scaled?: true, luts?: { name: string, oneD: boolean }[], matrix?: string }} CopyNeed
+ * @typedef {{ fps: number, w: number, h: number, alpha: boolean, scaled?: true, luts?: { name: string, oneD: boolean }[], matrix?: string, range?: { from: number, to: number } }} CopyNeed
  */
 
 /** The end of a master export's copy's name, beside the preview's `.mp4`. */
@@ -298,7 +301,9 @@ async function makeCopy(file, out, need, signal, fine = false) {
     /* graded: the LUTs read from the copy's folder by names with nothing to escape (gradeLuts) */
     const graded = need.luts?.length ? gradeFilter(need, need.alpha ? 'yuva420p' : encoder ? 'nv12' : 'yuv420p') : null;
     /* the same frames at the same times (passthrough: no frame is added or dropped), the picture only */
-    const run = ffmpeg([...decoding, '-i', file, '-map', '0:v:0', '-an', '-sn', '-dn', '-fps_mode', 'passthrough',
+    /* a part of the file (need.range): from its first second, its picture starting at 0 */
+    const trim = need.range ? ['-ss', String(need.range.from), '-t', String(need.range.to - need.range.from)] : [];
+    const run = ffmpeg([...decoding, ...trim, '-i', file, '-map', '0:v:0', '-an', '-sn', '-dn', '-fps_mode', 'passthrough',
       ...(graded ? ['-vf', graded] : need.scaled ? ['-vf', `scale=${need.w}:${need.h}`] : []),
       ...(need.alpha ? ['-c:v', 'libvpx-vp9', '-pix_fmt', 'yuva420p', '-b:v', '0', '-crf', '18', '-row-mt', '1', '-deadline', 'realtime', '-cpu-used', '8',
         '-g', String(gop), '-keyint_min', String(gop), '-auto-alt-ref', '0', ...(graded ? GRADED_VP9_TAGS : [])]
@@ -398,13 +403,26 @@ function lutOf(file, body) {
   return facts;
 }
 
+/** Seconds a graded copy of a part of its file keeps on each side of it: room to scrub past a cut. */
+const GRADE_MARGIN = 1;
 /**
- * The name of `file`'s copy graded by `luts` (LUT files, in order), by the file's version, the LUTs' contents and
- * `fine` (a master export's): a LUT changed in place makes a new copy. Null when one of them can't be read. A copy
- * without LUTs is named as ever (copyBase).
- * @param {string} file @param {string[]} luts @param {boolean} [fine]
+ * The part of its file a graded copy holds for a clip playing `time` ([in, out] source seconds, its `#t=`): whole
+ * seconds around it with GRADE_MARGIN either side, so nearby clips of a file share it; null (the whole file) without.
+ * @param {readonly number[] | null | undefined} time @returns {{ from: number, to: number } | null}
  */
-export function gradeKey(file, luts, fine = false) {
+export function gradeRange(time) {
+  if (!time || time.length !== 2 || !(time[1] > time[0])) return null;
+  return { from: Math.max(0, Math.floor(time[0] - GRADE_MARGIN)), to: Math.ceil(time[1] + GRADE_MARGIN) };
+}
+
+/**
+ * The name of `file`'s copy graded by `luts` (LUT files, in order), by the file's version, the LUTs' contents,
+ * `fine` (a master export's) and the part of the file it holds (`range`, gradeRange; null: all of it): a LUT
+ * changed in place makes a new copy. Null when one of them can't be read. A copy without LUTs is named as ever
+ * (copyBase).
+ * @param {string} file @param {string[]} luts @param {boolean} [fine] @param {{ from: number, to: number } | null} [range]
+ */
+export function gradeKey(file, luts, fine = false, range = null) {
   let stat;
   try { stat = statSync(file); } catch { return null; }
   const contents = [];
@@ -413,7 +431,7 @@ export function gradeKey(file, luts, fine = false) {
     if (!facts) return null;
     contents.push(facts.content);
   }
-  return hash(Buffer.from(`${VERSION}\0${file}\0${stat.size}\0${stat.mtimeMs}\0graded${fine ? ' fine' : ''}\0${contents.join('\0')}`));
+  return hash(Buffer.from(`${VERSION}\0${file}\0${stat.size}\0${stat.mtimeMs}\0graded${fine ? ' fine' : ''}${range ? ` ${range.from}-${range.to}` : ''}\0${contents.join('\0')}`));
 }
 
 /** The graded copy named `key` (gradeKey) made in `root`'s cache, or null. @param {string} root @param {string} key */
@@ -425,8 +443,8 @@ export function gradedCopy(root, key) {
 
 /**
  * The film's video clips graded by LUTs (lutsOf): film.html at `film` (a path in `root`, as a URL says it), each one's
- * file and LUT files, once each.
- * @param {string} root @param {string} film @returns {{ file: string, luts: string[] }[]}
+ * file, LUT files and the part of the file it plays (gradeRange), once each.
+ * @param {string} root @param {string} film @returns {{ file: string, luts: string[], range: { from: number, to: number } | null }[]}
  */
 export function filmGrades(root, film) {
   let doc;
@@ -437,8 +455,9 @@ export function filmGrades(root, film) {
       const luts = lutsOf(clip);
       if (!luts.length) continue;
       try {
-        const grade = { file: fileOf(root, film, srcHref(clip.src)), luts: luts.map((lut) => fileOf(root, film, srcHref(lut))) };
-        grades.set([grade.file, ...grade.luts].join('\0'), grade);
+        const range = gradeRange(clip.time);
+        const grade = { file: fileOf(root, film, srcHref(clip.src)), luts: luts.map((lut) => fileOf(root, film, srcHref(lut))), range };
+        grades.set([grade.file, range ? `${range.from}-${range.to}` : '', ...grade.luts].join('\0'), grade);
       } catch { /* a source or a LUT out of the folder: not served either */ }
     }
   }
@@ -470,13 +489,43 @@ async function gradeNeed(file) {
   };
 }
 
+/** A color transform file, evaluated by src/color rather than read by ffmpeg. */
+const TRANSFORM = /\.(ctf|clf)$/i;
+/** Points on each side of the LUT a list of transforms is baked into (measured on real footage through a strong
+    grade and ACES 2's output: 0.1 of an 8-bit code on average, p99.9 under 3; a colour graded past the display's
+    gamut can land a few codes off at its edge, as with any LUT) */
+const BAKED_SIZE = 65;
+
+/**
+ * `luts` (files, in order) evaluated as one transform and baked into a `.cube` in `dir`, named by the files' contents:
+ * its name, or null when one can't be read or evaluated.
+ * @param {string[]} luts @param {string} dir
+ */
+async function bakedGrade(luts, dir) {
+  const contents = luts.map((lut) => lutOf(lut)?.content);
+  if (contents.some((c) => !c)) return null;
+  const name = `grade-${createHash('sha1').update(`${BAKED_SIZE}\0${contents.join('\0')}`).digest('hex').slice(0, 16)}.cube`;
+  if (existsSync(join(dir, name))) return name;
+  try {
+    const { parseColorTransform } = await import('./color/ctf.mjs');
+    const { bake, cubeText } = await import('./color/ops.mjs');
+    const ops = luts.flatMap((lut) => parseColorTransform(readFileSync(lut, 'utf8'), lut));
+    const part = join(dir, `${name}.part-${process.pid}-${randomBytes(4).toString('hex')}`);
+    writeFileSync(part, cubeText(bake(ops, { size: BAKED_SIZE })));
+    renameSync(part, join(dir, name));
+    return name;
+  } catch {
+    return null;
+  }
+}
+
 /** @type {Map<string, Promise<'made' | 'failed' | 'cancelled'>>} the graded copies being made in this process, by their key and folder */
 const grading = new Map();
 /**
  * `grade`'s copy (key `key`) made in `root`'s cache: its LUTs copied beside it under their contents' names, which a
  * filter reads with nothing to escape, then the copy (makeCopy). One at a time a copy in this process.
- * @param {{ file: string, luts: string[] }} grade @param {string} root @param {string} key @param {boolean} fine
- * @param {AbortSignal} [signal]
+ * @param {{ file: string, luts: string[], range?: { from: number, to: number } | null }} grade @param {string} root
+ * @param {string} key @param {boolean} fine @param {AbortSignal} [signal]
  */
 function makeGraded(grade, root, key, fine, signal) {
   const id = `${root}\0${key}`;
@@ -487,7 +536,13 @@ function makeGraded(grade, root, key, fine, signal) {
       if (!need) return /** @type {const} */ ('failed');
       const dir = outDir(root, 'seek');
       const luts = [];
-      for (const lut of grade.luts) {
+      /* a list with a color transform file: the whole list baked into one LUT, named by its files' contents */
+      if (grade.luts.some((lut) => TRANSFORM.test(lut))) {
+        const baked = await bakedGrade(grade.luts, dir);
+        if (!baked) return /** @type {const} */ ('failed');
+        luts.push({ name: baked, oneD: false });
+      }
+      for (const lut of luts.length ? [] : grade.luts) {
         let body;
         try { body = readFileSync(lut); } catch { return /** @type {const} */ ('failed'); }
         const facts = /** @type {{ content: string, oneD: boolean }} */ (lutOf(lut, body));
@@ -499,8 +554,8 @@ function makeGraded(grade, root, key, fine, signal) {
         luts.push({ name, oneD: facts.oneD });
       }
       /* a LUT changed while it was read: this key's copy would be of other contents */
-      if (gradeKey(grade.file, grade.luts, fine) !== key) return /** @type {const} */ ('failed');
-      return makeCopy(grade.file, join(dir, `${key}${need.alpha ? '.webm' : '.mp4'}`), { ...need, luts }, signal, fine && !need.alpha);
+      if (gradeKey(grade.file, grade.luts, fine, grade.range ?? null) !== key) return /** @type {const} */ ('failed');
+      return makeCopy(grade.file, join(dir, `${key}${need.alpha ? '.webm' : '.mp4'}`), { ...need, luts, ...(grade.range ? { range: grade.range } : {}) }, signal, fine && !need.alpha);
     })().finally(() => grading.delete(id));
     grading.set(id, job);
   }
@@ -511,7 +566,7 @@ function makeGraded(grade, root, key, fine, signal) {
  * The copies of `grades` ({ file, luts }, filmGrades) graded by their LUTs, made in `root`'s cache (or found there from
  * before): a map from each one's key (gradeKey) to its copy. One that can't be made (a LUT ffmpeg does not read) is
  * told to `failed`, and its clip is played as it is. `fine`: copies for a master export (seekableCopies).
- * @param {{ file: string, luts: string[] }[]} grades @param {string} root
+ * @param {{ file: string, luts: string[], range?: { from: number, to: number } | null }[]} grades @param {string} root
  * @param {{ signal?: AbortSignal, fine?: boolean, failed?: (grade: { file: string, luts: string[] }) => void }} [options]
  */
 export async function gradedCopies(grades, root, { signal, fine = false, failed } = {}) {
@@ -522,7 +577,7 @@ export async function gradedCopies(grades, root, { signal, fine = false, failed 
   const worker = async () => {
     for (let grade = queue.shift(); grade; grade = queue.shift()) {
       if (signal?.aborted) return;
-      const key = gradeKey(grade.file, grade.luts, fine);
+      const key = gradeKey(grade.file, grade.luts, fine, grade.range ?? null);
       if (!key) { failed?.(grade); continue; }
       const made = gradedCopy(root, key);
       if (made) { copies.set(key, made); continue; }
@@ -540,16 +595,18 @@ export async function gradedCopies(grades, root, { signal, fine = false, failed 
 /** @type {Set<string>} graded copies that could not be made, by their key and folder: not tried again this launch */
 const gradeFailed = new Set();
 /**
- * For a preview: `file`'s copy graded by `luts` in `root`'s cache, its key when it is made; else it is begun (once) and
+ * For a preview: `file`'s copy graded by `luts` in `root`'s cache, of the part `time` plays ([in, out] source seconds;
+ * none: all of it), its key and the source second it starts at (`from`) when it is made; else it is begun (once) and
  * `making` is said; null when it can't be made.
- * @param {string} file @param {string[]} luts @param {string} root
- * @returns {{ key: string } | { making: true } | null}
+ * @param {string} file @param {string[]} luts @param {string} root @param {readonly number[] | null} [time]
+ * @returns {{ key: string, from: number } | { making: true } | null}
  */
-export function gradeSoon(file, luts, root) {
-  const key = gradeKey(file, luts);
+export function gradeSoon(file, luts, root, time = null) {
+  const range = gradeRange(time);
+  const key = gradeKey(file, luts, false, range);
   if (!key) return null;
-  if (gradedCopy(root, key)) return { key };
+  if (gradedCopy(root, key)) return { key, from: range?.from ?? 0 };
   if (gradeFailed.has(`${root}\0${key}`)) return null;
-  void gradedCopies([{ file, luts }], root, { failed: () => gradeFailed.add(`${root}\0${key}`) });
+  void gradedCopies([{ file, luts, range }], root, { failed: () => gradeFailed.add(`${root}\0${key}`) });
   return { making: true };
 }

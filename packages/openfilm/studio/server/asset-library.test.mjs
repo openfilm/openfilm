@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { lstat, mkdir, mkdtemp, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises';
+import { realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { startStudio } from './server.mjs';
@@ -40,27 +41,39 @@ async function fixture(run) {
   }
 }
 
-test('stars and collections persist without copying media; library renames preserve asset identity', async () =>
+test('library renames preserve asset identity', async () =>
   fixture(async ({ call }) => {
     await call('saved/files');
-    const first = await call('saved/catalog');
-    const assetId = first.items['saved/logo.svg'].id;
-    const { collection } = await call('saved/collections', 'POST', { name: 'Brand' });
-    await call('saved/files');
-    await call('saved/catalog', 'PATCH', { paths: ['saved/logo.svg'], collectionId: collection.id, starred: true });
-    assert.deepEqual(
-      (await readdir(process.env.OPENFILM_SAVED)).filter((name) => !name.startsWith('.')),
-      ['logo.svg'],
-    );
+    const assetId = (await call('saved/catalog')).items['saved/logo.svg'].id;
     await call('saved/files', 'PATCH', { from: 'saved/logo.svg', to: 'saved/brand.svg' });
-    const renamed = await call('saved/catalog');
-    assert.equal(renamed.items['saved/brand.svg'].id, assetId);
-    assert.equal(renamed.items['saved/brand.svg'].starred, true);
-    assert.deepEqual(renamed.items['saved/brand.svg'].collections, [collection.id]);
-    await call(`saved/collections?id=${collection.id}`, 'DELETE');
-    assert.equal((await call('saved/catalog')).collections.length, 0);
-    assert.ok((await readFile(join(process.env.OPENFILM_SAVED, 'brand.svg'), 'utf8')).includes('<svg'));
-    await call('saved/catalog', 'PATCH', { paths: ['saved/unknown.svg'], starred: true }, 404);
+    assert.equal((await call('saved/catalog')).items['saved/brand.svg'].id, assetId);
+  }));
+
+test('the first look makes the shelf: loose things move into its first place, folders and links stay places', async () =>
+  fixture(async ({ call, scratch }) => {
+    const saved = process.env.OPENFILM_SAVED;
+    await mkdir(join(saved, 'Brand'));
+    await writeFile(join(saved, 'Brand', 'mark.svg'), '<svg xmlns="http://www.w3.org/2000/svg"/>');
+    await mkdir(join(saved, 'clip'));
+    await writeFile(join(saved, 'clip', 'saved.json'), '{}');
+    const outside = join(scratch, 'shoot');
+    await mkdir(outside);
+    await call('saved/files/bring', 'POST', { paths: [outside], into: 'saved', mode: 'link' });
+    await call('saved/files');
+    const assetId = (await call('saved/catalog')).items['saved/logo.svg'].id;
+    const { places, shelf } = await call('saved/places?name=素材库');
+    assert.deepEqual(shelf, ['saved/素材库']);
+    assert.deepEqual(places.map((p) => p.path).sort(), ['saved/Brand', 'saved/shoot', 'saved/素材库']);
+    assert.equal(places.find((p) => p.path === 'saved/shoot').link.to, realpathSync.native(outside));
+    assert.deepEqual((await readdir(join(saved, '素材库'))).sort(), ['clip', 'logo.svg']);
+    assert.equal((await call('saved/catalog')).items['saved/素材库/logo.svg'].id, assetId);
+    /* made once: another name later changes nothing */
+    assert.deepEqual((await call('saved/places?name=Library')).shelf, ['saved/素材库']);
+    await call('saved/shelf', 'PUT', { shelf: ['saved/Brand', 'saved/素材库', 'saved/../x'] });
+    await call('saved/files', 'PATCH', { from: 'saved/Brand', to: 'saved/Logos' });
+    assert.deepEqual((await call('saved/places')).shelf, ['saved/Logos', 'saved/素材库']);
+    await call('saved/files?path=saved%2FLogos', 'DELETE');
+    assert.deepEqual((await call('saved/places')).shelf, ['saved/素材库']);
   }));
 
 test('disconnected folders keep last-seen media, reconnect under the same identity, and disconnect without deleting originals', async () =>

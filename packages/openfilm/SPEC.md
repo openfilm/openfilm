@@ -91,6 +91,12 @@ where, and CSS that says how each looks. A page draws a shot.
     looking at its middle), which the film has once any picture of it is in 3D. `--fx-ax` and `--fx-ay` (lengths) are
     its anchor point, stage px from its box's middle: its animation's `rotate` and `scale`, and its turns in 3D, are
     about there.
+  - A video clip is graded by `--of-lut`: one or more color transform files of the project, applied in order to its
+    decoded picture at the file's own bit depth, before any other CSS:
+    `style="--of-lut: url(looks/in-sony-slog3.ctf) url(looks/beach.ctf) url(looks/out-rec709.ctf)"`. Each is an
+    OpenColorIO Common Transform Format file (`.ctf`), an Academy/ASC Common LUT Format file (`.clf`), or a `.cube` LUT.
+    The first takes the file's R′G′B′ code values (full range, 0–1); the last gives what the screen shows (BT.709
+    primaries). Clips that name the same file are graded by it together.
   - Video clips use local person effects through ordinary CSS custom properties. `--of-cutout: 1` enables
     background removal. `--of-cutout-mode` chooses fast portrait (0), bundled portrait detail (1, default), optional
     detailed subject extraction (2), chroma key (3), or optional person edge refinement (4). `--of-cutout-edge` is spatial, image-guided edge softness

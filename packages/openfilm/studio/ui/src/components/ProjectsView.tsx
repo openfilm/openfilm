@@ -4,7 +4,6 @@ import { createPortal } from 'react-dom';
 import {
   ArrowLeft,
   ArrowRight,
-  ArrowUp,
   ClipboardPaste,
   Check,
   ChevronDown,
@@ -48,7 +47,7 @@ import styles from './ProjectsView.module.css';
 import { ProjectCoverContext } from './ProjectCover';
 import { Tooltip } from './Tooltip';
 import { FileViewControl } from './FileViewControl';
-import { RESOURCE_TILE_SIZE, pinKey, type ResourcePinActions, type ResourceView } from '@/lib/resource-center';
+import { RESOURCE_TILE_SIZE, type ResourceView } from '@/lib/resource-center';
 
 /**
  * A project as the popover lists it: `poster` (an image URL; a gradient when it fails), `duration` (seconds, when
@@ -78,13 +77,10 @@ export function ProjectsView({
   onDeleteFolder,
   onMoveToFolder,
   onMoveFolder,
-  onClose,
-  pane = 'projects',
-  onPane,
-  examplesPane,
+  shown = true,
   display,
   onDisplay,
-  navigation, onFolder, pins, onPin, onUnpin,
+  navigation, onBin,
 }: {
   projects: LibraryProject[];
   /** A project is being created or opened; "New project" does not take a second click meanwhile. */
@@ -122,19 +118,13 @@ export function ProjectsView({
   onMoveToFolder: (projectId: string, folderId: string | null) => void;
   /** a folder into another (null: the top level) */
   onMoveFolder: (folderId: string, parentId: string | null) => void;
-  /** Missing: no close button (Studio has no project to go back to). */
-  onClose?: () => void;
-  /** What the window shows beside the sidebar: the projects, or the examples (`examplesPane`), picked in the project header. */
-  pane?: 'projects' | 'examples';
-  onPane?: (pane: 'projects' | 'examples') => void;
-  examplesPane?: React.ReactNode;
+  /** false: another place of the window is shown (the examples, the library), and the projects wait as they were */
+  shown?: boolean;
   display: ResourceView;
   onDisplay: (view: ResourceView) => void;
   navigation: { folderId: string | null; seq: number };
-  onFolder: (id: string | null) => void;
-  pins: ResourcePinActions['pins'];
-  onPin: ResourcePinActions['onPin'];
-  onUnpin: ResourcePinActions['onUnpin'];
+  /** Open OpenFilm's recycle bin (the button at the end of the projects' tools). */
+  onBin?: () => void;
 }) {
   const t = useT();
   const language = useLanguage();
@@ -188,10 +178,10 @@ export function ProjectsView({
   React.useEffect(() => {
     surface.current?.scrollTo(0, 0);
   }, [folderId, query]);
-  /* back from the examples: the keys work on the projects again */
+  /* back from another place: the keys work on the projects again */
   React.useEffect(() => {
-    if (pane === 'projects' && !(document.activeElement as HTMLElement | null)?.closest('[role=tablist]')) surface.current?.focus({ preventScroll: true });
-  }, [pane]);
+    if (shown && !(document.activeElement as HTMLElement | null)?.closest('nav')) surface.current?.focus({ preventScroll: true });
+  }, [shown]);
   const navigate = (id: string | null) => {
     if (id !== folderId)
       setLocation((was) => ({ entries: [...was.entries.slice(0, was.index + 1), id], index: was.index + 1 }));
@@ -204,7 +194,6 @@ export function ProjectsView({
   React.useEffect(() => {
     navigate(navigation.folderId);
   }, [navigation]);
-  React.useEffect(() => { onFolder(folderId); }, [folderId, onFolder]);
   const history = (step: number) => {
     setLocation((was) => ({ ...was, index: Math.max(0, Math.min(was.entries.length - 1, was.index + step)) }));
     setQuery('');
@@ -337,12 +326,6 @@ export function ProjectsView({
       setDropTarget(undefined);
     },
   });
-  const folderPin = (id: string | null): ContextMenuEntry[] => {
-    if (!id) return [];
-    const pin = { kind: 'projects' as const, folderId: id };
-    const pinned = pins.some(p => pinKey(p) === pinKey(pin));
-    return [{ id: 'pin', label: t(pinned ? 'resourceCenter.unpin' : 'resourceCenter.pin'), onSelect: () => pinned ? onUnpin(pin) : onPin(pin) }];
-  };
   const selectionActions = (picked: string[]): ContextMenuEntry[] => {
     const single = entries.find((e) => e.key === picked[0]);
     if (picked.length === 1 && single) {
@@ -367,7 +350,6 @@ export function ProjectsView({
       }
       return [
         { id: 'open', icon: <FolderOpen size={14} />, label: t('projectMenu.open'), onSelect: () => openEntry(single) },
-        ...folderPin(single.folder.id),
         {
           id: 'rename',
           icon: <Pencil size={14} />,
@@ -400,7 +382,6 @@ export function ProjectsView({
     ];
   };
   const backgroundActions: ContextMenuEntry[] = [
-    ...folderPin(folderId),
     {
       id: 'new',
       icon: <Plus size={14} />,
@@ -423,7 +404,7 @@ export function ProjectsView({
   ];
   const onKeyDown = (event: React.KeyboardEvent) => {
     if (event.defaultPrevented || moving || context || (event.target as HTMLElement).closest('[role="menu"]')) return;
-    if (pane === 'examples') return;
+    if (!shown) return;
     const mod = event.metaKey || event.ctrlKey;
     if (mod && event.key.toLowerCase() === 'f') {
       event.preventDefault();
@@ -704,94 +685,9 @@ export function ProjectsView({
   };
 
   return (
-    <div className={styles.browser} onKeyDown={onKeyDown} data-project-browser="" data-icon-size={display} style={{ '--resource-tile': `${RESOURCE_TILE_SIZE[display === 'list' ? 'medium' : display]}px` } as React.CSSProperties}>
-      <div className={styles.sectionHeader}>
-        <div role="tablist" aria-label={t('resourceCenter.projects')} className={styles.projectTabs} onKeyDown={event => {
-          if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
-          event.preventDefault(); event.stopPropagation();
-          const next = event.key === 'Home' ? 'projects' : event.key === 'End' ? 'examples' : pane === 'projects' ? 'examples' : 'projects';
-          onPane?.(next);
-          event.currentTarget.querySelector<HTMLButtonElement>(`#resource-${next}-tab`)?.focus();
-        }}>
-          <button type="button" role="tab" id="resource-projects-tab" aria-controls="resource-project-panel" tabIndex={pane === 'projects' ? 0 : -1} aria-selected={pane === 'projects'} onClick={() => onPane?.('projects')}>{t('launcher.projects')}</button>
-          <button type="button" role="tab" id="resource-examples-tab" aria-controls="resource-examples-panel" tabIndex={pane === 'examples' ? 0 : -1} aria-selected={pane === 'examples'} onClick={() => onPane?.('examples')}>{t('launcher.examples')}</button>
-        </div>
-        {onClose ? <button type="button" className={styles.iconButton} aria-label={t('project.close')} onClick={onClose}><X size={17} /></button> : null}
-      </div>
+    <div className={styles.browser} onKeyDown={onKeyDown} data-project-browser="" data-icon-size={display} style={{ '--resource-tile': `${RESOURCE_TILE_SIZE[display === 'list' ? 'medium' : display]}px`, ...(shown ? {} : { display: 'none' }) } as React.CSSProperties}>
       <div className={styles.body}>
-        {pane === 'examples' ? examplesPane : null}
-        <main className={styles.main} role="tabpanel" id="resource-project-panel" aria-labelledby="resource-projects-tab" hidden={pane === 'examples'}>
-          <div className={styles.navigation}>
-            <button
-              type="button"
-              className={styles.iconButton}
-              aria-label={t('projectBrowser.back')}
-              disabled={location.index === 0}
-              onClick={() => history(-1)}
-            >
-              <ArrowLeft size={16} />
-            </button>
-            <button
-              type="button"
-              className={styles.iconButton}
-              aria-label={t('projectBrowser.forward')}
-              disabled={location.index === location.entries.length - 1}
-              onClick={() => history(1)}
-            >
-              <ArrowRight size={16} />
-            </button>
-            <button
-              type="button"
-              className={styles.iconButton}
-              aria-label={t('projects.folderUp')}
-              disabled={!folderId}
-              onClick={() => navigate(trail.length > 1 ? trail[trail.length - 2]!.id : null)}
-            >
-              <ArrowUp size={16} />
-            </button>
-            <nav className={styles.path} aria-label={t('projectBrowser.path')}>
-              <button type="button" onClick={() => navigate(null)} {...dropProps(null)}>
-                <FolderOpen size={14} />
-                <span>{t('launcher.projects')}</span>
-              </button>
-              {trail.map((folder) => (
-                <React.Fragment key={folder.id}>
-                  <ChevronRight size={12} />
-                  <button type="button" onClick={() => navigate(folder.id)} {...dropProps(folder.id)}>
-                    <span>{folder.name}</span>
-                  </button>
-                </React.Fragment>
-              ))}
-              {query ? (
-                <>
-                  <ChevronRight size={12} />
-                  <span className="px-1 text-[var(--text-muted)]">{t('projectBrowser.results')}</span>
-                </>
-              ) : null}
-            </nav>
-
-            <button type="button" className={`${styles.action} ${styles.primary} ${styles.compactAction}`} aria-label={t('projects.newProject')} title={t('projects.newProject')} disabled={creating} onClick={() => onNewProject(folderId)}><Plus size={15} /><span>{t('projects.newProject')}</span></button>
-            <button type="button" className={styles.iconButton} data-explorer-command="" aria-label={t('projects.newFolder')} title={t('projects.newFolder')} onClick={() => void newFolder()}><FolderPlus size={15} /></button>
-            <button type="button" className={styles.iconButton} aria-label={t('projectMenu.more')} title={t('projectMenu.more')} onClick={event => { const rect = event.currentTarget.getBoundingClientRect(); setContext({ x: rect.left, y: rect.bottom, keys: [...selected] }); }}><MoreHorizontal size={16} /></button>
-            <SortButton sort={sort} onSort={next => { setSort(next); setReversed(false); }} />
-            <FileViewControl value={display} onChange={onDisplay} />
-          <label className={styles.search}>
-            <Search size={14} />
-            <input
-              ref={search}
-              type="search"
-              aria-label={t('projectBrowser.search')}
-              placeholder={t('projectBrowser.search')}
-              value={query}
-              onChange={(event) => {
-                setQuery(event.target.value);
-                setSelected(new Set());
-                /* a search is through the projects */
-                onPane?.('projects');
-              }}
-            />
-          </label>
-          </div>
+        <main className={styles.main} aria-label={t('projects.sideProjects')}>
           <div
             ref={surface}
             className={styles.surface}
@@ -860,6 +756,74 @@ export function ProjectsView({
               setMarquee(null);
             }}
           >
+            {/* ways to start (at the top level, not while searching): a new project, a folder on this computer, a
+                repository, side by side */}
+            {!folderId && !query ? (
+              <div className={styles.starts}>
+                <button type="button" className={`${styles.startCard} ${styles.startNew}`} disabled={creating} data-start="new" onClick={() => onNewProject(null)}>
+                  <span className={styles.startPlus}><Plus size={20} strokeWidth={2.2} /></span>
+                  <span className={styles.startText}><strong>{t('projects.newProject')}</strong><small>{t('projects.newProjectNote')}</small></span>
+                </button>
+                <button type="button" className={styles.startCard} data-start="folder" onClick={onOpenFolder}>
+                  <FolderOpen size={20} strokeWidth={1.6} />
+                  <span className={styles.startText}><strong>{t('projects.openFolderShort')}</strong><small>{t('projects.openFolderNote')}</small></span>
+                </button>
+                <button type="button" className={styles.startCard} data-start="github" onClick={onGetFromGitHub}>
+                  <Github size={20} strokeWidth={1.6} />
+                  <span className={styles.startText}><strong>{t('projects.githubShort')}</strong><small>{t('projects.githubNote')}</small></span>
+                </button>
+              </div>
+            ) : null}
+            {/* the projects' own bar, staying at the top as they scroll: where one is (the projects, or a folder's path
+                with the way back), then the tools for them gathered at its end */}
+            <div className={styles.listBar}>
+              {/* back and forward once there is somewhere to go (a folder was opened) */}
+              {location.entries.length > 1 ? (
+                <>
+                  <button type="button" className={styles.iconButton} aria-label={t('projectBrowser.back')} disabled={location.index === 0} onClick={() => history(-1)}><ArrowLeft size={16} /></button>
+                  <button type="button" className={styles.iconButton} aria-label={t('projectBrowser.forward')} disabled={location.index === location.entries.length - 1} onClick={() => history(1)}><ArrowRight size={16} /></button>
+                </>
+              ) : null}
+              {folderId || query ? (
+                <>
+                  <nav className={styles.path} aria-label={t('projectBrowser.path')}>
+                    <button type="button" onClick={() => navigate(null)} {...dropProps(null)}><span>{t('launcher.projects')}</span></button>
+                    {trail.map((folder) => (
+                      <React.Fragment key={folder.id}>
+                        <ChevronRight size={13} />
+                        <button type="button" onClick={() => navigate(folder.id)} {...dropProps(folder.id)}><span>{folder.name}</span></button>
+                      </React.Fragment>
+                    ))}
+                    {query ? <><ChevronRight size={13} /><span className="px-1 text-[var(--text-muted)]">{t('projectBrowser.results')}</span></> : null}
+                  </nav>
+                </>
+              ) : (
+                <h3 className={styles.listTitle} {...dropProps(null)}>{t('projects.listTitle')}<small>{entries.length}</small></h3>
+              )}
+              <span className={styles.listTools}>
+                <label className={styles.search}>
+                  <Search size={14} />
+                  <input
+                    ref={search}
+                    type="search"
+                    aria-label={t('projectBrowser.search')}
+                    placeholder={t('projectBrowser.search')}
+                    value={query}
+                    onChange={(event) => {
+                      setQuery(event.target.value);
+                      setSelected(new Set());
+                    }}
+                  />
+                </label>
+                {folderId ? <button type="button" className={`${styles.action} ${styles.primary}`} disabled={creating} onClick={() => onNewProject(folderId)}><Plus size={14} /><span>{t('projects.newProject')}</span></button> : null}
+                <Tooltip label={t('projects.newFolder')}><button type="button" className={styles.iconButton} data-explorer-command="" aria-label={t('projects.newFolder')} onClick={() => void newFolder()}><FolderPlus size={16} strokeWidth={1.7} /></button></Tooltip>
+                <SortButton sort={sort} onSort={next => { setSort(next); setReversed(false); }} />
+                <FileViewControl value={display} onChange={onDisplay} />
+                <Tooltip label={t('projectMenu.more')}><button type="button" className={styles.iconButton} aria-label={t('projectMenu.more')} onClick={event => { const rect = event.currentTarget.getBoundingClientRect(); setContext({ x: rect.left, y: rect.bottom, keys: [...selected] }); }}><MoreHorizontal size={16} /></button></Tooltip>
+                {/* OpenFilm's recycle bin: what was deleted in OpenFilm, projects and everything else, to put back */}
+                {onBin ? <Tooltip label={t('recycleBin.title')}><button type="button" className={styles.iconButton} aria-label={t('recycleBin.title')} data-open-recycle-bin="" onClick={onBin}><Trash2 size={16} strokeWidth={1.7} /></button></Tooltip> : null}
+              </span>
+            </div>
             {view === 'list' ? (
               <div className={styles.list}>
                 <div className={styles.listHeader}>
@@ -1373,13 +1337,13 @@ function SortButton({ sort, onSort }: { sort: LibrarySort; onSort: (next: Librar
           aria-haspopup="dialog"
           aria-expanded={anchor != null}
           aria-label={t('library.sortLabel')}
-          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-[var(--border)] transition ${
+          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition ${
             anchor != null
               ? 'bg-[var(--bg-pressed)] text-[var(--text)]'
-              : 'bg-[var(--bg-raised)] text-[var(--text-muted)] hover:text-[var(--text)]'
+              : 'text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)]'
           }`}
         >
-          <SlidersHorizontal size={14} />
+          <SlidersHorizontal size={16} strokeWidth={1.7} />
         </button>
       </Tooltip>
       {anchor

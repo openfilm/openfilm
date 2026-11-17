@@ -806,6 +806,9 @@ const ADJUST_RANGE: Record<AdjustKey, { min: number; max: number; unit: string; 
 /* the picture's color; its blur is an effect (a layer blur) */
 const COLOR_KEYS = ADJUST_KEYS.filter((k) => k !== 'blur');
 
+/** Whether the picture's CSS changes its color (a video's color is graded by files instead: this is what it had before). */
+export const cssColorTouched = (look: Look): boolean => look.common((read) => COLOR_KEYS.some((k) => adjustOf(read('filter'))[k] !== 0)) !== false;
+
 export function AdjustSection({ look, t }: { look: Look; t: T }) {
   const readable = look.common((read) => filterParts(read('filter')) != null);
   const touched = look.common((read) => COLOR_KEYS.some((k) => adjustOf(read('filter'))[k] !== 0));

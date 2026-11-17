@@ -8,7 +8,7 @@
  * the model asked for and its reasoning efforts: pi-config.mjs OwnModel; `model` the id of the one a session starts
  * on; the chat switches between them with the session's `model` option, and a model's efforts with `effort`, for one
  * offering more than one; `auto` sends none), and its whole system prompt (agents.mjs ownAgentPrompt), in place of Pi's. Of the project's instructions only its own AGENTS.md (or CLAUDE.md) is read, not
- * the folders above it; no SYSTEM.md; of skills only OpenFilm's (`skills`: their folder and names, agent-skills.mjs). Besides Pi's read, bash, edit and write it has `ask`: questions for
+ * the folders above it; no SYSTEM.md; of skills only OpenFilm's (`skills`: their folder and names, agent-skills.mjs). Besides Pi's read, bash (PowerShell on Windows: pi-config.mjs agentTools), edit and write it has `ask`: questions for
  * the person, with options, shown in the chat as Claude Code's and Codex's are (an ACP form).
  *
  * A conversation's session is kept with the project it is about (chat-store.mjs: `.film/chat/agent/`), so it goes
@@ -32,7 +32,7 @@ import * as acp from '@agentclientprotocol/sdk';
 import { DefaultResourceLoader, ModelRuntime, SessionManager, SettingsManager, createAgentSession, formatDimensionNote, resizeImage } from '@earendil-works/pi-coding-agent';
 import { EnvHttpProxyAgent, install, setGlobalDispatcher } from 'undici';
 import { agentSessionsDir, openLog } from './chat-store.mjs';
-import { IMAGE_BUDGET, THINKING, TOO_LARGE, WAIT_MINUTES, contextUsed, effortOption, fitImages, modelOption, modelsJson, providerOf, retryNotice, stopReason, toolCall, toolContent } from './pi-config.mjs';
+import { IMAGE_BUDGET, THINKING, TOO_LARGE, WAIT_MINUTES, agentTools, contextUsed, effortOption, fitImages, modelOption, modelsJson, providerOf, retryNotice, stopReason, toolCall, toolContent } from './pi-config.mjs';
 
 /* stdout is the protocol's: anything else Pi or a library prints goes to stderr */
 console.log = console.info = console.warn = console.debug = (...args) => process.stderr.write(`${args.map(String).join(' ')}\n`);
@@ -237,7 +237,7 @@ async function open(client, cwd, resumeId) {
   const { session } = await createAgentSession({
     cwd, agentDir: config.agentDir, modelRuntime, model: piModel(startModel, startEffort),
     ...(startEffort !== 'auto' ? { thinkingLevel: startEffort } : {}),
-    resourceLoader, sessionManager, settingsManager, tools: ['read', 'bash', 'edit', 'write', 'ask'],
+    resourceLoader, sessionManager, settingsManager, tools: agentTools(),
   });
   /* a request refused as too large is one Pi tries again (its retry: once, the failed attempt left out of what is sent)
      when it held pictures to leave out; Pi neither retries a 413 nor, but for Anthropic's own words, compacts for it */

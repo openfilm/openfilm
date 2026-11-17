@@ -1,85 +1,36 @@
 'use client';
 
 /**
- * The conversation column of an empty project, before anything has been said: the question, then the skills as
- * cards, each its cover and its name, two to a row. A card names its skill in the message being written (Enter
- * starts it, or a few words more say what to make with it), installed or not: as the library's Try now, the skill is
- * given to that conversation, nothing installed. Under them, "More skills" opens the Plugins window on Discover, all
- * of OpenFilm's, and "Start from an example" the projects window's examples: one copied into a new project, or followed
- * by the agent here.
+ * The conversation column of an empty project, before anything has been said: the question, and under it a line for
+ * each of the two buttons at the message box's right, with the same mark, saying what it opens: the Community (plugins,
+ * skills and material to add) and the library (this project's media, the person's own and what was added). A click
+ * opens it, as the button does.
  */
 import React from 'react';
-import { ChevronRight } from 'lucide-react';
-import { useT, useUiLocale } from '@/i18n';
-import { app, type StarterSkill } from '../app-bridge';
+import { LibraryBig, Shapes } from 'lucide-react';
+import { useT } from '@/i18n';
+import { app } from '../app-bridge';
 import { BrandLogo } from './BrandLogo';
 
-/** Three rows of two: the most used skills, in their order; the rest are a click away in the library. */
-const SHOWN = 6;
-/** the cards as read last: another empty conversation shows them at once, read again behind them */
-let lastRead: StarterSkill[] | null = null;
-
-export function ProjectStarters({ onSkill }: {
-  /** Names the skill in the composer (unsent) and focuses it. */
-  onSkill: (skill: { name: string; description: string; title: string }) => void;
-}) {
+export function ProjectStarters() {
   const t = useT();
-  const locale = useUiLocale();
-  /* null until read: the cards' places are kept meanwhile, so nothing below them moves when they arrive */
-  const [skills, setSkills] = React.useState<StarterSkill[] | null>(lastRead);
-  React.useEffect(() => {
-    let live = true;
-    void app.starterSkills().then((list) => {
-      lastRead = list.slice(0, SHOWN);
-      if (live) setSkills(lastRead);
-    }, () => { if (live) setSkills((was) => was ?? []); });
-    return () => { live = false; };
-  }, []);
-  const titleOf = (skill: StarterSkill) => {
-    const words = skill.title;
-    return (words ? words[locale] ?? words[locale.split('-')[0]!] ?? words.en : undefined) ?? skill.name;
-  };
-
+  const hints = [
+    ...(app.showExamples ? [{ id: 'community', icon: <Shapes size={15} strokeWidth={1.75} aria-hidden />, words: t('starter.community'), open: () => app.showExamples?.({ kind: 'plugins' }) }] : []),
+    { id: 'library', icon: <LibraryBig size={15} strokeWidth={1.75} aria-hidden />, words: t('starter.library'), open: () => app.setAssetsOpen(true) },
+  ];
   return (
-    <div className="mx-auto w-full max-w-[420px] py-2">
-      <div className="flex items-center justify-center gap-2.5">
-        <BrandLogo size={22} />
-        <h2 className="text-[19px] font-semibold tracking-[-0.02em] text-[var(--text)]">{t('starter.title')}</h2>
+    <div className="mx-auto flex w-full max-w-[420px] flex-col items-center py-2 text-center" data-project-starters="">
+      <BrandLogo size={30} />
+      <h2 className="mt-4 text-[20px] font-semibold tracking-[-0.02em] text-[var(--text)]">{t('starter.title')}</h2>
+      <div className="mt-5 flex flex-col items-center gap-1">
+        {hints.map((hint) => (
+          <button key={hint.id} type="button" onClick={hint.open} data-starter-hint={hint.id}
+            className="inline-flex h-8 items-center gap-2 rounded-full px-3 text-[13px] text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]">
+            {hint.icon}
+            <span>{hint.words}</span>
+          </button>
+        ))}
       </div>
-
-      <ul className="mt-6 grid grid-cols-2 gap-2">
-        {skills
-          ? skills.map((skill) => (
-            <li key={skill.name} className="min-w-0">
-              <button
-                type="button"
-                title={skill.description}
-                onClick={() => onSkill({ name: skill.name, description: skill.description, title: titleOf(skill) })}
-                className="flex h-14 w-full min-w-0 items-center gap-2.5 rounded-lg border border-[var(--border)] bg-[var(--bg-raised)] p-2 text-left transition hover:border-[var(--border-strong)] hover:bg-[var(--bg-hover)]"
-              >
-                <img src={skill.cover} alt="" loading="lazy" draggable={false} className="h-10 w-10 shrink-0 rounded-md bg-[var(--bg-hover)] object-cover" />
-                <span className="line-clamp-2 min-w-0 flex-1 text-[13px] leading-snug text-[var(--text)]">{titleOf(skill)}</span>
-              </button>
-            </li>
-          ))
-          : Array.from({ length: SHOWN }, (_, i) => <li key={i} aria-hidden className="skeleton h-14 rounded-lg" />)}
-      </ul>
-
-      {app.showExamples ? (
-        <div className="mt-4 flex justify-center gap-2">
-          {([['discover', 'starter.more'], ['examples', 'starter.examples']] as const).map(([kind, label]) => (
-            <button
-              key={kind}
-              type="button"
-              onClick={() => app.showExamples?.({ kind })}
-              className="inline-flex items-center gap-0.5 rounded-md px-2 py-1 text-[13px] text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]"
-            >
-              {t(label)}
-              <ChevronRight size={14} />
-            </button>
-          ))}
-        </div>
-      ) : null}
     </div>
   );
 }

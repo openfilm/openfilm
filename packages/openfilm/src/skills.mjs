@@ -20,7 +20,8 @@
  * OpenFilm's own (coreSkills: `manual/` in this package, and its plugins' in their folders) are never installed or
  * removed. None is given to every agent: as a package names the packages it depends on, a plugin (src/plugins.mjs) and
  * a skill name the skills they build on (openfilm.json `requires`: `film`, how a film is written; `media`), and an
- * agent is given those the plugins on bring and require, each once, a skill after those it builds on (ownSkills). The
+ * agent is given those the plugins on bring and require, each once, a skill after those it builds on (ownSkills); with
+ * no plugin on, the film's and the media's (WITHOUT_PLUGINS). The
  * system prompt lists them (promptSkills), saying what each builds on.
  *
  * Nothing here deletes a skill outright: one replaced or removed goes to the system's trash.
@@ -35,6 +36,7 @@ import { basename, dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHash, randomUUID } from 'node:crypto';
 import { moveToTrash } from '../studio/server/trash.mjs';
+import { recycle } from '../studio/server/recycle-bin.mjs';
 import { pictureType } from '../studio/server/cover.mjs';
 import { parseRepoUrl } from '../studio/server/fetch-repo.mjs';
 import { libraryDefault, setSharedPref, sharedHome, sharedPref } from './locations.mjs';
@@ -349,18 +351,28 @@ export function parseSkillFile(text) {
  * @typedef {{ title: Record<string, string>, summary: Record<string, string>, details?: Record<string, string> }} SkillShown
  *   how people see it in an app (openfilm.json beside SKILL.md, optional): a title, a one-line summary and a few lines
  *   on who it is for and what it does, by language (`en`, `zh-CN`…); the SKILL.md's description is for the agent
- * @typedef {{ kind?: 'workflow' | 'style', order?: number, icon?: string, cover?: string, preview?: string, repository?: string, needs?: Record<string, string>, platforms?: SkillPlatform[], tab?: import('./plugins.mjs').PluginTab, blocks?: string | (import('./plugin-blocks.mjs').BlockDecl | string)[], requires?: string[], profile?: import('./plugins.mjs').Profile, network?: SkillNetwork }} SkillLook
+ * @typedef {{ kind?: 'workflow' | 'style', order?: number, icon?: string, cover?: string, preview?: string, repository?: string, needs?: Record<string, string>, platforms?: SkillPlatform[], tab?: import('./plugins.mjs').PluginTab, blocks?: string | (import('./plugin-blocks.mjs').BlockDecl | string)[], requires?: string[], profile?: import('./plugins.mjs').Profile, network?: SkillNetwork, appIcon?: string }} SkillLook
  *   where an app shows it and what it builds on (openfilm.json, each optional): `requires` the skills an agent reads
  *   before it (by name: ownSkills), `kind` a way of working or a look, `order` among its kind,
  *   `icon` a mark's name, `cover` a picture and `preview` a video in its folder, `repository` where its source is read,
  *   `needs` what it needs beyond OpenFilm (by language), `platforms` the computers it runs on (none: every one), `tab`
  *   a plugin's surface shown as a tab of the library instead of as a workbench (src/plugins.mjs tabOf), `blocks` the
- *   blocks its workbench is laid out in among the page's panels (src/plugin-blocks.mjs)
+ *   blocks its workbench is laid out in among the page's panels (src/plugin-blocks.mjs); and `appIcon`, its app icon
+ *   (appIconIn), with or without an openfilm.json
  */
 
 /** The words of an openfilm.json field: a string (any language), or one per language; anything else is none. */
 const byLanguage = (/** @type {unknown} */ v, max = 200) => (typeof v === 'string' && v.trim() ? { en: v.trim().slice(0, max) }
   : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).filter(([k, w]) => /^[a-z]{2}(-[A-Za-z]{2,4})?$/.test(k) && typeof w === 'string' && w.trim()).map(([k, w]) => [k, String(w).trim().slice(0, max)])) : {});
+
+/** The names an app icon may have at the root of a skill's or a plugin's folder, in the order looked for. */
+export const APP_ICON_FILES = Object.freeze(['icon.svg', 'icon.png', 'icon.webp']);
+/**
+ * The app icon a folder brings, by convention as an app's: a square picture at its root named icon.svg, icon.png or
+ * icon.webp (OpenFilm rounds its corners and draws it the same everywhere); none: OpenFilm's default for its kind.
+ * @param {string} folder @returns {string | undefined}
+ */
+export const appIconIn = (folder) => APP_ICON_FILES.find((name) => existsSync(join(folder, name)));
 
 /** A file named by openfilm.json, when it is one in the skill's folder. @param {string} folder @param {unknown} name */
 const fileIn = (folder, name) => (typeof name === 'string' && /^[\w./-]{1,200}$/.test(name) && !name.split('/').includes('..')
@@ -371,13 +383,15 @@ const fileIn = (folder, name) => (typeof name === 'string' && /^[\w./-]{1,200}$/
  * @param {string} folder @returns {{ shown?: SkillShown, version?: string } & SkillLook}
  */
 function openfilmJson(folder) {
+  const appIcon = appIconIn(folder);
   let raw;
-  try { raw = JSON.parse(readFileSync(join(folder, 'openfilm.json'), 'utf8')); } catch { return {}; }
+  try { raw = JSON.parse(readFileSync(join(folder, 'openfilm.json'), 'utf8')); } catch { return appIcon ? { appIcon } : {}; }
   const details = byLanguage(raw?.details, 1000);
   /** @type {SkillShown} */
   const shown = { title: byLanguage(raw?.title), summary: byLanguage(raw?.summary), ...(Object.keys(details).length ? { details } : {}) };
   /** @type {{ shown?: SkillShown, version?: string } & SkillLook} */
   const out = {};
+  if (appIcon) out.appIcon = appIcon;
   if (Object.keys(shown.title).length || Object.keys(shown.summary).length) out.shown = shown;
   if (typeof raw?.version === 'string' && VERSION.test(raw.version)) out.version = raw.version;
   if (raw?.kind === 'workflow' || raw?.kind === 'style') out.kind = raw.kind;
@@ -664,7 +678,7 @@ export function usableSkills({ home, ...where } = {}) {
 }
 
 /** OpenFilm's own skills by name, in the order they are listed: how a film is written, its media, its canvas, its motion. */
-export const CORE_SKILLS = Object.freeze(['film', 'media', 'canvas', 'motion']);
+export const CORE_SKILLS = Object.freeze(['film', 'media', 'canvas']);
 
 /** Names OpenFilm's own skills had before, read as their names now (`edit`, which became `film`). */
 const RENAMED = Object.freeze(/** @type {Record<string, string>} */ ({ edit: 'film' }));
@@ -707,14 +721,23 @@ export function requiredSkills(roots, pool) {
 }
 
 /**
+ * What an agent is given with no plugin on (WITHOUT_PLUGINS): no workbench to work in beside the conversation, so the
+ * agent makes the film alone, and needs how one is written and where its media comes from.
+ */
+export const WITHOUT_PLUGINS = Object.freeze(['film', 'media']);
+
+/**
  * The skills an agent is given of OpenFilm's own (requiredSkills): those the plugins on bring and require
- * (src/plugins.mjs), and those `also` require (the person's own and a project's, given too), and what these require.
+ * (src/plugins.mjs), with none on WITHOUT_PLUGINS, and those `also` require (the person's own and a project's, given
+ * too), and what these require.
  * @param {string} [home] @param {readonly { name: string, requires?: readonly string[] }[]} [also]
  */
 export function ownSkills(home, also = []) {
   /** @type {[string, string][]} */
   const roots = [];
-  for (const p of pluginStates(home)) if (p.on) for (const name of [...p.requires, ...p.skills]) roots.push([p.id, name]);
+  const on = pluginStates(home).filter((p) => p.on);
+  for (const p of on) for (const name of [...p.requires, ...p.skills]) roots.push([p.id, name]);
+  if (!on.length) for (const name of WITHOUT_PLUGINS) roots.push(['OpenFilm', name]);
   for (const s of also) for (const name of s.requires ?? []) roots.push([s.name, name]);
   return requiredSkills(roots, new Map(coreSkills().map((s) => [s.name, s])));
 }
@@ -823,6 +846,9 @@ export function promptSkills(home) {
   return `${lines.join('\n')}${said ? `\n\n${said}` : ''}\n`;
 }
 
+/** The plugins turned off, in a line, as promptSkills ends with it: for the app's own agent too. */
+export { pluginsOffLine };
+
 /**
  * What the skills given build on, in a line (empty: none builds on another), for an agent whose program lists the
  * skills itself (the app's own: apps/desktop agents.mjs), each by the name it is given by (`as`, agentNames).
@@ -845,12 +871,14 @@ export const asRun = (text, run) => text.replaceAll('npx openfilm', run).replace
 
 /**
  * A skill as an agent reads it: its name, where its files are (only read: what a film uses is copied into the
- * project), what it builds on (`requires`: read those first), and its SKILL.md whole.
+ * project), what it builds on (`requires`: read those first), and its SKILL.md whole but its front matter, whose name
+ * and description the agent has already (the tag says the name it is given by).
  * @param {Skill} skill
  */
 export function skillText(skill) {
   const requires = skill.requires?.length ? ` requires="${skill.requires.join(' ')}"` : '';
-  return `<skill name="${/** @type {Skill & { as?: string }} */ (skill).as ?? agentName(skill)}" full-name="${skill.uid}" folder="${skill.folder}"${requires}>\n${readFileSync(skill.file, 'utf8').trim()}\n</skill>`;
+  const body = readFileSync(skill.file, 'utf8').replace(/^\uFEFF?---\r?\n[\s\S]*?\r?\n---\r?\n?/, '').trim();
+  return `<skill name="${/** @type {Skill & { as?: string }} */ (skill).as ?? agentName(skill)}" full-name="${skill.uid}" folder="${skill.folder}"${requires}>\n${body}\n</skill>`;
 }
 
 /**
@@ -982,13 +1010,13 @@ function noteOrigins(mine, changes) {
 }
 
 /**
- * Remove one of the person's own skills: to the system's trash, where it can be taken back. → whether it was there.
+ * Remove one of the person's own skills: to the recycle bin, where it can be taken back. → whether it was there.
  * @param {string} key its uid (or name) @param {{ mine?: string }} [where]
  */
 export async function removeSkill(key, { mine = mySkillsDir() } = {}) {
   const skill = mineBy(key, mine);
   if (!skill || resolve(dirname(skill.folder)) !== resolve(mine)) return false;
-  await moveToTrash(skill.folder);
+  await recycle(skill.folder, 'skill');
   noteOrigins(mine, { [basename(skill.folder)]: null });
   return true;
 }

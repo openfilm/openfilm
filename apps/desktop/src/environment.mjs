@@ -400,6 +400,19 @@ export function proxyVariables(found) {
 }
 
 /**
+ * What Node's own fetch needs to take the proxy in `env` (Studio's, which reaches the image and video services with
+ * it): Node goes direct whatever HTTPS_PROXY says unless NODE_USE_ENV_PROXY is set. This computer never goes through
+ * the proxy, whatever NO_PROXY the person wrote. None: {}.
+ */
+export function nodeProxyVariables(env) {
+  const value = (name) => Object.entries(env).find(([key, v]) => key.toLowerCase() === name && v)?.[1];
+  if (!value('https_proxy') && !value('http_proxy')) return {};
+  const own = String(value('no_proxy') ?? '').split(',').map((s) => s.trim()).filter(Boolean);
+  const noProxy = [...new Set([...own, 'localhost', '127.0.0.1', '::1'])].join(',');
+  return { NODE_USE_ENV_PROXY: '1', NO_PROXY: noProxy, no_proxy: noProxy };
+}
+
+/**
  * The person's variables, with the system's proxy (`proxy`, proxyVariables') unless they set one themselves; a
  * NO_PROXY of theirs stays.
  */

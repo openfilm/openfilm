@@ -253,7 +253,8 @@ function readClip(raw, where, problems) {
     problems.push(`${at}size is the px a page is laid out at, whole numbers up to ${PAGE_SIZE_MAX}: { "w": 1920, "h": 1080 }.`);
   }
   if (raw.overrides !== undefined) {
-    if (!Array.isArray(raw.overrides) || raw.overrides.length > 200) problems.push(`${at}overrides has to be a list (at most 200).`);
+    /* no count: a page may have as many layers as it draws, and each the person changed is an entry */
+    if (!Array.isArray(raw.overrides)) problems.push(`${at}overrides has to be a list.`);
     else {
       /* fades to the millisecond, as every time is */
       for (const o of raw.overrides) if (isObject(o) && Array.isArray(o.fade)) o.fade = o.fade.map((v) => (typeof v === 'number' && isFinite(v) ? toMs(v) : v));
@@ -812,7 +813,7 @@ export function declarations(style) {
 
 /**
  * The LUT files a video clip's picture is graded by, in the order they apply: its style's `--of-lut`, one or more
- * `url(…)` naming `.cube` files from the film's folder, as written (SPEC.md). None for another kind of clip, or none
+ * `url(…)` naming color transform files (`.ctf`, `.clf`, `.cube`) from the film's folder, as written (SPEC.md). None for another kind of clip, or none
  * written. The host grades the picture before the clip's CSS (seekable.mjs); a browser alone shows it as it is.
  * @param {{ src?: unknown, sound?: unknown, style?: unknown } | null | undefined} clip @returns {string[]}
  */

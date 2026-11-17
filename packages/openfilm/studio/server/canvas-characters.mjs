@@ -22,7 +22,7 @@ import { sharedHome } from '../../src/locations.mjs';
 import { writeAtomic } from './atomic.mjs';
 import { inProject } from './files.mjs';
 import { HttpError, json, readJson } from './http.mjs';
-import { moveToTrash } from './trash.mjs';
+import { recycle } from './recycle-bin.mjs';
 
 const NAME_MAX = 60;
 const ABOUT_MAX = 2000;
@@ -149,7 +149,7 @@ export async function charactersRoute(req, res, parts) {
     return json(res, 200, { character: shown(id, next) });
   }
   if (req.method === 'DELETE') {
-    await moveToTrash(join(charactersDir(), id));
+    await recycle(join(charactersDir(), id), 'subject');
     return json(res, 200, {});
   }
   throw new HttpError(404, 'no such API');

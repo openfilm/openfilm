@@ -77,9 +77,10 @@ export class BrowserPool {
 /**
  * What a browser that crashed, or a tab that stopped answering, says: drawn again in new browsers, it may work. Also a
  * page or a file the browser could not load from Studio for want of the system's network buffers (Windows: a moment's
- * shortage, not the page's fault). And a film whose video frames its browser never showed (host.mjs VideoNotShown).
+ * shortage, not the page's fault). And a film whose video frames its browser never showed (host.mjs VideoNotShown), or
+a frame whose picture its browser never gave (host.mjs FilmPage.capture).
  */
-const BROWSER_FAILED = /browser drawing the page closed|target (page, context or browser has been )?closed|target crashed|page crashed|browser has been closed|browser (has )?disconnected|did not finish within|did not come within|net::ERR_NO_BUFFER_SPACE|video is shown another way from now on/i;
+const BROWSER_FAILED = /browser drawing the page closed|target (page, context or browser has been )?closed|target crashed|page crashed|browser has been closed|browser (has )?disconnected|did not finish within|did not come within|net::ERR_NO_BUFFER_SPACE|video is shown another way from now on|unable to capture screenshot/i;
 
 /**
  * Whether a render that failed is worth drawing again in new browsers: its browser crashed or stopped answering. A

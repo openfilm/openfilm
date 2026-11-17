@@ -17,7 +17,10 @@ test('a page is written only over the text it was made from, a new one only wher
   await assert.rejects(writePage(root, 'title.html', 'x', null), /there already/);
   await writePage(root, 'scenes/title-2.html', '<p>own</p>', null);
   assert.equal(readFileSync(join(root, 'scenes/title-2.html'), 'utf8'), '<p>own</p>');
-  await assert.rejects(readPage(root, 'notes.txt'), /a page of the project/);
+  await assert.rejects(readPage(root, 'notes.txt'), /a page \(\.html\) or a color file/);
+  /* a color file, as the inspector writes a clip's grade */
+  const color = await writePage(root, 'looks/shot-s1.ctf', '<ProcessList version="2.5" id="shot-s1"/>', null);
+  assert.equal((await readPage(root, 'looks/shot-s1.ctf')).rev, color.rev);
   await assert.rejects(readPage(root, '../title.html'), /not a path inside/);
   await assert.rejects(writePage(root, 'scenes/title-2.html', null, revOf(Buffer.from('<p>other</p>'))), /changed since/, 'taken away only as it was written');
   assert.ok(existsSync(join(root, 'scenes/title-2.html')));

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { AgentSession, CLIENT_CAPABILITIES, INSTRUCTIONS, agentDefaults, agentInstructions, closeEverySession, planProblem, probeFolder, CODEX_UTF8_CMD, agentShell, allowOption, codexDeveloperInstructions, codexLaunchEnv, codexSessionConfig, distinctOptions, errorCause, legacyOptions, optionsForModel, powerShellScript, powerShellLine, powerShellWindowLaunch, terminalScript, checkAgentProgram, readAgentStatus, setChosenPaths, signInScript, turnError, signInError, codexTooOld, ANTIGRAVITY_TESTED, antigravityTooOld, AGENTS, ownSignIn, codexServiceError, codexRefusal, codexNotice, explainFailure, stderrReason, withToolKind, OWN_GROUP, stopTree, winArg, CLAUDE_TESTED, claudeOutdated, keyFileRules } from './agents.mjs';
+import { AgentSession, CLIENT_CAPABILITIES, INSTRUCTIONS, agentDefaults, agentInstructions, closeEverySession, planProblem, probeFolder, CODEX_UTF8_CMD, agentShell, allowOption, codexDeveloperInstructions, codexLaunchEnv, codexSessionConfig, distinctOptions, errorCause, legacyOptions, optionsForModel, powerShellScript, powerShellLine, powerShellWindowLaunch, terminalScript, checkAgentProgram, readAgentStatus, setChosenPaths, signInScript, turnError, signInError, codexTooOld, ANTIGRAVITY_TESTED, antigravityTooOld, AGENTS, ownSignIn, codexServiceError, codexRefusal, codexNotice, explainFailure, stderrReason, withToolKind, OWN_GROUP, stopTree, winArg, CLAUDE_TESTED, claudeOutdated, keyFileRules, PATH_KEPT } from './agents.mjs';
 import { spawn } from 'node:child_process';
 import { acpSignedIn, signOutAgent } from './agents.mjs';
 import { openfilmCommand } from './openfilm-command.mjs';
@@ -226,12 +226,15 @@ test("an agent is told to run the app's openfilm by its whole path: its shell ma
   const command = openfilmCommand('/Users/me/Library/Application Support/OpenFilm/bin', 'darwin');
   assert.equal(command, "'/Users/me/Library/Application Support/OpenFilm/bin/openfilm'", 'quoted, for the space in it');
   const told = agentInstructions(command);
-  for (const run of [`\`${command}\` with no\narguments`, `\`${command} open\``]) assert.ok(told.includes(run), run);
-  assert.match(told, /not as `openfilm` \(your shell may find another one first\)/);
+  assert.ok(told.includes(`run \`${command}\` with no arguments`));
+  assert.match(told, /run every OpenFilm command by it, also where a skill says `openfilm`,\nas your shell may find another one first/);
   assert.ok(!told.includes('on your PATH'));
   assert.equal(openfilmCommand('C:\\Users\\me\\AppData\\Roaming\\OpenFilm\\bin', 'win32'), null, 'on Windows the name on the PATH');
   assert.equal(agentInstructions(null), INSTRUCTIONS);
-  assert.match(INSTRUCTIONS, /Use the `openfilm` command on your PATH/);
+  assert.match(INSTRUCTIONS, /run `openfilm` with no arguments/);
+  assert.match(INSTRUCTIONS, /The `openfilm` on your PATH is this app's own/);
+  /* by its name to the agents whose PATH the app keeps: its own, Claude Code (CLAUDE_ENV_FILE), Codex (its config) */
+  assert.deepEqual([...PATH_KEPT].sort(), ['byok', 'claude', 'codex', 'openfilm']);
 });
 
 test("Codex keeps the session's PATH for each command, the app's openfilm first, after the person's own instructions", () => {
@@ -748,4 +751,67 @@ test("Claude Code is told not to read Studio's key files, in every home it may f
     'Read(//srv/me/.openfilm/providers.json)', 'Read(//srv/me/.openfilm/key)', 'Read(//srv/me/.openfilm/run.json)',
   ]);
   assert.equal(keyFileRules(['D:\\me\\.openfilm'], 'win32')[0], 'Read(//d/me/.openfilm/providers.json)');
+});
+
+test("a session to forget is deleted from the agent's history as it closes; the person's own conversation is kept", async () => {
+  const { mkdtempSync, writeFileSync, readFileSync, existsSync, rmSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+  const dir = mkdtempSync(join(tmpdir(), 'of-forget-'));
+  const heard = join(dir, 'heard');
+  /* a Qwen Code that can delete a session (sessionCapabilities.delete), or not, and writes down what it is asked */
+  const fake = (deletes) => {
+    const program = join(dir, `qwen-${deletes}.mjs`);
+    writeFileSync(program, `import { appendFileSync } from 'node:fs';
+let buf = '';
+const send = (o) => process.stdout.write(JSON.stringify(o) + '\\n');
+process.stdin.on('data', (d) => {
+  buf += d;
+  let i;
+  while ((i = buf.indexOf('\\n')) >= 0) {
+    const m = JSON.parse(buf.slice(0, i)); buf = buf.slice(i + 1);
+    if (m.method === 'session/delete') appendFileSync(${JSON.stringify(heard)}, 'delete ' + m.params.sessionId + '\\n');
+    if (m.method === 'initialize') send({ jsonrpc: '2.0', id: m.id, result: { protocolVersion: 1, agentCapabilities: { sessionCapabilities: ${deletes} ? { delete: {} } : {} }, authMethods: [] } });
+    else if (m.method === 'session/new') send({ jsonrpc: '2.0', id: m.id, result: { sessionId: 's1' } });
+    else if (m.id !== undefined) send({ jsonrpc: '2.0', id: m.id, result: {} });
+  }
+});
+setInterval(() => {}, 1000);
+`);
+    return program;
+  };
+  const run = async (program, opts) => {
+    setChosenPaths({ qwen: program });
+    const session = new AgentSession({ agent: 'qwen', cwd: dir, ...opts });
+    await session.start();
+    session.close();
+    await session.ended();
+  };
+  const said = () => (existsSync(heard) ? readFileSync(heard, 'utf8') : '');
+  try {
+    await run(fake(true), {});
+    assert.equal(said(), '', "the person's conversation stays in the agent's history");
+    await run(fake(true), { forget: true });
+    assert.equal(said(), 'delete s1\n');
+    rmSync(heard, { force: true });
+    await run(fake(false), { forget: true });
+    assert.equal(said(), '', 'an agent that cannot delete a session is not asked to');
+    setChosenPaths({ qwen: fake(true) });
+    const quitting = new AgentSession({ agent: 'qwen', cwd: dir, forget: true });
+    await quitting.start();
+    closeEverySession();
+    await quitting.ended();
+    assert.equal(said(), '', 'the app quitting ends it at once');
+  } finally { setChosenPaths({}); rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("connectors' MCP servers go to the ACP session: programs always, remote ones when the agent takes them", async () => {
+  const { acpServers } = await import('./agents.mjs');
+  const servers = [{ name: 'notion', type: 'http', url: 'https://mcp.notion.com/mcp', headers: { 'X-A': 'b' } }, { name: 'local', type: 'stdio', command: 'npx', args: ['x'], env: { K: 'v' } }];
+  assert.deepEqual(acpServers(servers, { http: true }), [
+    { type: 'http', name: 'notion', url: 'https://mcp.notion.com/mcp', headers: [{ name: 'X-A', value: 'b' }] },
+    { name: 'local', command: 'npx', args: ['x'], env: [{ name: 'K', value: 'v' }] },
+  ]);
+  assert.deepEqual(acpServers(servers, undefined).map((s) => s.name), ['local'], 'an agent that takes no remote server');
+  assert.deepEqual(acpServers([], { http: true }), []);
 });

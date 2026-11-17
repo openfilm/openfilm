@@ -1,5 +1,5 @@
 /**
- * Sound recorded from the computer's microphone (the timeline's record button, components/RecordButton): taken with
+ * Sound recorded from the computer's microphone (the library's voice-over Record line, components/RecordPane): taken with
  * MediaRecorder, then written as a WAV file, a file every player and every export reads, named for when it was made.
  * Where the page cannot read back what it recorded, the recording is kept as the browser made it.
  */

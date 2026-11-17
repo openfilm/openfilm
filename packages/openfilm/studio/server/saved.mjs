@@ -21,7 +21,7 @@
  * properties (its `data-props`, lib/component-props) is a component: every clip taken from it offers them.
  */
 import { existsSync, createReadStream, realpathSync } from 'node:fs';
-import { copyFile, lstat, mkdir, readFile, readdir, readlink, stat, writeFile } from 'node:fs/promises';
+import { copyFile, cp, lstat, mkdir, readFile, readdir, readlink, stat, writeFile } from 'node:fs/promises';
 import { basename, dirname, isAbsolute, join, posix, sep } from 'node:path';
 import { animationsOf, withAnimations } from '../../src/clip-motion.mjs';
 import { FILM_FILE, clipKind, filmHtml } from '../../src/film-doc.mjs';
@@ -31,7 +31,7 @@ import { STUDIO_STATE, filmClosure, folderView } from './closure.mjs';
 import { playedBy } from './compound.mjs';
 import { readProjectFilm } from './film.mjs';
 import { bringIn, cleanName, importFile, inProject, inside, kindOf, readable } from './files.mjs';
-import { BUILT_IN, builtInRoot, fetchLibrary } from './library.mjs';
+import { BUILT_IN, builtInRoot, fetchLibrary, libraryIndex } from './library.mjs';
 
 export class SavedError extends Error {
   /** @param {string} message @param {number} status */
@@ -386,6 +386,59 @@ export async function saveFile(root, rel, o = {}) {
   const lib = await libraryRoot();
   const { path } = await importFile(lib, into ? `${into}/${basename(rel)}` : basename(rel), createReadStream(source));
   return libraryPath(path);
+}
+
+/**
+ * A thing of OpenFilm's library or a Community pack (`openfilm/<its place>`, fetched first when it has to be) copied
+ * into the person's library folder `into` ('' its top): a file as itself, a page (a bundle) with what it loads, as it is
+ * kept there, under its own name or `as` (a file's, its extension kept). A look or a line's style is no file: refused.
+ * Returns its place in the library.
+ * @param {unknown} from @param {string} into @param {unknown} [as]
+ */
+export async function copyFromLibrary(from, into, as) {
+  const rel = typeof from === 'string' && from.startsWith(`${BUILT_IN}/`) ? from.slice(BUILT_IN.length + 1) : '';
+  if (!rel || rel.split('/').some((part) => !part || part === '..' || part === '.')) throw new SavedError('a thing of the library, please', 400);
+  const at = (await fetchLibrary(rel)) ?? readable(builtInRoot(), rel);
+  const info = await stat(at).catch(() => null);
+  if (!info) throw new SavedError('That is not in the library, or could not be fetched.', 404);
+  if (info.isDirectory() && !(await readBundle(at))) throw new SavedError('That cannot be kept in a folder: put it in a film, then save it from there.', 409);
+  const lib = await libraryRoot();
+  const parent = into ? inside(lib, into) : lib;
+  await mkdir(parent, { recursive: true });
+  /* `as`: the name it is kept under (a media file of the Community's, by its name), its extension kept */
+  const named = typeof as === 'string' && cleanName(as) && info.isFile() ? `${cleanName(as)}${posix.extname(at)}` : basename(at);
+  const name = freeName(parent, named);
+  await cp(at, join(parent, name), { recursive: true });
+  return into ? `${into}/${name}` : name;
+}
+
+/**
+ * A pack of the Community's media (footage, pictures, recordings) kept as a folder of the person's own: a new folder at
+ * the top of the library folder, named after the pack, with each of its files fetched and copied in under its name
+ * (in `lang`, else English), as files the person put there. Returns the folder's place in the library. Throws when
+ * there is no such pack, it has no media, or a file cannot be fetched (the folder keeps what came before it).
+ * @param {unknown} packId @param {unknown} lang
+ */
+export async function savePack(packId, lang) {
+  const index = /** @type {{ packs: { id: string, name: Record<string, string>, items?: string[] }[], items: { id: string, kind: string, name: Record<string, string> }[] }} */ (libraryIndex());
+  const pack = index.packs.find((p) => p.id === packId);
+  if (!pack) throw new SavedError('There is no such pack.', 404);
+  const said = (/** @type {Record<string, string>} */ words) => (typeof lang === 'string' && words[lang]) || words.en || Object.values(words)[0] || '';
+  const files = (pack.items ?? []).map((id) => index.items.find((it) => it.id === id)).filter((it) => it?.kind === 'file');
+  if (!files.length) throw new SavedError('That pack has no media to keep in a folder.', 409);
+  const lib = await libraryRoot();
+  await mkdir(lib, { recursive: true });
+  const name = freeName(lib, cleanName(said(pack.name)) || 'Media');
+  const dir = join(lib, name);
+  await mkdir(dir);
+  for (const item of files) {
+    if (!item) continue;
+    const at = await fetchLibrary(item.id);
+    if (!at) throw new SavedError('A file of that pack could not be fetched: check the connection and try again.', 502);
+    const ext = posix.extname(item.id);
+    await copyFile(at, join(dir, freeName(dir, `${cleanName(said(item.name)) || 'Media'}${ext}`)));
+  }
+  return name;
 }
 
 /** A place made a name a page's address takes as it is, part by part. */

@@ -6,6 +6,7 @@ import { MEDIA_RATE_MAX, MEDIA_RATE_MIN, registerEffects, clipFade, clipSpan, cl
 import { override, restore } from './overrides.mjs';
 import { CAPTION_BASE_CSS, cueCss, cueLayout, cueNodes, readVtt, regionBox } from './captions.mjs';
 import { clearVideoEffects, drawVideoEffects, hideVideoEffects, suspendVideoEffects, retryVideoEffects, videoEffectsOn, videoEffectsState, setVideoPreview, clearVideoAnalysisCache } from './video-effects.mjs';
+import { clearVideoLut, drawVideoLut, setVideoSplit, hideVideoLut } from './video-lut.mjs';
 
 /* the file as written (without what the host puts in it), read as every reader reads it */
 const own = new URL(location.href);
@@ -359,7 +360,7 @@ async function showVideoAt(v, t, frame = null) {
     let timer = 0;
     const presented = callback
       ? new Promise((done) => {
-        const next = () => { handle = v.requestVideoFrameCallback((now, meta) => { if (right(meta.mediaTime)) done(true); else next(); }); };
+        const next = () => { handle = v.requestVideoFrameCallback((now, meta) => { if (right(meta.mediaTime + (v.__filmFrom ?? 0))) done(true); else next(); }); };
         next();
         timer = setTimeout(() => done(false), last ? 3000 : PRESENT_MS);
       })
@@ -486,7 +487,7 @@ function follow(c) {
   if (c.following || typeof v.requestVideoFrameCallback !== 'function') return;
   c.following = true;
   const note = (/** @type {number} */ _now, /** @type {{ mediaTime: number }} */ meta) => {
-    c.presented = meta.mediaTime;
+    c.presented = meta.mediaTime + (v.__filmFrom ?? 0);
     c.onPresented?.();
     v.requestVideoFrameCallback(note);
   };
@@ -772,13 +773,24 @@ function wake(c, from = null) {
   if (c.kind === 'page') return wakePage(c);
   const v = c.el;
   v.preload = 'auto';
-  /* graded by LUTs: its file once the host says where its graded copy is (see gradeOf) */
+  /* graded by LUTs: its file once the host says where its graded copy is (see gradeOf); while an editor shows a grade
+     not written yet (c.draft), its own file, drawn through that grade (gradeLive) */
   const ask = c.graded = gradeAsk(c.row);
-  if (ask) {
-    const awake = c.awake = gradeOf(ask).then((href) => new Promise((done) => {
+  /* split in two (an editor's before and after): its own file, its grade drawn over the half after the line */
+  if (ask && splitAt != null && !c.draft) {
+    /* its own file plays now, not the graded copy it may have played before */
+    c.gradedSrc = null;
+    playsFrom(v, 0);
+    void liveGrade(ask).then((lut) => { if (c.graded === ask) { c.liveLut = lut; window.__filmEditor.redraw?.(); } });
+  }
+  if (ask && !c.draft && splitAt == null) {
+    const awake = c.awake = gradeOf(ask).then((copy) => new Promise((done) => {
       /* let go meanwhile (see rest) */
       if (c.awake !== awake) { done(); return; }
+      const href = copy?.href ?? null;
       c.gradedSrc = href;
+      if (!href) void liveGrade(ask).then((lut) => { if (c.graded === ask) c.liveLut = lut; });
+      playsFrom(v, copy?.from ?? 0);
       v.src = href ?? url(c.row.src).href;
       if (from > 0) v.currentTime = from;
       v.addEventListener('loadeddata', () => done(), { once: true });
@@ -810,6 +822,7 @@ function undecoded(src) {
 function rest(c) {
   if (c.kind === 'page') { restPage(c); return; }
   clearVideoEffects(c);
+  clearVideoLut(c);
   const v = c.el;
   if (!v.paused) v.pause();
   v.preload = 'none';
@@ -989,7 +1002,12 @@ function fromFilm(src) {
 const GRADE_POLL_MS = 1000;
 /** A clip's grade as the host is asked it (its video and its LUTs, from the film's folder); null without LUTs, or for
     a video or a LUT from another site. */
+/** Whether the picture shows every video as its file is, its grade left off (an editor's before and after). */
+let ungraded = false;
+/** Where the picture is split between each video as its file is (left) and graded (right), 0–1 across; null: not. */
+let splitAt = null;
 function gradeAsk(row) {
+  if (ungraded) return null;
   const luts = lutsOf(row);
   if (!luts.length) return null;
   const src = url(row.src);
@@ -1000,22 +1018,101 @@ function gradeAsk(row) {
     if (at.origin !== location.origin) return null;
     ask.append('lut', fromFilm(at));
   }
+  /* the part of its file the clip plays: its copy holds only that (seekable.mjs gradeRange) */
+  if (row.time?.length === 2) ask.set('t', row.time.join(','));
   return ask.toString();
 }
-/** What the host says of a grade: `{ src }` (its copy's address, from the film's folder, or null) and `making`. */
+/** What the host says of a grade: `{ src }` (its copy's address, from the film's folder, or null), `from` (the source
+    second the copy starts at) and `making`. */
 const askGrade = (ask) => fetch(new URL(`__film/graded?${ask}`, location.href), { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
 /** @type {Map<string, Promise<string | null>>} the grades being asked now */
 const asking = new Map();
-/** Where a graded video plays from: its graded copy's address, or null (its own) while there is none. */
+/** Where a graded video plays from: its graded copy (`href`, and `from`, the source second it starts at), or null (its
+    own file) while there is none. */
 function gradeOf(ask) {
   if (!asking.has(ask)) {
     asking.set(ask, askGrade(ask).then((said) => {
-      if (said?.making) pollGrade(ask);
-      return said?.src ? new URL(said.src, location.href).href : null;
+      if (said?.making) { pollGrade(ask); void liveGrade(ask); }
+      return said?.src ? { href: new URL(said.src, location.href).href, from: Number(said.from) || 0 } : null;
     }).finally(() => asking.delete(ask)));
   }
   return asking.get(ask);
 }
+
+/** a video's own currentTime, read once there is a window to read it from */
+let ownTime = null;
+/**
+ * Video `v` playing a copy of a part of its file that starts at source second `from` (0: its own file, or a copy of
+ * all of it): its time read and set in its file's seconds still, as everywhere here, the copy's own time under it.
+ */
+function playsFrom(v, from) {
+  if (!from) { if (Object.hasOwn(v, 'currentTime')) delete v.currentTime; delete v.__filmFrom; return; }
+  v.__filmFrom = from;
+  ownTime ??= /** @type {PropertyDescriptor} */ (Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, 'currentTime'));
+  Object.defineProperty(v, 'currentTime', {
+    configurable: true, enumerable: true,
+    get() { return /** @type {number} */ (ownTime?.get?.call(this)) + from; },
+    set(t) { ownTime?.set?.call(this, Math.max(0, Number(t) - from)); },
+  });
+}
+/*
+ * While a grade's copy is made, its clips are drawn through the grade in the page (gradeLive): its files baked into a
+ * small LUT by a worker (color/live-worker.mjs), once a grade.
+ */
+const LIVE_SIZE = 33;
+/** @type {Map<string, Promise<{ size: number, data: Float32Array, key: string } | null>>} each grade's live LUT, by its ask */
+const liveGrades = new Map();
+/** @type {Map<number, (lut: { size: number, data: Float32Array } | null) => void>} */
+const liveWaiting = new Map();
+let liveWorker = null, liveAsked = 0;
+/** Files (urls) baked into one live LUT by the worker, `texts` read in place of those it names; null when it cannot be. */
+function liveBake(files, texts = {}, key = '') {
+  return new Promise((done) => {
+    if (!liveWorker) {
+      try { liveWorker = new Worker(new URL('./color/live-worker.mjs', import.meta.url), { type: 'module' }); } catch { done(null); return; }
+      liveWorker.onmessage = ({ data }) => { liveWaiting.get(data.id)?.(data.error ? null : data); liveWaiting.delete(data.id); };
+    }
+    const id = ++liveAsked;
+    liveWaiting.set(id, (said) => done(said ? { size: said.size, data: said.data, key } : null));
+    liveWorker.postMessage({ id, files, size: LIVE_SIZE, texts });
+  });
+}
+/** The files a grade's ask names, as urls. */
+const askFiles = (ask) => new URLSearchParams(ask).getAll('lut').map((lut) => new URL(lut, location.href).href);
+function liveGrade(ask) {
+  if (!liveGrades.has(ask)) {
+    liveGrades.set(ask, liveBake(askFiles(ask), {}, ask).then((lut) => {
+      /* the clips playing this grade's video as it is get it at the next frame drawn */
+      let any = false;
+      for (const c of clips) if (c.kind === 'video' && c.graded === ask && !c.gradedSrc) { c.liveLut = lut; any = true; }
+      if (any) window.__filmEditor.redraw?.();
+      return lut;
+    }));
+  }
+  return liveGrades.get(ask);
+}
+
+/**
+ * Clip `c` drawn through its grade as written again: its grade's files read anew (one changed on disk), and once they
+ * are baked, the grade an editor showed meanwhile (`c.draft`) let go of and the clip woken again, so its graded copy is
+ * asked for anew. Nothing between the two grades is drawn: the draft stays until the written one is ready.
+ */
+function regrade(c) {
+  const ask = gradeAsk(c.row);
+  const token = c.settling = (c.settling ?? 0) + 1;
+  const done = (lut) => {
+    if (c.settling !== token) return;
+    c.settling = 0;
+    c.draft = null;
+    if (ask) { c.graded = ask; c.liveLut = lut; }
+    if (c.awake) rest(c);
+    window.__filmEditor.redraw?.();
+  };
+  if (!ask) { done(null); return; }
+  liveGrades.delete(ask);
+  void liveGrade(ask).then(done);
+}
+
 /** the grades whose copies are being made, asked again until they are */
 const polling = new Set();
 function pollGrade(ask) {
@@ -1033,6 +1130,17 @@ function pollGrade(ask) {
     if (any) window.__filmEditor.redraw?.();
   };
   setTimeout(again, GRADE_POLL_MS);
+}
+
+/**
+ * Clip `c` drawn through its grade in the page (video-lut.mjs) while it plays its video as it is: an editor's grade not
+ * written yet (`c.draft`), else its grade's own LUT while its graded copy is made (`c.liveLut`). Never in an export,
+ * which waits for every copy, nor over effects drawn from the video (those show the copy once it is made).
+ */
+function gradeLive(c) {
+  const lut = ungraded ? null : c.draft ?? (c.awake && !c.gradedSrc ? c.liveLut : null);
+  if (lut && !renderOn && !videoEffectsOn(c) && drawVideoLut(c, lut)) return;
+  clearVideoLut(c);
 }
 
 const cueing = new Set();
@@ -1306,6 +1414,7 @@ async function drawClip(c, t, live, play, turn, coming, going) {
   if (!on) {
     hideVideoEffects(c);
     if (c.kind !== 'video') return;
+    hideVideoLut(c);
     if (play && c.awake && c.at > t && c.at - play.now < CUE_AHEAD * play.rate) getReady(c, c.at - play.now, play.rate);
     else { if (!c.el.paused) c.el.pause(); c.lastWant = c.cued = undefined; }
     return;
@@ -1322,11 +1431,12 @@ async function drawClip(c, t, live, play, turn, coming, going) {
       if (renderOn && (t < renderOn.end - EFFECT_HANDOVER || renders.some((r) => r !== renderOn && r.at <= renderOn.end + .001 && r.end > renderOn.end && r.el.readyState >= 2))) { suspendVideoEffects(c); return; }
       follow(c);
       void drawVideoEffects(c, c.el.currentTime, false, { playing: true });
+      gradeLive(c);
       return;
     }
     const want = sourceAt(c.span, t - c.at, c.row);
     c.held = false;
-    if (live) { await glance(c, want); if (c.lastWant === want) await drawVideoEffects(c, want); return; }
+    if (live) { await glance(c, want); if (c.lastWant === want) { await drawVideoEffects(c, want); gradeLive(c); } return; }
     if (!c.el.paused) c.el.pause();
     c.lastWant = want;
     await loaded(c);
@@ -1344,6 +1454,7 @@ async function drawClip(c, t, live, play, turn, coming, going) {
     /* one without a picture (a sound in a video clip) has no frame to show */
     if (await showVideoAt(c.el, want, await frameOf(c))) videoSeen.shown++;
     else if (c.el.videoWidth > 0) videoSeen.unshown++;
+    gradeLive(c);
     return;
   }
   /* a page closed while the playhead was far (see near): opened again, then drawn; one that will not open is the
@@ -1834,6 +1945,69 @@ window.__filmEditor = {
     visionPreview: setVideoPreview,
     visionClear: clearVideoAnalysisCache,
     visionRetry: (id) => { const c = clips.find((c) => c.id === id); if (c) { retryVideoEffects(c); if (c.shown) void drawVideoEffects(c, c.lastWant ?? c.el.currentTime); } },
+    /**
+     * Show video clip `id` graded as an editor has it but has not written yet: `lut` ({ size, data, key }, a 3D LUT of
+     * its whole grade from the file's own picture), drawn in the page at once (video-lut.mjs); null, as written again.
+     * A clip playing its graded copy plays its own file meanwhile, the grade drawn over it.
+     */
+    grade(id, lut) {
+      const c = clips.find((x) => x.id === id);
+      if (!c || c.kind !== 'video') return;
+      /* its files as the editor has them, baked here: the last asked is the one shown */
+      if (lut && 'files' in lut) {
+        const token = c.drafting = (c.drafting ?? 0) + 1;
+        const files = lut.files.map((f) => url(f).href);
+        const texts = Object.fromEntries(Object.entries(lut.texts ?? {}).map(([f, text]) => [url(f).href, text]));
+        /* one bake at a time a clip: a slider dragged on asks faster than a bake, so only the last asked waits */
+        const bake = () => {
+          if (c.drafting !== token) return;
+          c.baking = true;
+          void liveBake(files, texts, `draft:${token}`).then((baked) => {
+            c.baking = false;
+            if (c.drafting === token && baked) window.__filmEditor.stage.grade(id, baked);
+            const next = c.nextBake;
+            c.nextBake = null;
+            next?.();
+          });
+        };
+        if (c.baking) c.nextBake = bake;
+        else bake();
+        return;
+      }
+      /* written: shown as written once that is ready, the draft until then */
+      if (lut && 'written' in lut) { c.drafting = (c.drafting ?? 0) + 1; regrade(c); return; }
+      if (!lut) c.drafting = (c.drafting ?? 0) + 1;
+      const had = c.draft;
+      c.draft = lut ?? null;
+      /* to the file as it is (or back to its copy): woken again */
+      if (c.awake && (Boolean(had) !== Boolean(c.draft)) && (c.draft ? c.gradedSrc : true)) rest(c);
+      window.__filmEditor.redraw?.();
+    },
+    /** Every video drawn as its file is (`off`), or through its grade again. */
+    compare(off, split = null) {
+      const at = split == null ? null : Math.min(1, Math.max(0, Number(split)));
+      if (ungraded === off && (splitAt == null) === (at == null)) {
+        /* only the line moved: drawn again where it is now */
+        if (at != null && at !== splitAt) { splitAt = at; setVideoSplit(at); window.__filmEditor.redraw?.(); }
+        return;
+      }
+      ungraded = off;
+      splitAt = at;
+      setVideoSplit(at);
+      /* those graded (or not, while their grade was left off) woken again: with their copy, or their own file */
+      for (const c of clips) if (c.kind === 'video' && c.awake) rest(c);
+      window.__filmEditor.redraw?.();
+    },
+    /** Color files of the film's folder (paths from it) changed on disk: the clips they grade drawn through them again. */
+    regraded(paths) {
+      const changed = new Set(paths.map((p) => url(p).href));
+      for (const ask of [...liveGrades.keys()]) if (askFiles(ask).some((f) => changed.has(f))) liveGrades.delete(ask);
+      for (const c of clips) {
+        if (c.kind !== 'video' || c.draft) continue;
+        const ask = gradeAsk(c.row);
+        if (ask && askFiles(ask).some((f) => changed.has(f))) regrade(c);
+      }
+    },
   },
   /** Set by a host (Studio's bridge) to hear of a page's own length and size learned as it first opens (see load). */
   learned: null,

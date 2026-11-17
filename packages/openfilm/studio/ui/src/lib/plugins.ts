@@ -19,12 +19,18 @@ export interface PluginTab { title?: Record<string, string>; icon?: string }
  * A plugin: its words by language (`title`, `summary`), its mark's name, the workbench, the blocks it is laid out in
  * (lib/blocks), the library's tab, the skills and the commands it brings, whether it is on, and whether it is still
  * being made good (`beta`) or not made yet (`soon`: no switch). One someone made is a skill with a surface
- * (lib/project-plugins): `skill` its uid, by which it is turned, `page` its surface's address, and `files` where the
+ * (lib/project-plugins): `appIcon` its app icon's address (components/AppIcon; OpenFilm's own too), `skill` its uid, by which it is turned, `page` its surface's address, and `files` where the
  * project's files are for that page.
  */
 export interface Plugin {
-  id: string; title?: Record<string, string>; summary?: Record<string, string>; details?: Record<string, string>; profile?: Profile; icon?: string;
+  id: string; title?: Record<string, string>; summary?: Record<string, string>; details?: Record<string, string>; profile?: Profile; icon?: string; appIcon?: string;
   workbench?: Workbench; blocks?: string | readonly (BlockDecl | string)[]; tab?: PluginTab; skills: string[]; commands?: string[]; on: boolean; beta?: boolean; soon?: boolean; skill?: string; page?: string; files?: string; program?: boolean; runs?: boolean; inApp?: boolean; element?: string;
+  /** a connector's MCP servers (src/plugins.mjs readMcpServers): given to the agent while it is on */
+  mcpServers?: Record<string, { type: 'http'; url: string } | { type: 'stdio'; command: string }>;
+  /** got (one OpenFilm comes with always is); not got, it is only in the Community's store */
+  installed?: boolean;
+  /** comes with OpenFilm: turned off, never removed */
+  builtIn?: boolean;
 }
 
 /** The plugins there are to turn as a new install has them, until Studio answers with every plugin. */
@@ -35,9 +41,8 @@ export interface Profile {
 }
 
 const DEFAULT: readonly Plugin[] = [
-  { id: 'edit', workbench: 'edit', skills: [], on: true },
-  { id: 'canvas', workbench: 'canvas', skills: ['canvas'], on: true },
-  { id: 'motion', workbench: 'motion', skills: ['motion'], on: false, beta: true },
+  { id: 'edit', workbench: 'edit', skills: [], on: true, installed: true, builtIn: true },
+  { id: 'canvas', workbench: 'canvas', skills: ['canvas'], on: true, installed: true, builtIn: true },
 ];
 const KEPT = 'openfilm.plugins';
 /** The ways of working as they were kept in this browser before (`edit,canvas`). */
@@ -45,6 +50,9 @@ const BEFORE = 'openfilm.workModes';
 
 const listeners = new Set<() => void>();
 let current: readonly Plugin[] | null = null;
+/** The order the person put the workbenches in (plugin ids, uids of those someone made), kept in this browser too. */
+const KEPT_ORDER = 'openfilm.workbenchOrder';
+let order: readonly string[] | null = null;
 let asked = false;
 /** Studio has answered since this page opened: what is kept in this browser may be of another launch (addresses change). */
 let answered = false;
@@ -60,16 +68,20 @@ function kept(): readonly Plugin[] {
   return DEFAULT;
 }
 
-function take(next: readonly Plugin[]): void {
+function take(next: readonly Plugin[], nextOrder?: unknown): void {
   current = next;
   try { localStorage.setItem(KEPT, JSON.stringify(next)); } catch { /* this session only */ }
+  if (Array.isArray(nextOrder)) {
+    order = nextOrder.filter((id): id is string => typeof id === 'string');
+    try { localStorage.setItem(KEPT_ORDER, JSON.stringify(order)); } catch { /* this session only */ }
+  }
   for (const fn of listeners) fn();
 }
 
-const put = (id: string, on: boolean) => fetch(`/api/plugins/${encodeURIComponent(id)}`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ on }) });
+const put = (id: string, on: boolean | null) => fetch(`/api/plugins/${encodeURIComponent(id)}`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ on }) });
 
 async function read(): Promise<void> {
-  const body = await fetch('/api/plugins', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null), () => null) as { plugins?: unknown } | null;
+  const body = await fetch('/api/plugins', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null), () => null) as { plugins?: unknown; order?: unknown } | null;
   if (!valid(body?.plugins)) return;
   let plugins = body.plugins;
   /* the choice this browser kept before: told to Studio once */
@@ -86,7 +98,7 @@ async function read(): Promise<void> {
     try { localStorage.removeItem(BEFORE); } catch { /* none */ }
   }
   answered = true;
-  take(plugins);
+  take(plugins, body.order);
 }
 
 function start(): void {
@@ -110,11 +122,53 @@ export function readPlugins(): readonly Plugin[] {
 export async function setPluginOn(id: string, on: boolean): Promise<void> {
   /* shown at once, as a switch flips; what Studio answers is what stays */
   const was = readPlugins();
-  take(was.map((p) => (p.id === id ? { ...p, on } : p)));
+  take(was.map((p) => (p.id === id ? { ...p, on, installed: true } : p)));
   const res = await put(id, on).catch(() => null);
-  const body = await res?.json().catch(() => ({})) as { plugins?: unknown; error?: string } | undefined;
+  const body = await res?.json().catch(() => ({})) as { plugins?: unknown; order?: unknown; error?: string } | undefined;
   if (!res?.ok || !valid(body?.plugins)) { take(was); throw new Error(body?.error ?? 'failed'); }
-  take(body.plugins);
+  take(body.plugins, body.order);
+}
+
+/** Whether a plugin is got: one OpenFilm comes with always is (an answer from an older Studio: on or not). */
+export const isInstalled = (p: Plugin): boolean => p.installed ?? (p.on || Boolean(p.builtIn));
+
+/** Remove a plugin the person got (one OpenFilm comes with is only turned off). Rejects with what Studio said. */
+export async function removePlugin(id: string): Promise<void> {
+  const was = readPlugins();
+  take(was.map((p) => (p.id === id ? { ...p, on: false, installed: false } : p)));
+  const res = await put(id, null).catch(() => null);
+  const body = await res?.json().catch(() => ({})) as { plugins?: unknown; order?: unknown; error?: string } | undefined;
+  if (!res?.ok || !valid(body?.plugins)) { take(was); throw new Error(body?.error ?? 'failed'); }
+  take(body.plugins, body.order);
+}
+
+/** The order the person put the workbenches in: ids first to last (what it leaves out keeps its place after them). */
+export function readWorkbenchOrder(): readonly string[] {
+  if (order == null) {
+    try { const raw: unknown = JSON.parse(localStorage.getItem(KEPT_ORDER) ?? '[]'); order = Array.isArray(raw) ? raw.filter((id): id is string => typeof id === 'string') : []; } catch { order = []; }
+  }
+  start();
+  return order;
+}
+
+/** Put the workbenches in an order (shown at once; Studio keeps it for every OpenFilm on this computer). */
+export async function setWorkbenchOrder(ids: readonly string[]): Promise<void> {
+  const was = readWorkbenchOrder();
+  take(readPlugins(), ids);
+  const res = await fetch('/api/plugin-order', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ order: ids }) }).catch(() => null);
+  const body = await res?.json().catch(() => ({})) as { order?: unknown } | undefined;
+  take(readPlugins(), res?.ok && Array.isArray(body?.order) ? body.order : was);
+}
+
+export function useWorkbenchOrder(): readonly string[] {
+  return useSyncExternalStore((fn) => { listeners.add(fn); return () => { listeners.delete(fn); }; }, readWorkbenchOrder, () => EMPTY);
+}
+const EMPTY: readonly string[] = [];
+
+/** A list in the person's order: those they placed first, as placed, then the rest as they were (openfilm/src/plugins.mjs inPersonsOrder). */
+export function inPersonsOrder<T extends { id: string }>(list: readonly T[], ids: readonly string[]): T[] {
+  const at = new Map(ids.map((id, i) => [id, i]));
+  return list.map((item, i) => ({ item, i, o: at.get(item.id) ?? ids.length + i })).sort((a, b) => a.o - b.o || a.i - b.i).map((x) => x.item);
 }
 
 /** The plugins as Studio said them since this page opened; null until it has (what is kept in this browser is of an earlier launch). */

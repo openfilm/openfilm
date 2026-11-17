@@ -112,6 +112,20 @@ export function useDesktopAttachments(project: string) {
     return items.map(({ item }) => item);
   }, [project, thumbnail]);
 
+  /** Things of this computer by their paths (a folder picked): pills at once, ready once the app says what each is. */
+  const addPaths = React.useCallback((paths: string[]): DesktopAttachment[] => {
+    const items = paths.map((path): DesktopAttachment => ({ id: newAttachmentPillId(), name: path.split(/[\\/]/).filter(Boolean).at(-1) ?? path, kind: 'document', mediaType: '', size: 0, state: 'pending' }));
+    setFiles((list) => [...list, ...items]);
+    void app.chat.describePaths(paths)
+      .then((found) => items.forEach((item, i) => {
+        const one = found[i];
+        if (!one || 'error' in one) patch(item.id, { state: 'failed', error: one?.error ?? 'That is not there.' });
+        else patch(item.id, { state: 'ready', path: one.path, ...(one.folder ? { folder: true } : { size: one.size ?? 0 }) });
+      }))
+      .catch((error: unknown) => items.forEach((item) => patch(item.id, { state: 'failed', error: error instanceof Error ? error.message : String(error) })));
+    return items;
+  }, []);
+
   /**
    * Hand over the files whose pills are sent, in that order; the composer is empty of files after, those whose pill
    * was taken out too (kept until now only so an undo could bring the pill back).
@@ -128,7 +142,7 @@ export function useDesktopAttachments(project: string) {
     return taken;
   }, []);
 
-  return { files, add, take };
+  return { files, add, addPaths, take };
 }
 
 /** What still keeps the message from going: a file still on its way, or one that could not be attached. */

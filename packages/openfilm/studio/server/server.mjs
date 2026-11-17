@@ -25,7 +25,8 @@ import { createHash } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { EditError, editProjectFilm, pageClipLook, readProjectFilm, settleProjectFilm } from './film.mjs';
 import { compoundOuter, readPartFilm, writePartFilm } from './parts.mjs';
-import { PARTS, compoundFolder, srcInto } from './compound.mjs';
+import { COVERS, PARTS, compoundFolder, srcInto } from './compound.mjs';
+import { CoverFilmError, coverFolder, coverFrame, coverLook, coverLooks, drawCovers, listCovers, makeCover } from './covers.mjs';
 import { readPage, writePage } from './page-text.mjs';
 import { FileError, bringIn, collect, extractAudio, freezeFrame, importFile, inside, listFiles, makeFolder, moveCheck, moveFile, readable, relink, trashFile } from './files.mjs';
 import { mediaReferences } from '../../src/media-links.mjs';
@@ -48,7 +49,7 @@ import { sealKeysWith, sealPlainKeys } from './keys.mjs';
 /* the app's Studio seals the person's keys with it (startStudio `sealer`) */
 export { vaultSealer } from './keys.mjs';
 import { BrowseError, browseFolder, browsePlaces } from './browse.mjs';
-import { exampleFile, exampleFolder, listExamples } from './examples.mjs';
+import { exampleFile, exampleFolder, listExamples, listNews } from './examples.mjs';
 import { pickFiles, pickFolder } from './folder-picker.mjs';
 import { readPrefs, writePrefs } from './prefs.mjs';
 import { ensureProxies, playChecks } from './proxies.mjs';
@@ -64,16 +65,17 @@ import { COVER_FRAME_W, CoverError, clearCover, readCover, readCoverBody, setCov
 import { BUILT_IN, fetchItem, libraryAdded, libraryFavorites, libraryFileFetched, libraryIndex, libraryVoices, notHere, withPairs, refreshCommunity, setLibraryAdded, setLibraryFavorites } from './library.mjs';
 import { createMediaIndexer, mediaSummary } from './media-index.mjs';
 import { carryMade, madeView } from './media-made.mjs';
-import { pluginOfSkill, pluginStates, pluginsDir, setPluginOn } from '../../src/plugins.mjs';
+import { pluginOfSkill, pluginStates, pluginsDir, removePlugin, setPluginOn, setWorkbenchOrder, workbenchOrder } from '../../src/plugins.mjs';
 import { createReconnector, missingMedia, reconnect } from './media-reconnect.mjs';
 import { clearProjectCache, storage } from './storage.mjs';
-import { SavedError, TEXT_COMPONENT, TEXT_OWN_FONTS, bundlePoster, libraryPath, libraryRel, libraryRoot as savedLibrary, bringClip, saveClip, saveFile, saveGroup, takeSaved } from './saved.mjs';
-import { addLibraryAsset, assetCatalog, assetUsage, catalogListing, createAssetCollection, editAssetCatalog, existingLibraryAsset, moveAssetCatalog, refreshLibraryReferences, registerLibraryLinks, registerLibraryFolder, forgetLibraryPath, removeAssetCollection } from './asset-library.mjs';
+import { SavedError, TEXT_COMPONENT, TEXT_OWN_FONTS, bundlePoster, copyFromLibrary, libraryPath, savePack, libraryRel, libraryRoot as savedLibrary, bringClip, saveClip, saveFile, saveGroup, takeSaved } from './saved.mjs';
+import { addLibraryAsset, assetCatalog, assetUsage, catalogListing, existingLibraryAsset, moveAssetCatalog, refreshLibraryReferences, registerLibraryLinks, registerLibraryFolder, forgetLibraryPath } from './asset-library.mjs';
+import { defaultPlace, ensureShelf, readHidden, shelfMoved, shelfRemoved, writeShelf } from './library-places.mjs';
 import { FILM_FILE, clipKind, isPage } from '../../src/film-doc.mjs';
 import { listenLocal } from '../../src/host.mjs';
 import { captionTrackRoutes } from './caption-tracks.mjs';
-import { moveToTrash } from './trash.mjs';
-import { allowProjectSkill, revocationOf, revokedNow, skillFiles, commandsIn, coreSkills, elementIn, keeps, listSkills, offeredSkills, ownSkills, pluginRuns, projectSkillAllowed, pluginWrites, removeSkill, setPluginRuns, setPluginWrites, setSkillCover, setSkillOn, skillOrigins, skillsOff, thisPlatform } from '../../src/skills.mjs';
+import { binDelete, binList, binRestore, recycle } from './recycle-bin.mjs';
+import { allowProjectSkill, appIconIn, revocationOf, revokedNow, skillFiles, commandsIn, coreSkills, elementIn, keeps, listSkills, offeredSkills, ownSkills, pluginRuns, projectSkillAllowed, pluginWrites, removeSkill, setPluginRuns, setPluginWrites, setSkillCover, setSkillOn, skillOrigins, skillsOff, thisPlatform } from '../../src/skills.mjs';
 import { startPluginPages } from './plugin-pages.mjs';
 import { startPluginPrograms } from './plugin-programs.mjs';
 import { createPluginServers } from './plugin-servers.mjs';
@@ -457,18 +459,43 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     }
     /* Saved, the person's own library for every project (saved.mjs): its files and folders as a project's media are
        (files.mjs), by their `saved/` paths; a file's bytes, a bundle's picture, and what Studio works out from a file */
+    /* OpenFilm's recycle bin (recycle-bin.mjs): what is in it, put back (a project is listed again), deleted for good,
+       emptied */
+    if (parts[0] === 'recycle') {
+      if (parts.length === 1 && req.method === 'GET') return json(res, 200, { items: await binList() });
+      const { ids } = /** @type {{ ids?: unknown }} */ (req.method === 'POST' ? await readJson(req) ?? {} : {});
+      if (parts[1] === 'restore' && req.method === 'POST') {
+        const back = await binRestore(ids);
+        for (const item of back) if (item.kind === 'project') await openProject(item.path).catch(() => null);
+        return json(res, 200, { restored: back });
+      }
+      if (parts[1] === 'delete' && req.method === 'POST') { await binDelete(ids); return json(res, 200, {}); }
+      if (parts[1] === 'empty' && req.method === 'POST') { await binDelete(); return json(res, 200, {}); }
+    }
     if (parts[0] === 'saved') {
       const sub = parts.slice(1).join('/');
       const lib = await savedLibrary();
       const rel = (/** @type {unknown} */ path) => { try { return libraryRel(path); } catch (e) { throw new HttpError(400, /** @type {Error} */ (e).message); } };
       const at = url.searchParams.get('path') ?? '';
       if (sub === 'catalog' && req.method === 'GET') return json(res, 200, await assetCatalog());
-      if (sub === 'catalog' && req.method === 'PATCH') return json(res, 200, await editAssetCatalog(await readJson(req)));
-      if (sub === 'collections' && req.method === 'POST') {
-        const body = await readJson(req);
-        return json(res, 200, { collection: await createAssetCollection(body?.name) });
+      /* the places at the library's top (folders made here, folders linked from elsewhere) and the person's shelf of
+         them (library-places.mjs); `name`: the person's word for the first place, made the first time */
+      if (sub === 'places' && req.method === 'GET') {
+        const shelf = await ensureShelf(url.searchParams.get('name') ?? undefined, moveAssetCatalog);
+        const top = await catalogListing('saved');
+        const places = top.folders.filter((path) => path.split('/').length === 2).map((path) => ({ path, ...(top.links[path] ? { link: top.links[path] } : {}) }));
+        return json(res, 200, { places, shelf, hidden: readHidden() });
       }
-      if (sub === 'collections' && req.method === 'DELETE') { await removeAssetCollection(url.searchParams.get('id')); return json(res, 200, {}); }
+      if (sub === 'shelf' && req.method === 'PUT') {
+        const { shelf, hidden } = /** @type {{ shelf?: unknown, hidden?: unknown }} */ (await readJson(req) ?? {});
+        try { return json(res, 200, { shelf: writeShelf(shelf, hidden), hidden: readHidden() }); } catch (e) { throw new HttpError(400, /** @type {Error} */ (e).message); }
+      }
+      /* a thing of OpenFilm's library or a Community pack copied into one of the person's folders (dropped on it in
+         the drawer): a file as itself, a page with what it loads as the folder it is kept in. { path } */
+      if (sub === 'files/from-library' && req.method === 'POST') {
+        const { from, into, name } = /** @type {{ from?: unknown, into?: unknown, name?: unknown }} */ (await readJson(req) ?? {});
+        return json(res, 200, { path: libraryPath(await savedCall(() => copyFromLibrary(from, rel(into), name))) });
+      }
       if (sub === 'usage' && req.method === 'GET') return json(res, 200, await assetUsage(at));
       if (sub === 'relink' && req.method === 'POST') {
         const { path: linked, to } = await readJson(req) ?? {};
@@ -488,9 +515,10 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
           const { from, to } = /** @type {{ from?: unknown, to?: unknown }} */ (await readJson(req) ?? {});
           const path = libraryPath((await moveFile(lib, rel(from), rel(to))).path);
           await moveAssetCatalog(libraryPath(rel(from)), path);
+          shelfMoved(libraryPath(rel(from)), path);
           return json(res, 200, { path });
         }
-        if (req.method === 'DELETE') { if (!rel(at)) throw new HttpError(403, 'The asset-library root cannot be deleted.'); await trashFile(lib, rel(at)); await forgetLibraryPath(libraryPath(rel(at))); return json(res, 200, {}); }
+        if (req.method === 'DELETE') { if (!rel(at)) throw new HttpError(403, 'The asset-library root cannot be deleted.'); await trashFile(lib, rel(at)); await forgetLibraryPath(libraryPath(rel(at))); shelfRemoved(libraryPath(rel(at))); return json(res, 200, {}); }
       }
       if (sub === 'folders' && req.method === 'POST') {
         const { path: folder } = /** @type {{ path?: unknown }} */ (await readJson(req) ?? {});
@@ -561,6 +589,14 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
         if (req.method === 'GET') { await refreshCommunity(); return json(res, 200, { ids: libraryAdded() }); }
         if (req.method === 'PUT') { await refreshCommunity(); return json(res, 200, { ids: setLibraryAdded((/** @type {{ ids?: unknown }} */ (await readJson(req) ?? {})).ids) }); }
       }
+      /* a pack of the Community's media kept as a folder of the person's own, and it is added: { path } */
+      if (parts[1] === 'packs' && parts[2] === 'save' && parts.length === 3 && req.method === 'POST') {
+        const { pack, lang } = /** @type {{ pack?: unknown, lang?: unknown }} */ (await readJson(req) ?? {});
+        await refreshCommunity();
+        const path = libraryPath(await savedCall(() => savePack(pack, lang)));
+        setLibraryAdded([...libraryAdded(), pack]);
+        return json(res, 200, { path });
+      }
       if (parts[1] === 'favorites' && parts.length === 2) {
         if (req.method === 'GET') return json(res, 200, { ids: libraryFavorites() });
         if (req.method === 'PUT') return json(res, 200, { ids: setLibraryFavorites((/** @type {{ ids?: unknown }} */ (await readJson(req) ?? {})).ids) });
@@ -598,14 +634,28 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     }
     /* OpenFilm's plugins (src/plugins.mjs): each with whether it is on; one turned on or off (PUT plugins/:id { on }),
        answered with them all. 409 for one not made yet */
-    if (parts[0] === 'plugins' && parts.length === 1 && req.method === 'GET') return json(res, 200, { plugins: pluginsShown() });
+    if (parts[0] === 'plugins' && parts.length === 1 && req.method === 'GET') return json(res, 200, { plugins: pluginsShown(), order: workbenchOrder() });
+    /* one of OpenFilm's own plugins' app icon (icon.svg, .png or .webp in its folder: src/skills.mjs appIconIn) */
+    if (parts[0] === 'plugin-icon' && parts.length === 2 && req.method === 'GET') {
+      const id = decodeURIComponent(parts[1]);
+      const folder = /^[a-z][a-z0-9-]{0,31}$/.test(id) ? join(pluginsDir(), id) : null;
+      const file = folder ? appIconIn(folder) : undefined;
+      return sendMedia(req, res, folder && file ? join(folder, file) : null, { keep: true });
+    }
+    /* the order the person put the workbenches in (PUT plugin-order { order: ids }), answered with it as kept */
+    if (parts[0] === 'plugin-order' && parts.length === 1 && req.method === 'PUT') {
+      const { order } = /** @type {{ order?: unknown }} */ (await readJson(req) ?? {});
+      try { setWorkbenchOrder(order); } catch (e) { throw new HttpError(400, /** @type {Error} */ (e).message); }
+      return json(res, 200, { order: workbenchOrder() });
+    }
     /* an own plugin's routes, `plugins/<id>/…`, from its server.mjs, while it is on (plugin-servers.mjs) */
     if (parts[0] === 'plugins' && parts.length > 2) return pluginServers.route(req, res, parts[1], parts.slice(2), url);
     if (parts[0] === 'plugins' && parts.length === 2 && req.method === 'PUT') {
       const { on } = /** @type {{ on?: unknown }} */ (await readJson(req) ?? {});
-      if (typeof on !== 'boolean') throw new HttpError(400, 'on: true or false');
-      try { setPluginOn(parts[1], on); } catch (e) { throw new HttpError(/there is no plugin/i.test(/** @type {Error} */ (e).message) ? 404 : 409, /** @type {Error} */ (e).message); }
-      return json(res, 200, { plugins: pluginsShown() });
+      /* on: true or false; null: removed (one that comes with OpenFilm is only turned off) */
+      if (typeof on !== 'boolean' && on !== null) throw new HttpError(400, 'on: true, false or null');
+      try { if (on === null) removePlugin(parts[1]); else setPluginOn(parts[1], on); } catch (e) { throw new HttpError(/there is no plugin/i.test(/** @type {Error} */ (e).message) ? 404 : 409, /** @type {Error} */ (e).message); }
+      return json(res, 200, { plugins: pluginsShown(), order: workbenchOrder() });
     }
     /* the person's media in numbers (media-index.mjs): places, files, the room they take and the room copies take */
     if (parts[0] === 'media-index' && parts.length === 1 && req.method === 'GET') return json(res, 200, { ...await mediaSummary(), scanning: mediaIndex.busy() });
@@ -643,6 +693,8 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     }
     /* the example films (examples.mjs): none when the index cannot be read */
     if (parts[0] === 'examples' && parts.length === 1 && req.method === 'GET') return json(res, 200, { examples: await listExamples() });
+    /* the Community's news that is now (examples.mjs listNews): the projects window's card */
+    if (parts[0] === 'news' && parts.length === 1 && req.method === 'GET') return json(res, 200, { news: await listNews() });
     /* a poster or preview beside an index read from this computer (examples.mjs exampleFile) */
     if (parts[0] === 'examples' && parts[1] === 'file' && parts.length > 2 && req.method === 'GET') {
       return sendMedia(req, res, exampleFile(parts.slice(2).map(decodeURIComponent).join('/')), { keep: true });
@@ -680,7 +732,7 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
       const off = new Set(skillsOff());
       const given = new Set(ownSkills().skills.map((k) => k.name));
       const agentsCall = new Map(offeredSkills({ project: project?.path ?? null }).named.map((k) => [k.uid, k.as]));
-      const media = (/** @type {string} */ uid, /** @type {'cover' | 'preview'} */ which) => `/api/skills/${encodeURIComponent(uid)}/${which}${id ? `?project=${encodeURIComponent(id)}` : ''}`;
+      const media = (/** @type {string} */ uid, /** @type {'cover' | 'preview' | 'icon'} */ which) => `/api/skills/${encodeURIComponent(uid)}/${which}${id ? `?project=${encodeURIComponent(id)}` : ''}`;
       /* a project's own the person has not allowed in it (src/skills.mjs projectSkillAllowed): listed, waiting, with
          nothing of it shown or run (no page, element, program, tab or commands) until it is allowed */
       const waits = (/** @type {typeof skills[number]} */ k) => k.source === 'project' && !projectSkillAllowed(k, project?.path ?? null);
@@ -711,6 +763,8 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
           /* what it needs beyond OpenFilm, the computers it runs on, and whether this one is not among them */
           ...(k.needs ? { needs: k.needs } : {}), ...(k.platforms ? { platforms: k.platforms, ...(k.platforms.includes(thisPlatform()) ? {} : { elsewhere: true }) } : {}),
           ...(k.cover ? { cover: `${media(k.uid, 'cover')}${id ? '&' : '?'}v=${encodeURIComponent(k.cover)}` } : {}), ...(k.preview ? { preview: media(k.uid, 'preview') } : {}),
+          /* its app icon (src/skills.mjs appIconIn): none, the default for its kind */
+          ...(k.appIcon ? { appIcon: `${media(k.uid, 'icon')}${id ? '&' : '?'}v=${encodeURIComponent(k.appIcon)}` } : {}),
           /* one with a surface (a page of its own, src/skills.mjs SKILL_PAGE) is a plugin: where its page is, on the
              plugins' origin (plugin-pages.mjs); listed for a project, where that project's files are for it; and
              whether the person lets it change them */
@@ -798,7 +852,7 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
       if (!skill) throw new HttpError(404, 'no such skill');
       if (skill.source === 'official') throw new HttpError(400, 'An official skill is uninstalled, not removed.');
       if (skill.source === 'mine') await removeSkill(skill.uid);
-      else await moveToTrash(skill.folder);
+      else await recycle(skill.folder, 'skill');
       return json(res, 200, {});
     }
     /* a plugin someone made (a skill with a surface) let change projects, or no longer (PUT { on }); one a project
@@ -926,10 +980,10 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
         return json(res, 200, { cover: updated?.cover ? `/api/skills/${encodeURIComponent(skill.uid)}/cover?v=${encodeURIComponent(updated.cover)}` : null });
       } catch (e) { throw new HttpError(400, e instanceof Error ? e.message : String(e)); }
     }
-    /* a skill's cover picture or preview video (its openfilm.json's `cover`, `preview`) */
-    if (parts[0] === 'skills' && parts.length === 3 && (parts[2] === 'cover' || parts[2] === 'preview') && req.method === 'GET') {
+    /* a skill's cover picture or preview video (its openfilm.json's `cover`, `preview`), or its app icon */
+    if (parts[0] === 'skills' && parts.length === 3 && (parts[2] === 'cover' || parts[2] === 'preview' || parts[2] === 'icon') && req.method === 'GET') {
       const skill = await skillAt(decodeURIComponent(parts[1]), { core: true });
-      const file = skill?.[parts[2]];
+      const file = skill?.[parts[2] === 'icon' ? 'appIcon' : parts[2]];
       return sendMedia(req, res, skill && file ? join(skill.folder, file) : null, { keep: true });
     }
 
@@ -1219,6 +1273,31 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
       try { await readPartFilm(project.path, String(folder ?? '')); } catch (e) { throw new HttpError(404, e instanceof Error ? e.message : String(e)); }
       return json(res, 200, { project: await openProject(join(project.path, String(folder)), { create: false }) });
     }
+    /* the film's covers (covers.mjs): listed, made (from a moment of the film, a look, or another cover), opened to edit
+       as a compound clip's film is, given another moment or look, and drawn as pictures */
+    if (rest === 'covers' || rest.startsWith('covers/')) {
+      try {
+        if (rest === 'covers' && req.method === 'GET') return json(res, 200, { covers: await listCovers(project.path), looks: await coverLooks() });
+        const ask = /** @type {{ folder?: unknown, folders?: unknown, at?: unknown, look?: unknown, name?: unknown, stage?: unknown, from?: unknown, format?: unknown }} */ (await readJson(req));
+        if (rest === 'covers' && req.method === 'POST') return json(res, 200, { folder: await makeCover(project.path, ask) });
+        if (rest === 'covers/open' && req.method === 'POST') {
+          const { abs } = coverFolder(project.path, ask.folder);
+          return json(res, 200, { project: await openProject(abs, { create: false }) });
+        }
+        if (rest === 'covers/frame' && req.method === 'POST') return json(res, 200, { clip: await coverFrame(project.path, ask.folder, ask.at) });
+        if (rest === 'covers/look' && req.method === 'POST') return json(res, 200, { clip: await coverLook(project.path, ask.folder, ask.look) });
+        if (rest === 'covers/draw' && req.method === 'POST') {
+          const folders = Array.isArray(ask.folders) ? ask.folders : [];
+          const files = await drawCovers(project.path, folders, exportsRoot(), ask.format === 'png' ? 'png' : 'jpg');
+          /* shown where they were put, as an export is */
+          if (files[0]) reveal(files[0]);
+          return json(res, 200, { files });
+        }
+      } catch (e) {
+        if (e instanceof CoverFilmError) throw new HttpError(e.status, e.message);
+        throw e;
+      }
+    }
     if (rest === 'films' && req.method === 'GET') {
       try {
         return json(res, 200, { film: await readPartFilm(project.path, url.searchParams.get('folder') ?? '') });
@@ -1352,7 +1431,8 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     if (rest === 'saved' && req.method === 'POST') {
       const body = /** @type {{ clips?: unknown, groups?: unknown, files?: unknown, into?: unknown }} */ (await readJson(req) ?? {});
       const asked = (/** @type {unknown} */ list) => (Array.isArray(list) ? list.filter((x) => x && typeof x === 'object').slice(0, 50) : []);
-      const into = typeof body.into === 'string' ? body.into : undefined;
+      /* where it goes: the place asked for, else the first of the person's shelf (library-places.mjs) */
+      const into = typeof body.into === 'string' ? body.into : await defaultPlace(moveAssetCatalog);
       const base = pages.folderUrl(project);
       const paths = await savedCall(async () => {
         const out = [];
@@ -1659,7 +1739,12 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
    */
   const pluginsShown = () => pluginStates().map((p) => {
     const folder = join(pluginsDir(), p.id), module = elementIn(folder), commands = commandsIn(folder, p.id);
+    const icon = appIconIn(folder);
+    /* the icon's address changes with its file, so a new one is not hidden by the copy the page keeps an hour */
+    let drawn = '';
+    if (icon) try { const stat = statSync(join(folder, icon)); drawn = `${stat.size.toString(36)}-${Math.round(stat.mtimeMs).toString(36)}`; } catch { /* gone since it was found */ }
     return { ...p, ...(module ? { element: pluginPages.surface({ uid: `openfilm/${p.id}`, source: 'own', folder, page: module }).page } : {}),
+      ...(icon ? { appIcon: `/api/plugin-icon/${p.id}?v=${encodeURIComponent(`${icon}-${drawn}`)}` } : {}),
       ...(commands ? { commands: Object.keys(commands) } : {}) };
   });
   /* the programs of plugins that bring one, started as their workbenches are shown */
@@ -1714,13 +1799,15 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
 const FROM_SOURCE = existsSync(new URL('../ui/src', import.meta.url));
 
 /**
- * A project's files as a compound clip's film in `folder` names them (`assets/a.mp4` → `../../assets/a.mp4`), the
- * films of compound clips left out.
+ * A project's files as a compound clip's film or a cover in `folder` names them (`assets/a.mp4` → `../../assets/a.mp4`,
+ * its own `look.html`), the films of compound clips and the other covers left out.
  * @param {Awaited<ReturnType<typeof listFiles>>} listing @param {string} folder
  */
 function filesFrom(listing, folder) {
-  const keep = (/** @type {string} */ path) => !path.startsWith(`${PARTS}/`);
-  const named = (/** @type {string} */ path) => srcInto(path, folder);
+  /* a cover's own files (its picture, its look) are beside its film: named from there */
+  const own = (/** @type {string} */ path) => path.startsWith(`${folder}/`);
+  const keep = (/** @type {string} */ path) => own(path) || (!path.startsWith(`${PARTS}/`) && !path.startsWith(`${COVERS}/`));
+  const named = (/** @type {string} */ path) => (own(path) ? path.slice(folder.length + 1) : srcInto(path, folder));
   return {
     ...listing,
     files: listing.files.filter((f) => keep(f.path)).map((f) => ({ ...f, path: named(f.path) })),
@@ -1740,7 +1827,8 @@ async function outerProject(path) {
   if (compoundOuter(path) === resolve(path)) return null;
   const around = dirname(dirname(resolve(path)));
   const found = await openProject(around, { create: false }).catch(() => null);
-  return found ? { id: found.id, name: found.name ?? basename(around), folder: basename(resolve(path)) } : null;
+  const kind = basename(dirname(resolve(path))) === COVERS ? 'cover' : 'part';
+  return found ? { id: found.id, name: found.name ?? basename(around), folder: basename(resolve(path)), kind } : null;
 }
 
 /**

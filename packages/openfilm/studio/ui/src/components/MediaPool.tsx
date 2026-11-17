@@ -43,6 +43,7 @@ import {
   ImagePlus,
   Link2,
   Unlink,
+  Unplug,
   FolderOpen,
   FolderPlus,
   LayoutGrid,
@@ -51,7 +52,6 @@ import {
   Pencil,
   Plus,
   Search,
-  Star,
   Trash2,
   Upload,
   AudioLines,
@@ -59,6 +59,7 @@ import {
   X,
 } from 'lucide-react';
 import { useT } from '@/i18n';
+import { saveToEntry, type OwnFolder } from '@/lib/library-places';
 import { RESOURCE_TILE_SIZE, type ResourceView } from '@/lib/resource-center';
 import { FileViewControl } from './FileViewControl';
 import { clearResourceDrag, dragPicture, setResourceDragData } from '@/lib/resource-drag';
@@ -192,7 +193,11 @@ export interface MediaPoolProps {
   missing?: number;
   onFindMissing?: () => void;
   /** Files kept to use again in any project (lib/saved): the file menu's "Add to Saved". */
-  onSave?: (files: WorkspaceResource[]) => void;
+  onSave?: (files: WorkspaceResource[], into: string) => void;
+  /** Where "Save to" can put them: the person's folders (lib/library-places). */
+  saveFolders?: readonly OwnFolder[];
+  /** What the top folder is called (a place of the shelf); Saved's or the project's own name without it. */
+  rootName?: string;
   /**
    * Which library the pane shows, the project's media or Saved (the person's own, for every project), and the button
    * beside Upload that switches between them. Both are the same pane: upload, folders, views, filters, sort, rename,
@@ -253,7 +258,6 @@ export interface MediaPoolProps {
     isLinkEntry?: (path: string) => boolean;
     onCount?: (count: number) => void;
     badge?: (file: WorkspaceResource) => string;
-    starred?: (file: WorkspaceResource) => boolean;
   };
 }
 
@@ -281,6 +285,8 @@ export function MediaPool({
   missing = 0,
   onFindMissing,
   onSave,
+  saveFolders = [],
+  rootName,
   scope = 'project',
   onScope,
   wordsOf,
@@ -336,7 +342,7 @@ export function MediaPool({
   React.useEffect(() => { onSearchChange?.(query); }, [query, onSearchChange]);
   React.useEffect(() => { setQuery(''); }, [scope]);
   /* the top folder: All of the project's media, or Saved */
-  const topName = inSaved ? t('saved.title') : t('media.filter_all');
+  const topName = rootName ?? (inSaved ? t('saved.title') : t('media.filter_all'));
 
   React.useEffect(() => { setView(loadView(projectId)); setAtState(OPEN_FOLDER.get(projectId) ?? ''); setPicked([]); }, [projectId]);
   /* the file the viewer shows is the host's: the one clicked last, when it is a file. One shown from elsewhere (a click
@@ -771,7 +777,7 @@ export function MediaPool({
       { id: 'refer-sep', separator: true } as const,
     ] : []),
     ...commonEntries(file.path),
-    ...(onSave ? [{ id: 'save', label: t('saved.add'), icon: <BookmarkPlus size={14} />, onSelect: () => onSave([file]) }] : []),
+    ...(onSave ? saveToEntry(saveFolders, { id: 'save', label: t('saved.add'), many: t('saved.addTo'), icon: <BookmarkPlus size={14} />, pick: (into) => onSave([file], into) }) : []),
     { id: 'sep', separator: true } as const,
     ...linkEntries(file.path, false),
     /* web pages are the film's code, written by the person's agent (and named in each other's code): not renamed
@@ -808,10 +814,10 @@ export function MediaPool({
       id: 'collect', label: t('media.collect'), note: t('media.collectNote'), icon: <HardDriveDownload size={14} />,
       onSelect: () => { void collectAll(keys.filter((key) => linkOf(key) && !linkOf(key)!.missing)); },
     }] : []),
-    ...(onSave && keys.some((key) => itemByKey.get(key)?.type === 'file') ? [{
-      id: 'save', label: t('saved.add'), icon: <BookmarkPlus size={14} />,
-      onSelect: () => onSave(keys.flatMap((key) => { const item = itemByKey.get(key); return item?.type === 'file' ? [item.file] : []; })),
-    }] : []),
+    ...(onSave && keys.some((key) => itemByKey.get(key)?.type === 'file') ? saveToEntry(saveFolders, {
+      id: 'save', label: t('saved.add'), many: t('saved.addTo'), icon: <BookmarkPlus size={14} />,
+      pick: (into) => onSave(keys.flatMap((key) => { const item = itemByKey.get(key); return item?.type === 'file' ? [item.file] : []; }), into),
+    }) : []),
     ...(keys.some(entryProtected) ? [] : [
       moveEntry(keys),
       { id: 'sep', separator: true } as const,
@@ -1130,7 +1136,7 @@ export function MediaPool({
         {/* making: a folder, files brought in, a folder connected */}
         <span className={resourceStyles.toolGap} aria-hidden />
         {!browser.flat || browser.explorer.onNewFolder ? <button type="button" className={resourceStyles.iconButton} data-explorer-command="" aria-label={t('assets.newFolder')} title={t('assets.newFolder')} disabled={readOnly} onClick={() => { if (browser.explorer?.onNewFolder) { browser.explorer.onNewFolder(); return; } setQuery(''); setView(v => ({ ...v, filter: 'all' })); setCreating(true); }}><FolderPlus size={15} /></button> : null}
-        {/* a view of no one folder (the resource center, a collection, the starred) has nowhere to bring files into */}
+        {/* a view of no one folder (the resource center's home) has nowhere to bring files into */}
         {!browser.flat ? <button type="button" className={resourceStyles.iconButton} data-explorer-command="" aria-label={t('media.import')} title={t(readOnly ? 'assetLibrary.externalReadOnly' : 'media.import')} disabled={readOnly} onClick={e => onPick && onBring ? barMenu(e, importMenu) : inputRef.current?.click()}><Upload size={15} /></button> : null}
         {browser.explorer.onConnect ? <button type="button" className={resourceStyles.iconButton} aria-label={t('assetLibrary.connectFolder')} title={t('resourceCenter.networkHint')} onClick={browser.explorer.onConnect}><Link2 size={15} /></button> : null}
         {/* seeing: which, in what order, how; the rest in More */}
@@ -1303,6 +1309,7 @@ export function MediaPool({
                 count={item.count}
                 covers={item.covers}
                 linked={Boolean(media?.linkedDirs?.[item.rel])}
+                offline={media?.linkedDirs?.[item.rel]?.missing ? t('resourceCenter.sourceOffline') : undefined}
                 progress={progressInto(item.rel)}
                 sources={sources}
                 cut={browser?.transfer && clipboard?.action === 'cut' && clipboard.paths.includes(`${root}/${item.rel}`)}
@@ -1323,7 +1330,6 @@ export function MediaPool({
                 key={item.file.path}
                 row={rows}
                 refined={Boolean(browser)}
-                starred={Boolean(browser?.starred?.(item.file))}
                 file={item.file}
                 sources={sources}
                 duration={formatClipDuration(item.file.durationMs ?? 0)}
@@ -1466,6 +1472,8 @@ function FolderTile(p: {
   progress?: number | undefined;
   /** A link to a folder kept elsewhere (a NAS). */
   linked?: boolean;
+  /** That folder could not be reached when it was opened last (the NAS is off, the disk out): said, by its name. */
+  offline?: string;
   /** Its key in what is picked (its path). */
   pickKey: string;
   cut?: boolean; selected: boolean; target: boolean; renaming: boolean;
@@ -1481,11 +1489,11 @@ function FolderTile(p: {
   if (p.row) {
     return (
       <div className={`${ROW} ${on ? 'bg-[var(--bg-pressed)]' : 'hover:bg-[var(--bg-hover)]'} ${p.target ? 'ring-1 ring-inset ring-[var(--accent)]' : ''}`}
-        data-media-folder="" data-cut={p.cut || undefined} data-selected={p.selected || undefined} data-media-key={p.pickKey} draggable={!p.renaming} onDragStart={p.onDragStart}
+        data-media-folder="" data-offline={p.offline ? "" : undefined} title={p.offline} data-cut={p.cut || undefined} data-selected={p.selected || undefined} data-media-key={p.pickKey} draggable={!p.renaming} onDragStart={p.onDragStart}
         onClick={p.onPress} onDoubleClick={p.onOpen} onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); p.onMenu(e); }} {...p.drop}>
         <span className={ROW_THUMB}>
           <span className="pointer-events-none absolute inset-0 flex items-center justify-center">
-            {p.target ? <FolderOpen size={15} className="text-[var(--accent)]" /> : p.linked ? <FolderSymlink size={15} className="text-[var(--text-muted)]" /> : <Folder size={15} className="text-[var(--text-muted)]" />}
+            {p.target ? <FolderOpen size={15} className="text-[var(--accent)]" /> : p.offline ? <Unplug size={15} className="text-[var(--text-faint)]" /> : p.linked ? <FolderSymlink size={15} className="text-[var(--text-muted)]" /> : <Folder size={15} className="text-[var(--text-muted)]" />}
           </span>
           {p.progress != null ? <UploadBar ratio={p.progress} /> : null}
         </span>
@@ -1502,7 +1510,7 @@ function FolderTile(p: {
   }
   const grid = cells >= 4 ? 'grid-cols-2 grid-rows-2' : cells === 3 ? 'grid-cols-2 grid-rows-2' : cells === 2 ? 'grid-cols-2 grid-rows-1' : 'grid-cols-1 grid-rows-1';
   return (
-    <div className="group min-w-0 cursor-default select-none" data-media-folder="" data-cut={p.cut || undefined} data-selected={p.selected || undefined} data-media-key={p.pickKey} draggable={!p.renaming} onDragStart={p.onDragStart}
+    <div className="group min-w-0 cursor-default select-none" data-media-folder="" data-offline={p.offline ? "" : undefined} title={p.offline} data-cut={p.cut || undefined} data-selected={p.selected || undefined} data-media-key={p.pickKey} draggable={!p.renaming} onDragStart={p.onDragStart}
       onClick={p.onPress} onDoubleClick={p.onOpen} onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); p.onMenu(e); }} {...p.drop}>
       <div className="relative pt-[7px]">
         {/* the stack: two cards peeking out above the cover */}
@@ -1521,7 +1529,7 @@ function FolderTile(p: {
           <span className="pointer-events-none absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/55 to-transparent" />
           {p.progress != null ? <UploadBar ratio={p.progress} /> : null}
           <span className="pointer-events-none absolute bottom-1 left-1.5 flex items-center gap-1 text-[10.5px] font-medium text-white/90">
-            {p.target ? <FolderOpen size={11} /> : p.linked ? <FolderSymlink size={11} /> : <Folder size={11} />}
+            {p.target ? <FolderOpen size={11} /> : p.offline ? <Unplug size={11} /> : p.linked ? <FolderSymlink size={11} /> : <Folder size={11} />}
             <span className="tabular-nums">{p.count ? String(p.count) : ''}</span>
           </span>
         </div>
@@ -1566,7 +1574,7 @@ function NewFolderTile({ label, onDone, onCancel, row = false }: { label: string
 
 function FileTile(p: {
   file: WorkspaceResource; sources: MediaSources; duration: string;
-  cut?: boolean; copyDrag?: boolean; deferPreview?: boolean; refined?: boolean; starred?: boolean;
+  cut?: boolean; copyDrag?: boolean; deferPreview?: boolean; refined?: boolean;
   /** Its folder, shown under the name (search results where the name repeats). */
   where?: string | undefined;
   selected: boolean; renaming: boolean;
@@ -1641,7 +1649,6 @@ function FileTile(p: {
             {p.renaming ? <NameInput value={p.file.name} onDone={p.onRename} onCancel={p.onCancelRename} />
               : (
                 <span className="flex min-w-0 items-center gap-1" title={p.linkLabel}>
-                  {p.refined && p.starred ? <Star size={11} fill="currentColor" className="shrink-0 text-[var(--text-muted)]" /> : null}
                   {p.file.link ? (p.file.link.missing ? <Unlink size={12} className="shrink-0 text-[var(--err)]" /> : <Link2 size={12} className="shrink-0 text-[var(--text-faint)]" />) : null}
                   <span className={`block truncate text-[12.5px] ${p.file.link?.missing ? 'text-[var(--text-faint)]' : p.selected ? 'text-[var(--text)]' : 'text-[var(--text-muted)]'}`} style={KEEP_SPACES}>{p.file.name}</span>
                 </span>
@@ -1658,7 +1665,6 @@ function FileTile(p: {
       <div data-card-cover="" className="pt-[7px]">
         <div data-card-thumb="" className={`${TILE_BOX} bg-[var(--bg-hover)] ${lit ? 'ring-[var(--accent)] shadow-[0_0_10px_1px_color-mix(in_srgb,var(--accent)_55%,transparent)]' : p.selected ? 'ring-[var(--accent)]' : 'ring-transparent group-hover:ring-[var(--border)]'}`}>
           {p.deferPreview || p.file.link?.missing ? <span className="absolute inset-0 flex items-center justify-center text-[var(--text-faint)]"><FileIcon size={20} /></span> : p.file.kind === 'mg' ? <PagePoster file={p.file} sources={p.sources} /> : <MediaPreview file={p.file} sources={p.sources} />}
-          {p.refined && p.starred ? <span data-card-star=""><Star size={11} fill="currentColor" /></span> : null}
           {/* a link to media kept elsewhere: marked; one that cannot be reached (a NAS that is off) says so over it */}
           {p.file.link?.missing ? (
             <span className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-1 bg-black/65 text-[10.5px] text-white/85" title={p.linkLabel}>

@@ -221,9 +221,13 @@ export const ko: Words = {
     service: '서비스',
   },
   project: {
-    assets: '에셋',
+    assets: '에셋 라이브러리',
     backToChat: '채팅으로 돌아가기',
-    addAttachment: '파일 추가',
+    addAttachment: '파일 또는 사진 추가',
+    addMenu: '추가',
+    addFolder: "폴더 추가",
+    addSkillRef: "스킬",
+    addReference: "참조",
     plugins: '커뮤니티',
     close: '닫기',
     composerPlaceholder: '무엇을 바꿀지 말해 주세요. @를 입력하면 파일, 스킬, 순간, 선택한 항목을 가리킬 수 있습니다',
@@ -256,8 +260,8 @@ export const ko: Words = {
     unpin: '고정 해제',
   },
   starter: {
-    more: '스킬 더 보기',
-    examples: '예시로 시작하기',
+    community: '커뮤니티: 플러그인, 스킬, 소재 추가',
+    library: '라이브러리: 소재 가져오기, 템플릿·음악·효과 찾기',
     title: '무엇을 만들고 싶으세요?',
   },
   turnAsk: {

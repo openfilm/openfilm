@@ -2,22 +2,27 @@
 import { setPriority } from 'node:os';
 import { parseArgs } from 'node:util';
 
+/* an agent the desktop app started says so (OPENFILM_AGENT): Studio is beside it; any other is in a terminal */
+const IN_APP = Boolean(process.env.OPENFILM_AGENT?.startsWith('app:'));
+
+/* in the app, Studio is open on the project and the app updates itself: `open` and `update` are not said there */
 const USAGE = `openfilm — a film is a function of time: given t, it draws that moment
 
-  openfilm open    [folder | url]      start or open a project; Studio shows it to the person
-  openfilm look    [what] [t | a-b]    check the film and draw it: a contact sheet with its sound and loudness
-  openfilm render  [a-b]               the MP4, saved beside film.html
-  openfilm get     [what] [--options]  media: free from OpenFilm's library (music, sounds, transitions…), else a connected service
-  openfilm canvas  [apply <steps>]     the canvas beside the edit: read it, or lay out notes, files and what to make on it
-  openfilm skills                      the skills this film can be made with; \`openfilm skill <name>\` prints one
-  openfilm publish [folder]            check a workbench or a skill as the community's review will, before you publish it
-  openfilm <name> [command] …          a command a skill or a plugin brings; its skill says what it does
-  openfilm update                      the newest OpenFilm; Studio starts again on it
-  openfilm doctor                      what this computer has for OpenFilm, to paste into an issue
+${[
+  ...(IN_APP ? [] : ['  openfilm open    [folder | url]      start or open a project; Studio shows it to the person']),
+  '  openfilm look    [what] [t | a-b]    check the film and draw it: a contact sheet with its sound and loudness',
+  '  openfilm render  [a-b]               the MP4, saved beside film.html',
+  '  openfilm get     [what] [--options]  media: the person\'s own, OpenFilm\'s free library (music, sound effects, stickers), else a connected service',
+  '  openfilm skills                      the skills installed for this film; `openfilm skill <name>` prints one',
+  '  openfilm publish [folder]            check a workbench or a skill as the community\'s review will, before you publish it',
+  '  openfilm <name> [command] …          a command a plugin or a skill brings; its skill or its --help says what it does',
+  ...(IN_APP ? [] : ['  openfilm update                      the newest OpenFilm; Studio starts again on it']),
+  '  openfilm doctor                      what this computer has for OpenFilm, to paste into an issue',
+].join('\n')}
 
   Run with no arguments for how to work here and the skills that say how; \`openfilm <command> --help\` for one command's options;
   --version for the version.
-  look, render, get and canvas work on the project around the current folder.
+  look, render and get work on the project around the current folder.
   Exit status: 0 done, 1 the film or the command failed (the output says why), 2 not a project or a wrong command.`;
 
 /* one command's help: what it does, what it takes, where its output goes */
@@ -69,13 +74,15 @@ openfilm skill remove <name>
   what   the project (default), a web page (.html), or a media file (video, image, sound)
   t      one frame, e.g. 4.5: a JPEG at most 1568 px on its long edge (a PNG when it has transparency)
   a-b    a dense sheet of a stretch, e.g. 3-6
+         several, e.g. 8.4-8.8 26.5 35.9-36.3: one sheet of them all, in one look (every cut checked at once):
+         a time is one frame, a range three across it (--count frames)
          without either: a contact sheet of the whole thing, its sound and loudness, and a check that
          the same t draws the same picture
 
   Writes pictures under .film/cache/look/ of the project and prints their paths. A project Studio has not shown yet is
   opened in Studio first, so the person watches it.
 
-  --count <n>     frames in a sheet (12)
+  --count <n>     frames in a sheet (12), or across each range of several (3)
   --full          watch every frame of the rendered film (what render wrote beside film.html), or of a video
                   given: white flashes, frames unlike those on both sides, still pictures (6 s or more) and
                   black, each with its time
@@ -117,8 +124,7 @@ if (RAW.length === 0) {
   await updateNotice(true);
   const { asRun, promptSkills } = await import('../src/skills.mjs');
   const { systemPrompt } = await import('../src/system-prompt.mjs');
-  /* an agent the desktop app started says so (OPENFILM_AGENT): Studio is beside it; any other is in a terminal */
-  const where = process.env.OPENFILM_AGENT?.startsWith('app:') ? 'app' : 'terminal';
+  const where = IN_APP ? 'app' : 'terminal';
   console.log(asRun(`${systemPrompt(where)}\n${promptSkills()}`, RUN).trimEnd());
   process.exit(0);
 }
