@@ -67,7 +67,7 @@ const WORKBENCH = /^[a-z][a-z0-9-]{0,31}$/;
  *   it; `requires`: the skills it builds on (by name); `on`: whether it is on until the person says
  * @typedef {string | { say: string, does?: string }} Example
  *   what a person could say to use it, and what the agent then does (its page shows them as a conversation)
- * @typedef {{ highlights?: Record<string, { icon: string, title: string, text: string }[]>, keys?: (string | { keys: string[], label: Record<string, string> })[] }} Showcase
+ * @typedef {{ highlights?: Record<string, { icon: string, title: string, text: string }[]>, keys?: (string | { keys: string[], label: Record<string, string> })[], video?: { src: string, poster?: string } }} Showcase
  *   its page's highlights by language (a mark's name, a few words, a line), and the keys it is used with: a keymap
  *   action's id (its keys as the person set them), or keys of its own with what they do by language
  * @typedef {{ title?: Record<string, string>, icon?: string }} PluginTab
@@ -120,12 +120,12 @@ function exampleOf(w) {
 }
 
 /**
- * A plugin's page's highlights and keys (`showcase`): up to four highlights in each language, each a mark's name, a
- * title and a line; up to twelve keys. Anything not so is left out. @param {unknown} raw @returns {Showcase | undefined}
+ * A plugin's page's highlights, keys and video (`showcase`): up to four highlights in each language, each a mark's name,
+ * a title and a line; up to twelve keys; a recording of it at work (`video`: `src`, a poster, files in its folder). Anything not so is left out. @param {unknown} raw @returns {Showcase | undefined}
  */
 function showcaseOf(raw) {
   if (!raw || typeof raw !== 'object') return undefined;
-  const r = /** @type {{ highlights?: unknown, keys?: unknown }} */ (raw);
+  const r = /** @type {{ highlights?: unknown, keys?: unknown, video?: unknown }} */ (raw);
   const text = (/** @type {unknown} */ v, max = 160) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : null);
   /** @type {Showcase} */
   const out = {};
@@ -139,6 +139,13 @@ function showcaseOf(raw) {
       }).slice(0, 4)])
       .filter(([, list]) => list.length));
     if (Object.keys(highlights).length) out.highlights = highlights;
+  }
+  /* a short recording of the editor at work, and its first picture: files in the plugin's own folder */
+  if (r.video && typeof r.video === 'object') {
+    const v = /** @type {{ src?: unknown, poster?: unknown }} */ (r.video);
+    const file = (/** @type {unknown} */ n, /** @type {RegExp} */ ext) => (typeof n === 'string' && /^[\w-]+(\.[\w-]+)*$/.test(n) && ext.test(n) ? n : null);
+    const src = file(v.src, /\.(mp4|webm)$/i), poster = file(v.poster, /\.(jpe?g|png|webp)$/i);
+    if (src) out.video = { src, ...(poster ? { poster } : {}) };
   }
   if (Array.isArray(r.keys)) {
     const keys = r.keys.flatMap((/** @type {unknown} */ k) => /** @type {(string | { keys: string[], label: Record<string, string> })[]} */ ((() => {

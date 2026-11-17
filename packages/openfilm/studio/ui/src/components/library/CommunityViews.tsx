@@ -4,10 +4,10 @@
  * a connector as a line; templates, effects, transitions and looks as moving pictures; stickers as a sheet of
  * stickers; text styles in words; sounds and music as a list to listen to. And Mine's own: the person's workbenches as
  * tiles they put in order by dragging (the order of the top right's switch and its keys), and what an agent brings of
- * its own folded into one line until opened.
+ * its own folded into one line until opened. A page's parts share one header (Shelf, as library/Store StoreSection).
  */
 import * as React from 'react';
-import { AudioLines, BadgeCheck, Check, ChevronDown, ChevronLeft, ChevronRight, GripVertical, Music, Pause, Play, Plus, type LucideIcon } from 'lucide-react';
+import { AudioLines, BadgeCheck, Check, ChevronDown, ChevronRight, GripVertical, Music, Pause, Play, Plus, type LucideIcon } from 'lucide-react';
 import { useLanguage, useT } from '@/i18n';
 import type { Plugin } from '@/lib/plugins';
 import { byOpenFilm, libraryUrl, makerName, nameOf, posterUrl, previewUrl, templatePreviewUrl, TEXT_COMPONENT, type LibraryItem } from '@/lib/library';
@@ -32,32 +32,6 @@ export const opener = (onOpen?: () => void) => (onOpen ? {
 export const Own = ({ children, className = '' }: { children: React.ReactNode; className?: string }) => (
   <span className={className} onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>{children}</span>
 );
-
-/**
- * A plugin or a skill in a list, as an app store lists apps: its app icon, its name (and a word after it: Beta), what it
- * is for in a line or two, whose it is and how many use it; its control at the right (Get, Open, a switch, Coming
- * soon). Rows stand on a hairline each; a click opens its page.
- */
-export function ItemCard({ icon, title, badges, summary, by, action, onOpen, dim = false }: {
-  icon: React.ReactNode; title: string; badges?: React.ReactNode; summary: string; by?: React.ReactNode; action?: React.ReactNode;
-  onOpen?: () => void; dim?: boolean;
-}) {
-  return (
-    <div {...opener(onOpen)} data-store-card={title}
-      className={`group relative -mx-3 flex min-w-0 items-center gap-4 rounded-[14px] px-3 py-3 outline-none transition-colors ${onOpen ? 'cursor-pointer hover:bg-[var(--bg-hover)] focus-visible:shadow-[inset_0_0_0_1.5px_var(--accent)]' : ''}`}>
-      <span className={`shrink-0 transition-transform duration-200 group-hover:scale-[1.03] ${dim ? 'opacity-50 grayscale' : ''}`}>{icon}</span>
-      <div className="min-w-0 flex-1 self-stretch border-b border-[var(--border)] pb-3 group-last:border-transparent">
-        <div className="flex min-w-0 items-center gap-2 pt-0.5">
-          <span className={`truncate text-[15px] font-semibold tracking-[-0.01em] ${dim ? 'text-[var(--text-muted)]' : 'text-[var(--text)]'}`}>{title}</span>
-          {badges}
-        </div>
-        <p className="mt-0.5 line-clamp-2 text-[13px] leading-[18px] text-[var(--text-muted)]">{summary}</p>
-        {by ? <div className="mt-1 min-w-0 truncate text-[12px] text-[var(--text-faint)]">{by}</div> : null}
-      </div>
-      {action ? <Own className="shrink-0">{action}</Own> : null}
-    </div>
-  );
-}
 
 /** Get, as an app store has it: a pill with the word, its accent on a quiet fill; a spinner while it works. */
 export function AddButton({ label, text, onClick, busy = false, disabled = false }: { label: string; text?: string; onClick: () => void; busy?: boolean; disabled?: boolean }) {
@@ -146,8 +120,8 @@ export function BenchGrid({ items, onOrder }: { items: readonly BenchTileItem[];
 }
 
 /** A group of rows, as Settings has them: rounded, on the field's grey, rows apart by hairlines. */
-export const GROUP = 'overflow-hidden rounded-[16px] bg-[var(--bg-field)]';
-const GROUP_ROW = 'group flex min-w-0 cursor-pointer items-center gap-3 pl-4 outline-none transition-colors hover:bg-[var(--bg-hover)] focus-visible:shadow-[inset_0_0_0_1.5px_var(--accent)]';
+export const GROUP = 'overflow-hidden rounded-[14px] border border-[var(--border)] bg-[var(--bg-field)]';
+const GROUP_ROW = 'group flex min-h-[64px] min-w-0 cursor-pointer items-center gap-3.5 pl-4 outline-none transition-colors hover:bg-[var(--bg-hover)] focus-visible:shadow-[inset_0_0_0_1.5px_var(--accent)]';
 
 /** A row's words and its control: its hairline over it (not the first's), from where the words start, as Settings draws it. */
 function RowText({ first, title, badges, summary, dim, end, control }: {
@@ -157,10 +131,10 @@ function RowText({ first, title, badges, summary, dim, end, control }: {
     <div className={`flex min-w-0 flex-1 items-center gap-3 self-stretch py-3 pr-4 ${first ? '' : 'border-t border-[var(--border)]'}`}>
       <div className="min-w-0 flex-1">
         <div className="flex min-w-0 items-center gap-2">
-          <span className={`truncate text-[14px] font-medium ${dim ? 'text-[var(--text-muted)]' : 'text-[var(--text)]'}`}>{title}</span>
+          <span className={`truncate text-[14px] font-semibold tracking-[-0.01em] ${dim ? 'text-[var(--text-muted)]' : 'text-[var(--text)]'}`}>{title}</span>
           {badges}
         </div>
-        {summary ? <p className="mt-0.5 truncate text-[12.5px] text-[var(--text-faint)]">{summary}</p> : null}
+        {summary ? <p className="mt-0.5 truncate text-[12.5px] text-[var(--text-muted)]">{summary}</p> : null}
       </div>
       {end}
       {control ? <Own className="flex shrink-0 items-center">{control}</Own> : null}
@@ -194,7 +168,7 @@ export function FoldedGroup({ icon: Icon, title, count, footnote, children }: {
 }) {
   const [open, setOpen] = React.useState(false);
   return (
-    <section className={`mt-3 ${GROUP}`}>
+    <section className={`mt-3 ${GROUP}`} data-folded-group="">
       <button type="button" aria-expanded={open} onClick={() => setOpen(!open)}
         className="flex w-full items-center gap-3 px-4 py-3 text-left outline-none transition hover:bg-[var(--bg-hover)] focus-visible:shadow-[inset_0_0_0_1.5px_var(--accent)]">
         <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[9px] bg-[var(--bg-pressed)] text-[var(--text-muted)]"><Icon size={17} aria-hidden /></span>
@@ -213,29 +187,6 @@ export function FoldedGroup({ icon: Icon, title, count, footnote, children }: {
     </section>
   );
 }
-
-/** A thing with no picture of its own, as one line of a list: its mark, its name, what it is for, its control. */
-export function LineCard({ mark, title, note, summary, action, onOpen, dim = false }: {
-  mark: React.ReactNode; title: string; note?: React.ReactNode; summary?: string; action?: React.ReactNode; onOpen?: () => void; dim?: boolean;
-}) {
-  return (
-    <div {...opener(onOpen)} data-plugin-line={title}
-      className={`flex min-w-0 items-center gap-3 rounded-[12px] border border-[var(--border)] px-3.5 py-3 outline-none transition ${onOpen ? 'cursor-pointer hover:border-[var(--border-strong)] hover:bg-[var(--bg-hover)] focus-visible:shadow-[inset_0_0_0_1px_var(--accent)]' : ''}`}>
-      <span className={`shrink-0 ${dim ? 'opacity-50' : ''}`}>{mark}</span>
-      <div className="min-w-0 flex-1">
-        <div className="flex min-w-0 items-baseline gap-2">
-          <span className={`truncate text-[14.5px] ${dim ? 'text-[var(--text-muted)]' : 'text-[var(--text)]'}`}>{title}</span>
-          {note ? <span className="shrink-0 truncate text-[12px] text-[var(--text-faint)]">{note}</span> : null}
-        </div>
-        {summary ? <p className="mt-0.5 line-clamp-2 text-[13px] leading-[19px] text-[var(--text-muted)]">{summary}</p> : null}
-      </div>
-      {action ? <Own className="flex shrink-0 items-center">{action}</Own> : null}
-    </div>
-  );
-}
-
-/** A plain list's grid: two to a row where there is room. */
-export const LINE_GRID = 'grid grid-cols-[repeat(auto-fill,minmax(340px,1fr))] gap-2.5';
 
 /** How the library's things of a kind are laid out: moving pictures, a sheet of stickers, words, or a list to hear. */
 export type AssetShape = 'video' | 'sticker' | 'words' | 'sound';
@@ -388,151 +339,26 @@ export function SoundList({ items, lang, onOpen, action }: {
   );
 }
 
-/** The kinds a page holds, to see one at a time: All, then each with how many. */
-export function KindChips<K extends string>({ kinds, value, onChange, nameOf: name, countOf }: {
-  kinds: readonly K[]; value: K | null; onChange: (kind: K | null) => void; nameOf: (kind: K) => string; countOf: (kind: K | null) => number;
-}) {
-  const t = useT();
-  if (kinds.length < 2) return null;
-  const chip = (kind: K | null, label: string) => (
-    <button key={kind ?? ''} type="button" aria-pressed={value === kind} onClick={() => onChange(kind)}
-      className={`inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 text-[13px] transition ${value === kind ? 'bg-[var(--text)] text-[var(--dialog-main)]' : 'bg-[var(--bg-field)] text-[var(--text-muted)] hover:text-[var(--text)]'}`}>
-      {label}<span className="tabular-nums opacity-60">{countOf(kind)}</span>
-    </button>
-  );
-  return (
-    <div role="toolbar" className="mb-6 flex flex-wrap gap-2">
-      {chip(null, t('assetDrawer.allItems'))}
-      {kinds.map((k) => chip(k, name(k)))}
-    </div>
-  );
-}
-
-/** One thing the Community puts forward on Discover's banner: what it is, its art, its colour, its button. */
-export interface Featured {
-  key: string; eyebrow: string; title: string; summary: string; art?: React.ReactNode; hue: number;
-  /** a picture filling it (a pack's cover), darkened where the words are */
-  picture?: string;
-  action: React.ReactNode; onOpen: () => void;
-}
-
-/** A colour of its own for a thing, from its hue: deep at one corner, deeper at the other, a glow behind its art. */
-export const featuredBackground = (hue: number) =>
-  `radial-gradient(120% 140% at 85% 30%, hsl(${hue} 85% 58% / 0.55), transparent 55%), linear-gradient(135deg, hsl(${hue} 70% 34%), hsl(${(hue + 40) % 360} 75% 16%))`;
-
 /**
- * Discover's banner, as an app store opens on one thing at a time: its colour filling the width, its name large, what
- * it is for, its button, its art at the right; the next one by itself every few seconds (not while pointed at), or by
- * the arrows and the dots.
+ * A part of a page, as a store page's (library/Store StoreSection): its name, a word under it, and what it holds; `all`:
+ * the place showing all of it, a See all at its right.
  */
-export function Hero({ items }: { items: readonly Featured[] }) {
-  const t = useT();
-  const [at, setAt] = React.useState(0);
-  const [held, setHeld] = React.useState(false);
-  const count = items.length;
-  React.useEffect(() => {
-    if (held || count < 2) return undefined;
-    const timer = window.setTimeout(() => setAt((i) => (i + 1) % count), 7000);
-    return () => window.clearTimeout(timer);
-  }, [at, held, count]);
-  if (!count) return null;
-  const it = items[at % count]!;
-  const go = (step: number) => setAt((i) => (i + step + count) % count);
-  return (
-    <section data-community-hero="" aria-roledescription="carousel" aria-label={t('assetDrawer.featured')}
-      onMouseEnter={() => setHeld(true)} onMouseLeave={() => setHeld(false)}
-      className="relative mb-10 overflow-hidden rounded-[24px] shadow-[0_18px_50px_rgba(0,0,0,0.35)]">
-      <div key={it.key} {...opener(it.onOpen)} className="relative flex h-[264px] cursor-pointer items-center gap-8 px-10 outline-none transition-[background] duration-700 animate-[community-fade_600ms_ease]"
-        style={{ background: featuredBackground(it.hue) }}>
-        {it.picture ? <>
-          <img src={it.picture} alt="" draggable={false} className="absolute inset-0 h-full w-full object-cover" />
-          <span aria-hidden className="absolute inset-0 bg-[linear-gradient(90deg,rgba(0,0,0,0.78),rgba(0,0,0,0.35)_55%,transparent)]" />
-        </> : null}
-        <div className="relative min-w-0 flex-1 text-white">
-          <div className="text-[11.5px] font-semibold uppercase tracking-[0.12em] text-white/65">{it.eyebrow}</div>
-          <h3 className="mt-2 text-[34px] font-bold leading-[1.08] tracking-[-0.025em]">{it.title}</h3>
-          <p className="mt-2.5 line-clamp-2 max-w-[440px] text-[14.5px] leading-[21px] text-white/80">{it.summary}</p>
-          <Own className="mt-5 inline-flex">{it.action}</Own>
-        </div>
-        {it.art ? <div className="relative hidden shrink-0 rotate-[-6deg] drop-shadow-[0_22px_40px_rgba(0,0,0,0.45)] transition-transform duration-500 hover:rotate-0 sm:block">{it.art}</div> : null}
-      </div>
-      {count > 1 ? (
-        <div className="absolute bottom-5 right-6 flex items-center gap-2">
-          {items.map((x, i) => (
-            <button key={x.key} type="button" aria-label={x.title} aria-current={i === at % count}
-              onClick={() => setAt(i)} className={`h-1.5 rounded-full transition-all ${i === at % count ? 'w-6 bg-white' : 'w-1.5 bg-white/40 hover:bg-white/70'}`} />
-          ))}
-          <span className="w-2" />
-          <button type="button" aria-label={t('assetDrawer.previous')} onClick={() => go(-1)} className="grid h-8 w-8 place-items-center rounded-full bg-black/25 text-white backdrop-blur transition hover:bg-black/40"><ChevronLeft size={16} /></button>
-          <button type="button" aria-label={t('assetDrawer.next')} onClick={() => go(1)} className="grid h-8 w-8 place-items-center rounded-full bg-black/25 text-white backdrop-blur transition hover:bg-black/40"><ChevronRight size={16} /></button>
-        </div>
-      ) : null}
-    </section>
-  );
-}
-
-/**
- * A shelf of a page, as an app store's: its name large with a chevron (it opens all of it), a word under it, and what
- * it holds; `all`: the place showing all of it.
- */
-export function Shelf({ title, note, all, children }: { title: string; note?: string; all?: () => void; children: React.ReactNode }) {
+export function Shelf({ title, note, all, children }: { title: string; note?: string | undefined; all?: () => void; children: React.ReactNode }) {
   const t = useT();
   return (
-    <section className="mb-11" data-community-shelf={title}>
-      <header className="mb-3 flex items-end gap-3">
+    <section className="mb-12" data-community-shelf={title}>
+      <header className="mb-4 flex items-end gap-4">
         <div className="min-w-0 flex-1">
-          {all ? (
-            <button type="button" onClick={all} className="group inline-flex items-center gap-0.5 text-[21px] font-bold tracking-[-0.02em] text-[var(--text)]">
-              {title}<ChevronRight size={20} strokeWidth={2.4} className="text-[var(--text-faint)] transition group-hover:translate-x-0.5 group-hover:text-[var(--text)]" />
-            </button>
-          ) : <h3 className="text-[21px] font-bold tracking-[-0.02em] text-[var(--text)]">{title}</h3>}
-          {note ? <p className="mt-0.5 text-[13px] text-[var(--text-faint)]">{note}</p> : null}
+          <h3 className="text-[17px] font-semibold tracking-[-0.015em] text-[var(--text)]">{title}</h3>
+          {note ? <p className="mt-1 text-[13px] leading-[18px] text-[var(--text-faint)]">{note}</p> : null}
         </div>
-        {all ? <button type="button" onClick={all} className="shrink-0 pb-0.5 text-[13.5px] font-medium text-[var(--accent)] hover:underline">{t('assetDrawer.seeAll')}</button> : null}
+        {all ? (
+          <button type="button" onClick={all} className="group flex shrink-0 items-center gap-0.5 pb-0.5 text-[13px] font-medium text-[var(--text-muted)] transition hover:text-[var(--text)]">
+            {t('assetDrawer.seeAll')}<ChevronRight size={14} className="transition group-hover:translate-x-0.5" aria-hidden />
+          </button>
+        ) : null}
       </header>
       {children}
     </section>
-  );
-}
-
-/** Rows in two columns, as an app store lists its charts. */
-export const ROW_GRID = 'grid grid-cols-[repeat(auto-fill,minmax(360px,1fr))] gap-x-10';
-
-/** Things side by side that run on past the edge, scrolled by the arrows at the shelf's corner too. */
-export function Scroller({ children, width = 248 }: { children: React.ReactNode; width?: number }) {
-  const t = useT();
-  const row = React.useRef<HTMLDivElement>(null);
-  const [ends, setEnds] = React.useState({ start: true, end: false });
-  const read = () => {
-    const el = row.current;
-    if (el) setEnds({ start: el.scrollLeft < 4, end: el.scrollLeft + el.clientWidth >= el.scrollWidth - 4 });
-  };
-  React.useEffect(() => { read(); }, [children]);
-  const by = (step: number) => row.current?.scrollBy({ left: step * (row.current.clientWidth - width / 2), behavior: 'smooth' });
-  return (
-    <div className="group/scroller relative">
-      <div ref={row} onScroll={read} className="-mx-1 flex snap-x snap-mandatory gap-4 overflow-x-auto px-1 pb-2 [scrollbar-width:none]"
-        style={{ '--tile': `${width}px` } as React.CSSProperties}>
-        {React.Children.map(children, (child) => <div className="w-[var(--tile)] shrink-0 snap-start">{child}</div>)}
-      </div>
-      {ends.start ? null : <button type="button" aria-label={t('assetDrawer.previous')} onClick={() => by(-1)} className="absolute -left-4 top-[38%] grid h-9 w-9 -translate-y-1/2 place-items-center rounded-full border border-[var(--border)] bg-[var(--dialog-main)] text-[var(--text)] opacity-0 shadow-lg transition group-hover/scroller:opacity-100"><ChevronLeft size={17} /></button>}
-      {ends.end ? null : <button type="button" aria-label={t('assetDrawer.next')} onClick={() => by(1)} className="absolute -right-4 top-[38%] grid h-9 w-9 -translate-y-1/2 place-items-center rounded-full border border-[var(--border)] bg-[var(--dialog-main)] text-[var(--text)] opacity-0 shadow-lg transition group-hover/scroller:opacity-100"><ChevronRight size={17} /></button>}
-    </div>
-  );
-}
-
-/** Each kind of the library's things a colour of its own (Discover's tiles, a kind's page). */
-export const KIND_HUE: Record<string, number> = { media: 200, template: 262, text: 214, sticker: 330, effect: 188, transition: 22, filter: 42, sound: 152, music: 292 };
-
-/** A kind of the library's things as a tile of its colour: its name, how many there are, its mark large at the corner. */
-export function CategoryTile({ name, count, hue, mark, onOpen }: { name: string; count: string; hue: number; mark: React.ReactNode; onOpen: () => void }) {
-  return (
-    <button type="button" onClick={onOpen} data-community-category={name}
-      className="group relative h-[118px] overflow-hidden rounded-[18px] p-4 text-left text-white shadow-[0_8px_24px_rgba(0,0,0,0.22)] outline-none transition duration-200 hover:-translate-y-0.5 hover:shadow-[0_14px_32px_rgba(0,0,0,0.32)] focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
-      style={{ background: featuredBackground(hue) }}>
-      <div className="relative z-[1] text-[17px] font-semibold tracking-[-0.01em]">{name}</div>
-      <div className="relative z-[1] mt-0.5 text-[12.5px] text-white/70">{count}</div>
-      <span className="absolute -bottom-3 -right-2 rotate-[-12deg] text-white/85 transition duration-300 group-hover:rotate-0 group-hover:scale-105">{mark}</span>
-    </button>
   );
 }

@@ -273,11 +273,24 @@ test('a plugin\'s page words: examples said with what the agent does, and highli
   assert.deepEqual(demo.showcase, { highlights: { en: [{ icon: 'scissors', title: 'Fast', text: 'Cuts fast.' }] }, keys: ['play-pause', { keys: ['M'], label: { en: 'Mark' } }] });
 });
 
+test('a plugin\'s recording at work (showcase.video): a video and a poster in its folder, nothing outside it', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'of-showcase-video-'));
+  const write = (id, video) => { mkdirSync(join(dir, id)); writeFileSync(join(dir, id, 'openfilm.json'), JSON.stringify({ title: { en: id }, showcase: { video } })); };
+  write('good', { src: 'preview.mp4', poster: 'preview.jpg' });
+  write('away', { src: '../x.mp4', poster: 'a/b.jpg' });
+  write('wrong', { src: 'preview.gif', poster: 'preview.mp4' });
+  const byId = Object.fromEntries(readPlugins(dir).map((p) => [p.id, p.showcase]));
+  assert.deepEqual(byId.good, { video: { src: 'preview.mp4', poster: 'preview.jpg' } });
+  assert.equal(byId.away, undefined);
+  assert.equal(byId.wrong, undefined);
+});
+
 test('OpenFilm\'s editors have their page words in every language', () => {
   for (const p of readPlugins().filter((x) => ['edit', 'screening', 'canvas', 'color'].includes(x.id))) {
     for (const lang of ['en', 'zh-CN', 'ja', 'ko', 'es']) {
       assert.equal(p.examples?.[lang]?.length, 3, `${p.id} ${lang} examples`);
       assert.equal(p.showcase?.highlights?.[lang]?.length, 4, `${p.id} ${lang} highlights`);
     }
+    assert.deepEqual(p.showcase?.video, { src: 'preview.mp4', poster: 'preview.jpg' }, `${p.id} recording`);
   }
 });

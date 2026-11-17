@@ -49,8 +49,8 @@ export { PLUGIN_ICONS } from '../WorkbenchMark';
 import { WorkbenchMark } from '../WorkbenchMark';
 import { AppIcon } from '../AppIcon';
 import { ConnectorActions, ConnectorBody, ConnectorMark, connectConnector, useConnectorStates } from './ConnectorPanel';
-import { DetailShell, Facts, ManageButton, PageButton, StateMark, STORE_GRID, StoreChips, StoreCard, StoreSection } from './Store';
-import { AddButton, ASSET_GRID, AssetCover, AssetTile, Badge, BenchGrid, GroupList, InMark, FoldedGroup, GradientCover, Hero, PackTile, packGrid, ROW_GRID, Scroller, Shelf, SoundList, shapeOf, type BenchTileItem, type Featured, type GroupItem } from './CommunityViews';
+import { CallOut, COVER_GRID, DetailShell, Facts, ManageButton, PageButton, StateMark, STORE_GRID, StoreCardSkeleton, StoreChips, StoreCard, StoreSection } from './Store';
+import { AddButton, ASSET_GRID, AssetCover, AssetTile, Badge, BenchGrid, GroupList, InMark, FoldedGroup, GradientCover, PackTile, packGrid, Shelf, SoundList, shapeOf, type BenchTileItem, type GroupItem } from './CommunityViews';
 
 /** A plugin as people see it: its title and summary in the language shown, else its id. */
 export function usePluginWords() {
@@ -386,11 +386,8 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
   );
   /* the way to share what one made, wherever a shelf has nothing yet and at the foot of Discover */
   const publishCall = (text: string) => (
-    <div className="flex flex-wrap items-center gap-x-5 gap-y-3 rounded-[18px] bg-[var(--bg-field)] px-6 py-5">
-      <span className="grid h-11 w-11 shrink-0 place-items-center rounded-[12px] bg-[var(--bg-pressed)] text-[var(--accent)]"><Upload size={19} aria-hidden /></span>
-      <p className="min-w-0 flex-1 text-[14px] leading-relaxed text-[var(--text-muted)]">{text}</p>
-      <AddButton label={t('assetDrawer.publishAction')} text={t('assetDrawer.publishAction')} onClick={() => showPluginsLine('publish')} />
-    </div>
+    <CallOut icon={<Upload size={18} strokeWidth={1.7} aria-hidden />} text={text}
+      action={<AddButton label={t('assetDrawer.publishAction')} text={t('assetDrawer.publishAction')} onClick={() => showPluginsLine('publish')} />} />
   );
   const kindName = (kind: FeatureKind) => t(isCodeKind(kind) ? `assetDrawer.view_${kind}` : `assetDrawer.cat_${kind}`);
 
@@ -417,7 +414,7 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
     return (
       <PluginsPage key={line} title={who} note={t('assetDrawer.note_author').replace('{n}', String(theirs.length + theirThings.length))}>
         {consent.dialog}
-        {theirs.length ? <div className={`mb-8 ${ROW_GRID}`}>{theirs.map(catalogCard)}</div> : null}
+        {theirs.length ? <div className={`mb-10 ${STORE_GRID}`}>{theirs.map(catalogCard)}</div> : null}
         {theirThings.length ? <div className={ASSET_GRID.video}>{theirThings.map(assetTile)}</div> : null}
         {lightbox}
       </PluginsPage>
@@ -616,12 +613,12 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
         <StoreChips label={t('assetDrawer.tab_skills')} value={pick} onChange={setSkillSort}
           items={shelves.length > 1 ? [{ key: null, label: t('assetDrawer.allItems') }, ...shelves.map(({ c, list }) => ({ key: c, label: t(`assetDrawer.skillCat_${c}`), count: list.length }))] : []} />
         {waiting ? (
-          <div role="status" aria-label={t('assetDrawer.discoverReading')} className={STORE_GRID}>
-            {Array.from({ length: 6 }, (_, i) => <div key={i} aria-hidden className="skeleton h-[156px] rounded-[14px]" />)}
+          <div role="status" aria-label={t('assetDrawer.discoverReading')} className={COVER_GRID}>
+            {Array.from({ length: 6 }, (_, i) => <StoreCardSkeleton key={i} cover />)}
           </div>
         ) : null}
         {shelves.filter((x) => !pick || x.c === pick).map(({ c, list }) => (
-          <StoreSection key={c} title={t(`assetDrawer.skillCat_${c}`)} note={t(`assetDrawer.skillCatNote_${c}`)}><div className={STORE_GRID}>{list.map(catalogCard)}</div></StoreSection>
+          <StoreSection key={c} title={t(`assetDrawer.skillCat_${c}`)} note={t(`assetDrawer.skillCatNote_${c}`)}><div className={COVER_GRID}>{list.map(catalogCard)}</div></StoreSection>
         ))}
         {!catalogSkills.length && !waiting ? <Empty text={t('assetDrawer.noSkillsFound')} /> : null}
         {q ? null : publishCall(t('assetDrawer.publishCall'))}
@@ -655,7 +652,7 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
           <StoreSection key={k} title={kindName(k)} badge={packs.length ? undefined : <SoonPill />}
             note={packs.length ? t('assetDrawer.packsCount').replace('{n}', packs.length.toLocaleString()) : t(`assetDrawer.kindAbout_${k}`)}
             all={() => showPluginsLine(`kind:${k}`)}>
-            {packs.length ? <div className={packGrid(k)}>{packs.slice(0, rowOf(k)).map(packTile)}</div> : <GhostPacks kind={k} count={rowOf(k)} />}
+            {packs.length ? <div className={packGrid(k)}>{packs.slice(0, rowOf(k)).map(packTile)}</div> : <GhostPacks kind={k} count={rowOf(k) / 2} />}
           </StoreSection>
         ))}
         {q && !rows.length ? <Empty text={t('assetDrawer.noSkillsFound')} /> : null}
@@ -705,8 +702,8 @@ const EXAMPLES_REPO = 'https://github.com/openfilm/community#list-an-example';
 
 /**
  * Examples: whole projects made with OpenFilm, to start from or learn from (the projects window copies one into a new
- * project). A banner of what is put forward, then a shelf for each kind of film; one opened is its page in the
- * projects window. Anyone can send one; the foot says how.
+ * project). A grid for each kind of film, each film by its poster (its preview playing under the pointer); one opened
+ * is its page in the projects window. Anyone can send one; the foot says how.
  */
 function ExamplesStore({ query }: { query: string }) {
   const t = useT();
@@ -718,30 +715,22 @@ function ExamplesStore({ query }: { query: string }) {
   const kindLabel = (c: string | null) => { if (!c) return t(sorted ? 'assetDrawer.examplesOther' : 'assetDrawer.allItems'); const key = `gallery.cat.${c}`; const label = t(key); return label === key ? c : label; };
   const list = all.filter((e) => !query || [e.title, e.description, kindLabel(e.category)].some((w) => w.toLowerCase().includes(query)));
   const kinds = [...new Set(list.map((e) => e.category))].sort((a, b) => (a == null ? 1 : 0) - (b == null ? 1 : 0));
-  const featured: Featured[] = list.filter((e) => e.poster).slice(0, 5).map((e) => ({
-    key: e.id, eyebrow: e.category ? kindLabel(e.category) : t('assetDrawer.examplesEyebrow'), title: e.title, summary: e.description, hue: hueOf(e.id), picture: e.poster ?? undefined,
-    onOpen: () => openExample(e.id), action: <HeroButton label={t('assetDrawer.exampleOpen')} onClick={() => openExample(e.id)} />,
-  }));
   return (
     <PluginsPage key="examples" title={t('assetDrawer.tab_examples')} note={query ? undefined : t('assetDrawer.note_examples')}>
-      {query ? null : <Hero items={featured} />}
       {examples == null ? (
-        <div role="status" aria-label={t('gallery.loading')} className="grid grid-cols-[repeat(auto-fill,minmax(248px,1fr))] gap-6">
-          {Array.from({ length: 6 }, (_, i) => <div key={i} aria-hidden className="skeleton aspect-video rounded-[12px]" />)}
+        <div role="status" aria-label={t('gallery.loading')} className={EXAMPLE_GRID}>
+          {Array.from({ length: 6 }, (_, i) => <StoreCardSkeleton key={i} cover />)}
         </div>
       ) : null}
       {kinds.map((k) => (
         <Shelf key={k ?? ''} title={kindLabel(k)}>
-          <Scroller width={272}>{list.filter((e) => e.category === k).map((e) => <ExampleTile key={e.id} example={e} kind={kindLabel(e.category)} />)}</Scroller>
+          <div className={EXAMPLE_GRID}>{list.filter((e) => e.category === k).map((e) => <ExampleTile key={e.id} example={e} kind={kindLabel(e.category)} />)}</div>
         </Shelf>
       ))}
       {examples && !list.length ? <Empty text={query ? t('assetDrawer.noSkillsFound') : t('gallery.empty')} /> : null}
       {query ? null : (
-        <div className="flex flex-wrap items-center gap-x-5 gap-y-3 rounded-[18px] bg-[var(--bg-field)] px-6 py-5">
-          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-[12px] bg-[var(--bg-pressed)] text-[var(--text)]"><Clapperboard size={19} strokeWidth={1.6} aria-hidden /></span>
-          <p className="min-w-0 flex-1 text-[14px] leading-relaxed text-[var(--text-muted)]">{t('assetDrawer.examplesCall')}</p>
-          <AddButton label={t('assetDrawer.examplesSend')} text={t('assetDrawer.examplesSend')} onClick={() => { window.open(EXAMPLES_REPO, '_blank', 'noreferrer'); }} />
-        </div>
+        <CallOut icon={<Clapperboard size={18} strokeWidth={1.7} aria-hidden />} text={t('assetDrawer.examplesCall')}
+          action={<AddButton label={t('assetDrawer.examplesSend')} text={t('assetDrawer.examplesSend')} onClick={() => { window.open(EXAMPLES_REPO, '_blank', 'noreferrer'); }} />} />
       )}
     </PluginsPage>
   );
@@ -760,25 +749,15 @@ function ExampleTile({ example, kind }: { example: Example; kind: string }) {
         {hover && example.video ? <video src={example.video} autoPlay muted loop playsInline className="absolute inset-0 h-full w-full object-cover" /> : null}
         {length ? <span className="absolute bottom-2 right-2 rounded-[5px] bg-black/60 px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-white backdrop-blur-sm">{length}</span> : null}
       </span>
-      <span className="mt-2.5 line-clamp-1 text-[14px] font-medium text-[var(--text)]">{example.title}</span>
-      <Publisher owner={example.owner} className="mt-0.5 text-[12px] text-[var(--text-faint)]" />
-      <span className="mt-0.5 line-clamp-1 text-[12.5px] text-[var(--text-muted)]">{example.description || kind}</span>
+      <span className="mt-3 line-clamp-1 text-[14.5px] font-semibold tracking-[-0.01em] text-[var(--text)]">{example.title}</span>
+      <span className="mt-0.5 line-clamp-2 text-[13px] leading-[18px] text-[var(--text-muted)]">{example.description || kind}</span>
+      <Publisher owner={example.owner} className="mt-1.5 text-[12px] text-[var(--text-faint)]" />
     </button>
   );
 }
 
-/** A thing's colour on a page's banner, from its name (the same each time). */
-const hueOf = (key: string) => [...key].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 360, 7);
-
-/** The banner's button: white on its colour. */
-function HeroButton({ label, onClick }: { label: string; onClick: () => void }) {
-  return (
-    <button type="button" onClick={onClick}
-      className="inline-flex h-9 items-center rounded-full bg-white px-5 text-[14px] font-semibold text-black shadow-[0_6px_18px_rgba(0,0,0,0.25)] transition hover:bg-white/90 active:scale-[0.97]">
-      {label}
-    </button>
-  );
-}
+/** Examples side by side, as wide as the window allows. */
+const EXAMPLE_GRID = 'grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-x-6 gap-y-8';
 
 /**
  * One of OpenFilm's own plugins on its page, as an editor's extension page: its mark, name, whose and what it is for;
@@ -818,7 +797,7 @@ function PluginPage({ plugin, error, onBack, onTurn, onRemove, connector }: {
       byline={<><span className="inline-flex items-center gap-1 text-[var(--text-muted)]">OpenFilm<BadgeCheck size={13} strokeWidth={2} aria-hidden /></span><span aria-hidden>·</span><span>{kind}</span></>}
       summary={summary} actions={actions}
       notice={error ? <p role="alert" className="mt-4 text-[13.5px] text-[var(--warn)]">{error}</p> : null}
-      hero={<PreviewBand kind={plugin.mcpServers ? 'connector' : plugin.workbench ?? null} icon={<WorkbenchMark plugin={plugin} size={64} />} />}
+      hero={plugin.showcase?.video && !plugin.mcpServers ? <PreviewBand plugin={plugin} /> : undefined}
       aside={(
         <Facts title={t('assetDrawer.factsTitle')} items={[
           { key: 'kind', name: t('assetDrawer.factKind'), value: kind },
@@ -876,8 +855,8 @@ function AgentLine({ title, detail, control }: { title: string; detail: string; 
 /** Nothing to list: a word under the title, and where to go instead. */
 function Empty({ text, action }: { text: string; action?: { label: string; run: () => void } | undefined }) {
   return (
-    <div className="flex flex-col items-start gap-3 pt-2">
-      <p className="text-[14.5px] leading-relaxed text-[var(--text-faint)]">{text}</p>
+    <div className="mb-10 flex flex-col items-center gap-4 rounded-[14px] border border-dashed border-[var(--border-strong)] px-6 py-12 text-center" data-store-empty="">
+      <p className="max-w-[420px] text-[14px] leading-[21px] text-[var(--text-muted)]">{text}</p>
       {action ? <SettingsButton onClick={action.run}>{action.label}</SettingsButton> : null}
     </div>
   );
@@ -887,12 +866,12 @@ function Empty({ text, action }: { text: string; action?: { label: string; run: 
 function PluginsPage({ title, note, badge, children }: { title: string; note?: string; badge?: string; children: React.ReactNode }) {
   return (
     /* a page of its own: another place starts at its top (its key, given by whoever shows it) */
-    <div className={`min-h-0 flex-1 overflow-y-auto overscroll-contain ${PAGE_INSET} pb-12 pt-9`}>
-      <h2 className="flex items-center gap-2.5 text-[30px] font-bold tracking-[-0.03em] text-[var(--text)]">
+    <div className={`min-h-0 flex-1 overflow-y-auto overscroll-contain ${PAGE_INSET} pb-14 pt-10`}>
+      <h2 className="flex items-center gap-2.5 text-[28px] font-semibold leading-[1.15] tracking-[-0.025em] text-[var(--text)]">
         {title}
         {badge ? <span className="rounded-full bg-[var(--bg-field)] px-2 text-[12px] font-medium leading-[20px] tracking-normal text-[var(--text-muted)]">{badge}</span> : null}
       </h2>
-      {note ? <p className="mt-1 max-w-[640px] text-[14px] leading-relaxed text-[var(--text-muted)]">{note}</p> : null}
+      {note ? <p className="mt-2 max-w-[600px] text-[14px] leading-[21px] text-[var(--text-muted)]">{note}</p> : null}
       <div className="mt-8">{children}</div>
     </div>
   );

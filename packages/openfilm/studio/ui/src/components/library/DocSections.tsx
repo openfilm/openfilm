@@ -1,6 +1,6 @@
 /**
- * The body of an editor's, a connector's and a skill's page, laid out alike so each is read the same way: a picture of
- * it at work, what it does (highlights), working with the agent (a request and what the agent does, each put in the chat
+ * The body of an editor's, a connector's and a skill's page, laid out alike so each is read the same way: an editor's
+ * recording of it at work (a connector has none; a skill's is SkillChatBand), what it does (highlights), working with the agent (a request and what the agent does, each put in the chat
  * by a click), how to use it (numbered steps), its keys, then one quiet line on what turning it off does. A plugin's
  * `details` (a line each, "When to use it: …") is sorted into these by each line's lead.
  */
@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import { studioHost } from '@/lib/host';
 import { closePlugins } from '@/lib/plugins-window';
-import type { PluginExample } from '@/lib/plugins';
+import type { Plugin, PluginExample } from '@/lib/plugins';
 
 /** The marks a highlight may name (openfilm.json `showcase.highlights[].icon`); another is drawn as sparkles. */
 const MARKS: Record<string, LucideIcon> = {
@@ -164,139 +164,27 @@ export function sortDetails(text: string | undefined): { about: { lead?: string;
   return { about, how, off };
 }
 
-/* ── the picture of it at work: each editor drawn from its own pieces, as it looks ─────────────────────────────── */
+/* ── the editor at work: a recording of the real app ─────────────────────────────────────────────────────────── */
 
-const BAND = 'relative overflow-hidden rounded-[18px] border border-[var(--border)] bg-[radial-gradient(120%_140%_at_50%_0%,color-mix(in_srgb,var(--text)_7%,transparent),transparent_60%),var(--bg-field)]';
-/** A frame of film, as the picture: a soft light over dark, with a horizon. */
-const Frame = ({ className = '', warm = false }: { className?: string; warm?: boolean }) => (
-  <div className={`relative overflow-hidden rounded-[8px] ${className}`}
-    style={{ background: warm
-      ? 'radial-gradient(60% 80% at 70% 30%, #f5b06b 0%, #c4623a 28%, #3a2230 62%, #141018 100%)'
-      : 'radial-gradient(70% 90% at 30% 25%, #9fb7d8 0%, #4d6a92 30%, #1d2638 64%, #0d1018 100%)' }}>
-    <div className="absolute inset-x-0 bottom-0 h-[38%] bg-[linear-gradient(to_top,rgba(0,0,0,.65),transparent)]" />
-    <div className="absolute bottom-[26%] left-0 right-0 h-px bg-white/25" />
-  </div>
-);
-const Bar = ({ w, tone = 'bg-[var(--text)]/20', className = '' }: { w: string; tone?: string; className?: string }) => <span className={`block h-[6px] rounded-full ${tone} ${className}`} style={{ width: w }} />;
+/** Whether the person asked for less motion: a recording is then shown as its first picture. */
+const lessMotion = () => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-function EditBand() {
-  const lane = (clips: [number, number, boolean?][], color: string) => (
-    <div className="relative h-[18px]">
-      {clips.map(([at, len, on], i) => (
-        <span key={i} className={`absolute top-0 h-full rounded-[4px] ${on ? 'ring-2 ring-[var(--accent)]' : ''}`} style={{ left: `${at}%`, width: `${len}%`, background: color }} />
-      ))}
-    </div>
-  );
+/**
+ * The editor at work, at the head of its page: its recording (openfilm.json `showcase.video`), played muted, looped and
+ * inline from its poster, with no controls; its poster alone where less motion is asked for. A plugin without one (a
+ * connector) has no band.
+ */
+export function PreviewBand({ plugin }: { plugin: Pick<Plugin, 'id' | 'mcpServers' | 'showcase'> }) {
+  const video = plugin.mcpServers ? undefined : plugin.showcase?.video;
+  if (!video) return null;
+  const at = (name: string) => `/api/plugin-preview/${encodeURIComponent(plugin.id)}/${encodeURIComponent(name)}`;
+  const poster = video.poster ? at(video.poster) : undefined;
   return (
-    <div className="grid h-full grid-rows-[1fr_auto] gap-3 p-5">
-      <div className="grid min-h-0 grid-cols-[1fr_180px] gap-3">
-        <div className="flex min-h-0 items-center justify-center rounded-[10px] bg-black/40 p-3"><Frame className="aspect-video h-full max-h-full" /></div>
-        <div className="flex flex-col gap-2.5 rounded-[10px] bg-black/20 p-3.5">
-          <Bar w="45%" tone="bg-[var(--text)]/45" /><Bar w="80%" /><Bar w="65%" /><div className="mt-1.5 h-px bg-[var(--border)]" />
-          <Bar w="35%" tone="bg-[var(--text)]/45" /><Bar w="70%" /><Bar w="55%" />
-        </div>
-      </div>
-      <div className="relative flex flex-col gap-1.5 rounded-[10px] bg-black/25 px-3 py-3">
-        {lane([[2, 18], [22, 30, true], [54, 24], [80, 16]], 'color-mix(in srgb, #5b8def 55%, #1b2234)')}
-        {lane([[10, 22], [40, 14]], 'color-mix(in srgb, #c98b4b 55%, #1b2234)')}
-        {lane([[0, 96]], 'color-mix(in srgb, #3fae8a 45%, #1b2234)')}
-        <span className="absolute bottom-1 top-1 w-[2px] rounded-full bg-[var(--text)]" style={{ left: '38%' }} />
-      </div>
+    <div aria-hidden data-preview-band={plugin.id}
+      className="relative mt-8 aspect-video w-full overflow-hidden rounded-[16px] bg-black shadow-[0_18px_48px_-18px_rgba(0,0,0,.6)] ring-1 ring-[var(--border)]">
+      {lessMotion() && poster
+        ? <img src={poster} alt="" className="absolute inset-0 h-full w-full object-cover" />
+        : <video src={at(video.src)} poster={poster} autoPlay muted loop playsInline preload="auto" disablePictureInPicture className="absolute inset-0 h-full w-full object-cover" />}
     </div>
   );
-}
-
-function ScreeningBand() {
-  return (
-    <div className="flex h-full flex-col gap-3 px-10 py-5">
-      <div className="relative flex min-h-0 flex-1 items-center justify-center">
-        <Frame warm className="aspect-video h-full max-h-full" />
-        <span className="absolute left-[56%] top-[24%] h-[34%] w-[16%] rounded-[4px] border-2 border-[var(--accent)] bg-[color-mix(in_srgb,var(--accent)_14%,transparent)]" />
-        <span className="absolute left-[56%] top-[24%] grid h-5 w-5 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-[var(--accent)] text-[10.5px] font-bold text-[var(--on-accent)]">2</span>
-      </div>
-      <div className="flex flex-col gap-1.5">
-        <div className="relative h-4">
-          <span className="absolute top-1/2 grid h-4 w-4 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-[var(--accent)] text-[9px] font-bold text-[var(--on-accent)]" style={{ left: '24%' }}>1</span>
-          <span className="absolute inset-y-[3px] rounded-[3px] bg-[color-mix(in_srgb,var(--accent)_35%,transparent)] ring-1 ring-[var(--accent)]" style={{ left: '62%', width: '18%' }} />
-        </div>
-        <div className="flex h-7 overflow-hidden rounded-[6px]">
-          {['#2b3550', '#4a3a52', '#6a4a44', '#8a5a3c', '#5a4a5a', '#3a4a62', '#2e3a54', '#4d3c50'].map((c) => <span key={c} className="h-full flex-1 border-r border-black/30" style={{ background: c }} />)}
-        </div>
-        <span className="block h-1 rounded-full bg-[var(--text)]/15"><span className="block h-full w-[46%] rounded-full bg-[var(--text)]/60" /></span>
-      </div>
-    </div>
-  );
-}
-
-function CanvasBand() {
-  const node = (x: string, y: string, w: string, children: React.ReactNode, on = false) => (
-    <div className={`absolute rounded-[10px] bg-[var(--bg-raised)] p-2 shadow-[0_8px_24px_rgba(0,0,0,.35)] ${on ? 'ring-2 ring-[var(--accent)]' : 'ring-1 ring-[var(--border)]'}`} style={{ left: x, top: y, width: w }}>{children}</div>
-  );
-  return (
-    <div className="relative h-full bg-[radial-gradient(circle,color-mix(in_srgb,var(--text)_14%,transparent)_1px,transparent_1.2px)] [background-size:16px_16px]">
-      <svg className="absolute inset-0 h-full w-full" preserveAspectRatio="none" viewBox="0 0 100 100" aria-hidden>
-        <path d="M27 38 C 36 38, 36 30, 45 30" stroke="var(--text-faint)" strokeWidth="0.35" fill="none" vectorEffect="non-scaling-stroke" />
-        <path d="M27 38 C 36 38, 36 66, 45 66" stroke="var(--text-faint)" strokeWidth="0.35" fill="none" vectorEffect="non-scaling-stroke" />
-        <path d="M66 30 C 72 30, 72 48, 78 48" stroke="var(--accent)" strokeWidth="0.5" fill="none" vectorEffect="non-scaling-stroke" />
-        <path d="M66 66 C 72 66, 72 48, 78 48" stroke="var(--text-faint)" strokeWidth="0.35" fill="none" vectorEffect="non-scaling-stroke" />
-      </svg>
-      {node('7%', '24%', '20%', <><Bar w="40%" tone="bg-[var(--text)]/45" /><Bar w="90%" className="mt-2" /><Bar w="75%" className="mt-1.5" /><Bar w="60%" className="mt-1.5" /></>)}
-      {node('45%', '12%', '21%', <Frame className="aspect-video w-full" />)}
-      {node('45%', '54%', '21%', <Frame warm className="aspect-video w-full" />)}
-      {node('78%', '30%', '17%', <div className="flex aspect-[9/16] w-full items-center justify-center rounded-[6px] bg-black/50 text-[var(--text-muted)]"><Video size={18} aria-hidden /></div>, true)}
-    </div>
-  );
-}
-
-function ColorBand() {
-  const wheel = (label: string, dot: [number, number]) => (
-    <div className="flex flex-col items-center gap-1.5">
-      <div className="relative aspect-square w-full rounded-full p-[3px]" style={{ background: 'conic-gradient(from 90deg, #e25c5c, #e2c35c, #6ad36a, #5cc8e2, #6a6ae2, #d35cd3, #e25c5c)' }}>
-        <div className="h-full w-full rounded-full bg-[radial-gradient(circle,#2a2a2e_0%,#1a1a1e_70%)]" />
-        <span className="absolute h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-transparent" style={{ left: `${dot[0]}%`, top: `${dot[1]}%` }} />
-      </div>
-      <span className="text-[10px] text-[var(--text-faint)]">{label}</span>
-    </div>
-  );
-  return (
-    <div className="grid h-full grid-cols-[1.35fr_1fr] gap-4 p-5">
-      <div className="flex min-h-0 flex-col gap-3">
-        <div className="flex min-h-0 flex-1 items-center justify-center rounded-[10px] bg-black/40 p-3"><Frame warm className="aspect-video h-full max-h-full" /></div>
-        <div className="flex h-9 gap-1.5">
-          {['#3a5878', '#7a5a3c', '#5a6a4a', '#7a4a4a', '#4a5a7a'].map((c, i) => <span key={c} className={`flex-1 rounded-[5px] ${i === 1 ? 'ring-2 ring-[var(--accent)]' : ''}`} style={{ background: c }} />)}
-        </div>
-      </div>
-      <div className="flex min-h-0 flex-col gap-3">
-        <div className="grid grid-cols-3 gap-3 px-1">{wheel('Lift', [44, 56])}{wheel('Gamma', [52, 48])}{wheel('Gain', [62, 40])}</div>
-        <div className="relative min-h-0 flex-1 overflow-hidden rounded-[10px] bg-black/50">
-          <svg className="absolute inset-0 h-full w-full" viewBox="0 0 100 40" preserveAspectRatio="none" aria-hidden>
-            {Array.from({ length: 60 }, (_, i) => {
-              const x = (i / 59) * 100, y = 20 + Math.sin(i / 5) * 8 + Math.cos(i / 2.3) * 3;
-              return <line key={i} x1={x} x2={x} y1={y - 5} y2={y + 6} stroke="rgba(160,220,170,.55)" strokeWidth="0.6" />;
-            })}
-          </svg>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ConnectorBand({ icon }: { icon?: React.ReactNode }) {
-  return (
-    <div className="flex h-full items-center justify-center gap-6 px-8">
-      <span className="flex h-16 w-16 items-center justify-center rounded-[16px] bg-[var(--bg-raised)] text-[var(--text)] shadow-[0_8px_24px_rgba(0,0,0,.35)] ring-1 ring-[var(--border)]"><Sparkles size={26} strokeWidth={1.6} aria-hidden /></span>
-      <span className="flex items-center gap-1.5">
-        {Array.from({ length: 7 }, (_, i) => <span key={i} className={`h-1.5 w-1.5 rounded-full ${i === 3 ? 'bg-[var(--accent)]' : 'bg-[var(--text)]/25'}`} />)}
-      </span>
-      <span className="flex h-16 w-16 items-center justify-center rounded-[16px] shadow-[0_8px_24px_rgba(0,0,0,.35)]">{icon}</span>
-    </div>
-  );
-}
-
-/** The picture of a plugin at work, at the head of its page: the editor drawn from its own pieces, or a connector's link. */
-export function PreviewBand({ kind, icon }: { kind: string | null; icon?: React.ReactNode }) {
-  const drawn = kind === 'edit' ? <EditBand /> : kind === 'screening' ? <ScreeningBand /> : kind === 'canvas' ? <CanvasBand />
-    : kind === 'color' ? <ColorBand /> : kind === 'connector' ? <ConnectorBand icon={icon} /> : null;
-  if (!drawn) return null;
-  return <div aria-hidden className={`${BAND} mt-8 h-[260px]`} data-preview-band={kind}>{drawn}</div>;
 }

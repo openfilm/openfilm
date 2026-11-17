@@ -57,7 +57,7 @@ export function PluginsWindow({ projectId, onWorkbenchOn }: { projectId: string 
             {place('examples', <Clapperboard {...ICON} />, t('assetDrawer.tab_examples'))}
           </LargeDialogGroup>
           {/* sharing what one made; adding what is elsewhere */}
-          <div className="mt-auto flex flex-col gap-0.5 pt-6">
+          <div className="mt-auto flex flex-col gap-0.5 border-t border-[var(--border)] pt-3">
             {place('publish', <Upload {...ICON} />, t('assetDrawer.place_publish'))}
             <LargeDialogPlace icon={<Plus {...ICON} />} active={line === 'sources'} onClick={addMenu}>{t('assetDrawer.addMenu')}</LargeDialogPlace>
           </div>

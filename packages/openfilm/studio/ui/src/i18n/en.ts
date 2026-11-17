@@ -1752,6 +1752,8 @@ export const en = {
     docAgentNote: "Say this, and your agent does that. Click one to put it in the chat.",
     docPut: "Put in the chat",
     docKeys: "Keyboard shortcuts",
+    bandUses: "Using the skill {name}",
+    bandDone: "Done",
     metric_type: "Type",
     metricTip_type: "What it is: an editor with its own interface, or a skill your agent uses in the chat",
     typeNote_editor: "Its own interface",

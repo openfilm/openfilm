@@ -5,18 +5,25 @@
  * Used by library/PluginsPane for plugins, skills and the library's packs alike.
  */
 import * as React from 'react';
-import { ArrowLeft, Check, Settings } from 'lucide-react';
+import { ArrowLeft, Check, ChevronRight, Settings } from 'lucide-react';
 import { useT } from '@/i18n';
 import { ContextMenu, type ContextMenuEntry } from '../ContextMenu';
 import { LARGE_DIALOG_COLUMN as PAGE_INSET } from '../dialog-chrome';
 import { Own, opener } from './CommunityViews';
 
-/** Cards side by side: three where there is room. */
-export const STORE_GRID = 'grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-3';
+/**
+ * Things side by side, in columns as wide as the window allows: rows of apps (a plugin, a connector), one under the
+ * other with a hairline between, or cards with a picture (a skill's cover).
+ */
+export const STORE_GRID = 'grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-x-8';
+/** Cards with a picture side by side (skills by their covers): two where the window is narrow, more as it widens. */
+export const COVER_GRID = 'grid grid-cols-[repeat(auto-fill,minmax(210px,1fr))] gap-x-6';
 
 /**
- * A plugin or a skill in the store: its icon and name, whose it is, what it is for in two lines; at its foot how many
- * use it and what to do (Get), or that it is here (Installed, Off). A click opens its page.
+ * A plugin or a skill in the store. Without a picture, as an app store lists apps: its icon, its name (a word after it:
+ * Beta), what it is for, whose it is and how many use it, and what to do (Get) or that it is here (Installed, Off) at
+ * the right, a hairline over it. With one (a skill's cover, playing its preview while pointed at), a card: the picture,
+ * then the same words under it. A click opens its page.
  */
 export function StoreCard({ icon, cover, title, badges, by, summary, meta, action, onOpen, dim = false }: {
   icon: React.ReactNode;
@@ -26,30 +33,67 @@ export function StoreCard({ icon, cover, title, badges, by, summary, meta, actio
   meta?: React.ReactNode; action?: React.ReactNode; onOpen?: () => void; dim?: boolean;
 }) {
   const [hover, setHover] = React.useState(false);
-  return (
-    <div {...opener(onOpen)} data-store-card={title} onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
-      className="group flex min-w-0 cursor-pointer flex-col overflow-hidden rounded-[14px] bg-[var(--bg-field)] outline-none transition hover:bg-[var(--bg-hover)] focus-visible:shadow-[inset_0_0_0_1.5px_var(--accent)]">
-      {cover ? (
-        <div className={`relative aspect-[16/9] w-full overflow-hidden bg-[var(--bg-pressed)] ${dim ? 'opacity-50 grayscale' : ''}`}>
+  const name = (
+    <div className="flex min-w-0 items-center gap-1.5">
+      <span className={`truncate text-[14.5px] font-semibold tracking-[-0.01em] ${dim ? 'text-[var(--text-muted)]' : 'text-[var(--text)]'}`}>{title}</span>
+      {badges}
+    </div>
+  );
+  const foot = by || meta ? (
+    <div className="mt-1.5 flex min-w-0 items-center gap-1.5 text-[12px] text-[var(--text-faint)]">
+      {by ? <span className="flex min-w-0 items-center truncate">{by}</span> : null}
+      {by && meta ? <span aria-hidden>·</span> : null}
+      {meta ? <span className="min-w-0 truncate tabular-nums">{meta}</span> : null}
+    </div>
+  ) : null;
+  if (cover) {
+    return (
+      <div {...opener(onOpen)} data-store-card={title} onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
+        className="group mb-8 flex min-w-0 cursor-pointer flex-col outline-none">
+        <div className={`relative aspect-[16/9] w-full overflow-hidden rounded-[12px] bg-[var(--bg-field)] ring-1 ring-inset ring-[var(--border)] transition group-hover:ring-[var(--border-strong)] group-focus-visible:ring-2 group-focus-visible:ring-[var(--accent)] ${dim ? 'opacity-50 grayscale' : ''}`}>
           <div className="absolute inset-0 transition duration-300 group-hover:scale-[1.02]">{cover(hover)}</div>
         </div>
-      ) : null}
-      <div className={`flex min-h-[156px] flex-1 flex-col p-4 ${cover ? 'min-h-[128px] pt-3.5' : ''}`}>
-        <div className="flex min-w-0 items-center gap-3">
-          {cover ? null : <span className={`shrink-0 ${dim ? 'opacity-50 grayscale' : ''}`}>{icon}</span>}
+        <div className="mt-3 flex min-w-0 items-start gap-3">
           <div className="min-w-0 flex-1">
-            <div className="flex min-w-0 items-center gap-1.5">
-              <span className={`truncate text-[15px] font-semibold tracking-[-0.01em] ${dim ? 'text-[var(--text-muted)]' : 'text-[var(--text)]'}`}>{title}</span>
-              {badges}
-            </div>
-            {by ? <div className="mt-0.5 min-w-0 truncate text-[12.5px] text-[var(--text-faint)]">{by}</div> : null}
+            {name}
+            <p className="mt-0.5 line-clamp-2 text-[13px] leading-[18px] text-[var(--text-muted)]">{summary}</p>
+            {foot}
           </div>
+          {action ? <Own className="shrink-0 pt-0.5">{action}</Own> : null}
         </div>
-        <p className="mt-2.5 line-clamp-2 flex-1 text-[13px] leading-[19px] text-[var(--text-muted)]">{summary}</p>
-        <div className="mt-3 flex min-h-7 min-w-0 items-center gap-2">
-          <span className="min-w-0 flex-1 truncate text-[12px] tabular-nums text-[var(--text-faint)]">{meta}</span>
-          {action ? <Own className="shrink-0">{action}</Own> : null}
+      </div>
+    );
+  }
+  return (
+    <div {...opener(onOpen)} data-store-card={title}
+      className="group -mx-2 flex min-w-0 cursor-pointer items-center gap-3.5 rounded-[12px] px-2 outline-none transition-colors hover:bg-[var(--bg-hover)] focus-visible:shadow-[inset_0_0_0_1.5px_var(--accent)]">
+      <span className={`shrink-0 transition-transform duration-200 group-hover:scale-[1.03] ${dim ? 'opacity-50 grayscale' : ''}`}>{icon}</span>
+      <div className="flex min-w-0 flex-1 items-center gap-3 self-stretch border-t border-[var(--border)] py-3.5 group-hover:border-transparent">
+        <div className="min-w-0 flex-1">
+          {name}
+          <p className="mt-0.5 line-clamp-2 text-[13px] leading-[18px] text-[var(--text-muted)]">{summary}</p>
+          {foot}
         </div>
+        {action ? <Own className="shrink-0">{action}</Own> : null}
+      </div>
+    </div>
+  );
+}
+
+/** A card's place while the store is read: a picture's (`cover`) or an app row's. */
+export function StoreCardSkeleton({ cover = false }: { cover?: boolean }) {
+  return cover ? (
+    <div aria-hidden className="mb-8 min-w-0">
+      <div className="skeleton aspect-[16/9] rounded-[12px]" />
+      <div className="skeleton mt-3 h-3.5 w-1/2 rounded-full" />
+      <div className="skeleton mt-2 h-3 w-4/5 rounded-full opacity-70" />
+    </div>
+  ) : (
+    <div aria-hidden className="flex min-w-0 items-center gap-3.5">
+      <div className="skeleton h-11 w-11 shrink-0 rounded-[11px]" />
+      <div className="min-w-0 flex-1 border-t border-[var(--border)] py-3.5">
+        <div className="skeleton h-3.5 w-2/5 rounded-full" />
+        <div className="skeleton mt-2 h-3 w-4/5 rounded-full opacity-70" />
       </div>
     </div>
   );
@@ -164,14 +208,14 @@ export function StoreChips<K extends string>({ label, items, value, onChange }: 
 }) {
   if (items.length < 2) return null;
   return (
-    <div role="tablist" aria-label={label} className="mb-7 flex flex-wrap gap-2" data-store-chips="">
+    <div role="tablist" aria-label={label} className="-mx-1 mb-8 flex gap-1.5 overflow-x-auto px-1 pb-1 pr-8 [mask-image:linear-gradient(to_right,black_calc(100%-40px),transparent)] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" data-store-chips="">
       {items.map((it) => {
         const on = value === it.key;
         return (
           <button key={it.key ?? ''} type="button" role="tab" aria-selected={on} onClick={() => onChange(it.key)}
-            className={`inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3.5 text-[13px] font-medium transition ${on ? 'bg-[var(--text)] text-[var(--dialog-main)]' : 'bg-[var(--bg-field)] text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)]'}`}>
+            className={`inline-flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3 text-[13px] font-medium transition ${on ? 'bg-[var(--text)] text-[var(--dialog-main)]' : 'text-[var(--text-muted)] ring-1 ring-inset ring-[var(--border)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)]'}`}>
             {it.icon}{it.label}
-            {it.count != null ? <span className={`tabular-nums ${on ? 'opacity-60' : 'text-[var(--text-faint)]'}`}>{it.count.toLocaleString()}</span> : null}
+            {it.count != null ? <span className={`text-[12px] tabular-nums ${on ? 'opacity-60' : 'text-[var(--text-faint)]'}`}>{it.count.toLocaleString()}</span> : null}
           </button>
         );
       })}
@@ -183,15 +227,30 @@ export function StoreChips<K extends string>({ label, items, value, onChange }: 
 export function StoreSection({ title, badge, note, all, children }: { title: string; badge?: React.ReactNode; note?: string | undefined; all?: (() => void) | undefined; children: React.ReactNode }) {
   const t = useT();
   return (
-    <section className="mb-10" data-community-shelf={title}>
-      <header className="mb-3.5 flex items-end gap-3">
+    <section className="mb-12" data-community-shelf={title}>
+      <header className="mb-4 flex items-end gap-4">
         <div className="min-w-0 flex-1">
-          <h3 className="text-[17px] font-semibold tracking-[-0.01em] text-[var(--text)]">{title}{badge}</h3>
-          {note ? <p className="mt-0.5 text-[13px] text-[var(--text-faint)]">{note}</p> : null}
+          <h3 className="flex items-center text-[17px] font-semibold tracking-[-0.015em] text-[var(--text)]">{title}{badge}</h3>
+          {note ? <p className="mt-1 text-[13px] leading-[18px] text-[var(--text-faint)]">{note}</p> : null}
         </div>
-        {all ? <button type="button" onClick={all} className="shrink-0 pb-0.5 text-[13px] font-medium text-[var(--text-muted)] hover:text-[var(--text)]">{t('assetDrawer.seeAll')} ›</button> : null}
+        {all ? (
+          <button type="button" onClick={all} className="group flex shrink-0 items-center gap-0.5 pb-0.5 text-[13px] font-medium text-[var(--text-muted)] transition hover:text-[var(--text)]">
+            {t('assetDrawer.seeAll')}<ChevronRight size={14} className="transition group-hover:translate-x-0.5" aria-hidden />
+          </button>
+        ) : null}
       </header>
       {children}
     </section>
+  );
+}
+
+/** An invitation at a page's foot (publish what you made, send an example): its mark, a line, its button, quiet. */
+export function CallOut({ icon, text, action }: { icon: React.ReactNode; text: string; action: React.ReactNode }) {
+  return (
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-3 rounded-[14px] border border-[var(--border)] px-5 py-4" data-store-callout="">
+      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[10px] bg-[var(--bg-field)] text-[var(--text-muted)]">{icon}</span>
+      <p className="min-w-0 flex-1 text-[13.5px] leading-[20px] text-[var(--text-muted)]">{text}</p>
+      <Own className="shrink-0">{action}</Own>
+    </div>
   );
 }

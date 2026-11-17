@@ -656,6 +656,12 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
       const file = folder ? appIconIn(folder) : undefined;
       return sendMedia(req, res, folder && file ? join(folder, file) : null, { keep: true });
     }
+    /* one of OpenFilm's own plugins' recording at work, or its poster: only the files its showcase names (src/plugins.mjs) */
+    if (parts[0] === 'plugin-preview' && parts.length === 3 && req.method === 'GET') {
+      const id = decodeURIComponent(parts[1]), name = decodeURIComponent(parts[2]);
+      const video = /^[a-z][a-z0-9-]{0,31}$/.test(id) ? pluginsShown().find((p) => p.id === id)?.showcase?.video : undefined;
+      return sendMedia(req, res, video && (name === video.src || name === video.poster) ? join(pluginsDir(), id, name) : null, { keep: true });
+    }
     /* the order the person put the workbenches in (PUT plugin-order { order: ids }), answered with it as kept */
     if (parts[0] === 'plugin-order' && parts.length === 1 && req.method === 'PUT') {
       const { order } = /** @type {{ order?: unknown }} */ (await readJson(req) ?? {});

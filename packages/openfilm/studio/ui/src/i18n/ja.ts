@@ -1740,6 +1740,8 @@ export const ja: Words = {
     docAgentNote: "こう言えば、エージェントがこうします。クリックでチャットに入ります。",
     docPut: "チャットに入れる",
     docKeys: "キーボードショートカット",
+    bandUses: "スキル「{name}」を使っています",
+    bandDone: "完了",
     metric_type: "種類",
     metricTip_type: "これは何か：独自の画面を持つエディター、またはエージェントがチャットで使うスキル",
     typeNote_editor: "独自の画面",

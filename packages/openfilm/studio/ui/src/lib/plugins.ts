@@ -24,11 +24,13 @@ export interface PluginTab { title?: Record<string, string>; icon?: string }
  */
 /** What a person could say to use a plugin, and what the agent then does (src/plugins.mjs exampleOf). */
 export type PluginExample = string | { say: string; does?: string };
-/** A plugin's page's highlights and keys (src/plugins.mjs showcaseOf). */
+/** A plugin's page's highlights, keys and video (src/plugins.mjs showcaseOf). */
 export interface PluginShowcase {
   highlights?: Record<string, { icon: string; title: string; text: string }[]>;
   /** a keymap action's id, or keys of its own with what they do by language */
   keys?: (string | { keys: string[]; label: Record<string, string> })[];
+  /** a short recording of it at work and its poster, files in its folder (served at /api/plugin-preview/<id>/<file>) */
+  video?: { src: string; poster?: string };
 }
 
 export interface Plugin {

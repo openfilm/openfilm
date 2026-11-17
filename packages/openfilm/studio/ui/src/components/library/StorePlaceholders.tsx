@@ -8,6 +8,8 @@ import { KindIcon, type FeatureKind } from '../feature-kinds';
 import { ASSET_GRID, packGrid, shapeOf } from './CommunityViews';
 
 const BAR = 'block rounded-full bg-[var(--bg-field)]';
+/* a place drawn empty: an outline, never a filled card, so it is not taken for something still loading */
+const SLOT = 'grid place-items-center rounded-[12px] border border-dashed border-[var(--border-strong)] bg-[color-mix(in_srgb,var(--bg-field)_45%,transparent)] text-[var(--text-faint)]';
 
 /** "Coming soon", beside a section's name. */
 export function SoonPill() {
@@ -22,11 +24,10 @@ export function GhostPacks({ kind, count }: { kind: FeatureKind; count: number }
     <div aria-hidden className={packGrid(kind)} data-store-ghost={kind}>
       {Array.from({ length: count }, (_, i) => (
         <div key={i} className="min-w-0">
-          <div className={`grid place-items-center rounded-[14px] bg-[var(--bg-field)] text-[var(--text-faint)] opacity-70 ${square ? 'aspect-square' : 'aspect-video'}`}>
+          <div className={`${SLOT} ${square ? 'aspect-square' : 'aspect-video'}`}>
             <KindIcon kind={kind} size={22} />
           </div>
-          <span className={`${BAR} mt-3 h-3 w-3/5`} />
-          <span className={`${BAR} mt-2 h-2.5 w-2/5 opacity-70`} />
+          <span className={`${BAR} mt-3 h-2.5 w-3/5 opacity-60`} />
         </div>
       ))}
     </div>
@@ -41,7 +42,7 @@ export function GhostThings({ kind, count }: { kind: FeatureKind; count: number 
       <div aria-hidden className="grid grid-cols-[repeat(auto-fill,minmax(340px,1fr))] gap-x-6" data-store-ghost={kind}>
         {Array.from({ length: count }, (_, i) => (
           <div key={i} className="flex h-12 items-center gap-3">
-            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[var(--bg-field)] text-[var(--text-faint)]"><KindIcon kind={kind} size={14} /></span>
+            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full border border-dashed border-[var(--border-strong)] text-[var(--text-faint)] opacity-60"><KindIcon kind={kind} size={14} /></span>
             <span className={`${BAR} h-3`} style={{ width: `${38 + ((i * 17) % 30)}%` }} />
             <span className={`${BAR} ml-auto h-2.5 w-10 opacity-70`} />
           </div>
@@ -53,7 +54,7 @@ export function GhostThings({ kind, count }: { kind: FeatureKind; count: number 
     <div aria-hidden className={ASSET_GRID[shape]} data-store-ghost={kind}>
       {Array.from({ length: count }, (_, i) => (
         <div key={i} className="min-w-0">
-          <div className={`grid place-items-center rounded-[14px] bg-[var(--bg-field)] text-[var(--text-faint)] opacity-70 ${shape === 'sticker' ? 'aspect-square' : shape === 'words' ? 'aspect-[2/1]' : 'aspect-video'}`}>
+          <div className={`${SLOT} ${shape === 'sticker' ? 'aspect-square' : shape === 'words' ? 'aspect-[2/1]' : 'aspect-video'}`}>
             <KindIcon kind={kind} size={18} />
           </div>
           <span className={`${BAR} mt-2 h-2.5 ${shape === 'sticker' ? 'mx-auto w-1/2' : 'w-3/5'}`} />
