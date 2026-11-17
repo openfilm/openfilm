@@ -1653,6 +1653,7 @@ export const en = {
     kind_plugins: "Plugin",
     kind_plugin: "Plugin",
     note_favorites: "What you starred: the same list here and in the library.",
+    libraryLater: "The Community's library is empty for now: it fills up over the coming 0.4.x versions.",
     note_kindAsset: "Community {kind}, all free for commercial use. Add them to the library and use them from its {kind}.",
     sourcesLine: "Read other catalogs people keep, besides the OpenFilm Community.",
     note_plugins: "Plugins teach OpenFilm new things: some bring a workbench you switch to at the top right, some connect your agent to outside services.",

@@ -1639,6 +1639,7 @@ export const ko: Words = {
     kind_plugins: "플러그인",
     kind_plugin: "플러그인",
     note_favorites: "즐겨찾기한 것들입니다. 여기와 소재 라이브러리에서 같은 목록입니다.",
+    libraryLater: "커뮤니티 소재 라이브러리는 아직 비어 있습니다. 0.4.x 후속 버전에서 차차 채워집니다.",
     note_kindAsset: "커뮤니티의 {kind}, 모두 상업적 무료. 라이브러리에 추가하면 그 {kind}에서 바로 사용합니다.",
     sourcesLine: "OpenFilm 커뮤니티 외에 다른 사람이 관리하는 카탈로그도 읽을 수 있습니다.",
     note_plugins: "플러그인은 OpenFilm에 새 기능을 더합니다. 오른쪽 위에서 전환하는 작업대를 가진 것도 있고, 에이전트를 외부 서비스에 연결하는 것도 있습니다.",

@@ -1641,6 +1641,7 @@ export const ja: Words = {
     kind_plugins: "プラグイン",
     kind_plugin: "プラグイン",
     note_favorites: "お気に入りにしたもの。ここと素材ライブラリで同じリストです。",
+    libraryLater: "コミュニティの素材ライブラリは今は空です。0.4.x の今後のバージョンで少しずつ増えていきます。",
     note_kindAsset: "コミュニティの{kind}。商用無料です。素材ライブラリに追加すると、その「{kind}」から使えます。",
     sourcesLine: "OpenFilm コミュニティのほか、ほかの人が管理するカタログも読めます。",
     note_plugins: "プラグインは OpenFilm にできることを増やします。右上で切り替えるワークベンチを持つものや、エージェントを外部サービスにつなぐものがあります。",

@@ -132,6 +132,15 @@ function VersionCard() {
   React.useEffect(() => { void api.version().then(setInfo).catch(() => {}); }, []);
   const ready = useHostUpdate();
   if (!info) return null;
+  /* nothing to restart for: the whole card is one button, to what is new in this version */
+  if (!ready && !(info.newer && info.latest)) {
+    return (
+      <button type="button" className={`${styles.version} ${styles.versionButton}`} data-projects-version={info.version} onClick={showWhatsNew}>
+        <strong>{t('projects.versionLine').replace('{version}', info.version)}</strong>
+        <small>{t('projects.versionNotes')}</small>
+      </button>
+    );
+  }
   return (
     <div className={styles.version} data-projects-version={info.version}>
       <strong>{t('projects.versionLine').replace('{version}', info.version)}</strong>
@@ -142,9 +151,7 @@ function VersionCard() {
         </>
       ) : info.newer && info.latest ? (
         <small>{t('projects.versionNewer').replace('{version}', info.latest)}</small>
-      ) : (
-        <button type="button" className={styles.versionLink} onClick={showWhatsNew}>{t('projects.versionNotes')}</button>
-      )}
+      ) : null}
     </div>
   );
 }

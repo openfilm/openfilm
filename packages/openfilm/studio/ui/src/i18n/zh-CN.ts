@@ -1652,6 +1652,7 @@ export const zhCN: Words = {
     kind_plugins: "插件",
     kind_plugin: "插件",
     note_favorites: "你收藏的东西，在这里和素材库里是同一份。",
+    libraryLater: "社区素材库暂时是空的，会在 0.4.x 的后续版本里逐步更新。",
     note_kindAsset: "社区里的{kind}，都可以免费商用。添加到素材库后，在素材库的「{kind}」里直接用。",
     sourcesLine: "除了 OpenFilm 社区，也可以读取别人维护的作品目录。",
     note_plugins: "插件给 OpenFilm 加新本事：有的带一个工作台，在右上角切换；有的把智能体连到外部服务。",

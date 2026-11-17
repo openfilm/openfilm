@@ -10,11 +10,12 @@
  * projects' beside the window's sidebar, so switching between them moves nothing.
  */
 import React from 'react';
-import { ArrowLeft, Clapperboard, ExternalLink, MessageCircleQuestion, Play, Workflow, X } from 'lucide-react';
+import { ArrowLeft, BadgeCheck, Clapperboard, ExternalLink, MessageCircleQuestion, Play, Workflow, X } from 'lucide-react';
 import { useT } from '@/i18n';
 import { seenExamples, sourcesApi, type Example } from '@/lib/project-sources';
 import { readCanvasDoc, type CanvasDoc } from '@/lib/canvas';
 import { Tooltip } from './Tooltip';
+import { byOpenFilm, makerName } from '@/lib/library';
 
 /* an example's canvas, only looked at: the board's code is loaded when one is shown */
 const CanvasPreview = React.lazy(() => import('./canvas/CanvasView').then((m) => ({ default: m.CanvasPreview })));
@@ -182,6 +183,7 @@ function Hero({ example, onOpen, onStart, onReference }: { example: Example; onO
       <div className="absolute inset-x-0 bottom-0 flex items-end gap-6 p-6">
         <div className="min-w-0 flex-1">
           <div className="text-[22px] font-semibold leading-tight tracking-[-0.015em] text-white">{example.title}</div>
+          <Publisher owner={example.owner} className="mt-1 text-[12.5px] text-white/70" />
           {example.description ? <div className="mt-1.5 line-clamp-2 max-w-[520px] text-[13px] leading-[19px] text-white/80">{example.description}</div> : null}
           {example.duration ? <div className="mt-1.5 text-[12px] text-white/55">{clock(example.duration)}</div> : null}
         </div>
@@ -218,6 +220,7 @@ function ExampleCard({ example, label, onOpen }: { example: Example; label: stri
         <span className="min-w-0 flex-1 truncate text-[13.5px] font-medium text-[var(--text)]">{example.title}</span>
         {label ? <span className="shrink-0 text-[11.5px] text-[var(--text-faint)]">{label}</span> : null}
       </div>
+      <Publisher owner={example.owner} className="mt-0.5 text-[11.5px] text-[var(--text-faint)]" />
       {example.description ? <div className="mt-0.5 line-clamp-2 text-[12px] leading-[17px] text-[var(--text-muted)]">{example.description}</div> : null}
     </button>
   );
@@ -317,6 +320,7 @@ function ExampleDetail({ example, onStart, onReference, onUseCanvas, onExplain, 
         <div className="flex min-w-0 flex-col">
           {example.category ? <div className="mb-1 text-[11.5px] font-medium text-[var(--text-muted)]">{categoryLabel(example.category)}</div> : null}
           <h2 className="text-[20px] font-semibold leading-tight tracking-[-0.01em] text-[var(--text)]">{example.title}</h2>
+          <Publisher owner={example.owner} className="mt-1.5 text-[12.5px] text-[var(--text-muted)]" />
           {example.description ? <p className="mt-2 text-[13.5px] leading-[20px] text-[var(--text-muted)]">{example.description}</p> : null}
           {example.duration ? <p className="mt-2 text-[12px] text-[var(--text-faint)]">{clock(example.duration)}</p> : null}
           <div className="mt-5 flex flex-col gap-2">
@@ -346,6 +350,17 @@ function ExampleDetail({ example, onStart, onReference, onUseCanvas, onExplain, 
           <a href={example.url} target="_blank" rel="noreferrer" className="mt-auto flex items-center gap-1.5 pt-6 text-[12px] text-[var(--text-muted)] hover:text-[var(--text)]"><ExternalLink size={13} />{t('gallery.viewSource')}</a>
         </div>
       </div>
+    </div>
+  );
+}
+
+/** Who published an example: OpenFilm with its tick, else the publisher's GitHub name. */
+export function Publisher({ owner, className = '' }: { owner?: string; className?: string }) {
+  if (!owner) return null;
+  return (
+    <div data-example-publisher="" className={`flex min-w-0 items-center gap-1 ${className}`}>
+      <span className="truncate">{makerName(owner)}</span>
+      {byOpenFilm(owner) ? <BadgeCheck size={12} strokeWidth={2} aria-label="OpenFilm" className="shrink-0" /> : null}
     </div>
   );
 }

@@ -1641,6 +1641,7 @@ export const es: Words = {
     kind_plugins: "Plugin",
     kind_plugin: "Plugin",
     note_favorites: "Lo que marcaste con estrella: la misma lista aquí y en la biblioteca.",
+    libraryLater: "La biblioteca de la Comunidad está vacía por ahora: se irá llenando en las próximas versiones 0.4.x.",
     note_kindAsset: "{kind} de la Comunidad, gratis para uso comercial. Añádelos a la biblioteca y úsalos desde su {kind}.",
     sourcesLine: "Lee otros catálogos que mantiene la gente, además de la Comunidad de OpenFilm.",
     note_plugins: "Los plugins enseñan cosas nuevas a OpenFilm: algunos traen una mesa de trabajo que eliges arriba a la derecha, otros conectan tu agente con servicios externos.",

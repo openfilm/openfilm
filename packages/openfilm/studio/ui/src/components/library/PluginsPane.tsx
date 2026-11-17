@@ -26,6 +26,7 @@ import { openExample, showPluginsLine, type PluginsLine } from '@/lib/plugins-wi
 import { isPlugin, pluginOfSkill } from '@/lib/project-plugins';
 import { communityOf, fetchErrorKey, forgetSeenSkills, makerOf, ownerOf, seenCatalog, seenExamples, seenSkills, sourcesApi, SourceError, watchSkills, type Example, type PublishCheck, type PublishVerify, type SkillEntry } from '@/lib/project-sources';
 import { ConfirmDialog } from '../ConfirmDialog';
+import { Publisher } from '../ExamplesGallery';
 import type { ContextMenuEntry } from '../ContextMenu';
 import {
   BringsLine, byOrder, CommandChips, ForDevelopers, HowToUse, TrustMark, hostOf, useScriptsConsent, inLanguage, PageSection, SkillCover, SkillMark, SkillPage, useSkillWords,
@@ -649,6 +650,7 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
           </StoreSection>
         ))}
         {q && !rows.length ? <Empty text={t('assetDrawer.noSkillsFound')} /> : null}
+        {!q && !rows.length ? <Empty text={t('assetDrawer.libraryLater')} /> : null}
         {q ? null : publishCall(t('assetDrawer.kindNone').replaceAll('{kind}', t('assetDrawer.tab_assets')))}
         {lightbox}
       </PluginsPage>
@@ -673,7 +675,7 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
           </StoreSection>
         </>
       ) : q ? <Empty text={t('assetDrawer.noSkillsFound')} />
-        : publishCall(t('assetDrawer.kindNone').replaceAll('{kind}', kindName(kind)))}
+        : <><Empty text={t('assetDrawer.libraryLater')} />{publishCall(t('assetDrawer.kindNone').replaceAll('{kind}', kindName(kind)))}</>}
       {lightbox}
     </PluginsPage>
   );
@@ -740,6 +742,7 @@ function ExampleTile({ example, kind }: { example: Example; kind: string }) {
         {length ? <span className="absolute bottom-2 right-2 rounded-[5px] bg-black/60 px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-white backdrop-blur-sm">{length}</span> : null}
       </span>
       <span className="mt-2.5 line-clamp-1 text-[14px] font-medium text-[var(--text)]">{example.title}</span>
+      <Publisher owner={example.owner} className="mt-0.5 text-[12px] text-[var(--text-faint)]" />
       <span className="mt-0.5 line-clamp-1 text-[12.5px] text-[var(--text-muted)]">{example.description || kind}</span>
     </button>
   );

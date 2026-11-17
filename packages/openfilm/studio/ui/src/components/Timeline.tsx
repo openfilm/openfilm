@@ -61,7 +61,7 @@ import { useLanguage, useT } from '@/i18n';
 import { CcMark } from './CcMark';
 import type { ActionId } from '@/lib/keymap';
 import { keyAction, useKeyHint } from '@/lib/keymap-store';
-import { ownTrackHeight } from '@/lib/track-heights';
+import { MAIN_TRACK_MIN_H, ownTrackHeight } from '@/lib/track-heights';
 import type { Op } from '@/api';
 import type { ClipEdit } from '@/lib/film-clip-edits';
 import { laneOfBlock, pasteLane, trackByLane } from '@/lib/timeline-clipboard';
@@ -333,7 +333,9 @@ function rowH(track: Pick<TimelineTrack, 'kind' | 'height' | 'main' | 'extra'> &
 }
 /** The row's own height, without the moving properties under it. */
 function baseRowH(track: Pick<TimelineTrack, 'kind' | 'height' | 'main'> & { captions?: unknown; text?: boolean }): number {
-  return track.height ?? (track.captions || track.text ? CAPTION_ROW_H : ownTrackHeight(track));
+  const h = track.height ?? (track.captions || track.text ? CAPTION_ROW_H : ownTrackHeight(track));
+  /* the main track keeps room for its cover, however low the person dragged it */
+  return track.main ? Math.max(MAIN_TRACK_MIN_H, h) : h;
 }
 
 /**

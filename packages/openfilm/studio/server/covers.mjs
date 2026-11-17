@@ -201,6 +201,40 @@ function ffmpeg(args, input) {
   });
 }
 
+/** How long the film's page stays open after a frame is taken, so the next moment picked is quick. */
+const KEEP_MS = 60_000;
+/** @type {{ key: string, film: Promise<any>, queue: Promise<unknown>, timer: NodeJS.Timeout | null } | null} */
+let kept = null;
+
+/**
+ * `run` on the film's page, opened once and kept open a while (until film.html changes or KEEP_MS passes unused): picking
+ * one moment after another seeks the open page instead of opening the film again each time. Runs one at a time.
+ * @template T @param {string} root @param {number} scale @param {(film: any) => Promise<T>} run @returns {Promise<T>}
+ */
+async function keptFilm(root, scale, run) {
+  const file = join(root, FILM_FILE);
+  const key = `${file}\0${scale}\0${(await stat(file)).mtimeMs}`;
+  if (kept && kept.key !== key) closeKept();
+  if (!kept) kept = { key, film: open(file, /** @type {{ root: string, playable: boolean }} */ ({ root, playable: true, scale })), queue: Promise.resolve(), timer: null };
+  const here = kept;
+  if (here.timer) clearTimeout(here.timer);
+  const done = here.queue.then(async () => run(await here.film));
+  here.queue = done.catch(() => {});
+  try { return await done; }
+  catch (e) { if (kept === here) closeKept(); throw e; }
+  finally {
+    if (kept === here) { here.timer = setTimeout(() => { if (kept === here) closeKept(); }, KEEP_MS); here.timer.unref?.(); }
+  }
+}
+
+function closeKept() {
+  const was = kept;
+  kept = null;
+  if (!was) return;
+  if (was.timer) clearTimeout(was.timer);
+  void was.queue.then(() => was.film).then((f) => f.close(), () => {});
+}
+
 /**
  * The film drawn at `at` seconds into a cover's folder, big enough to fill `stage` (its short side covers the cover's,
  * never smaller than the film is laid out), as a clip that fills the cover centered, cropped at its edges where the
@@ -216,15 +250,11 @@ async function frameClip(root, abs, at, stage) {
   /* drawn as sharp as the cover needs, never smaller than the film is laid out */
   const scale = Math.max(1, stage.w / meta.width, stage.h / meta.height);
   /* `scale` goes on to the film's page (host.mjs FilmPage.open), as an export's does */
-  const film = await open(join(root, FILM_FILE), /** @type {{ root: string, playable: boolean }} */ ({ root, playable: true, scale }));
-  let png;
-  try {
+  const png = await keptFilm(root, scale, async (film) => {
     const length = film.film.meta.duration ?? Infinity;
     await film.film.seek(Math.max(0, Math.min(at, length - 1e-3)));
-    png = await film.film.capture({ format: 'png' });
-  } finally {
-    await film.close();
-  }
+    return film.film.capture({ format: 'png' });
+  });
   const fill = Math.max(stage.w / meta.width, stage.h / meta.height);
   const w = Math.round(meta.width * fill), h = Math.round(meta.height * fill);
   const name = `frame-${Math.round(at * 1000)}.jpg`;
