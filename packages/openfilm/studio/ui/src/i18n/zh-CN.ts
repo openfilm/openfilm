@@ -1703,6 +1703,7 @@ export const zhCN: Words = {
     kindPlaceholder: "社区的{kind}会出现在这里，按大家最常用的排在前面。",
     kindPacks: "{kind}包",
     kindPacksCount: "{n} 个{kind}包",
+    packsCountShort: "{n} 个包",
     packCount_sound: "{n} 个音效",
     packCount_music: "{n} 首音乐",
     connectorsNote: "{name} 自己装的插件（连接器）。打开后，它在 OpenFilm 里也能用。",

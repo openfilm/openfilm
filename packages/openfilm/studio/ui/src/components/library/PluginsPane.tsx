@@ -36,6 +36,7 @@ import { CATEGORIES, categoryOfSkill, type Category } from '@/lib/plugin-profile
 import { Meter } from './PluginProfile';
 import { GhostPacks, GhostThings, SoonPill } from './StorePlaceholders';
 import { StoreAudio } from './StoreAudio';
+import { KindTile } from './StoreKinds';
 import { DocAgent, DocHighlights, DocKeys, DocLines, DocOff, DocSection, DocSteps, InfoBar, sortDetails } from './DocSections';
 import { SettingsButton, SettingsGroup, SettingsSwitch } from '../settings/ui';
 import { LARGE_DIALOG_COLUMN as PAGE_INSET } from '../dialog-chrome';
@@ -644,16 +645,19 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
   /* how many packs a row shows: more where their pictures are square */
   const rowOf = (k: FeatureKind) => (k !== 'music' && (shapeOf(k) === 'sound' || shapeOf(k) === 'sticker') ? 6 : 4);
   if (!kind) {
-    const rows = kinds.map((k) => ({ k, packs: packsOf(k) })).filter((x) => x.packs.length || !q);
+    /* the home: every kind a card of its own, then the packs of each kind that has some */
+    const rows = kinds.map((k) => ({ k, packs: packsOf(k) })).filter((x) => x.packs.length);
     return (
       <PluginsPage key={line} title={t('assetDrawer.tab_assets')} note={q ? undefined : t('assetDrawer.note_assets')}>
         {status}
-        {kindChips}
+        {q ? null : (
+          <div className="mb-12 grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-3" data-store-kinds="">
+            {kinds.map((k) => <KindTile key={k} kind={k} name={kindName(k)} packs={packsOf(k).length} onOpen={() => showPluginsLine(`kind:${k}`)} />)}
+          </div>
+        )}
         {rows.map(({ k, packs }) => (
-          <StoreSection key={k} title={kindPacks(k)} badge={packs.length ? undefined : <SoonPill />}
-            note={t(`assetDrawer.kindAbout_${k}`)}
-            all={() => showPluginsLine(`kind:${k}`)}>
-            {packs.length ? <div className={packGrid(k)}>{packs.slice(0, rowOf(k)).map(packTile)}</div> : <GhostPacks kind={k} count={rowOf(k) / 2} />}
+          <StoreSection key={k} title={kindPacks(k)} note={t(`assetDrawer.kindAbout_${k}`)} all={() => showPluginsLine(`kind:${k}`)}>
+            <div className={packGrid(k)}>{packs.slice(0, rowOf(k)).map(packTile)}</div>
           </StoreSection>
         ))}
         {q && !rows.length ? <Empty text={t('assetDrawer.noSkillsFound')} /> : null}

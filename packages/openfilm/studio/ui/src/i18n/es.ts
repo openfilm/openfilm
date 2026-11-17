@@ -1692,6 +1692,7 @@ export const es: Words = {
     kindPlaceholder: "Aquí aparecerán {kind} de la Comunidad, los más usados primero.",
     kindPacks: "Paquetes de {kind}",
     kindPacksCount: "{n} paquetes de {kind}",
+    packsCountShort: "{n} paquetes",
     packCount_sound: "{n} sonidos",
     packCount_music: "{n} temas",
     connectorsNote: "Plugins (conectores) que añadiste tú a {name}. Activa uno para usarlo también en OpenFilm.",

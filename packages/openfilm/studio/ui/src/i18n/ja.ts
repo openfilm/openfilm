@@ -1692,6 +1692,7 @@ export const ja: Words = {
     kindPlaceholder: "コミュニティの{kind}はここに並びます。よく使われているものから順に。",
     kindPacks: "{kind}パック",
     kindPacksCount: "{kind}パック {n} 個",
+    packsCountShort: "{n} パック",
     packCount_sound: "{n} 個の効果音",
     packCount_music: "{n} 曲",
     connectorsNote: "{name} に自分で追加したプラグイン（コネクタ）。オンにすると OpenFilm でも使えます。",

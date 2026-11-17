@@ -980,7 +980,7 @@ function StarButton({ item, kept, className }: { item: LibraryItem; kept: boolea
 }
 
 /** A namespace of the side bar, as a box (one that opens, its heading); a line under one that opened. */
-const RAIL_BOX = 'flex h-[26px] w-full shrink-0 select-none items-center gap-1 rounded-[6px] bg-[var(--bg-field)] px-2.5 text-left text-[11.5px] font-semibold transition-colors hover:bg-[var(--bg-pressed)]';
+const RAIL_BOX = 'flex h-[26px] w-full shrink-0 select-none items-center gap-1 rounded-[4px] bg-[var(--bg-field)] px-2.5 text-left text-[11.5px] font-semibold transition-colors hover:bg-[var(--bg-pressed)]';
 const RAIL_CHILD = 'flex h-7 w-full shrink-0 items-center px-2.5 text-left text-[11.5px] font-semibold transition-colors';
 
 /** The sections of the side bars folded, by category and section, kept on this computer. */

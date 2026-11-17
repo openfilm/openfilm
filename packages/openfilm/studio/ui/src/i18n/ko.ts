@@ -1690,6 +1690,7 @@ export const ko: Words = {
     kindPlaceholder: "커뮤니티의 {kind}이(가) 여기에 많이 쓰는 순으로 표시됩니다.",
     kindPacks: "{kind} 팩",
     kindPacksCount: "{kind} 팩 {n}개",
+    packsCountShort: "팩 {n}개",
     packCount_sound: "효과음 {n}개",
     packCount_music: "음악 {n}곡",
     connectorsNote: "{name}에 직접 추가한 플러그인(커넥터)입니다. 켜면 OpenFilm에서도 쓸 수 있습니다.",

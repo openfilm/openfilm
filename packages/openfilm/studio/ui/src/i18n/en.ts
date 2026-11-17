@@ -1704,6 +1704,7 @@ export const en = {
     kindPlaceholder: "The Community's {kind} will show here, the most used first.",
     kindPacks: "{kind} packs",
     kindPacksCount: "{n} {kind} packs",
+    packsCountShort: "{n} packs",
     packCount_sound: "{n} sounds",
     packCount_music: "{n} tracks",
     connectorsNote: "Plugins (connectors) you added to {name} yourself. Turn one on to use it in OpenFilm too.",
