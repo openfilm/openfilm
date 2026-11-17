@@ -58,8 +58,13 @@ async function withCard(name, run, { chat = false, again = false, mixed = false 
     const scale = box.width / 1080;
     /** A point of the film (its px) on the screen. */
     const on = (x, y) => ({ x: box.x + x * scale, y: box.y + y * scale });
-    const until = async (check, what) => {
-      for (let i = 0; i < 60; i += 1) { if (await check()) return; await page.waitForTimeout(100); }
+    /* waits by the clock, not by tries: a slow machine draws a new page later */
+    const until = async (check, what, wait = 20_000) => {
+      for (const end = Date.now() + wait; ;) {
+        if (await check()) return;
+        if (Date.now() >= end) break;
+        await page.waitForTimeout(100);
+      }
       assert.fail(`${what}; selection: ${JSON.stringify(await selection())}`);
     };
     /** What is selected on the picture: how many layers together (null: not several), the Layers rows selected, and

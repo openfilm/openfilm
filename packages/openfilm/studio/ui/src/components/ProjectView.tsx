@@ -1738,7 +1738,7 @@ export function ProjectView({ projectId, onProject }: {
     /* a clip given a page of its own: the layers copied from it are of that page now */
     const clips = board.clips.map((c) => (sources.has(c.src) ? { ...c, src: sources.get(c.src)! } : c));
     keepLayerBoard({ ...board, clips, pasted: { spot, n, ats: made } });
-    if (copies.length) await selectPasted(copies, 40);
+    if (copies.length) await selectPasted(copies, 20_000);
     return null;
   };
   /**
@@ -1807,18 +1807,18 @@ export function ProjectView({ projectId, onProject }: {
       return e instanceof Error ? e.message : String(e);
     }
   };
-  /* what was pasted is selected, all of it together, once the picture draws it (a new page loads first); the copies
-     the picture never draws in that time are left out */
-  const selectPasted = async (copies: readonly { clip: string; at: string }[], tries = 20) => {
+  /* what was pasted is selected, all of it together, once the picture draws it (a new page loads first, slowly on a
+     slow computer); the copies the picture has not drawn within `wait` ms are left out */
+  const selectPasted = async (copies: readonly { clip: string; at: string }[], wait = 3000) => {
     let there: { loc: string; clipLoc: string }[] = [];
-    for (let k = 0; k < tries; k++) {
+    for (const end = Date.now() + wait; ;) {
       const doc = filmRef.current as unknown as FilmDoc | null;
       const found = await Promise.all(copies.map(async ({ clip, at }) => {
         const clipLoc = doc?.tracks.flatMap((tr, ti) => tr.clips.map((c, ci) => (c.id === clip ? filmDocLoc(ti, ci) : null))).find(Boolean);
         return clipLoc && await preview.current?.stage?.<object>('layer', { clip, loc: at, any: true }) ? { loc: at, clipLoc } : null;
       }));
       there = found.filter((x): x is { loc: string; clipLoc: string } => x != null);
-      if (there.length === copies.length) break;
+      if (there.length === copies.length || Date.now() >= end) break;
       await new Promise((done) => window.setTimeout(done, 150));
     }
     if (there.length) selectStageLayers(there);
