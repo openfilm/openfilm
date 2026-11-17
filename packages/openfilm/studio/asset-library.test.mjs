@@ -66,9 +66,12 @@ test('the library drawer: the media are folders, the project and the person’s 
     assert.equal(await line('project').count(), 0, 'no project line outside the media');
     const packs = await drawer.locator('[data-rail-kind="pack"]').evaluateAll(rows => rows.map(r => r.getAttribute('data-rail-line')));
     assert.ok(packs.length > 0, 'the music category has packs');
+    /* the box shows all of Official; its arrow folds it and opens it again */
     await section.click();
+    await drawer.locator('[data-rail-section="openfilm"] > button[aria-pressed="true"]').waitFor();
+    await section.locator('[data-rail-fold]').click();
     await line(packs[0]).waitFor({ state: 'detached' });
-    await section.click();
+    await section.locator('[data-rail-fold]').click();
     await line(packs[0]).waitFor();
     /* a pack taken out of the library, then put back from "+ Add" */
     await line(packs[0]).click({ button: 'right' });
