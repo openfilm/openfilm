@@ -116,14 +116,13 @@ test('Studio popups use the same themed controls on Windows and Mac browser prof
         await page.getByRole('button', { name: 'Clone voice', exact: true }).first().click();
         const dialog = page.getByRole('dialog', { name: 'Clone voice', exact: true });
         await dialog.waitFor();
-        await dialog.getByRole('button', { name: 'Service', exact: true }).click();
-        await menuAppearance(page, 'dark');
-        const inworld = page.getByRole('option', { name: 'Inworld', exact: true });
-        assert.equal(await inworld.evaluate(el => { const r = el.getBoundingClientRect(); return el.contains(document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2)); }), true);
-        await inworld.click();
-        assert.match(await dialog.getByRole('button', { name: 'Service', exact: true }).innerText(), /Inworld/);
+        /* the dialog's menus are the themed ones, over the dialog's overlay (its engine is OpenFilm's service's to offer) */
         await dialog.getByRole('button', { name: 'Recording language', exact: true }).click();
-        await page.getByRole('option', { name: '日本語', exact: true }).click();
+        await menuAppearance(page, 'dark');
+        const japanese = page.getByRole('option', { name: '日本語', exact: true });
+        assert.equal(await japanese.evaluate(el => { const r = el.getBoundingClientRect(); return el.contains(document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2)); }), true);
+        await japanese.click();
+        assert.match(await dialog.getByRole('button', { name: 'Recording language', exact: true }).innerText(), /日本語/);
         await dialog.getByRole('button', { name: 'Project audio', exact: true }).click();
         const audio = dialog.locator('button[aria-haspopup="listbox"][aria-label="Project audio"]');
         await audio.click();
