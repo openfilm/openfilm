@@ -153,13 +153,16 @@ test('browser layouts ignore unavailable chat, an arrangement compares the block
   assert.equal(sameWorkspace(DEFAULT_WORKSPACE, { ...DEFAULT_WORKSPACE, chat: false }, true), false);
   assert.equal(sameWorkspace(DEFAULT_CANVAS_WORKSPACE, { ...DEFAULT_CANVAS_WORKSPACE, blocks: { ...DEFAULT_CANVAS_WORKSPACE.blocks, layers: { open: true, edge: 'left', size: 800 } } }, true, CANVAS), true);
   assert.equal(sameWorkspace(DEFAULT_WORKSPACE, DEFAULT_CANVAS_WORKSPACE, true), false);
+  assert.deepEqual(workspacePresets(EDIT).map((p) => p.id), ['standard', 'library', 'detail', 'focus']);
+  assert.deepEqual(workspacePresets(CANVAS).map((p) => p.id), ['standard', 'library', 'focus']);
   for (const spec of [EDIT, CANVAS]) {
     const presets = workspacePresets(spec);
-    assert.deepEqual(presets.map((p) => p.id), ['standard', 'library', 'focus']);
     assert.equal(presets.find(row => row.id === 'focus')?.layout.mode, spec.name);
-    assert.equal(presets.find(row => row.id === 'library')?.layout.libraryDock, 'bottom');
+    assert.equal(presets.find(row => row.id === 'library')?.layout.libraryDock, 'left', 'the library beside the work');
   }
-  const [, library, focus] = workspacePresets(EDIT);
-  assert.deepEqual(Object.entries(library!.layout.blocks).map(([k, p]) => [k, p.open]), [['layers', false], ['viewer', true], ['inspector', false], ['timeline', true]], 'the library preset closes what is beside the picture');
-  assert.deepEqual(Object.entries(focus!.layout.blocks).map(([k, p]) => [k, p.open]), [['layers', false], ['viewer', true], ['inspector', false], ['timeline', false]]);
+  const [standard, library, detail, focus] = workspacePresets(EDIT);
+  assert.deepEqual(library!.layout.blocks, standard!.layout.blocks, 'the library preset keeps the work as it is');
+  assert.equal(detail!.layout.blocks.layers?.open, true, 'Detail opens the layers');
+  assert.equal(focus!.layout.chat, false);
+  assert.equal(focus!.layout.assets, false);
 });

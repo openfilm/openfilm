@@ -7,7 +7,7 @@
 import React from 'react';
 import { Check, Eye, Loader2, PencilLine, Plug, Unplug } from 'lucide-react';
 import { useLanguage, useT } from '@/i18n';
-import { DocOff, DocSay, DocSection, DocSteps } from './DocSections';
+import { DocAgent, DocHighlights, DocOff, DocSection, DocSteps } from './DocSections';
 import { studioHost, type HostConnector } from '@/lib/host';
 import type { Plugin } from '@/lib/plugins';
 import { PageButton } from './Store';
@@ -81,22 +81,24 @@ export function ConnectorBody({ plugin, title, state }: { plugin: Plugin; title:
   const t = useT();
   const lang = useLanguage();
   const examples = plugin.examples?.[lang] ?? plugin.examples?.en ?? [];
+  const highlights = plugin.showcase?.highlights?.[lang] ?? plugin.showcase?.highlights?.en ?? [];
   const read = state?.tools.filter((tool) => tool.readOnly) ?? [];
   const write = state?.tools.filter((tool) => !tool.readOnly) ?? [];
-  /* laid out as every editor's and skill's page: what it does, how to use it, what to say, then what turning it off does */
+  /* laid out as every editor's and skill's page: what it does, with the agent, how to use it, then what turning it off does */
   return (
     <div data-connector-body={plugin.id}>
-      {state?.error ? <p role="alert" className="mt-6 rounded-[10px] bg-[var(--bg-field)] px-4 py-3 text-[13.5px] text-[var(--warn)]">{t('assetDrawer.connectorFailed').replace('{why}', state.error)}</p> : null}
-      {state?.expired ? <p role="status" className="mt-6 rounded-[10px] bg-[var(--bg-field)] px-4 py-3 text-[13.5px] text-[var(--text-muted)]">{t('assetDrawer.connectorExpired').replace('{name}', title)}</p> : null}
+      {state?.error ? <p role="alert" className="mb-8 rounded-[12px] bg-[var(--bg-field)] px-4 py-3 text-[13.5px] text-[var(--warn)]">{t('assetDrawer.connectorFailed').replace('{why}', state.error)}</p> : null}
+      {state?.expired ? <p role="status" className="mb-8 rounded-[12px] bg-[var(--bg-field)] px-4 py-3 text-[13.5px] text-[var(--text-muted)]">{t('assetDrawer.connectorExpired').replace('{name}', title)}</p> : null}
 
-      {/* what it can do: the tools its server offers, read apart from those that change things */}
-      <DocSection title={t('assetDrawer.docAbout')} note={state?.connected ? undefined : t('assetDrawer.connectorToolsLater').replace('{name}', title)}>
+      {/* what it can do: its highlights; once connected, the tools its server offers, read apart from those that change things */}
+      <DocSection title={t('assetDrawer.docAbout')} note={state?.connected || highlights.length ? undefined : t('assetDrawer.connectorToolsLater').replace('{name}', title)}>
+        {highlights.length ? <DocHighlights items={highlights} /> : null}
         {state?.connected ? (
-          <div className="grid gap-5 sm:grid-cols-2">
+          <div className={`grid gap-3 sm:grid-cols-2 ${highlights.length ? 'mt-3' : ''}`}>
             {[{ list: read, icon: Eye, key: 'connectorToolsRead' }, { list: write, icon: PencilLine, key: 'connectorToolsWrite' }].filter((g) => g.list.length).map((g) => (
-              <div key={g.key}>
+              <div key={g.key} className="rounded-[14px] bg-[var(--bg-field)] p-4">
                 <div className="flex items-center gap-1.5 text-[12.5px] font-medium text-[var(--text-faint)]"><g.icon size={13} aria-hidden />{t(`assetDrawer.${g.key}`)}</div>
-                <ul className="mt-1.5 flex flex-col gap-1">
+                <ul className="mt-2 flex flex-col gap-1.5">
                   {g.list.map((tool) => (
                     <li key={tool.name} title={tool.description} className="truncate text-[13.5px] text-[var(--text)]" data-connector-tool={tool.name}>{tool.title}</li>
                   ))}
@@ -107,17 +109,17 @@ export function ConnectorBody({ plugin, title, state }: { plugin: Plugin; title:
         ) : null}
       </DocSection>
 
+      {/* with the agent: what to say, each put in the chat by a click */}
+      {examples.length ? (
+        <DocSection title={t('assetDrawer.docAgent')} note={t(state?.connected ? 'assetDrawer.connectorSayNote' : 'assetDrawer.connectorSayFirst').replaceAll('{name}', title)}>
+          <DocAgent examples={examples} put={t('assetDrawer.docPut')} />
+        </DocSection>
+      ) : null}
+
       {/* how it works, in three steps */}
       <DocSection title={t('assetDrawer.connectorHow')}>
         <DocSteps steps={['connectorStep1', 'connectorStep2', 'connectorStep3'].map((key) => t(`assetDrawer.${key}`).replaceAll('{name}', title))} />
       </DocSection>
-
-      {/* what to say: each a line put in the chat by a click */}
-      {examples.length ? (
-        <DocSection title={t('assetDrawer.connectorSay')} note={t(state?.connected ? 'assetDrawer.connectorSayNote' : 'assetDrawer.connectorSayFirst').replaceAll('{name}', title)}>
-          <DocSay examples={examples} />
-        </DocSection>
-      ) : null}
 
       <DocOff text={t('assetDrawer.connectorOffNote').replaceAll('{name}', title)} />
     </div>

@@ -59,7 +59,7 @@ export function ProfileStrip({ profile }: { profile: Profile | undefined }) {
   /* nothing to say (one still being made, with no profile yet): no strip */
   if (!cells.length && !audience) return null;
   return (
-    <div data-profile-strip="" className="@container mt-4 overflow-hidden rounded-[12px] border border-[var(--border)] bg-[var(--border)]">
+    <div data-profile-strip="" className="@container overflow-hidden rounded-[14px] border border-[var(--border)] bg-[var(--border)]">
       {/* the measures side by side, ruled apart by the gap between them; two to a row where the drawer is narrow */}
       {cells.length ? <div className={`grid gap-px [&>*]:bg-[var(--bg-panel)] ${cells.length >= 4 ? 'grid-cols-2 @[560px]:grid-cols-4' : cells.length === 3 ? 'grid-cols-3' : cells.length === 2 ? 'grid-cols-2' : 'grid-cols-1'}`}>
         {cells}

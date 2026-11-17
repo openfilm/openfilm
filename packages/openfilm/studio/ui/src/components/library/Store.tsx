@@ -97,9 +97,12 @@ export function ManageButton({ label, items }: { label: string; items: readonly 
  * One thing's page: Back; its icon large, its name, whose it is, what it is for and what to do with it; then what it
  * is at the left and its facts at the right.
  */
-export function DetailShell({ onBack, icon, title, badges, byline, summary, actions, notice, aside, children, data }: {
+export function DetailShell({ onBack, icon, title, badges, byline, summary, actions, notice, hero, aside, children, data }: {
   onBack: () => void; icon: React.ReactNode; title: string; badges?: React.ReactNode; byline?: React.ReactNode; summary?: string;
-  actions?: React.ReactNode; notice?: React.ReactNode; aside?: React.ReactNode; children?: React.ReactNode;
+  actions?: React.ReactNode; notice?: React.ReactNode;
+  /** a picture of it at work, across the page under its head (DocSections PreviewBand) */
+  hero?: React.ReactNode;
+  aside?: React.ReactNode; children?: React.ReactNode;
   /** marks the page carries (data-skill-page, data-plugin-page) */
   data?: Record<string, string>;
 }) {
@@ -125,7 +128,8 @@ export function DetailShell({ onBack, icon, title, badges, byline, summary, acti
           </div>
         </header>
         {notice}
-        <div className="mt-8 grid gap-x-12 gap-y-8 border-t border-[var(--border)] pt-7 [grid-template-columns:minmax(0,1fr)] min-[1180px]:[grid-template-columns:minmax(0,1fr)_200px]">
+        {hero}
+        <div className={`${hero ? 'mt-8' : 'mt-8 border-t border-[var(--border)] pt-7'} grid gap-x-12 gap-y-8 [grid-template-columns:minmax(0,1fr)] min-[1180px]:[grid-template-columns:minmax(0,1fr)_200px]`}>
           <div className="min-w-0">{children}</div>
           {aside ? <aside className="min-w-0" data-detail-aside="">{aside}</aside> : null}
         </div>

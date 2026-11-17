@@ -21,7 +21,8 @@ import {
 import { useLanguage, useT } from '@/i18n';
 import { studioHost, type HostAgentId, type HostConnector } from '@/lib/host';
 import { inPersonsOrder, isInstalled, removePlugin, setPluginOn, setWorkbenchOrder, usePlugins, useWorkbenchOrder, type Plugin } from '@/lib/plugins';
-import { MAC } from '@/lib/keymap-store';
+import { MAC, useKeyHint } from '@/lib/keymap-store';
+import type { ActionId } from '@/lib/keymap';
 import { openExample, showPluginsLine, type PluginsLine } from '@/lib/plugins-window';
 import { isPlugin, pluginOfSkill } from '@/lib/project-plugins';
 import { communityOf, fetchErrorKey, forgetSeenSkills, makerOf, ownerOf, seenCatalog, seenExamples, seenSkills, sourcesApi, SourceError, watchSkills, type Example, type PublishCheck, type PublishVerify, type SkillEntry } from '@/lib/project-sources';
@@ -34,7 +35,7 @@ import {
 import { CATEGORIES, categoryOfSkill, type Category } from '@/lib/plugin-profile';
 import { ProfileStrip } from './PluginProfile';
 import { GhostPacks, GhostThings, SoonPill } from './StorePlaceholders';
-import { DocLines, DocOff, DocSay, DocSection, DocSteps, sortDetails } from './DocSections';
+import { DocAgent, DocHighlights, DocKeys, DocLines, DocOff, DocSection, DocSteps, PreviewBand, sortDetails } from './DocSections';
 import { SettingsButton, SettingsGroup, SettingsSwitch } from '../settings/ui';
 import { LARGE_DIALOG_COLUMN as PAGE_INSET } from '../dialog-chrome';
 import { ASSET_KINDS, COMMUNITY_ICON, KindIcon, isCodeKind, type FeatureKind } from '../feature-kinds';
@@ -796,6 +797,7 @@ function PluginPage({ plugin, error, onBack, onTurn, onRemove, connector }: {
   const t = useT();
   const lang = useLanguage();
   const { title, summary } = usePluginWords()(plugin);
+  const keyHint = useKeyHint();
   const details = inLanguage(plugin.details, lang);
   const how = plugin.workbench ? (pickedOnTimeline(plugin) ? 'assetDrawer.howTimeline' : 'assetDrawer.howWorkbench') : plugin.tab ? 'assetDrawer.howTab' : null;
   const got = isInstalled(plugin);
@@ -816,6 +818,7 @@ function PluginPage({ plugin, error, onBack, onTurn, onRemove, connector }: {
       byline={<><span className="inline-flex items-center gap-1 text-[var(--text-muted)]">OpenFilm<BadgeCheck size={13} strokeWidth={2} aria-hidden /></span><span aria-hidden>·</span><span>{kind}</span></>}
       summary={summary} actions={actions}
       notice={error ? <p role="alert" className="mt-4 text-[13.5px] text-[var(--warn)]">{error}</p> : null}
+      hero={<PreviewBand kind={plugin.mcpServers ? 'connector' : plugin.workbench ?? null} icon={<WorkbenchMark plugin={plugin} size={64} />} />}
       aside={(
         <Facts title={t('assetDrawer.factsTitle')} items={[
           { key: 'kind', name: t('assetDrawer.factKind'), value: kind },
@@ -826,16 +829,30 @@ function PluginPage({ plugin, error, onBack, onTurn, onRemove, connector }: {
         ]} />
       )}>
       {/* a connector: connected or not, what to say, how it works and what it can do */}
-      {/* the page laid out as every editor's, connector's and skill's: what it does, how to use it, what to say, off */}
+      {/* the page laid out as every editor's, connector's and skill's: what it does, with the agent, how, keys, off */}
       {connector ? <ConnectorBody plugin={plugin} title={title} state={connector.state} /> : (() => {
         const sorted = sortDetails(details);
         const steps = [...(how && !plugin.soon ? [t(how)] : []), ...sorted.how];
         const examples = plugin.examples?.[lang] ?? plugin.examples?.en ?? [];
+        const highlights = plugin.showcase?.highlights?.[lang] ?? plugin.showcase?.highlights?.en ?? [];
+        /* what its words say of working with the agent is said by the conversation below, when it has one */
+        const about = examples.length ? sorted.about.filter((line) => !/智能体|agent|エージェント|에이전트|agente/i.test(line.lead ?? '')) : sorted.about;
+        const keys = (plugin.showcase?.keys ?? []).flatMap((k) => {
+          if (typeof k !== 'string') return [{ keys: k.keys, label: inLanguage(k.label, lang) ?? '' }];
+          const hint = keyHint(k as ActionId);
+          return hint ? [{ keys: [hint], label: t(`settings.shortcuts.actions.${k}`) }] : [];
+        }).filter((k) => k.label);
         return <>
           <ProfileStrip profile={plugin.profile} />
-          {sorted.about.length ? <DocSection title={t('assetDrawer.docAbout')}><DocLines lines={sorted.about} /></DocSection> : null}
+          {highlights.length || about.length ? (
+            <DocSection title={t('assetDrawer.docAbout')}>
+              {highlights.length ? <DocHighlights items={highlights} /> : null}
+              {about.length ? <div className={highlights.length ? 'mt-4' : ''}><DocLines lines={about} /></div> : null}
+            </DocSection>
+          ) : null}
+          {examples.length ? <DocSection title={t('assetDrawer.docAgent')} note={t('assetDrawer.docAgentNote')}><DocAgent examples={examples} put={t('assetDrawer.docPut')} /></DocSection> : null}
           {steps.length ? <DocSection title={t('assetDrawer.connectorHow')}><DocSteps steps={steps} /></DocSection> : null}
-          {examples.length ? <DocSection title={t('assetDrawer.connectorSay')}><DocSay examples={examples} /></DocSection> : null}
+          {keys.length ? <DocSection title={t('assetDrawer.docKeys')}><DocKeys items={keys} /></DocSection> : null}
           <DocOff text={plugin.soon ? t('assetDrawer.pluginSoonNote') : sorted.off ?? t('assetDrawer.pluginOffNote')} />
         </>;
       })()}

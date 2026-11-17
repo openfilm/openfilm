@@ -22,8 +22,19 @@ export interface PluginTab { title?: Record<string, string>; icon?: string }
  * (lib/project-plugins): `appIcon` its app icon's address (components/AppIcon; OpenFilm's own too), `skill` its uid, by which it is turned, `page` its surface's address, and `files` where the
  * project's files are for that page.
  */
+/** What a person could say to use a plugin, and what the agent then does (src/plugins.mjs exampleOf). */
+export type PluginExample = string | { say: string; does?: string };
+/** A plugin's page's highlights and keys (src/plugins.mjs showcaseOf). */
+export interface PluginShowcase {
+  highlights?: Record<string, { icon: string; title: string; text: string }[]>;
+  /** a keymap action's id, or keys of its own with what they do by language */
+  keys?: (string | { keys: string[]; label: Record<string, string> })[];
+}
+
 export interface Plugin {
-  id: string; title?: Record<string, string>; summary?: Record<string, string>; details?: Record<string, string>; examples?: Record<string, string[]>; profile?: Profile; icon?: string; appIcon?: string;
+  id: string; title?: Record<string, string>; summary?: Record<string, string>; details?: Record<string, string>; examples?: Record<string, PluginExample[]>; profile?: Profile; icon?: string; appIcon?: string;
+  /** its page's highlights by language and the keys it is used with (src/plugins.mjs showcaseOf) */
+  showcase?: PluginShowcase;
   workbench?: Workbench; blocks?: string | readonly (BlockDecl | string)[]; tab?: PluginTab; skills: string[]; commands?: string[]; on: boolean; beta?: boolean; soon?: boolean; skill?: string; page?: string; files?: string; program?: boolean; runs?: boolean; inApp?: boolean; element?: string;
   /** a connector's MCP servers (src/plugins.mjs readMcpServers): given to the agent while it is on */
   mcpServers?: Record<string, { type: 'http'; url: string } | { type: 'stdio'; command: string }>;

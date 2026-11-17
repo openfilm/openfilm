@@ -57,7 +57,7 @@ const WORKBENCH = /^[a-z][a-z0-9-]{0,31}$/;
 
 /**
  * @typedef {{
- *   id: string, title: Record<string, string>, summary: Record<string, string>, details?: Record<string, string>, examples?: Record<string, string[]>, profile?: Profile, icon?: string, about: string,
+ *   id: string, title: Record<string, string>, summary: Record<string, string>, details?: Record<string, string>, examples?: Record<string, Example[]>, showcase?: Showcase, profile?: Profile, icon?: string, about: string,
  *   workbench?: string, blocks?: string | (import('./plugin-blocks.mjs').BlockDecl | string)[], tab?: PluginTab, skills: readonly string[], requires: readonly string[], on: boolean, beta?: true, soon?: true,
  *   mcpServers?: Record<string, McpServer>,
  * }} Plugin
@@ -65,6 +65,11 @@ const WORKBENCH = /^[a-z][a-z0-9-]{0,31}$/;
  *   `id`: its folder's name; `workbench`: the way of working it shows; `blocks`: the blocks its workbench is laid out in
  *   (src/plugin-blocks.mjs); `tab`: the library's tab it shows; `skills`: OpenFilm's own skills (by name) that go with
  *   it; `requires`: the skills it builds on (by name); `on`: whether it is on until the person says
+ * @typedef {string | { say: string, does?: string }} Example
+ *   what a person could say to use it, and what the agent then does (its page shows them as a conversation)
+ * @typedef {{ highlights?: Record<string, { icon: string, title: string, text: string }[]>, keys?: (string | { keys: string[], label: Record<string, string> })[] }} Showcase
+ *   its page's highlights by language (a mark's name, a few words, a line), and the keys it is used with: a keymap
+ *   action's id (its keys as the person set them), or keys of its own with what they do by language
  * @typedef {{ title?: Record<string, string>, icon?: string }} PluginTab
  *   a tab of the library drawer: its name by language and its mark's name, the plugin's own where left out
  */
@@ -102,6 +107,49 @@ export function profileOf(raw, words) {
   const audience = words(raw.audience);
   if (Object.keys(audience).length) out.audience = audience;
   if (raw.cost === 'free' || raw.cost === 'generation') out.cost = raw.cost;
+  return Object.keys(out).length ? out : undefined;
+}
+
+/** One of `examples`: words to say, or `{ say, does }`; anything else is none. @param {unknown} w @returns {Example | null} */
+function exampleOf(w) {
+  if (typeof w === 'string') return w.trim() ? w.trim().slice(0, 200) : null;
+  if (!w || typeof w !== 'object') return null;
+  const { say, does } = /** @type {{ say?: unknown, does?: unknown }} */ (w);
+  if (typeof say !== 'string' || !say.trim()) return null;
+  return typeof does === 'string' && does.trim() ? { say: say.trim().slice(0, 200), does: does.trim().slice(0, 200) } : say.trim().slice(0, 200);
+}
+
+/**
+ * A plugin's page's highlights and keys (`showcase`): up to four highlights in each language, each a mark's name, a
+ * title and a line; up to twelve keys. Anything not so is left out. @param {unknown} raw @returns {Showcase | undefined}
+ */
+function showcaseOf(raw) {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const r = /** @type {{ highlights?: unknown, keys?: unknown }} */ (raw);
+  const text = (/** @type {unknown} */ v, max = 160) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : null);
+  /** @type {Showcase} */
+  const out = {};
+  if (r.highlights && typeof r.highlights === 'object') {
+    const highlights = Object.fromEntries(Object.entries(r.highlights)
+      .filter(([lang, list]) => /^[a-z]{2}(-[A-Za-z]{2,4})?$/.test(lang) && Array.isArray(list))
+      .map(([lang, list]) => [lang, /** @type {unknown[]} */ (list).flatMap((h) => {
+        const o = /** @type {{ icon?: unknown, title?: unknown, text?: unknown }} */ (h ?? {});
+        const icon = typeof o.icon === 'string' && ICON.test(o.icon) ? o.icon : null, title = text(o.title, 40), line = text(o.text);
+        return icon && title && line ? [{ icon, title, text: line }] : [];
+      }).slice(0, 4)])
+      .filter(([, list]) => list.length));
+    if (Object.keys(highlights).length) out.highlights = highlights;
+  }
+  if (Array.isArray(r.keys)) {
+    const keys = r.keys.flatMap((/** @type {unknown} */ k) => /** @type {(string | { keys: string[], label: Record<string, string> })[]} */ ((() => {
+      if (typeof k === 'string') return /^[a-z][a-z0-9-]{0,40}$/.test(k) ? [k] : [];
+      const o = /** @type {{ keys?: unknown, label?: unknown }} */ (k ?? {});
+      const caps = Array.isArray(o.keys) ? o.keys.filter((c) => typeof c === 'string' && c.trim() && c.length <= 12).slice(0, 4) : [];
+      const label = o.label && typeof o.label === 'object' ? Object.fromEntries(Object.entries(o.label).filter(([l, w]) => /^[a-z]{2}(-[A-Za-z]{2,4})?$/.test(l) && typeof w === 'string' && w.trim()).map(([l, w]) => [l, String(w).trim().slice(0, 60)])) : {};
+      return caps.length && Object.keys(label).length ? [{ keys: caps, label }] : [];
+    })())).slice(0, 12);
+    if (keys.length) out.keys = keys;
+  }
   return Object.keys(out).length ? out : undefined;
 }
 
@@ -173,9 +221,11 @@ function readPlugin(dir, id) {
   /* what a person could say to use it, a few in each language: the page offers each to put in the chat */
   const examples = raw.examples && typeof raw.examples === 'object' ? Object.fromEntries(Object.entries(raw.examples)
     .filter(([lang, list]) => /^[a-z]{2}(-[A-Za-z]{2,4})?$/.test(lang) && Array.isArray(list))
-    .map(([lang, list]) => [lang, list.filter((w) => typeof w === 'string' && w.trim()).slice(0, 4).map((w) => w.trim().slice(0, 200))])
+    .map(([lang, list]) => [lang, list.map(exampleOf).filter((/** @type {Example | null} */ e) => e != null).slice(0, 4)])
     .filter(([, list]) => list.length)) : {};
-  if (Object.keys(examples).length) plugin.examples = examples;
+  if (Object.keys(examples).length) plugin.examples = /** @type {Record<string, Example[]>} */ (examples);
+  const showcase = showcaseOf(raw.showcase);
+  if (showcase) plugin.showcase = showcase;
   const profile = profileOf(raw, byLanguage);
   if (profile) plugin.profile = profile;
   if (typeof raw.workbench === 'string' && WORKBENCH.test(raw.workbench) && !soon) plugin.workbench = raw.workbench;

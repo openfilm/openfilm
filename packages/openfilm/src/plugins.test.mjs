@@ -256,3 +256,28 @@ test('a connector is a plugin whose .mcp.json names its MCP servers: a remote on
   assert.equal(read.editor, undefined, 'no .mcp.json: no connector');
   assert.equal(read.broken, undefined);
 });
+
+test('a plugin\'s page words: examples said with what the agent does, and highlights and keys (showcase); what is not so is left out', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'of-showcase-'));
+  mkdirSync(join(dir, 'demo'));
+  writeFileSync(join(dir, 'demo', 'openfilm.json'), JSON.stringify({
+    title: { en: 'Demo' },
+    examples: { en: ['Plain words', { say: 'Cut it', does: 'Cuts it' }, { say: 'Alone' }, { does: 'no words' }, 7] },
+    showcase: {
+      highlights: { en: [{ icon: 'scissors', title: 'Fast', text: 'Cuts fast.' }, { icon: 'Bad Icon', title: 'x', text: 'y' }, { icon: 'eye', title: '', text: 'no title' }] },
+      keys: ['play-pause', 'Not An Id', { keys: ['M'], label: { en: 'Mark' } }, { keys: [], label: { en: 'no keys' } }],
+    },
+  }));
+  const [demo] = readPlugins(dir);
+  assert.deepEqual(demo.examples, { en: ['Plain words', { say: 'Cut it', does: 'Cuts it' }, 'Alone'] });
+  assert.deepEqual(demo.showcase, { highlights: { en: [{ icon: 'scissors', title: 'Fast', text: 'Cuts fast.' }] }, keys: ['play-pause', { keys: ['M'], label: { en: 'Mark' } }] });
+});
+
+test('OpenFilm\'s editors have their page words in every language', () => {
+  for (const p of readPlugins().filter((x) => ['edit', 'screening', 'canvas', 'color'].includes(x.id))) {
+    for (const lang of ['en', 'zh-CN', 'ja', 'ko', 'es']) {
+      assert.equal(p.examples?.[lang]?.length, 3, `${p.id} ${lang} examples`);
+      assert.equal(p.showcase?.highlights?.[lang]?.length, 4, `${p.id} ${lang} highlights`);
+    }
+  }
+});

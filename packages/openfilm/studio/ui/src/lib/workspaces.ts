@@ -62,7 +62,6 @@ const cleanName = (s: string) => s.replace(/\s+/g, ' ').trim().slice(0, 40);
 const EDGES: readonly BlockEdge[] = ['left', 'right', 'top', 'bottom', 'center'];
 const KEY = /^(?:[a-z][a-z0-9-]{0,31}:)?[a-z][a-z0-9-]{0,31}$/;
 const NAME = /^[a-z0-9][a-z0-9-]{0,63}(?:\/[a-z0-9][a-z0-9._-]{0,127})*$/;
-const sideways = (edge: BlockEdge) => edge === 'left' || edge === 'right';
 
 function readPlace(value: unknown): BlockPlace | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
@@ -195,17 +194,23 @@ export function keepWorkspace(rows: readonly SavedWorkspace[], entry: SavedWorks
   return rows.some(row => row.id === entry.id) ? rows.map(row => row.id === entry.id ? next : row) : [...rows, next];
 }
 /** The arrangement with the blocks `keep` says shown (by spec), the others hidden; the main block always shown. */
-const showing = (layout: WorkspaceLayout, spec: ArrangementSpec, keep: (block: BlockSpec) => boolean): WorkspaceLayout => ({
-  ...layout, blocks: { ...layout.blocks, ...Object.fromEntries(spec.blocks.map((b) => [b.key, { ...layout.blocks[b.key]!, open: b.edge === 'center' || (layout.blocks[b.key]!.open && keep(b)) }])) },
-});
-/** The arrangements to pick from: as declared; the library along the bottom with the blocks beside the main one closed; the main block alone. */
+/**
+ * The arrangements to pick from, as each editor's work wants them: always its own (as declared) and Focus (the editor
+ * alone, no chat and no library). The edit adds the library beside the work (Library) and its layers opened for fine
+ * work (Detail); the canvas adds the library beside the board; Screening and Color, whose work takes no material from
+ * the library, have the two only.
+ */
 export function workspacePresets(spec: ArrangementSpec): Array<{ id: string; layout: WorkspaceLayout }> {
   const standard = defaultWorkspace(spec);
-  return [
-    { id: 'standard', layout: standard },
-    { id: 'library', layout: showing({ ...standard, libraryDock: 'bottom', assets: true, libraryHeight: 280, chat: false }, spec, (b) => !sideways(b.edge)) },
-    { id: 'focus', layout: showing({ ...standard, assets: false, chat: false }, spec, () => false) },
-  ];
+  const focus = { id: 'focus', layout: { ...standard, assets: false, chat: false } };
+  const library = { id: 'library', layout: { ...standard, libraryDock: 'left' as LibraryDock, assets: true, assetsWidth: 320 } };
+  if (spec.name === 'edit') {
+    const layers = standard.blocks.layers;
+    const detail = layers ? [{ id: 'detail', layout: { ...standard, blocks: { ...standard.blocks, layers: { ...layers, open: true } } } }] : [];
+    return [{ id: 'standard', layout: standard }, library, ...detail, focus];
+  }
+  if (spec.name === 'canvas') return [{ id: 'standard', layout: standard }, library, focus];
+  return [{ id: 'standard', layout: standard }, focus];
 }
 /** The arrangements in use, by name, as kept (one not kept yet is its default, made once its blocks are known). */
 export type WorkspaceProfiles = Readonly<Record<string, WorkspaceLayout>>;

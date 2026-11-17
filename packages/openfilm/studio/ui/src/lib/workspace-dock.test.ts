@@ -17,7 +17,7 @@ test('every preset stays in its own mode and defaults retain the original chat/l
   assert.equal(DEFAULT_WORKSPACE.libraryDock,'chat');
   assert.equal(DEFAULT_WORKSPACE.assets,false);
   assert.equal(DEFAULT_CANVAS_WORKSPACE.assets,false);
-  assert.deepEqual(workspacePresets(EDIT).map(p=>p.id),['standard','library','focus']);
+  assert.deepEqual(workspacePresets(EDIT).map(p=>p.id),['standard','library','detail','focus']);
   assert.deepEqual(edit,['viewer','chat','library','layers','inspector','timeline'],'the main block, the page\'s own, then the others as declared');
   assert.deepEqual(dockPanels(CANVAS),['canvas','chat','library']);
 });

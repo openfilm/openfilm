@@ -244,7 +244,7 @@ export function SkillPage({ skill, setSkills, projectId, onBack, onTry, onOn, on
       ) : null}
 
       {/* laid out as every editor's and connector's page: how it measures up, what it does, how to use it */}
-      {skill.profile ? <ProfileStrip profile={skill.profile} /> : null}
+      {skill.profile ? <div className="mt-8 first:mt-0"><ProfileStrip profile={skill.profile} /></div> : null}
       {(() => {
         const sorted = sortDetails(details ?? undefined);
         const steps = [...(installed ? [t(!plugin ? 'assetDrawer.howSkill' : skill.tab ? 'assetDrawer.howTab' : 'assetDrawer.howWorkbench')] : []), ...sorted.how];
