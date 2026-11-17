@@ -1,201 +1,130 @@
 <p align="center">
-  <br>
-  <img src="docs/logo-light.svg#gh-light-mode-only" alt="OpenFilm" height="72">
-  <img src="docs/logo-dark.svg#gh-dark-mode-only" alt="OpenFilm" height="72">
+  <img src="docs/logo-light.svg#gh-light-mode-only" alt="OpenFilm" height="48">
+  <img src="docs/logo-dark.svg#gh-dark-mode-only" alt="OpenFilm" height="48">
+</p>
+<p align="center">Açık kaynaklı yapay zekâ video ajanı.</p>
+<p align="center">
+  <a href="https://www.npmjs.com/package/openfilm"><img alt="npm" src="https://img.shields.io/npm/v/openfilm?style=flat-square" /></a>
+  <a href="https://github.com/openfilm/openfilm/actions/workflows/ci.yml"><img alt="Build status" src="https://img.shields.io/github/actions/workflow/status/openfilm/openfilm/ci.yml?style=flat-square&branch=main&label=build" /></a>
+  <a href="LICENSE"><img alt="License" src="https://img.shields.io/github/license/openfilm/openfilm?style=flat-square" /></a>
 </p>
 
-<h3 align="center">Açık kaynak yapay zekâ video ajanı.</h3>
+<p align="center">
+  <a href="README.md">English</a> |
+  <a href="README.zh-CN.md">简体中文</a> |
+  <a href="README.zh-TW.md">繁體中文</a> |
+  <a href="README.ko.md">한국어</a> |
+  <a href="README.de.md">Deutsch</a> |
+  <a href="README.es.md">Español</a> |
+  <a href="README.fr.md">Français</a> |
+  <a href="README.it.md">Italiano</a> |
+  <a href="README.da.md">Dansk</a> |
+  <a href="README.ja.md">日本語</a> |
+  <a href="README.pl.md">Polski</a> |
+  <a href="README.ru.md">Русский</a> |
+  <a href="README.bs.md">Bosanski</a> |
+  <a href="README.ar.md">العربية</a> |
+  <a href="README.no.md">Norsk</a> |
+  <a href="README.pt-BR.md">Português (Brasil)</a> |
+  <a href="README.th.md">ไทย</a> |
+  <a href="README.tr.md">Türkçe</a> |
+  <a href="README.uk.md">Українська</a> |
+  <a href="README.bn.md">বাংলা</a> |
+  <a href="README.el.md">Ελληνικά</a> |
+  <a href="README.vi.md">Tiếng Việt</a>
+</p>
 
-<p align="center">Tek bir HTML dosyası, tek bir fonksiyon, gerçek bir editör.</p>
+<p align="center">
+  <a href="https://openfilm.dev"><img alt="Visit our website" src="docs/buttons/website.svg" /></a>
+  <a href="https://discord.gg/a462Rs88hF"><img alt="Join our Discord" src="docs/buttons/discord.svg" /></a>
+  <a href="https://www.youtube.com/@riverisbuilding"><img alt="Watch on YouTube" src="docs/buttons/youtube.svg" /></a>
+</p>
 
-<p align="center"><a href="README.md">English</a> · <a href="README.zh-CN.md">简体中文</a> · <a href="README.ja.md">日本語</a> · <b>Türkçe</b></p>
+[![OpenFilm: siz izlerken bir ajan film yapar, sonra siz onu elle değiştirirsiniz](docs/openfilm.webp)](https://openfilm.dev)
 
-## Hakkında
+---
 
-OpenFilm, kodlama ajanının video yapmasını, senin de bu videoları düzenlemeni sağlar.
+### Hakkında
 
-Codex'ten, Claude Code'dan ya da herhangi bir kodlama ajanından bir film yapmasını iste. Ajan filmi web sayfaları olarak
-yazar; tarayıcında çalışan yerel bir editör olan Studio da filmin şekillenişini gösterir. Sonra istediğin her şeyi elle ya
-da ajandan isteyerek değiştir.
+OpenFilm her kodlama ajanını bir video ajanına dönüştürür ve onun yaptığı her şeyi değiştirebileceğiniz editörler sunar.
 
-- **Tek bir HTML dosyası.** `film.html`; animasyonlu web sayfalarını, video çekimlerini, resimleri ve sesleri izler (track)
-  üzerinde birleştirir ve CSS ile biçimlendirilir. Öğrenecek yeni bir şey yok: ajanın web'i zaten biliyor.
-- **Tek bir fonksiyon.** Her çekim, herhangi bir anı `frame(t)` ile çizen bir web sayfasıdır ve tarayıcının çizebildiği her
-  şeyi kullanabilir: three.js, WebGL, canvas, SVG, CSS, GSAP, video ve daha fazlası. Framework yok (Remotion veya
-  HyperFrames gibi): tek bir fonksiyon yeter.
-- **Gerçek bir editör.** Bir sayfanın içindeki herhangi bir öğeyi taşı, ölçekle, döndür; metnini, rengini ve stilini
-  değiştir. Her klibi yerleştir, kırp, yeniden biçimlendir; zaman çizelgesinde (timeline) kısalt ve kes.
+Siz ve ajan aynı film üzerinde, birlikte ve canlı çalışırsınız. Ajan neyi değiştirirse anında görürsünüz; siz neyi değiştirirseniz ajan da görür. İşin çoğunu ajan yapar; siz herhangi bir şeyi gösterip değişiklik istersiniz ya da kendiniz yaparsınız.
 
-<p align="center"><img src="docs/openfilm.webp" alt="Bir ajan OpenFilm ile bir film yapıyor; film daha sonra Studio'da elle değiştiriliyor" width="900"><br>
-<sub>▶ <a href="https://www.youtube.com/watch?v=Qea7v6dtNM0">1:42'lik tanıtım videosunu izle</a>; baştan sona OpenFilm ile yapıldı.</sub></p>
+- **Filmi ajan yapar.** Claude Code, Codex, başka herhangi bir kodlama ajanı ya da masaüstü uygulamasındaki yerleşik ajanı kullanın. Siz izlerken görüntüleri, müziği ve sesleri bulur, her çekimi yazar ve hepsini kurgular.
+- **Herhangi bir şeyi gösterin.** Bir klip, bir an, zaman çizelgesinin bir bölümü, kadrajda bir nokta, bir altyazı satırı, tuvaldeki bir kart. Gösterin, ne istediğinizi söyleyin; ajan tam olarak neyi kastettiğinizi anlar.
+- **Elle değiştirin.** Herhangi bir çekimin içinde her öğeyi taşıyın, ölçekleyin ve döndürün, metnini yeniden yazın, rengini, yazı tipini ve boyutunu değiştirin, ona animasyon ekleyin, hatta kelime kelime. Zaman çizelgesinde klipleri kısaltın, bölün ve yeniden sıralayın; hızlarını, ses düzeylerini ve fade'lerini değiştirin, kadrajı kırpın, renk düzenlemesi yapın, arka planı kaldırın, altyazıları ve dış sesi düzenleyin. Düzenlemeleriniz aynı dosyalara yazılır ve ajan onların üzerine devam eder.
 
-## Kurulum
+### Kurulum
 
-macOS, Windows veya Linux'ta Node 22.2+ ve ffmpeg gerekir (Studio'nun kayıtlı sürümleri için git de); ilk çalıştırmada
-başsız (headless) bir Chromium indirilir (yaklaşık 100 MB).
+**Masaüstü uygulaması.** [macOS veya Windows için indirin](https://github.com/openfilm/openfilm/releases/latest). İhtiyacınız olan her şey, yerleşik bir ajana kadar, içinde gelir; Claude Code veya Codex kullanıyorsanız onlarla da çalışır.
 
-```sh
+**Kendi kodlama ajanınız.** Beceriyi ekleyin (Node 22.2+ ve ffmpeg gerekir), ardından bir film isteyin:
+
+```bash
 npx skills add openfilm/openfilm
 ```
 
-Sonra ajanından bir film iste:
+> CLI aracım için müzikli, 20 saniyelik bir tanıtım videosu yap.
 
-> Make a 20-second launch video for my CLI, with music.
+### Editörler
 
-Ajan filmi Studio'da açar ve şekillenişini izlersin. Ajanın beceri (skill) desteklemiyorsa ona şunu söyle: "Run
-`npx -y openfilm@latest` and follow what it prints."
+Her editör aynı film üzerinde çalışmanın farklı bir yoludur ve her birinde siz ve ajan birlikte çalışırsınız. OpenFilm dört editörle gelir; farklı insanlar için daha fazla resmi editör de geliştiriliyor: herkesin hemen kullanabileceği kadar basit olanlar ve isteyenler için profesyonel çalışma alanları. Editörler Topluluğun açık standardını izler, böylece herkes kendi editörünü yapıp paylaşabilir.
 
-Ya da macOS veya Windows için masaüstü uygulamasını [openfilm.dev](https://openfilm.dev) adresinden veya
-[Releases](https://github.com/openfilm/openfilm/releases) sayfasından indir: yanında sahip olduğun ajanlar için bir sohbet
-paneli bulunan Studio. ffmpeg ve başsız tarayıcıyla birlikte gelir, başka bir şey kurman gerekmez.
+- **Gösterim**: filmi tam boyutta izleyin. Bir ana tıklayın, bir bölümün üzerinden sürükleyin ya da kadrajın bir kısmını daire içine alın; ajan neyi gösterdiğinizi bilir.
+- **Kurgu**: klipler, metin, altyazılar, dış ses ve ses için eksiksiz bir zaman çizelgesi. Bir çekimin içindeki her şeyi taşıyın, ölçekleyin ve stilini değiştirin. Video dışa aktarın ya da zaman çizelgesini Final Cut Pro, Premiere Pro veya DaVinci Resolve'a taşıyın.
+- **Tuval**: notların, görsellerin, kliplerin ve seslerin yan yana durduğu bir planlama panosu. Her birini kendi servislerinizle üretin, sonra sırayla zaman çizelgesine gönderin.
+- **Renk**: her klibin rengini skoplar, renk tekerlekleri ve eğrilerle düzenleyin; kameranın log görüntüsünden ya da `.cube` LUT'larıyla. Önizlemede ne görüyorsanız dışa aktardığınız da odur.
 
-Film yapmak, düzenlemek ve dışa aktarmak (render) için hesap gerekmez; OpenFilm'in müzik, ses efekti, seslendirme,
-çıkartma, geçiş, efekt ve şablon kütüphanesi ücretsizdir. Yapay zekâ ile ses, müzik, resim ve video üretmek için
-kullandığın servisleri (ElevenLabs, OpenAI, Google, OpenRouter, fal ve diğerleri) Studio'nun Settings → Services
-(Ayarlar → Servisler) bölümünden kendi anahtarlarınla bağla ya da kendi anahtarın olmadan üretmek için orada OpenFilm'e giriş yap.
+Dördü de tek bir kütüphaneyi paylaşır: klasörlerdeki kendi görüntüleriniz kopyalanmak yerine bağlanır ve taşıdığınızda yeniden bulunur; yanında da OpenFilm'in ücretsiz müzikleri, ses efektleri, sesleri ve çıkartmaları durur.
 
-Bitmiş bir filmden başlamak için [örneklerden](https://github.com/openfilm/examples) birini aç:
+### Topluluk
 
-```sh
-npx -y openfilm@latest open https://github.com/openfilm/examples/tree/main/one-prompt
-```
+Topluluk, OpenFilm'e ekleyebileceğiniz her şey için açık bir standarttır ve herkes onun için geliştirebilir.
 
-## Komutlar
+- **Eklentiler** OpenFilm'in kendisini yeni editörlerle ve dış servislere bağlantılarla genişletir. OpenFilm'in kendi editörleri de eklentidir ve herkesinkiyle aynı şekilde yapılmıştır.
+- **Beceriler** ajana bir film türünü yapmanın bir yolunu öğretir.
+- **Varlıklar** müzik, ses efektleri, geçişler, efektler, metin stilleri, çıkartmalar ve şablonlardır.
+- **Örnekler**, inceleyip öğrenebileceğiniz ve remiksleyebileceğiniz eksiksiz projelerdir.
 
-Bunları ajanın çalıştırır; sen de `npx -y openfilm@latest <komut>` ya da `npm i -g openfilm` ile çalıştırabilirsin.
+Her biri sıradan bir klasördür. OpenFilm'deki Topluluk penceresinden ekleyin ya da kendinizinkini yapın: [eklenti yapın](packages/openfilm/plugins/README.md), [beceri yazın](https://github.com/openfilm/community/blob/main/SPEC.md), [varlık paylaşın](https://github.com/openfilm/community/blob/main/assets/CONTRIBUTING.md) ya da bitmiş bir filmi örnek olarak paylaşın, ardından [openfilm/community](https://github.com/openfilm/community) içinde listeleyin.
 
-```sh
-openfilm                          # film nedir ve OpenFilm'in kendi becerileri: ajanın başladığı yer
-openfilm open   [folder | url]    # bir filmi Studio'da göster: yeni, mevcut, GitHub'dan bir film; yoksa bu ya da sonuncusu
-openfilm look   [what] [t | a-b]  # filmi, bir sayfayı veya bir medya dosyasını kontrol et: temas baskısı, tek kare ya da bir aralık
-openfilm render [a-b]             # MP4; --4k, --blur (hareket bulanıklığı), --alpha (.webm / .mov), --loudness=-14
-openfilm get    [what]            # medya: önce OpenFilm kütüphanesinden ücretsiz, yoksa bağlı bir servisle üretilir
-openfilm canvas [apply <steps>]   # düzenlemenin yanındaki tuval: oku ya da notları, dosyaları ve yapılacakları yerleştir
-openfilm skills                   # bir filmin yapılabileceği beceriler; `openfilm skill <name>` birini yazdırır
-openfilm doctor                   # bu bilgisayarda OpenFilm için neler var; bir issue'ya yapıştırmak için
-```
+### Nasıl çalışır
 
-`openfilm <komut> --help` bir komutun seçeneklerini listeler; tek başına `openfilm get` neler üretilebileceğini, kütüphanede
-neler olduğunu ve Studio'da bir servisin nasıl bağlanacağını listeler.
-
-## Studio
-
-Studio senin bilgisayarında, tarayıcında çalışır: Chromium tabanlı bir tarayıcı kullan (Chrome, Edge); filmler bu motorla
-çizilir ve dışa aktarılır, yani önizleme ne gösteriyorsa dışa aktarılan da odur. Filmdeki her şey değiştirilebilir:
-görüntüdeki metin ve katmanlar, zaman çizelgesindeki klipler, bunların konumu, görünümü, ses düzeyi ve hızı, ayrıca
-altyazılar. Düzenlemelerin filmin dosyalarına kaydedilir; böylece ajan onları görür ve korur. Geri dönmek için
-adlandırılmış sürümler de kaydedebilirsin. Video, GIF, ses veya ses katmanları (stem), altyazı, durağan kareler, slaytlar,
-saydam video ya da Final Cut Pro, Premiere Pro ve DaVinci Resolve için zaman çizelgesinin kendisini dışa aktar.
-
-Düzenlemenin yanında tuval (canvas) var (⌘E ikisi arasında geçiş yapar): senin ve ajanın notları, resimleri, klipleri,
-dış sesi, müziği ve sesleri yerleştirdiği, onları birbirine bağladığı, her birini servislerinle ürettiği ve ürettiklerini
-sırayla zaman çizelgesine gönderdiği bir pano. Bir projede birden fazla tuval olabilir ve her biri bir storyboard olarak da
-görülebilir. Varlıklar (assets) çekmecesindeki kütüphane; çekimleri, seslendirmeleri, sesleri, müziği, metinleri,
-çıkartmaları, filtreleri, efektleri, geçişleri, şablonları ve becerileri barındırır.
-
-Masaüstü uygulaması ([apps/desktop](apps/desktop)); Claude Code, Codex ve diğer ajanlar ya da kendi anahtarınla çalışan
-kendi ajanı için yanında bir sohbet paneli olan Studio'dur.
-
-## Beceriler
-
-Bir filmin nasıl yapılacağı araçta değil, becerilerde (skills) durur. `openfilm` tek bir sayfa yazdırır: film nedir ve
-geri kalan her şeyi barındıran OpenFilm'in kendi becerileri: `edit` (proje, film.html ve sayfalar ve bunların kontrolü),
-`media` (kütüphane ve servisler) ve `canvas`. Ajan, bir görevin ihtiyaç duyduğu beceriyi `openfilm skill <name>` ile okur.
-
-Diğer her beceri, bir tür film yapmanın bir yoludur ve tam adıyla, `owner/name` biçiminde bilinir. Studio'nun kütüphanesi,
-OpenFilm'in ve topluluğun becerilerini Discover (Keşfet) altında [openfilm/skills](https://github.com/openfilm/skills)
-reposundan listeler; bu repo beceri yazmayı da anlatır. Oradan bir beceri kur, kurmadan bir sohbette dene ya da kendi
-becerini bir bağlantıdan veya klasörden ekle (`openfilm skill add <link>`). Kurulu bir beceri her ajana sunulur.
-
-## Nasıl çalışır
-
-Bir film, içinde `film.html` olan bir klasördür: birlikte kesilmiş kliplerden oluşan izler.
+Bir film, `film.html` içeren bir klasördür: CSS ile biçimlendirilmiş klip izleri.
 
 ```html
 <meta name="viewport" content="width=1920, height=1080">
-<style>
-  .card { object-fit: cover; border-radius: 24px; }
-</style>
 <section>
-  <iframe src="title.html#t=0,4"></iframe>
+  <iframe src="title.html#t=0,4"
+          overrides='[{"at":"h1","text":"Aura Pods","style":{"color":"#7fd4ff"}}]'></iframe>
 </section>
 <section>
-  <video src="assets/footage.mp4#t=12,18" at="4" speed="0.5" class="card" style="left: 160px; top: 90px; width: 1600px; height: 700px"></video>
+  <video src="assets/footage.mp4#t=12,18" at="4" style="left: 160px; top: 90px; width: 1600px; height: 700px"></video>
 </section>
 <section>
   <audio src="assets/music.mp3" volume="0.6"></audio>
 </section>
 ```
 
-Her `<section>` bir izdir ve zaman çizelgesindeki sırasıyla durur: ilki en üsttedir. Bir klip bir öğedir: bir sayfa, bir
-video, durağan bir resim ya da bir ses. Dosyasının hangi kısmının oynatılacağı bir medya parçasıdır (`#t=12,18`), nerede
-başladığı `at`, nerede durduğu stilindeki `left`, `top`, `width` ve `height`, nasıl göründüğü ise CSS'tir. Her ses kendi
-başına bir kliptir. `overrides`, bir sayfanın öğelerinde yaptığın değişiklikleri tutar ve ajanlar düzenleme yaparken
-bunları korur.
+Her çekim, tek fonksiyonu `frame(t)` olan bir web sayfasıdır; bu fonksiyon herhangi bir anı tarayıcının çizebildiği her şeyle (three.js, WebGL, canvas, SVG, CSS, GSAP, video) çizer ve aynı `t` için her zaman aynı görüntüyü verir, bu yüzden film her makinede aynı şekilde render edilir, ajan her kareyi kontrol edebilir ve Remotion ya da HyperFrames gibi bir framework'e gerek kalmaz.
 
-Bir sayfa, kendisinin herhangi bir anını çizen bir web sayfasıdır ve sözleşmenin tamamı budur:
-
-```html
-<script type="module">
+```js
 window.film = {
-  frame(t) { /* t saniyedeki görüntünün tamamını, herhangi bir şeyle çiz */ },
-  duration: 4,               // isteğe bağlı: kendi uzunluğu, saniye cinsinden
-  ready: loadFonts(),        // isteğe bağlı: yazı tipleri, resimler, modeller, veriler için bir Promise
-  width: 480, height: 320,   // isteğe bağlı: görüntünün yalnızca bir parçası olan bir sayfa
+  frame(t) { /* t. saniyedeki görüntünün tamamını çiz */ },
 };
-</script>
 ```
 
-**Tek kural:** aynı `t`, daha önce ne çizilmiş olursa olsun, her zaman aynı görüntüyü çizer. Kareler sırasız, paralel ve
-kareler arasında (hareket bulanıklığı için) istenir; bu yüzden kurala uyan bir sayfa her boyutta, her makinede aynı
-şekilde render edilir. Görüntü üreten diğer her şey (Python, Blender, bir video modeli) video ya da resim olarak gelir.
+**Değişiklikleriniz sizde kalır.** Bir çekimin içinde metin, renk, konum veya boyut gibi bir şeyi elle değiştirdiğinizde OpenFilm bunu sayfanın kodunda değil, klibin `overrides` alanında saklar. Ajan sayfayı yeniden yazabilir; değişiklikleriniz yine geçerli olur. Biçimin tamamı [SPEC.md](packages/openfilm/SPEC.md) dosyasında.
 
-OpenFilm emeğini modellerin başarısız olduğu yere harcar: filmi kontrol etmek. `look`, kontrol sayfasının her karesini
-iki farklı karışık sırada iki kez çizer ve değişen kareleri; sayfa hatalarını, yüklenemeyen yazı tiplerini, eksik ses
-dosyalarını ve kadrajdan taşan metinleri adlarıyla bildirir.
+### Katkıda bulunma
 
-[MANUAL.md](packages/openfilm/MANUAL.md), `openfilm` komutunun yazdırdığı sayfadır ve
-[packages/openfilm/manual](packages/openfilm/manual) OpenFilm'in kendi becerilerini barındırır;
-[SPEC.md](packages/openfilm/SPEC.md) bir oynatıcı, render motoru ya da editör yapan herkes içindir.
+OpenFilm'i kaynak koddan çalıştırmak veya pull request göndermek için [CONTRIBUTING.md](CONTRIBUTING.md) dosyasını okuyun. Hataları Settings → Developer → Copy report ile alınan raporla birlikte [Issues](https://github.com/openfilm/openfilm/issues) bölümüne, güvenlik sorunlarını ise [SECURITY.md](SECURITY.md) dosyasında anlatıldığı gibi bildirin.
 
-## Kaynaktan
-
-Node 22.18 veya üzeri, pnpm 9 (`corepack enable` bu reponun istediği sürümü verir), PATH üzerinde ffmpeg ve git gerekir.
-
-```sh
-git clone https://github.com/openfilm/openfilm && cd openfilm
-pnpm install
-pnpm dev            # bu checkout'tan Studio, örnek bir filmle, kurulu bir OpenFilm'in yanında
-pnpm test
-```
-
-Kodlama ajanına `packages/openfilm/.dev/bin/openfilm` çalıştırmasını söyle; ajan senin checkout'unla, o Studio'da film
-yapar. Kurulu ya da kaynaktan olsun, her OpenFilm projelerini aynı kütüphanede tutar.
-
-`pnpm dev:desktop` masaüstü uygulamasını kaynaktan çalıştırır; `pnpm typecheck`, `pnpm build` ve `pnpm audit:public`
-adlarındaki işi yapar.
-Her paketin ayrıntıları [CONTRIBUTING.md](CONTRIBUTING.md) dosyasında.
-
-## Topluluk
-
-Sorular, fikirler ve yaptığın filmler [Discussions](https://github.com/openfilm/openfilm/discussions) bölümüne: Q&A'de
-sor, filmini Show and tell'de paylaş. Hatalar Studio'nun Settings → Developer → Copy report (Ayarlar → Geliştirici →
-Raporu kopyala) bölümündeki raporla (ya da `npx openfilm doctor`) birlikte [Issues](https://github.com/openfilm/openfilm/issues)'a.
-
-## Katkıda bulunma
-
-Bkz. [CONTRIBUTING.md](CONTRIBUTING.md). Bir güvenlik sorunu bildirmek için [SECURITY.md](SECURITY.md) dosyasına bak.
-
-## Lisans
-
-Format, CLI, Studio ve masaüstü uygulaması [MIT](LICENSE) lisanslıdır. OpenFilm adı ve logosu ticari markadır: bkz.
-[TRADEMARK.md](TRADEMARK.md).
-
-## Yıldız geçmişi
+### Star History
 
 <a href="https://www.star-history.com/#openfilm/openfilm&Date">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=openfilm/openfilm&type=Date&theme=dark">
-    <img alt="openfilm/openfilm yıldız geçmişi" src="https://api.star-history.com/svg?repos=openfilm/openfilm&type=Date">
+    <img alt="Star History of openfilm/openfilm" src="https://api.star-history.com/svg?repos=openfilm/openfilm&type=Date">
   </picture>
 </a>
