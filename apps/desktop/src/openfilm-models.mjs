@@ -1,11 +1,15 @@
 /** The OpenFilm model menu's default order. Provider routing remains on the cloud. */
 export const OPENFILM_MODELS = Object.freeze([
+  { id: 'anthropic/claude-fable-5.2', name: 'Claude Fable 5.2' },
   { id: 'anthropic/claude-opus-5.5', name: 'Claude Opus 5.5' },
   { id: 'anthropic/claude-sonnet-5.5', name: 'Claude Sonnet 5.5' },
   { id: 'anthropic/claude-haiku-5.5', name: 'Claude Haiku 5.5' },
-  { id: 'openai/gpt-6.1-sol', name: 'GPT-6.1 Sol' },
+  { id: 'openai/gpt-6.2-astra', name: 'GPT-6.2 Astra' },
+  { id: 'openai/gpt-6.2-sol', name: 'GPT-6.2 Sol' },
   { id: 'openai/gpt-6.1-terra', name: 'GPT-6.1 Terra' },
   { id: 'openai/gpt-6-luna', name: 'GPT-6 Luna' },
+  { id: 'google/gemini-4-carbon', name: 'Gemini 4 Carbon' },
+  { id: 'tencent/hy4-flash', name: 'Hy4 Flash' },
   { id: 'deepseek/deepseek-v4.1-flash-1017', name: 'DeepSeek V4.1 Flash' },
 ]);
 

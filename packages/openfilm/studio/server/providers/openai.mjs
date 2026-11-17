@@ -24,8 +24,8 @@ const MODELS = {
   asr: [{ id: 'whisper-1', name: 'Whisper' }],
   translate: [
     { id: 'gpt-6-luna', name: 'GPT-6 Luna' },
-    { id: 'gpt-6.1-sol', name: 'GPT-6.1 Sol' },
-    { id: 'gpt-6-astra', name: 'GPT-6 Astra' },
+    { id: 'gpt-6.2-sol', name: 'GPT-6.2 Sol' },
+    { id: 'gpt-6.2-astra', name: 'GPT-6.2 Astra' },
   ],
 };
 /** The qualities each picture model has, the finest last. */

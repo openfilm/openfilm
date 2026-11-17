@@ -11,6 +11,9 @@ import { SettingsButton, SettingsSwitch, settingsError } from './ui';
 import { mergeModelMenu } from '@/lib/agent-model-menu';
 import { AgentUpdateDetails } from './AgentUpdateDetails';
 
+/** A model's maker's mark, by its id's maker (Anthropic's is Claude's); a maker with none has its letter. */
+const makerMark = (id: string) => { const maker = id.split('/')[0]!; return maker === 'anthropic' ? 'claude' : maker; };
+
 /** Account information and this computer's model menu, edited together and saved explicitly. */
 export function OpenFilmAgentDialog({ agent, onClose, actions, connectionStatus, connectionError }: {
   agent: HostAgent;
@@ -87,7 +90,7 @@ export function OpenFilmAgentDialog({ agent, onClose, actions, connectionStatus,
           itemAttribute="data-model-id" dragLabel={(model) => modelWords('openfilmModelDrag', model.name)}>
           {(model) => (
             <>
-              <span className="flex h-7 w-7 shrink-0 items-center justify-center text-[var(--text-muted)]"><ProviderMark id={model.id.startsWith('anthropic/') ? 'claude' : model.id.startsWith('openai/') ? 'openai' : 'deepseek'} size={17} /></span>
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center text-[var(--text-muted)]"><ProviderMark id={makerMark(model.id)} size={17} /></span>
               <span className={`min-w-0 flex-1 text-[14px] ${model.shown ? '' : 'text-[var(--text-faint)]'}`}>{model.name}</span>
               {pendingService && !model.available ? <span className="shrink-0 text-[12px] text-[var(--text-muted)]">{t('settings.agents.openfilmModelsPending')}</span> : null}
               <SettingsSwitch checked={model.shown} disabled={busy || model.shown && visible === 1} label={modelWords('openfilmModelShow', model.name)}
