@@ -16,7 +16,7 @@
  */
 import React from 'react';
 import {
-  ArrowLeft, ArrowUpRight, AudioLines, BadgeCheck, Box, Check, ChevronLeft, ChevronRight, Clapperboard, Github, Globe, BookOpenText, Loader2, Music, Power, Puzzle, RefreshCw, SquareTerminal, Trash2, Unplug, Plug, Upload, X, type LucideIcon,
+  ArrowLeft, ArrowUpRight, AudioLines, BadgeCheck, Check, ChevronLeft, ChevronRight, Clapperboard, Github, Globe, BookOpenText, Loader2, Music, Power, Puzzle, RefreshCw, SquareTerminal, Trash2, Unplug, Plug, Upload, X, type LucideIcon,
 } from 'lucide-react';
 import { useLanguage, useT } from '@/i18n';
 import { studioHost, type HostAgentId, type HostConnector } from '@/lib/host';
@@ -40,7 +40,7 @@ import { DocAgent, DocHighlights, DocKeys, DocLines, DocOff, DocSection, DocStep
 import { SettingsButton, SettingsGroup, SettingsSwitch } from '../settings/ui';
 import { LARGE_DIALOG_COLUMN as PAGE_INSET } from '../dialog-chrome';
 import { ASSET_KINDS, COMMUNITY_ICON, KindIcon, isCodeKind, type FeatureKind } from '../feature-kinds';
-import { byOpenFilm, inLibrary, libraryUrl, makerName, soundLook, nameOf, packItems, packOf, posterUrl, previewUrl, setAdded, templatePreviewUrl, TEXT_COMPONENT, useLibraryAdded, useLibraryIndex, type LibraryCategory, type LibraryItem, type LibraryPack } from '@/lib/library';
+import { byOpenFilm, inLibrary, libraryUrl, makerName, nameOf, packItems, packOf, posterUrl, previewUrl, setAdded, templatePreviewUrl, TEXT_COMPONENT, useLibraryAdded, useLibraryIndex, type LibraryItem, type LibraryPack } from '@/lib/library';
 import { isClipMotion } from '@/lib/clip-presets';
 import { packKey, shelfActions, useLibraryPlaces } from '@/lib/library-places';
 import { PLAIN } from './OnPicture';
@@ -51,7 +51,7 @@ import { WorkbenchMark } from '../WorkbenchMark';
 import { AppIcon } from '../AppIcon';
 import { ConnectorActions, ConnectorBody, ConnectorMark, connectConnector, useConnectorStates } from './ConnectorPanel';
 import { CallOut, COVER_GRID, DetailShell, Facts, ManageButton, PageButton, StateMark, STORE_GRID, StoreCardSkeleton, StoreChips, StoreCard, StoreSection } from './Store';
-import { AddButton, ASSET_GRID, AssetCover, AssetTile, Badge, BenchGrid, GroupList, FoldedGroup, GradientCover, PackTile, packGrid, Shelf, shapeOf, type BenchTileItem, type GroupItem } from './CommunityViews';
+import { AddButton, ASSET_GRID, AssetCover, KindCover, AssetTile, Badge, BenchGrid, GroupList, FoldedGroup, GradientCover, PackTile, packGrid, Shelf, shapeOf, type BenchTileItem, type GroupItem } from './CommunityViews';
 
 /** A plugin as people see it: its title and summary in the language shown, else its id. */
 export function usePluginWords() {
@@ -171,8 +171,6 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
     seePackVersion(p);
     setAdded(p.id, true);
   };
-  /* a kind with thousands (OpenFilm's sounds): shown a page at a time */
-  const [shown, setShown] = React.useState(STORE_PAGE);
   /* one of the library's things shown large over the page, among those it was opened from (stepped through by arrows) */
   const [preview, setPreview] = React.useState<{ items: readonly LibraryItem[]; at: number } | null>(null);
   /* one of the library's things asked for by its page (`asset:<id>`, from elsewhere): shown large over its kind's page */
@@ -188,7 +186,6 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
   const [skillSort, setSkillSort] = React.useState<Category | null>(null);
   /* the order the person put their workbenches in */
   const benchOrder = useWorkbenchOrder();
-  React.useEffect(() => { setShown(STORE_PAGE); }, [line, query]);
   const lang = useLanguage();
   const q = query.trim().toLowerCase();
   const matches = (...said: (string | undefined)[]) => !q || said.some((w) => w?.toLowerCase().includes(q));
@@ -288,11 +285,6 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
   /* a plugin, not a skill: it brings an editor (a workbench, a tab) or connects the agent to a service */
   const ownBench = (p: Plugin) => Boolean(p.workbench || p.tab || p.mcpServers);
 
-  /* the Community's things of a kind (sent by someone, `by`, OpenFilm's own account among them); OpenFilm's built-in
-     library is not here: it is the drawer's 官方 (a clip's motion and a moving line of words are another tab's) */
-  const assetsOf = (kind: LibraryCategory | 'media') => (library?.items ?? []).filter((it) => it.by && (it.cat as string) === kind
-    && !isClipMotion(it) && it.kind !== 'textmotion' && matches(nameOf(it.name, lang), it.by, makerName(it.by), ...(it.tags ?? [])));
-
   /* Publish: one's own, published to the community from here (PublishFlow); the other ways; the community's other
      indexes are under Sources (from Added's foot) */
   if (line === 'publish') {
@@ -347,9 +339,15 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
       action={installedOf(k) ? <StateMark off={Boolean(k.off)} />
         : <AddButton label={t('assetDrawer.getNamed').replace('{name}', words(k).title)} busy={installing === k.uid} disabled={installing != null} onClick={() => consent.ask(k, () => install(k))} />} />
   );
+  /* how many a pack holds, in its kind's words (12 sounds, 9 tracks) */
+  const packCount = (cat: string, n: number) => {
+    const key = `assetDrawer.packCount_${cat}`;
+    const said = t(key);
+    return (said === key ? t('assetDrawer.countItems') : said).replace('{n}', n.toLocaleString());
+  };
   /* a pack among its kind's things: its picture, its name, how many it holds; added whole to the library from here */
   const packTile = (p: LibraryPack) => (
-    <PackTile key={p.id} cat={p.cats[0] ?? 'sound'} name={nameOf(p.name, lang)} count={t('assetDrawer.countItems').replace('{n}', p.count.toLocaleString())} by={p.by ? makerName(p.by) : t('assetDrawer.skillsOfficial')}
+    <PackTile key={p.id} cat={p.cats[0] ?? 'sound'} name={nameOf(p.name, lang)} count={packCount(p.cats[0] ?? '', p.count)} by={p.by ? makerName(p.by) : t('assetDrawer.skillsOfficial')}
       cover={<PackCover pack={p} first={packItems(library, p)[0]} lang={lang} />} here={packIn(p)} newer={packNewer(p)}
       onOpen={() => open(`${PACK_PAGE}${p.id}`)} onAdd={() => addPack(p)} />
   );
@@ -361,7 +359,7 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
   ) : null;
   /* the Community's packs of a kind (none: of every kind); a thing listed alone is among the things, not here */
   const packsOf = (kind: FeatureKind | null) => (library?.packs ?? [])
-    .filter((p) => !p.official && !p.lone && (!kind || (p.cats as readonly string[]).includes(kind)) && matches(nameOf(p.name, lang), p.by, p.by ? makerName(p.by) : undefined));
+    .filter((p) => !p.official && (!kind || (p.cats as readonly string[]).includes(kind)) && matches(nameOf(p.name, lang), p.by, p.by ? makerName(p.by) : undefined));
   /* the library's things as what they are: moving pictures, stickers, words in a grid; sounds and music in a list;
      each with one thing to do, adding it to the library */
   const assetTile = (it: LibraryItem, i: number, list: readonly LibraryItem[]) => (
@@ -636,12 +634,15 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
   const kindChips = (
     <StoreChips label={t('assetDrawer.tab_assets')} value={kind} onChange={(k) => showPluginsLine(k ? `kind:${k}` : 'assets')}
       items={[{ key: null, label: t('assetDrawer.allItems') }, ...kinds.map((k) => {
-        const n = assetsOf(k as LibraryCategory).length;
+        /* how many packs: the Community's unit */
+        const n = packsOf(k).length;
         return { key: k, label: kindName(k), ...(n ? { count: n } : {}), icon: <KindIcon kind={k} size={14} /> };
       })]} />
   );
+  /* a kind's packs by name (音效包, Sound packs) */
+  const kindPacks = (k: FeatureKind) => t('assetDrawer.kindPacks').replaceAll('{kind}', kindName(k));
   /* how many packs a row shows: more where their pictures are square */
-  const rowOf = (k: FeatureKind) => (shapeOf(k) === 'sound' || shapeOf(k) === 'sticker' ? 6 : 4);
+  const rowOf = (k: FeatureKind) => (k !== 'music' && (shapeOf(k) === 'sound' || shapeOf(k) === 'sticker') ? 6 : 4);
   if (!kind) {
     const rows = kinds.map((k) => ({ k, packs: packsOf(k) })).filter((x) => x.packs.length || !q);
     return (
@@ -649,8 +650,8 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
         {status}
         {kindChips}
         {rows.map(({ k, packs }) => (
-          <StoreSection key={k} title={kindName(k)} badge={packs.length ? undefined : <SoonPill />}
-            note={packs.length ? t('assetDrawer.packsCount').replace('{n}', packs.length.toLocaleString()) : t(`assetDrawer.kindAbout_${k}`)}
+          <StoreSection key={k} title={kindPacks(k)} badge={packs.length ? undefined : <SoonPill />}
+            note={t(`assetDrawer.kindAbout_${k}`)}
             all={() => showPluginsLine(`kind:${k}`)}>
             {packs.length ? <div className={packGrid(k)}>{packs.slice(0, rowOf(k)).map(packTile)}</div> : <GhostPacks kind={k} count={rowOf(k) / 2} />}
           </StoreSection>
@@ -661,24 +662,15 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
       </PluginsPage>
     );
   }
-  const things = assetsOf(kind as LibraryCategory);
   const packs = packsOf(kind);
   return (
     <PluginsPage key={line} title={kindName(kind)} note={q ? undefined : t('assetDrawer.note_kindAsset').replaceAll('{kind}', kindName(kind))}>
       {status}
       {kindChips}
-      {things.length || packs.length ? (
-        <>
-          {packs.length ? <StoreSection title={t('assetDrawer.packs')} note={t('assetDrawer.packsCount').replace('{n}', packs.length.toLocaleString())}><div className={packGrid(kind)}>{packs.map(packTile)}</div></StoreSection> : null}
-          <StoreSection title={t('assetDrawer.allItems')} note={t('assetDrawer.countItems').replace('{n}', things.length.toLocaleString())}>
-            {assetsView(kind, things.slice(0, shown))}
-            {things.length > shown ? (
-              <div className="mt-6 flex justify-center">
-                <SettingsButton onClick={() => setShown((n) => n + STORE_PAGE)}>{t('assetDrawer.showMoreCards').replace('{n}', (things.length - shown).toLocaleString())}</SettingsButton>
-              </div>
-            ) : null}
-          </StoreSection>
-        </>
+      {packs.length ? (
+        <StoreSection title={kindPacks(kind)} note={t('assetDrawer.kindPacksCount').replace('{n}', packs.length.toLocaleString()).replaceAll('{kind}', kindName(kind))}>
+          <div className={packGrid(kind)}>{packs.map(packTile)}</div>
+        </StoreSection>
       ) : q ? <Empty text={t('assetDrawer.noSkillsFound')} />
         : (
           <>
@@ -959,22 +951,14 @@ function seenPackVersion(pack: LibraryPack): number {
   try { const v = Number(localStorage.getItem(SEEN_KEY(pack.id))); if (v > 0) return v; } catch { /* none kept */ }
   return pack.version ?? 0;
 }
-/** How many cards of a kind are shown at once; more on asking. */
-const STORE_PAGE = 48;
 
 /** A pack's picture: its own, else its first thing's. */
 function PackCover({ pack, first, lang }: { pack: LibraryPack; first: LibraryItem | undefined; lang: ReturnType<typeof useLanguage> }) {
   if (pack.cover) return <img src={libraryUrl(pack.cover)} alt="" loading="lazy" draggable={false} className="absolute inset-0 h-full w-full object-cover" />;
   if (first?.cover) return <img src={libraryUrl(first.cover)} alt="" loading="lazy" draggable={false} className="absolute inset-0 h-full w-full object-cover" />;
-  /* sounds: soft light in their group's colors, as the library's tiles */
-  if (first?.kind === 'sound' && first.cat === 'sound') {
-    return (
-      <div aria-hidden className="absolute inset-0 flex items-center justify-center" style={soundLook({ id: pack.id, group: first.group })}>
-        <AudioLines size={26} className="text-white/85" />
-      </div>
-    );
-  }
-  return first ? <AssetCover item={first} lang={lang} /> : <GradientCover hue={220} Icon={Box} />;
+  /* sounds and music, or nothing to show: its kind's own cover */
+  if (!first || first.kind === 'sound' || (first.kind === 'file' && first.media === 'audio')) return <KindCover cat={pack.cats[0] ?? first?.cat ?? 'sound'} />;
+  return <AssetCover item={first} lang={lang} />;
 }
 
 /**

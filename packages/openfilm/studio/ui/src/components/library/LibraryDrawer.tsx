@@ -723,9 +723,10 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, onUpload, onKee
       <div key={node.key} className="flex flex-col" data-rail-section={node.key}>
         <button type="button" aria-expanded={node.children.length ? open : undefined} aria-pressed={whole ? Boolean(node.on) : undefined} title={node.name}
           onClick={(e) => {
-            if (!whole || (e.target as HTMLElement).closest('[data-rail-fold]')) { fold(node.key); return; }
-            node.onPick?.();
-            if (!open) fold(node.key);
+            /* the box itself opens or folds it, as its arrow does; one that shows its whole is picked as it opens */
+            const arrow = Boolean((e.target as HTMLElement).closest('[data-rail-fold]'));
+            if (node.children?.length) fold(node.key);
+            if (whole && !arrow && (!open || !node.children?.length)) node.onPick?.();
           }}
           className={`${RAIL_BOX} ${lit ? 'text-[var(--accent)]' : 'text-[var(--text)]'}`}>
           <span className="min-w-0 flex-1 truncate">{node.name}</span>
@@ -979,8 +980,8 @@ function StarButton({ item, kept, className }: { item: LibraryItem; kept: boolea
 }
 
 /** A namespace of the side bar, as a box (one that opens, its heading); a line under one that opened. */
-const RAIL_BOX = 'flex h-7 w-full shrink-0 select-none items-center gap-1 rounded-[6px] bg-[var(--bg-field)] px-2.5 text-left text-[12px] font-semibold transition-colors hover:bg-[var(--bg-pressed)]';
-const RAIL_CHILD = 'flex h-8 w-full shrink-0 items-center px-2.5 text-left text-[12px] font-semibold transition-colors';
+const RAIL_BOX = 'flex h-[26px] w-full shrink-0 select-none items-center gap-1 rounded-[6px] bg-[var(--bg-field)] px-2.5 text-left text-[11.5px] font-semibold transition-colors hover:bg-[var(--bg-pressed)]';
+const RAIL_CHILD = 'flex h-7 w-full shrink-0 items-center px-2.5 text-left text-[11.5px] font-semibold transition-colors';
 
 /** The sections of the side bars folded, by category and section, kept on this computer. */
 const FOLDED_KEY = 'openfilm.library.folded';

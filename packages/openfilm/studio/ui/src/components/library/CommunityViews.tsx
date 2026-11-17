@@ -9,6 +9,7 @@
 import * as React from 'react';
 import { AudioLines, BadgeCheck, Check, ChevronDown, ChevronRight, GripVertical, Music, Plus, type LucideIcon } from 'lucide-react';
 import { useLanguage, useT } from '@/i18n';
+import { KindIcon, type FeatureKind } from '../feature-kinds';
 import type { Plugin } from '@/lib/plugins';
 import { byOpenFilm, libraryUrl, makerName, nameOf, posterUrl, previewUrl, templatePreviewUrl, TEXT_COMPONENT, type LibraryItem } from '@/lib/library';
 import { AppIcon } from '../AppIcon';
@@ -267,12 +268,23 @@ export function PackTile({ cover, cat, name, count, by, here, newer = false, onO
 }) {
   const t = useT();
   const square = shapeOf(cat) === 'sound' || shapeOf(cat) === 'sticker';
+  /* music as an album: its record behind the sleeve, sliding out under the pointer */
+  const album = cat === 'music';
+  const sleeve = (
+    <div className={`relative overflow-hidden rounded-[14px] bg-[var(--bg-field)] shadow-[0_6px_18px_rgba(0,0,0,0.28)] transition duration-200 group-hover:brightness-110 group-focus-visible:ring-2 group-focus-visible:ring-[var(--accent)] ${album ? 'aspect-square h-full' : square ? 'aspect-square' : 'aspect-video'}`}>
+      {cover}
+      {newer ? <span className="absolute left-2 top-2 rounded-full bg-[var(--text)] px-2 py-0.5 text-[11px] font-semibold text-[var(--dialog-main)]">{t('assetDrawer.packNewer')}</span> : null}
+    </div>
+  );
   return (
     <div {...opener(onOpen)} data-store-card={name} className="group min-w-0 cursor-pointer outline-none">
-      <div className={`relative overflow-hidden rounded-[14px] bg-[var(--bg-field)] transition duration-200 group-hover:brightness-110 group-focus-visible:ring-2 group-focus-visible:ring-[var(--accent)] ${square ? 'aspect-square' : 'aspect-video'}`}>
-        {cover}
-        {newer ? <span className="absolute left-2 top-2 rounded-full bg-[var(--text)] px-2 py-0.5 text-[11px] font-semibold text-[var(--dialog-main)]">{t('assetDrawer.packNewer')}</span> : null}
-      </div>
+      {album ? (
+        <div className="relative aspect-[1.18/1]">
+          <span aria-hidden className="absolute bottom-[5%] left-[22%] top-[5%] aspect-square rounded-full shadow-[0_6px_18px_rgba(0,0,0,0.4)] transition-transform duration-500 ease-out group-hover:translate-x-[6%] group-hover:rotate-[40deg]"
+            style={{ background: 'radial-gradient(circle, #f2f2ee 0 13%, #0b0b0b 13.5% 15%, transparent 15.5%), repeating-radial-gradient(circle, #151515 0 2px, #1d1d1d 2px 3px), #111' }} />
+          <div className="relative h-full">{sleeve}</div>
+        </div>
+      ) : sleeve}
       {/* its name, whose and how many it holds; Get, or said got */}
       <div className="mt-2.5 flex min-w-0 items-center gap-3">
         <div className="min-w-0 flex-1">
@@ -285,9 +297,20 @@ export function PackTile({ cover, cat, name, count, by, here, newer = false, onO
   );
 }
 
-/** Packs in a grid: smaller where their pictures are square. */
-export const packGrid = (cat: string) => (shapeOf(cat) === 'sound' || shapeOf(cat) === 'sticker'
-  ? 'grid grid-cols-[repeat(auto-fill,minmax(140px,1fr))] gap-x-3 gap-y-4' : ASSET_GRID.video);
+/** Packs in a grid: albums of music wide enough for their record, sounds and stickers square. */
+export const packGrid = (cat: string) => (cat === 'music' ? 'grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-x-5 gap-y-6'
+  : shapeOf(cat) === 'sound' || shapeOf(cat) === 'sticker' ? 'grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-x-4 gap-y-6' : ASSET_GRID.video);
+
+/** A pack's picture when it has none: its kind's mark on a quiet field, in black and white. */
+export function KindCover({ cat }: { cat: string }) {
+  return (
+    <div aria-hidden className="absolute inset-0 grid place-items-center text-white/80"
+      style={{ background: 'radial-gradient(120% 90% at 30% 20%, #2a2a2a 0%, #141414 55%, #0c0c0c 100%), #111' }}>
+      <span className="absolute inset-0 opacity-[0.07]" style={{ backgroundImage: 'repeating-linear-gradient(135deg, #fff 0 1px, transparent 1px 9px)' }} />
+      <span className="relative"><KindIcon kind={cat as FeatureKind} size={30} /></span>
+    </div>
+  );
+}
 
 /**
  * A part of a page, as a store page's (library/Store StoreSection): its name, a word under it, and what it holds; `all`:
