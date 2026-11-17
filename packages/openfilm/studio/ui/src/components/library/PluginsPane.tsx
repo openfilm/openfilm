@@ -41,7 +41,7 @@ import { DocAgent, DocHighlights, DocKeys, DocLines, DocOff, DocSection, DocStep
 import { SettingsButton, SettingsGroup, SettingsSwitch } from '../settings/ui';
 import { LARGE_DIALOG_COLUMN as PAGE_INSET } from '../dialog-chrome';
 import { ASSET_KINDS, COMMUNITY_ICON, KindIcon, isCodeKind, type FeatureKind } from '../feature-kinds';
-import { byOpenFilm, inLibrary, libraryUrl, makerName, nameOf, packItems, packOf, posterUrl, previewUrl, setAdded, templatePreviewUrl, TEXT_COMPONENT, useLibraryAdded, useLibraryIndex, type LibraryItem, type LibraryPack } from '@/lib/library';
+import { byOpenFilm, libraryUrl, makerName, nameOf, packItems, packOf, posterUrl, previewUrl, setAdded, templatePreviewUrl, TEXT_COMPONENT, useLibraryAdded, useLibraryIndex, type LibraryItem, type LibraryPack } from '@/lib/library';
 import { isClipMotion } from '@/lib/clip-presets';
 import { packKey, shelfActions, useLibraryPlaces } from '@/lib/library-places';
 import { PLAIN } from './OnPicture';
@@ -158,7 +158,6 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
     setAdded(p.id, true); seePackVersion(p);
   };
   /* a thing alone got: in the library under 社区 */
-  const addThing = (it: LibraryItem) => { setAdded(it.id, true); };
   /* a pack taken out of the library: one of OpenFilm's own hidden from the drawer (got back here), any other let go
      (media saved into a folder of the person's stay theirs) */
   const removePack = (p: LibraryPack) => {
@@ -352,11 +351,11 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
       cover={<PackCover pack={p} first={packItems(library, p)[0]} lang={lang} />} here={packIn(p)} newer={packNewer(p)}
       onOpen={() => open(`${PACK_PAGE}${p.id}`)} onAdd={() => addPack(p)} />
   );
-  /* one of the library's things large over the page: what to do with it is its pack's (got whole), or, a file, kept */
+  /* one of the library's things large over the page: what to do with it is its pack's, got whole */
   const lightbox = preview ? (
     <AssetLightbox items={preview.items} at={preview.at} lang={lang} onAt={(at) => setPreview({ ...preview, at })} onClose={() => setPreview(null)}
-      packOf={(it) => { const p = packOf(library, it); return p && !p.lone ? p : undefined; }} packIn={packIn} here={(it) => inLibrary(it, added)}
-      onGetPack={addPack} onAdd={addThing} onPack={(p) => { setPreview(null); open(`${PACK_PAGE}${p.id}`); }} />
+      packOf={(it) => packOf(library, it)} packIn={packIn}
+      onGetPack={addPack} onPack={(p) => { setPreview(null); open(`${PACK_PAGE}${p.id}`); }} />
   ) : null;
   /* the Community's packs of a kind (none: of every kind); a thing listed alone is among the things, not here */
   const packsOf = (kind: FeatureKind | null) => (library?.packs ?? [])
@@ -364,7 +363,7 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
   /* the library's things as what they are: moving pictures, stickers, words in a grid; sounds and music in a list;
      each with one thing to do, adding it to the library */
   const assetTile = (it: LibraryItem, i: number, list: readonly LibraryItem[]) => (
-    <AssetTile key={it.id} item={it} lang={lang} here={inLibrary(it, added)} onOpen={() => setPreview({ items: list, at: i })} onAdd={() => addThing(it)} />
+    <AssetTile key={it.id} item={it} lang={lang} onOpen={() => setPreview({ items: list, at: i })} />
   );
   const assetsView = (cat: string, list: readonly LibraryItem[]) => {
     const shape = shapeOf(cat);
@@ -1013,13 +1012,13 @@ function PackPage({ pack, items, view, lang, here, newer, onBack, onAdd, onRemov
 
 /**
  * One of the library's things large, over the page it was opened from: shown as it is used, its name, whose, its kind
- * and its pack; what to do with it (its pack got whole; a file of footage, a picture or a recording kept on its own).
+ * and its pack; what to do with it: its pack, got whole (the Community's unit).
  * The arrows (and ← →) step through the others there; Esc, the cross or a click outside closes it.
  */
-function AssetLightbox({ items, at, lang, onAt, onClose, packOf: packOfItem, packIn, here, onGetPack, onAdd, onPack }: {
+function AssetLightbox({ items, at, lang, onAt, onClose, packOf: packOfItem, packIn, onGetPack, onPack }: {
   items: readonly LibraryItem[]; at: number; lang: ReturnType<typeof useLanguage>; onAt: (at: number) => void; onClose: () => void;
-  packOf: (item: LibraryItem) => LibraryPack | undefined; packIn: (pack: LibraryPack) => boolean; here: (item: LibraryItem) => boolean;
-  onGetPack: (pack: LibraryPack) => void; onAdd: (item: LibraryItem) => void; onPack: (pack: LibraryPack) => void;
+  packOf: (item: LibraryItem) => LibraryPack | undefined; packIn: (pack: LibraryPack) => boolean;
+  onGetPack: (pack: LibraryPack) => void; onPack: (pack: LibraryPack) => void;
 }) {
   const t = useT();
   const item = items[Math.min(at, items.length - 1)];
@@ -1035,14 +1034,9 @@ function AssetLightbox({ items, at, lang, onAt, onClose, packOf: packOfItem, pac
   if (!item) return null;
   const pack = packOfItem(item);
   const name = nameOf(item.name, lang);
-  const file = item.kind === 'file';
-  const action = file
-    ? (here(item) ? <span className="inline-flex h-8 items-center gap-1 text-[13px] text-[var(--text-faint)]"><Check size={13} aria-hidden />{t('assetDrawer.savedToMine')}</span>
-      : <PageButton kind="main" onClick={() => onAdd(item)}>{t('assetDrawer.saveToMine')}</PageButton>)
-    : pack ? (packIn(pack) ? <span className="inline-flex h-8 items-center gap-1 text-[13px] text-[var(--text-faint)]"><Check size={13} aria-hidden />{t('assetDrawer.stateGot')}</span>
-      : <PageButton kind="main" onClick={() => onGetPack(pack)}>{t('assetDrawer.getPack')}</PageButton>)
-      : here(item) ? <span className="inline-flex h-8 items-center gap-1 text-[13px] text-[var(--text-faint)]"><Check size={13} aria-hidden />{t('assetDrawer.stateGot')}</span>
-        : <PageButton kind="main" onClick={() => onAdd(item)}>{t('assetDrawer.get')}</PageButton>;
+  /* the Community's unit is the pack: what is got from here is always the whole pack this thing is in */
+  const action = !pack ? null : packIn(pack) ? <span className="inline-flex h-8 items-center gap-1 text-[13px] text-[var(--text-faint)]"><Check size={13} aria-hidden />{t('assetDrawer.stateGot')}</span>
+    : <PageButton kind="main" onClick={() => onGetPack(pack)}>{t('assetDrawer.getPack')}</PageButton>;
   const arrow = 'absolute top-1/2 z-[1] grid h-10 w-10 -translate-y-1/2 place-items-center rounded-full bg-black/45 text-white backdrop-blur transition hover:bg-black/65';
   /* drawn in the window itself (it is on the page's top layer: nothing put on the body shows over it) */
   return (

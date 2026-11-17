@@ -7,7 +7,7 @@
  * its own folded into one line until opened. A page's parts share one header (Shelf, as library/Store StoreSection).
  */
 import * as React from 'react';
-import { AudioLines, BadgeCheck, Check, ChevronDown, ChevronRight, GripVertical, Music, Plus, type LucideIcon } from 'lucide-react';
+import { AudioLines, BadgeCheck, Check, ChevronDown, ChevronRight, GripVertical, Music, type LucideIcon } from 'lucide-react';
 import { useLanguage, useT } from '@/i18n';
 import { KindIcon, type FeatureKind } from '../feature-kinds';
 import type { Plugin } from '@/lib/plugins';
@@ -207,7 +207,8 @@ export function AssetCover({ item, lang }: { item: LibraryItem; lang: Lang }) {
   if (item.kind === 'file' && item.media === 'audio') return <GradientCover Icon={AudioLines} />;
   if (item.kind === 'look') return <img src={item.sample ? libraryUrl(item.sample) : PLAIN} alt="" loading="lazy" draggable={false} className="absolute inset-0 h-full w-full object-cover" style={{ filter: item.filter }} />;
   if (item.kind === 'textstyle' || item.id === TEXT_COMPONENT) return <TextStyleSample lang={lang} vars={item.vars} {...(item.id === TEXT_COMPONENT ? { words: nameOf(item.name, lang) } : {})} />;
-  return <img src={posterUrl(item)} alt="" loading="lazy" decoding="async" draggable={false} className={`absolute inset-0 h-full w-full ${item.cat === 'sticker' ? 'object-contain p-3' : 'object-cover'}`} />;
+  return <img src={posterUrl(item)} alt="" loading="lazy" decoding="async" draggable={false} data-sticker-idle={item.idle}
+    className={`absolute inset-0 h-full w-full ${item.cat === 'sticker' ? 'object-contain p-3' : 'object-cover'}`} />;
 }
 
 /** A picture for what has none: its mark on a default app tile (components/AppIcon), on the field's grey. */
@@ -228,27 +229,26 @@ const movingOf = (item: LibraryItem): string | null => (item.kind === 'file' ? (
  * someone sent it, whose; its star and its Add on the picture while pointed at (the star stays once starred). A click
  * opens its page.
  */
-export function AssetTile({ item, lang, here, onOpen, onAdd }: {
-  item: LibraryItem; lang: Lang; here: boolean; onOpen: () => void; onAdd: () => void;
-}) {
-  const t = useT();
-  const [hover, setHover] = React.useState(false);
+export function AssetTile({ item, lang, onOpen }: { item: LibraryItem; lang: Lang; onOpen: () => void }) {
+  const ref = React.useRef<HTMLDivElement>(null);
+  const [seen, setSeen] = React.useState(false);
   const [still, setStill] = React.useState(false);
   const shape = shapeOf(item.cat);
-  const moving = hover && !still ? movingOf(item) : null;
+  /* what moves plays on its own while it is in view (the pack is what is got: nothing to do on a single thing here) */
+  React.useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof IntersectionObserver === 'undefined') return undefined;
+    const watch = new IntersectionObserver(([entry]) => setSeen(Boolean(entry?.isIntersecting)), { rootMargin: '120px' });
+    watch.observe(el);
+    return () => watch.disconnect();
+  }, []);
+  const moving = seen && !still ? movingOf(item) : null;
   const name = nameOf(item.name, lang);
-  /* a file (footage, a picture, a recording) is saved into the person's own; anything else is got */
-  const word = t(item.kind === 'file' ? (here ? 'assetDrawer.savedToMine' : 'assetDrawer.saveToMine') : here ? 'assetDrawer.stateGot' : 'assetDrawer.get');
   return (
-    <div {...opener(onOpen)} data-store-card={name} onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)} className="group min-w-0 cursor-pointer outline-none">
+    <div ref={ref} {...opener(onOpen)} data-store-card={name} className="group min-w-0 cursor-pointer outline-none">
       <div className={`relative overflow-hidden rounded-[14px] bg-[var(--bg-field)] ring-1 ring-[var(--border)] transition duration-200 group-hover:-translate-y-0.5 group-hover:shadow-[0_10px_28px_rgba(0,0,0,0.28)] group-hover:ring-[var(--border-strong)] group-focus-visible:ring-[var(--accent)] ${shape === 'sticker' ? 'aspect-square' : shape === 'words' ? 'aspect-[2/1]' : 'aspect-video'}`}>
         <AssetCover item={item} lang={lang} />
         {moving ? <video key={moving} src={moving} autoPlay muted loop playsInline onError={() => setStill(true)} className="absolute inset-0 h-full w-full object-cover" /> : null}
-        <button type="button" disabled={here} aria-label={word} title={word}
-          onClick={(e) => { e.stopPropagation(); onAdd(); }}
-          className={`absolute bottom-1.5 right-1.5 h-7 items-center gap-1 rounded-full px-2.5 text-[12px] font-medium transition focus-visible:flex ${here ? 'hidden bg-black/55 text-white group-hover:flex' : 'hidden bg-white text-black hover:bg-white/90 group-hover:flex'}`}>
-          {here ? <Check size={13} aria-hidden /> : <Plus size={13} aria-hidden />}{word}
-        </button>
       </div>
       <div className={`mt-1.5 truncate text-[13px] text-[var(--text)] ${shape === 'sticker' ? 'text-center text-[12px]' : ''}`}>{name}</div>
       {item.by && shape !== 'sticker' ? <div className="flex items-center gap-1 truncate text-[11.5px] text-[var(--text-faint)]">{makerName(item.by)}{byOpenFilm(item.by) ? <BadgeCheck size={11} strokeWidth={2} aria-hidden className="shrink-0" /> : null}</div> : null}

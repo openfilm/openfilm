@@ -847,3 +847,18 @@ html[data-file-drag] iframe { pointer-events: none; }
 
 /* the Community's banner: the next thing fades in over the last (components/library/CommunityViews Hero) */
 @keyframes community-fade { from { opacity: 0.35; transform: scale(1.015); } to { opacity: 1; transform: none; } }
+
+/* A Community sticker's idle movement on its tile (the same keyframes are on its page: the Community's build.mjs) */
+@keyframes sticker-bounce { 0%, 100% { transform: translateY(0) } 50% { transform: translateY(-8%) } }
+@keyframes sticker-wiggle { 0%, 100% { transform: rotate(0) } 25% { transform: rotate(-7deg) } 75% { transform: rotate(7deg) } }
+@keyframes sticker-pulse { 0%, 100% { transform: scale(1) } 50% { transform: scale(1.08) } }
+@keyframes sticker-float { 0%, 100% { transform: translate(0, 0) rotate(-2deg) } 50% { transform: translate(0, -5%) rotate(2deg) } }
+@keyframes sticker-spin { to { transform: rotate(360deg) } }
+@keyframes sticker-pop { 0%, 70%, 100% { transform: scale(1) } 80% { transform: scale(1.15) } 90% { transform: scale(0.95) } }
+[data-sticker-idle="bounce"] { animation: sticker-bounce 1.2s ease-in-out infinite; }
+[data-sticker-idle="wiggle"] { animation: sticker-wiggle 1.4s ease-in-out infinite; }
+[data-sticker-idle="pulse"] { animation: sticker-pulse 1.2s ease-in-out infinite; }
+[data-sticker-idle="float"] { animation: sticker-float 2.4s ease-in-out infinite; }
+[data-sticker-idle="spin"] { animation: sticker-spin 4s linear infinite; }
+[data-sticker-idle="pop"] { animation: sticker-pop 1.6s ease-out infinite; }
+@media (prefers-reduced-motion: reduce) { [data-sticker-idle] { animation: none; } }

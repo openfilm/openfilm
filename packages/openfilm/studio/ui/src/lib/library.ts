@@ -13,6 +13,8 @@ import { gradeFilter, gradeOf, withGrade, type Grade } from './grade.ts';
 
 /** What a path names OpenFilm's library by, as `saved/` names Saved. */
 export const BUILT_IN = 'openfilm';
+/** How a Community sticker moves while it is shown: the same keyframes on its page and its tile (globals.css). */
+export type StickerIdle = 'bounce' | 'wiggle' | 'pulse' | 'float' | 'spin' | 'pop';
 
 export type LibraryCategory = 'transition' | 'effect' | 'filter' | 'text' | 'sticker' | 'sound' | 'music' | 'template';
 export type LibraryNames = Partial<Record<Language, string>> & { en: string };
@@ -59,6 +61,8 @@ export interface LibraryItem {
   music?: string;
   /** A motion preset (src/clip-motion.mjs withPreset): how a clip comes in, goes out, moves while shown; on a cut, the
    *  clip before it goes out and the one after comes in. */
+  /** A Community sticker's idle movement, shown on its tile as on its page (StickerIdle). */
+  idle?: StickerIdle;
   motion?: Partial<Record<'in' | 'out' | 'loop', { name: string; body: string; secs: number; ease: string }>>;
   /** A transition of two shots moving at once (a push, a wipe): the incoming clip overlaps the outgoing one by its
       length, coming in by `motion.in` while that one goes out by `motion.out` (lib/clip-presets withCutMove). */

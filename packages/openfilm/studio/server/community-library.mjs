@@ -17,6 +17,8 @@ const HEX = /^[a-f0-9]{64}$/;
 const ITEM = /^(sound|music|transition|effect|media|text|sticker|filter)\/[a-z0-9]+(?:-[a-z0-9]+)*$/;
 /** A text style's variables and a filter's grade, as the catalog carries them (the community's scripts/check.mjs) */
 const TEXT_VAR = /^--[a-z][a-z0-9-]{0,39}$/;
+/** How a sticker may move while shown (its page and its tile draw the same keyframes) */
+const STICKER_IDLE = ['bounce', 'wiggle', 'pulse', 'float', 'spin', 'pop'];
 const textVars = (/** @type {any} */ vars) => vars && typeof vars === 'object' && !Array.isArray(vars) && Object.keys(vars).length >= 1 && Object.keys(vars).length <= 24 &&
   Object.entries(vars).every(([key, value]) => TEXT_VAR.test(key) && typeof value === 'string' && value.length <= 200 && /^[\x20-\x7e]*$/.test(value) &&
     !/[<>{};\\@]/.test(value) && !/\b(?:url|image-set|image|src|expression|var)\s*\(/i.test(value));
@@ -30,7 +32,7 @@ const endpoint = () => (process.env.OPENFILM_COMMUNITY_LIBRARY_URL ??
   `${(process.env.OPENFILM_LIBRARY_URL || 'https://openfilm.dev/library').replace(/\/+$/, '')}/${PREFIX}`).replace(/\/+$/, '');
 
 /** @typedef {{ sha256: string, bytes: number }} Blob */
-/** @typedef {{ group: string, id: string, cat: string, kind: 'sound' | 'page' | 'file' | 'textstyle' | 'look', name: Record<string,string>, durationMs: number, tags: string[], about: string, by: string, src?: string, place?: 'cut', media?: 'video' | 'image' | 'audio', poster?: string, vars?: Record<string,string>, grade?: Record<string,unknown>, sample?: string, w?: number, h?: number, fit?: number }} Item */
+/** @typedef {{ group: string, id: string, cat: string, kind: 'sound' | 'page' | 'file' | 'textstyle' | 'look', name: Record<string,string>, durationMs: number, tags: string[], about: string, by: string, src?: string, place?: 'cut', media?: 'video' | 'image' | 'audio', poster?: string, vars?: Record<string,string>, grade?: Record<string,unknown>, sample?: string, w?: number, h?: number, fit?: number, idle?: string }} Item */
 /**
  * A pack: things of one maker's put together (a music pack of forty pieces), or one thing listed alone, as a pack of
  * its own (`lone`). Its id is `<maker>/<name>`; its things' `group` in the library is that id, so it is a group of
@@ -94,7 +96,7 @@ function decode(json) {
     result.packs.push(pack);
   }
   for (const entry of json.items) {
-    const { id, version, revision, name, about, tags, by, durationMs, files, media, vars, grade, w, h } = entry ?? {};
+    const { id, version, revision, name, about, tags, by, durationMs, files, media, vars, grade, w, h, idle } = entry ?? {};
     const kind = typeof id === 'string' && id.length < 100 ? ITEM.exec(id)?.[1] : undefined;
     /* a media file: footage, a picture or a recording, one file (a poster beside footage); a picture lasts nothing */
     const isMedia = kind === 'media';
@@ -102,7 +104,7 @@ function decode(json) {
     /* a text style is its variables, a filter its grade (neither lasts); a sticker its picture at its size */
     const timeless = kind === 'text' || kind === 'filter';
     if ((kind === 'text' && !textVars(vars)) || (kind === 'filter' && !gradeOk(grade)) ||
-        (kind === 'sticker' && ![w, h].every((n) => Number.isInteger(n) && n >= 1 && n <= 1024))) throw new Error('Invalid community item');
+        (kind === 'sticker' && (![w, h].every((n) => Number.isInteger(n) && n >= 1 && n <= 1024) || (idle !== undefined && !STICKER_IDLE.includes(idle))))) throw new Error('Invalid community item');
     if (!kind || seen.has(id) || !Number.isSafeInteger(version) || version < 1 || !HEX.test(revision) ||
         typeof by !== 'string' || !/^[a-zA-Z0-9-]{1,39}$/.test(by) ||
         !name || !languages.every((lang) => typeof name[lang] === 'string' && name[lang].trim() && name[lang].length <= 60) ||
@@ -148,7 +150,7 @@ function decode(json) {
       /* OpenFilm's text component draws a text style; a filter's picture is shown with its grade; a sticker is a page */
       : kind === 'text' ? { ...common, kind: 'textstyle', vars, w: 1600, h: 260, fit: 0.2 }
       : kind === 'filter' ? { ...common, kind: 'look', grade, sample: `${base}/sample.jpg` }
-      : kind === 'sticker' ? { ...common, kind: 'page', src: 'sticker.html', w, h, fit: 0.32, poster: `${base}/${picture}` }
+      : kind === 'sticker' ? { ...common, kind: 'page', src: 'sticker.html', w, h, fit: 0.32, poster: `${base}/${picture}`, ...(idle ? { idle } : {}) }
       : { id: itemId, cat: kind, group: pack.id, kind: audio ? 'sound' : 'page',
         name, about, tags, by, durationMs, ...(!audio ? { src: 'overlay.html', ...(kind === 'transition' ? { place: /** @type {const} */ ('cut') } : {}) } : {}) });
   }
