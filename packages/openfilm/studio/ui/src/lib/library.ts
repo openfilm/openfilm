@@ -425,10 +425,14 @@ export async function prepareLibraryItem(id: string): Promise<boolean> {
 /** A template's full example, shared by the card and the viewer, with the bundled preview as a fallback. */
 export const templateExamplePath = (item: LibraryItem): string => `examples/${item.id}.mp4`;
 export const templatePreviewUrl = (item: LibraryItem): string => {
+  /* a Community template brings its own preview */
+  if (item.id.startsWith('community/')) return previewUrl(item);
   const path = templateExamplePath(item);
   return failed.has(path) ? previewUrl(item) : libraryUrl(path);
 };
 export function prepareTemplatePreview(item: LibraryItem): Promise<boolean> {
+  /* a Community template's preview is fetched as it is played */
+  if (item.id.startsWith('community/')) return Promise.resolve(true);
   const path = templateExamplePath(item);
   return failed.has(path) ? Promise.resolve(false) : prepareLibraryItem(path);
 }

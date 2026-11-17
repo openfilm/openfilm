@@ -14,7 +14,7 @@ const MEDIA_EXT = { video: ['mp4', 'mov', 'webm'], image: ['jpg', 'jpeg', 'png',
 const REFRESH = 60_000;
 const TIMEOUT = 8000;
 const HEX = /^[a-f0-9]{64}$/;
-const ITEM = /^(sound|music|transition|effect|media|text|sticker|filter)\/[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const ITEM = /^(sound|music|transition|effect|media|text|sticker|filter|template)\/[a-z0-9]+(?:-[a-z0-9]+)*$/;
 /** A text style's variables and a filter's grade, as the catalog carries them (the community's scripts/check.mjs) */
 const TEXT_VAR = /^--[a-z][a-z0-9-]{0,39}$/;
 /** How a sticker may move while shown (its page and its tile draw the same keyframes) */
@@ -32,7 +32,7 @@ const endpoint = () => (process.env.OPENFILM_COMMUNITY_LIBRARY_URL ??
   `${(process.env.OPENFILM_LIBRARY_URL || 'https://openfilm.dev/library').replace(/\/+$/, '')}/${PREFIX}`).replace(/\/+$/, '');
 
 /** @typedef {{ sha256: string, bytes: number }} Blob */
-/** @typedef {{ group: string, id: string, cat: string, kind: 'sound' | 'page' | 'file' | 'textstyle' | 'look', name: Record<string,string>, durationMs: number, tags: string[], about: string, by: string, src?: string, place?: 'cut', media?: 'video' | 'image' | 'audio', poster?: string, vars?: Record<string,string>, grade?: Record<string,unknown>, sample?: string, w?: number, h?: number, fit?: number, idle?: string }} Item */
+/** @typedef {{ group: string, id: string, cat: string, kind: 'sound' | 'page' | 'file' | 'textstyle' | 'look' | 'group', name: Record<string,string>, durationMs: number, tags: string[], about: string, by: string, src?: string, place?: 'cut', media?: 'video' | 'image' | 'audio', poster?: string, vars?: Record<string,string>, grade?: Record<string,unknown>, sample?: string, w?: number, h?: number, fit?: number, idle?: string, slots?: number }} Item */
 /**
  * A pack: things of one maker's put together (a music pack of forty pieces), or one thing listed alone, as a pack of
  * its own (`lone`). Its id is `<maker>/<name>`; its things' `group` in the library is that id, so it is a group of
@@ -96,7 +96,7 @@ function decode(json) {
     result.packs.push(pack);
   }
   for (const entry of json.items) {
-    const { id, version, revision, name, about, tags, by, durationMs, files, media, vars, grade, w, h, idle } = entry ?? {};
+    const { id, version, revision, name, about, tags, by, durationMs, files, media, vars, grade, w, h, idle, slots } = entry ?? {};
     const kind = typeof id === 'string' && id.length < 100 ? ITEM.exec(id)?.[1] : undefined;
     /* a media file: footage, a picture or a recording, one file (a poster beside footage); a picture lasts nothing */
     const isMedia = kind === 'media';
@@ -118,10 +118,14 @@ function decode(json) {
     const basename = `community-${id.replace('/', '-')}`;
     const sound = [`${basename}.m4a`, `${basename}.mp3`].find((key) => Object.hasOwn(files, key));
     const mediaFile = isMedia ? MEDIA_EXT[/** @type {'video' | 'image' | 'audio'} */ (media)].map((ext) => `${basename}.${ext}`).find((key) => Object.hasOwn(files, key)) : undefined;
+    /* a template: its group, poster and preview, and its locked pages and pictures under files/ */
+    const parts = kind === 'template' && files && typeof files === 'object' ? Object.keys(files).filter((key) => /^files\/[a-z0-9][a-z0-9-]{0,30}\.(?:html|jpg)$/.test(key)) : [];
+    if (kind === 'template' && (!Number.isInteger(slots) || slots < 0 || slots > 24 || parts.length > 29)) throw new Error('Invalid community item');
     const picture = kind === 'sticker' ? ['files/sticker.png', 'files/sticker.webp'].find((key) => Object.hasOwn(files, key)) : undefined;
     const expected = isMedia ? [mediaFile, ...(media === 'video' ? ['poster.jpg'] : [])]
       : audio ? [sound, `waves/${basename}.png`] : kind === 'text' ? [] : kind === 'filter' ? ['sample.jpg']
-        : kind === 'sticker' ? ['saved.json', 'files/sticker.html', picture] : ['saved.json', 'files/overlay.html', 'poster.jpg', 'preview.mp4'];
+        : kind === 'sticker' ? ['saved.json', 'files/sticker.html', picture] : kind === 'template' ? ['saved.json', 'poster.jpg', 'preview.mp4', ...parts]
+          : ['saved.json', 'files/overlay.html', 'poster.jpg', 'preview.mp4'];
     if (Object.keys(files).length !== expected.length) throw new Error('Invalid community files');
     for (const key of expected) {
       const file = key ? files[key] : null;
@@ -130,7 +134,8 @@ function decode(json) {
           !Number.isInteger(file.bytes) || file.bytes < 1 || file.bytes > limit) throw new Error('Invalid community file');
       result.files.set(`${base}/${key}`, file);
     }
-    if (kind === 'sticker') result.bundles.set(base, ['saved.json', 'files/sticker.html', /** @type {string} */ (picture)].map((key) => `${base}/${key}`));
+    if (kind === 'template') result.bundles.set(base, ['saved.json', ...parts].map((key) => `${base}/${key}`));
+    else if (kind === 'sticker') result.bundles.set(base, ['saved.json', 'files/sticker.html', /** @type {string} */ (picture)].map((key) => `${base}/${key}`));
     else if (!audio && !timeless) result.bundles.set(base, ['saved.json', 'files/overlay.html'].map((key) => `${base}/${key}`));
     /* its pack, or one of its own when it is listed alone */
     let pack = packOf.get(id);
@@ -150,6 +155,7 @@ function decode(json) {
       /* OpenFilm's text component draws a text style; a filter's picture is shown with its grade; a sticker is a page */
       : kind === 'text' ? { ...common, kind: 'textstyle', vars, w: 1600, h: 260, fit: 0.2 }
       : kind === 'filter' ? { ...common, kind: 'look', grade, sample: `${base}/sample.jpg` }
+      : kind === 'template' ? { ...common, kind: 'group', slots, poster: `${base}/poster.jpg` }
       : kind === 'sticker' ? { ...common, kind: 'page', src: 'sticker.html', w, h, fit: 0.32, poster: `${base}/${picture}`, ...(idle ? { idle } : {}) }
       : { id: itemId, cat: kind, group: pack.id, kind: audio ? 'sound' : 'page',
         name, about, tags, by, durationMs, ...(!audio ? { src: 'overlay.html', ...(kind === 'transition' ? { place: /** @type {const} */ ('cut') } : {}) } : {}) });
