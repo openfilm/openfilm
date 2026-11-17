@@ -651,7 +651,7 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
       <PluginsPage key={line} title={t('assetDrawer.tab_assets')} note={q ? undefined : t('assetDrawer.note_assets')}>
         {status}
         {q ? null : (
-          <div className="mb-12 grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-3" data-store-kinds="">
+          <div className="mb-12 grid grid-cols-[repeat(auto-fill,minmax(190px,1fr))] gap-3" data-store-kinds="">
             {kinds.map((k) => <KindTile key={k} kind={k} name={kindName(k)} packs={packsOf(k).length} onOpen={() => showPluginsLine(`kind:${k}`)} />)}
           </div>
         )}
