@@ -47,7 +47,8 @@ export async function noteMade(root, canvas, { byFile = false } = {}) {
   if (!given.length) return;
   const made = await readMade(root);
   const known = new Set(made.map((m) => m.path));
-  const now = Date.now();
+  /* later than anything noted before, so two writes in the same millisecond still read newest first */
+  const now = made.reduce((latest, m) => Math.max(latest, m.at + 1), Date.now());
   const unknown = given.filter(({ path }) => !known.has(path) && inProject(path));
   const when = byFile ? await Promise.all(unknown.map(({ path }) => stat(join(root, path)).then((s) => Math.round(s.mtimeMs), () => 0))) : [];
   /* what really made a file, when `openfilm get` made it (an agent, from the chat): its words, service and model, not
