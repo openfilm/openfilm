@@ -1,0 +1,491 @@
+{
+ "version": 1,
+ "groups": [
+  {
+   "id": "frame",
+   "name": {
+    "en": "Over the picture",
+    "zh-CN": "叠在画面上",
+    "ja": "画面に重ねる",
+    "ko": "화면 위에",
+    "es": "Sobre la imagen"
+   }
+  },
+  {
+   "id": "design",
+   "name": {
+    "en": "Designs",
+    "zh-CN": "独立设计",
+    "ja": "デザイン",
+    "ko": "디자인",
+    "es": "Diseños"
+   }
+  }
+ ],
+ "items": [
+  {
+   "id": "bold-left",
+   "group": "frame",
+   "name": {
+    "en": "Big headline",
+    "zh-CN": "大字标题",
+    "ja": "大見出し",
+    "ko": "큰 제목",
+    "es": "Titular grande"
+   },
+   "src": "bold-left/look.html",
+   "poster": "bold-left/poster.jpg",
+   "about": "A huge two-line headline on the left over a shade, the second line in the accent color, a tag above and a line under it.",
+   "props": [
+    {
+     "name": "Tag",
+     "type": "text",
+     "at": ".tag"
+    },
+    {
+     "name": "Headline",
+     "type": "text",
+     "at": ".t1"
+    },
+    {
+     "name": "Highlight",
+     "type": "text",
+     "at": ".t2"
+    },
+    {
+     "name": "Subtitle",
+     "type": "text",
+     "at": ".t3"
+    },
+    {
+     "name": "Font",
+     "type": "var",
+     "var": "--font"
+    },
+    {
+     "name": "Accent",
+     "type": "var",
+     "var": "--accent"
+    },
+    {
+     "name": "Text",
+     "type": "var",
+     "var": "--ink"
+    }
+   ]
+  },
+  {
+   "id": "labels",
+   "group": "frame",
+   "name": {
+    "en": "Labels",
+    "zh-CN": "标签大字",
+    "ja": "ラベル",
+    "ko": "라벨",
+    "es": "Etiquetas"
+   },
+   "src": "labels/look.html",
+   "poster": "labels/poster.jpg",
+   "about": "Words on three tilted labels stacked, one in the accent color: a how-to or tips cover.",
+   "props": [
+    {
+     "name": "Line 1",
+     "type": "text",
+     "at": ".t1"
+    },
+    {
+     "name": "Line 2",
+     "type": "text",
+     "at": ".t2"
+    },
+    {
+     "name": "Line 3",
+     "type": "text",
+     "at": ".t3"
+    },
+    {
+     "name": "Font",
+     "type": "var",
+     "var": "--font"
+    },
+    {
+     "name": "Accent",
+     "type": "var",
+     "var": "--accent"
+    },
+    {
+     "name": "Label",
+     "type": "var",
+     "var": "--paper"
+    },
+    {
+     "name": "Text",
+     "type": "var",
+     "var": "--ink"
+    }
+   ]
+  },
+  {
+   "id": "cinema",
+   "group": "frame",
+   "name": {
+    "en": "Cinema",
+    "zh-CN": "电影感",
+    "ja": "シネマ",
+    "ko": "시네마",
+    "es": "Cine"
+   },
+   "src": "cinema/look.html",
+   "poster": "cinema/poster.jpg",
+   "about": "Letterbox bars, a wide-spaced title and a credit line: a cover for a short film.",
+   "props": [
+    {
+     "name": "Title",
+     "type": "text",
+     "at": ".t1"
+    },
+    {
+     "name": "Credit",
+     "type": "text",
+     "at": ".t2"
+    },
+    {
+     "name": "Above",
+     "type": "text",
+     "at": ".t3"
+    },
+    {
+     "name": "Font",
+     "type": "var",
+     "var": "--font"
+    },
+    {
+     "name": "Accent",
+     "type": "var",
+     "var": "--accent"
+    },
+    {
+     "name": "Text",
+     "type": "var",
+     "var": "--ink"
+    }
+   ]
+  },
+  {
+   "id": "magazine",
+   "group": "frame",
+   "name": {
+    "en": "Magazine",
+    "zh-CN": "杂志",
+    "ja": "マガジン",
+    "ko": "매거진",
+    "es": "Revista"
+   },
+   "src": "magazine/look.html",
+   "poster": "magazine/poster.jpg",
+   "about": "A serif masthead across the top, an issue line and cover lines in a corner: a lifestyle or fashion cover.",
+   "props": [
+    {
+     "name": "Masthead",
+     "type": "text",
+     "at": ".t1"
+    },
+    {
+     "name": "Issue",
+     "type": "text",
+     "at": ".t3"
+    },
+    {
+     "name": "Cover line",
+     "type": "text",
+     "at": ".t2"
+    },
+    {
+     "name": "Under it",
+     "type": "text",
+     "at": ".t4"
+    },
+    {
+     "name": "Masthead font",
+     "type": "var",
+     "var": "--serif"
+    },
+    {
+     "name": "Font",
+     "type": "var",
+     "var": "--font"
+    },
+    {
+     "name": "Accent",
+     "type": "var",
+     "var": "--accent"
+    },
+    {
+     "name": "Text",
+     "type": "var",
+     "var": "--ink"
+    }
+   ]
+  },
+  {
+   "id": "news",
+   "group": "frame",
+   "name": {
+    "en": "Breaking",
+    "zh-CN": "快讯",
+    "ja": "速報",
+    "ko": "속보",
+    "es": "Última hora"
+   },
+   "src": "news/look.html",
+   "poster": "news/poster.jpg",
+   "about": "A breaking label and a headline in a white box at the bottom, a live tag in the corner: a news cover.",
+   "props": [
+    {
+     "name": "Label",
+     "type": "text",
+     "at": ".t3"
+    },
+    {
+     "name": "Headline",
+     "type": "text",
+     "at": ".t1"
+    },
+    {
+     "name": "Under it",
+     "type": "text",
+     "at": ".t2"
+    },
+    {
+     "name": "Corner",
+     "type": "text",
+     "at": ".live"
+    },
+    {
+     "name": "Font",
+     "type": "var",
+     "var": "--font"
+    },
+    {
+     "name": "Accent",
+     "type": "var",
+     "var": "--accent"
+    },
+    {
+     "name": "Box",
+     "type": "var",
+     "var": "--paper"
+    },
+    {
+     "name": "Text",
+     "type": "var",
+     "var": "--ink"
+    }
+   ]
+  },
+  {
+   "id": "vlog",
+   "group": "frame",
+   "name": {
+    "en": "Photo border",
+    "zh-CN": "相纸 Vlog",
+    "ja": "フォトフレーム",
+    "ko": "포토 프레임",
+    "es": "Marco de foto"
+   },
+   "src": "vlog/look.html",
+   "poster": "vlog/poster.jpg",
+   "about": "A white photo border with a handwritten title, a date stamp and an episode tag: a vlog cover.",
+   "props": [
+    {
+     "name": "Title",
+     "type": "text",
+     "at": ".t1"
+    },
+    {
+     "name": "Date",
+     "type": "text",
+     "at": ".t2"
+    },
+    {
+     "name": "Tag",
+     "type": "text",
+     "at": ".t3"
+    },
+    {
+     "name": "Handwriting",
+     "type": "var",
+     "var": "--script"
+    },
+    {
+     "name": "Border",
+     "type": "var",
+     "var": "--paper"
+    },
+    {
+     "name": "Date color",
+     "type": "var",
+     "var": "--accent"
+    },
+    {
+     "name": "Text",
+     "type": "var",
+     "var": "--ink"
+    }
+   ]
+  },
+  {
+   "id": "versus",
+   "group": "frame",
+   "name": {
+    "en": "Versus",
+    "zh-CN": "对比",
+    "ja": "対決",
+    "ko": "대결",
+    "es": "Versus"
+   },
+   "src": "versus/look.html",
+   "poster": "versus/poster.jpg",
+   "about": "Two sides tinted in two colors with a VS between them and a question on top: a comparison cover.",
+   "props": [
+    {
+     "name": "Question",
+     "type": "text",
+     "at": ".t3"
+    },
+    {
+     "name": "Left",
+     "type": "text",
+     "at": ".t1"
+    },
+    {
+     "name": "Right",
+     "type": "text",
+     "at": ".t2"
+    },
+    {
+     "name": "Font",
+     "type": "var",
+     "var": "--font"
+    },
+    {
+     "name": "Left color",
+     "type": "var",
+     "var": "--left"
+    },
+    {
+     "name": "Right color",
+     "type": "var",
+     "var": "--right"
+    },
+    {
+     "name": "Text",
+     "type": "var",
+     "var": "--ink"
+    }
+   ]
+  },
+  {
+   "id": "knowledge",
+   "group": "design",
+   "name": {
+    "en": "Knowledge card",
+    "zh-CN": "知识卡片",
+    "ja": "知識カード",
+    "ko": "지식 카드",
+    "es": "Ficha"
+   },
+   "src": "knowledge/look.html",
+   "poster": "knowledge/poster.jpg",
+   "about": "A paper card with a big number and a title, the picture showing through a rounded window: an explainer or series cover.",
+   "props": [
+    {
+     "name": "Number",
+     "type": "text",
+     "at": ".t3"
+    },
+    {
+     "name": "Title",
+     "type": "text",
+     "at": ".t1"
+    },
+    {
+     "name": "Under it",
+     "type": "text",
+     "at": ".t2"
+    },
+    {
+     "name": "Font",
+     "type": "var",
+     "var": "--font"
+    },
+    {
+     "name": "Paper",
+     "type": "var",
+     "var": "--paper"
+    },
+    {
+     "name": "Number color",
+     "type": "var",
+     "var": "--accent"
+    },
+    {
+     "name": "Text",
+     "type": "var",
+     "var": "--ink"
+    }
+   ]
+  },
+  {
+   "id": "poster",
+   "group": "design",
+   "name": {
+    "en": "Poster",
+    "zh-CN": "纯色海报",
+    "ja": "ポスター",
+    "ko": "포스터",
+    "es": "Póster"
+   },
+   "src": "poster/look.html",
+   "poster": "poster/poster.jpg",
+   "about": "A plain color, a big circle and huge words, no picture needed: a cover designed from nothing.",
+   "props": [
+    {
+     "name": "Title",
+     "type": "text",
+     "at": ".t1"
+    },
+    {
+     "name": "Under it",
+     "type": "text",
+     "at": ".t2"
+    },
+    {
+     "name": "Corner",
+     "type": "text",
+     "at": ".t3"
+    },
+    {
+     "name": "Font",
+     "type": "var",
+     "var": "--font"
+    },
+    {
+     "name": "Background",
+     "type": "var",
+     "var": "--bg"
+    },
+    {
+     "name": "Circle",
+     "type": "var",
+     "var": "--accent"
+    },
+    {
+     "name": "Text",
+     "type": "var",
+     "var": "--ink"
+    }
+   ]
+  }
+ ]
+}

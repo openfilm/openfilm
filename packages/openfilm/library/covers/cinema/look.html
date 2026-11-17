@@ -1,0 +1,32 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Cinema</title>
+<style>
+:root { --font: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; --ink: #ffffff; --accent: #e8d3a2; }
+html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+* { box-sizing: border-box; }
+.vig { position: fixed; inset: 0; background: radial-gradient(ellipse at 50% 45%, rgba(0,0,0,0) 40%, rgba(0,0,0,.55) 100%), linear-gradient(0deg, rgba(0,0,0,.55), rgba(0,0,0,0) 45%); }
+.bar { position: fixed; left: 0; right: 0; height: 7.5vh; background: #000; }
+.bar.top { top: 0; } .bar.bottom { bottom: 0; }
+.box { position: fixed; left: 0; right: 0; bottom: 17vh; text-align: center; font-family: var(--font); color: var(--ink); }
+.t3 { display: block; font-size: 1.5vmax; letter-spacing: .6em; text-indent: .6em; color: var(--accent); font-weight: 600; }
+.t1 { display: block; margin-top: 1.4vmax; font-size: 6.4vmax; font-weight: 300; letter-spacing: .32em; text-indent: .32em; line-height: 1.1; }
+.rule { width: 6vmax; height: 1px; background: var(--accent); margin: 2vmax auto 1.6vmax; }
+.t2 { display: block; font-size: 1.7vmax; letter-spacing: .2em; text-indent: .2em; opacity: .85; font-weight: 400; }
+@media (max-aspect-ratio: 1/1) { .bar { display: none; } .box { bottom: 13vh; } .t1 { font-size: 5.4vmax; letter-spacing: .22em; text-indent: .22em; } }
+/* a full-screen feed: words kept clear of its caption, its buttons and its top bar */
+@media (max-aspect-ratio: 10/16) { .box { bottom: 26vh; } }
+</style>
+</head>
+<body>
+<div class="vig"></div><div class="bar top"></div><div class="bar bottom"></div><div class="box"><span class="t3">一部短片</span><span class="t1">海边的冬天</span><div class="rule"></div><span class="t2">导演 · 林一</span></div>
+<script>
+/*
+ * Letterbox bars, a wide-spaced title and a credit line: a cover like a film's. A page of OpenFilm's library (CC0): a still, the same at every t.
+ */
+window.film = { frame() {} };
+</script>
+</body>
+</html>

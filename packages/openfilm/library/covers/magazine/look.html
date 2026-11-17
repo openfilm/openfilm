@@ -1,0 +1,31 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Magazine</title>
+<style>
+:root { --font: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; --ink: #ffffff; --accent: #ff2d55; --serif: 'Didot', 'Bodoni 72', 'Songti SC', 'STSong', 'Noto Serif SC', serif; }
+html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+* { box-sizing: border-box; }
+.shade { position: fixed; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,.5) 0%, rgba(0,0,0,0) 34%, rgba(0,0,0,0) 62%, rgba(0,0,0,.6) 100%); }
+.t1 { position: fixed; left: 0; right: 0; top: 3.5vh; text-align: center; font-family: var(--serif); font-size: 19vmin; font-weight: 700; line-height: 1; letter-spacing: .04em; color: var(--ink); }
+.t3 { position: fixed; right: 4vw; top: 2vh; font-family: var(--font); font-size: 1.3vmax; letter-spacing: .25em; color: var(--ink); opacity: .9; }
+.lines { position: fixed; left: 5vw; bottom: 6vh; width: 46vw; font-family: var(--font); color: var(--ink); }
+.lines i { display: block; width: 4vmax; height: .45vmax; background: var(--accent); margin-bottom: 1.2vmax; }
+.t2 { display: block; font-size: 3.4vmax; font-weight: 800; line-height: 1.15; }
+.t4 { display: block; margin-top: .8vmax; font-size: 1.7vmax; opacity: .85; line-height: 1.35; }
+@media (max-aspect-ratio: 1/1) { .t1 { font-size: 19vmin; top: 4vh; } .lines { width: 80vw; bottom: 7vh; } .t2 { font-size: 4.4vmax; } }
+/* a full-screen feed: words kept clear of its caption, its buttons and its top bar */
+@media (max-aspect-ratio: 10/16) { .t1 { top: 9vh; } .t3 { top: 7.5vh; } .lines { bottom: 24vh; } }
+</style>
+</head>
+<body>
+<div class="shade"></div><span class="t3">NO.12 · 冬季刊</span><span class="t1">MOMENT</span><div class="lines"><i></i><span class="t2">把日常拍成电影</span><span class="t4">十个手机就能用的运镜</span></div>
+<script>
+/*
+ * A masthead across the top and cover lines in a corner: a magazine cover. A page of OpenFilm's library (CC0): a still, the same at every t.
+ */
+window.film = { frame() {} };
+</script>
+</body>
+</html>

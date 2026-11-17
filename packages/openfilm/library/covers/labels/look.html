@@ -1,0 +1,28 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Labels</title>
+<style>
+:root { --font: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; --accent: #ff5a1f; --paper: #ffffff; --ink: #111111; }
+html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+* { box-sizing: border-box; }
+.box { position: fixed; left: 5vw; top: 50%; transform: translateY(-50%) rotate(-3deg); font-family: var(--font); display: flex; flex-direction: column; align-items: flex-start; gap: .9vmax; }
+.box span { display: inline-block; font-size: 6.4vmax; font-weight: 900; line-height: 1; padding: .16em .32em .2em; color: var(--ink); background: var(--paper); box-shadow: .08em .08em 0 rgba(0,0,0,.85); }
+.box .t2 { background: var(--accent); color: #fff; }
+.box .t3 { font-size: 3.2vmax; }
+@media (max-aspect-ratio: 1/1) { .box { left: 6vw; top: auto; bottom: 10vh; transform: rotate(-3deg); } .box span { font-size: 6.8vmax; } }
+/* a full-screen feed: words kept clear of its caption, its buttons and its top bar */
+@media (max-aspect-ratio: 10/16) { .box { bottom: 26vh; } }
+</style>
+</head>
+<body>
+<div class="box"><span class="t1">三分钟</span><span class="t2">学会剪辑</span><span class="t3">零基础也能上手</span></div>
+<script>
+/*
+ * Words on stacked labels, tilted, one in the accent color: a how-to cover. A page of OpenFilm's library (CC0): a still, the same at every t.
+ */
+window.film = { frame() {} };
+</script>
+</body>
+</html>
