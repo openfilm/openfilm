@@ -651,8 +651,13 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
       <PluginsPage key={line} title={t('assetDrawer.tab_assets')} note={q ? undefined : t('assetDrawer.note_assets')}>
         {status}
         {q ? null : (
-          <div className="mb-12 grid grid-cols-[repeat(auto-fill,minmax(190px,1fr))] gap-3" data-store-kinds="">
-            {kinds.map((k) => <KindTile key={k} kind={k} name={kindName(k)} packs={packsOf(k).length} onOpen={() => showPluginsLine(`kind:${k}`)} />)}
+          <div className="mb-12 grid grid-cols-1 gap-3 min-[720px]:grid-cols-2 min-[1040px]:grid-cols-3" data-store-kinds="">
+            {kinds.map((k) => {
+              const list = packsOf(k);
+              /* the covers of its packs, the first three that have one */
+              const covers = list.flatMap((p) => (p.cover ? [libraryUrl(p.cover)] : [])).slice(0, 3);
+              return <KindTile key={k} kind={k} name={kindName(k)} packs={list.length} covers={covers} onOpen={() => showPluginsLine(`kind:${k}`)} />;
+            })}
           </div>
         )}
         {rows.map(({ k, packs }) => (
