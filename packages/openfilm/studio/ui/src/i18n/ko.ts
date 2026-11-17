@@ -2487,6 +2487,7 @@ export const ko: Words = {
     open: '「{name}」 사용법',
     close: '닫기',
     keysSwitch: '에디터 전환',
+    keysHelp: '이 도움말 열기',
   },
   canvas: {
     title: '캔버스',

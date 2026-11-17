@@ -264,8 +264,11 @@ export const zhCN: Words = {
     unpin: '取消置顶',
   },
   starter: {
-    community: '社区：添加插件、技能和素材',
-    library: '素材库：导入素材，找模板、音乐和特效',
+    subtitle: '描述你想要的影片，智能体来做；也可以先放素材。',
+    communityName: '社区',
+    communityNote: '添加插件、技能和素材',
+    libraryName: '素材库',
+    libraryNote: '导入素材，找模板、音乐和特效',
     title: '你想做什么？',
   },
   turnAsk: {

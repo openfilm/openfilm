@@ -3,7 +3,8 @@
  * (`summary`), then its `details`, a line each (when to use it, how, …), from its plugin (openfilm.json), and the keys
  * that go from one workbench to another. It comes by
  * itself the first time a workbench is shown (kept in this browser), and again from the workbench menu's "?".
- * It lies over the page without holding it: the workbench under it is used as ever, and Esc or "Got it" puts it away.
+ * It is a dialog in the middle of the window, with what the editor draws of its own help (studio `help`) under its
+ * plugin's words; Esc, its × or a click beside it puts it away.
  */
 import * as React from 'react';
 import { createPortal } from 'react-dom';
@@ -15,6 +16,7 @@ import { workbenchKey } from './ModeSwitcher';
 import { inLanguage } from './SkillPage';
 import { PluginDetails, usePluginWords } from './library/PluginsPane';
 import { WorkbenchMark } from './WorkbenchMark';
+import { editorHelps, type EditorHelp } from '@/studio/hub';
 
 const SEEN_KEY = 'openfilm.guide.seen';
 const KEY = 'rounded-[4px] bg-[var(--bg-hover)] px-1.5 py-px font-sans text-[11px] tabular-nums text-[var(--text)]';
@@ -53,6 +55,7 @@ export function WorkbenchGuide({ plugin, benches, onClose }: {
   const back = keyHint('work-mode');
   const lang = useLanguage();
   const words = usePluginWords();
+  const helps = React.useSyncExternalStore(editorHelps.subscribe, editorHelps.get);
   React.useEffect(() => {
     if (!plugin) return;
     const esc = (e: KeyboardEvent) => { if (e.key === 'Escape' && !e.defaultPrevented) onClose(); };
@@ -62,37 +65,55 @@ export function WorkbenchGuide({ plugin, benches, onClose }: {
   if (!plugin || typeof document === 'undefined') return null;
   const { title, summary } = words(plugin);
   const details = inLanguage(plugin.details, lang);
+  const own = helps.get(plugin.workbench ?? '');
   return createPortal(
-    <section role="dialog" aria-modal="false" aria-label={title} data-workbench-guide={plugin.workbench}
-      className="fixed right-3 top-[42px] z-[9000] w-[380px] max-w-[calc(100vw-24px)] rounded-[12px] border border-[var(--border-strong)] bg-[var(--bg-raised)] p-4 text-[var(--text)] shadow-[var(--shadow-lg)]"
-      style={{ animation: 'openfilm-rise 0.18s ease-out both' }}>
-      <div className="flex items-start gap-3">
-        <WorkbenchMark plugin={plugin} size={36} />
-        <div className="min-w-0 flex-1">
-          <h2 className="text-[14px] font-semibold leading-[20px]">{title}</h2>
-          {summary ? <p className="mt-0.5 text-[12.5px] leading-[18px] text-[var(--text-muted)]">{summary}</p> : null}
-        </div>
-        <button type="button" aria-label={t('guide.close')} onClick={onClose}
-          className="-mr-1 -mt-1 grid h-7 w-7 shrink-0 place-items-center rounded-md text-[var(--text-faint)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]">
-          <X size={14} />
-        </button>
-      </div>
-      {details ? <PluginDetails text={details} small className="mt-2.5 border-t border-[var(--border)] pt-1.5" /> : null}
-      {benches > 1 ? (
-        <dl className="mt-2.5 flex flex-col gap-1 border-t border-[var(--border)] pt-2.5 text-[12px] text-[var(--text-muted)]">
-          <div className="flex items-center justify-between gap-3">
-            <dt>{t('guide.keysSwitch')}</dt>
-            <dd><kbd className={KEY}>{workbenchKey(1)}</kbd>{benches > 1 ? <> – <kbd className={KEY}>{workbenchKey(Math.min(9, benches))}</kbd></> : null}</dd>
+    <div className="fixed inset-0 z-[9000] grid place-items-center bg-black/45 p-6" onPointerDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <section role="dialog" aria-modal="true" aria-label={title} data-workbench-guide={plugin.workbench}
+        className={`flex max-h-full w-full flex-col overflow-hidden rounded-[16px] border border-[var(--border-strong)] bg-[var(--bg-raised)] text-[var(--text)] shadow-[0_24px_64px_rgb(0_0_0/.45)] ${own ? 'max-w-[820px]' : 'max-w-[560px]'}`}
+        style={{ animation: 'openfilm-rise 0.18s ease-out both' }}>
+        <div className="flex items-start gap-3.5 border-b border-[var(--border)] px-6 py-5">
+          <WorkbenchMark plugin={plugin} size={44} />
+          <div className="min-w-0 flex-1">
+            <h2 className="text-[17px] font-semibold leading-[24px]">{title}</h2>
+            {summary ? <p className="mt-0.5 text-[13px] leading-[19px] text-[var(--text-muted)]">{summary}</p> : null}
           </div>
-          {back ? (
+          <button type="button" aria-label={t('guide.close')} onClick={onClose}
+            className="-mr-2 -mt-1 grid h-8 w-8 shrink-0 place-items-center rounded-md text-[var(--text-faint)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]">
+            <X size={16} />
+          </button>
+        </div>
+        <div className="min-h-0 overflow-auto px-6 pb-5 pt-2">
+          {details ? <PluginDetails text={details} /> : null}
+          {/* the editor's own: how it is used step by step, its keys */}
+          {own ? <OwnHelp key={plugin.workbench} draw={own} /> : null}
+          <dl className="mt-4 flex flex-col gap-1.5 border-t border-[var(--border)] pt-3.5 text-[12.5px] text-[var(--text-muted)]">
+            {benches > 1 ? (
+              <div className="flex items-center justify-between gap-3">
+                <dt>{t('guide.keysSwitch')}</dt>
+                <dd><kbd className={KEY}>{workbenchKey(1)}</kbd> – <kbd className={KEY}>{workbenchKey(Math.min(9, benches))}</kbd></dd>
+              </div>
+            ) : null}
+            {benches > 1 && back ? (
+              <div className="flex items-center justify-between gap-3">
+                <dt>{t('settings.shortcuts.actions.work-mode')}</dt>
+                <dd><kbd className={KEY}>{back}</kbd></dd>
+              </div>
+            ) : null}
             <div className="flex items-center justify-between gap-3">
-              <dt>{t('settings.shortcuts.actions.work-mode')}</dt>
-              <dd><kbd className={KEY}>{back}</kbd></dd>
+              <dt>{t('guide.keysHelp')}</dt>
+              <dd><kbd className={KEY}>?</kbd></dd>
             </div>
-          ) : null}
-        </dl>
-      ) : null}
-    </section>,
+          </dl>
+        </div>
+      </section>
+    </div>,
     document.body,
   );
+}
+
+/** What the editor draws into its help itself (studio `help.set`). */
+function OwnHelp({ draw }: { draw: EditorHelp }) {
+  const into = React.useRef<HTMLDivElement>(null);
+  React.useEffect(() => (into.current ? draw(into.current) : undefined), [draw]);
+  return <div ref={into} className="mt-4 border-t border-[var(--border)] pt-4" />;
 }

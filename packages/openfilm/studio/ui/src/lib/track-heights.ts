@@ -21,7 +21,7 @@ export const TRACK_SIZES = {
 export type TrackSize = keyof typeof TRACK_SIZES;
 
 /** The main track's own height: taller than the others. */
-export const MAIN_TRACK_H = 76;
+export const MAIN_TRACK_H = 88;
 /** A track of the library's things laid over the film only (stickers, effects, filters): low, as a text track is. */
 export const OVERLAY_TRACK_H = 30;
 

@@ -2502,6 +2502,7 @@ export const en = {
     open: 'How to use {name}',
     close: 'Close',
     keysSwitch: 'Switch editor',
+    keysHelp: 'Open this help',
   },
   canvas: {
     title: 'Canvas',

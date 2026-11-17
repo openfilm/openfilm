@@ -1,53 +1,8 @@
 /**
- * How the screening room is used, step by step with a drawing of each, then its keys as key caps: shown while ⌘ (Ctrl
- * elsewhere) is held alone for a moment and gone as it is let go, or opened from its button (closed by a click anywhere).
+ * How the screening room is used, step by step with a drawing of each, then its keys as key caps: drawn into the
+ * editor's help, which its "?" and the ? key open.
  */
 import * as React from 'react';
-import { MAC } from '@/lib/keymap-store';
-
-/** How long the key is held alone before the sheet shows, ms: a ⌘ pressed for a shortcut never shows it. */
-const HOLD_MS = 450;
-
-export interface Shortcut { keys: readonly string[]; label: string }
-
-/**
- * Whether the sheet is shown: while ⌘ (Ctrl) is held alone, from `HOLD_MS` on; `active` false: never. Held for
- * anything else (a scroll, a click, another key: ⌘ with the wheel zooms the bar), it does not show until let go.
- */
-export function useHeldSheet(active: boolean): boolean {
-  const [held, setHeld] = React.useState(false);
-  React.useEffect(() => {
-    if (!active) { setHeld(false); return; }
-    const modifier = MAC ? 'Meta' : 'Control';
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    /* the key is held for something else: no sheet until it is let go */
-    let used = false;
-    const stop = () => { if (timer) clearTimeout(timer); timer = null; setHeld(false); };
-    const spoil = () => { used = true; stop(); };
-    const down = (e: KeyboardEvent) => {
-      if (e.key === modifier && !e.repeat && !e.shiftKey && !e.altKey) {
-        used = false;
-        if (timer) clearTimeout(timer);
-        timer = setTimeout(() => { if (!used) setHeld(true); }, HOLD_MS);
-      } else spoil();
-    };
-    const up = (e: KeyboardEvent) => { if (e.key === modifier) { used = false; stop(); } };
-    window.addEventListener('keydown', down, true);
-    window.addEventListener('keyup', up, true);
-    window.addEventListener('blur', stop);
-    window.addEventListener('pointerdown', spoil, true);
-    window.addEventListener('wheel', spoil, { capture: true, passive: true });
-    return () => {
-      stop();
-      window.removeEventListener('keydown', down, true);
-      window.removeEventListener('keyup', up, true);
-      window.removeEventListener('blur', stop);
-      window.removeEventListener('pointerdown', spoil, true);
-      window.removeEventListener('wheel', spoil, true);
-    };
-  }, [active]);
-  return held;
-}
 
 export function Keys({ keys, small = false }: { keys: readonly string[]; small?: boolean }) {
   return (
@@ -63,42 +18,34 @@ export function Keys({ keys, small = false }: { keys: readonly string[]; small?:
 export interface Step { art: 'watch' | 'time' | 'picture' | 'say'; title: string; text: string }
 
 /**
- * The sheet over the screening room: how it is used, step by step, then its keys. `onClose`: it was opened from its
- * button, and a click anywhere closes it.
+ * How the screening room is used, step by step, then its keys: drawn into the editor's help (studio `help`), under
+ * what its plugin says of it.
  */
-export function ShortcutSheet({ title, steps, keysTitle, groups, hold, onClose }: {
-  title: string; steps: readonly Step[]; keysTitle: string;
-  groups: readonly { title: string; items: readonly Shortcut[] }[]; hold: Shortcut; onClose?: () => void;
+export function SheetBody({ steps, keysTitle, groups }: {
+  steps: readonly Step[]; keysTitle: string; groups: readonly { title: string; items: readonly Shortcut[] }[];
 }) {
   return (
-    <div className={`absolute inset-0 z-40 grid place-items-center bg-black/40 ${onClose ? 'pointer-events-auto' : 'pointer-events-none'}`} onClick={onClose}>
-      <div role="dialog" aria-label={title} className="max-h-[calc(100%-32px)] w-[min(780px,calc(100%-48px))] overflow-auto rounded-2xl border border-[color:var(--border-strong)] bg-[var(--bg-raised)] p-6 shadow-[0_24px_64px_rgb(0_0_0/.45)]">
-        <div className="mb-5 text-[15px] font-semibold text-[var(--text)]">{title}</div>
-        <div className="grid grid-cols-4 gap-4">
-          {steps.map((step, i) => (
-            <div key={step.art} className="flex flex-col gap-2">
-              <Art kind={step.art} />
-              <div className="mt-1 flex items-center gap-1.5 text-[13px] font-semibold text-[var(--text)]">
-                <span className="grid h-[18px] w-[18px] place-items-center rounded-full bg-white/10 text-[10.5px] text-[var(--text-muted)]">{i + 1}</span>{step.title}
-              </div>
-              <p className="text-[12px] leading-[1.55] text-[var(--text-muted)]">{step.text}</p>
+    <div>
+      <div className="grid grid-cols-4 gap-4">
+        {steps.map((step, i) => (
+          <div key={step.art} className="flex flex-col gap-2">
+            <Art kind={step.art} />
+            <div className="mt-1 flex items-center gap-1.5 text-[13px] font-semibold text-[var(--text)]">
+              <span className="grid h-[18px] w-[18px] place-items-center rounded-full bg-white/10 text-[10.5px] text-[var(--text-muted)]">{i + 1}</span>{step.title}
+            </div>
+            <p className="text-[12px] leading-[1.55] text-[var(--text-muted)]">{step.text}</p>
+          </div>
+        ))}
+      </div>
+      <div className="mt-5">
+        <div className="mb-3 text-[11px] font-medium uppercase tracking-wide text-[var(--text-faint)]">{keysTitle}</div>
+        <div className="grid grid-cols-2 gap-x-10 gap-y-2">
+          {groups.flatMap((group) => group.items).map((s) => (
+            <div key={s.label} className="flex items-center justify-between gap-3 text-[12.5px] text-[var(--text-muted)]">
+              <span className="min-w-0 truncate">{s.label}</span>
+              <Keys keys={s.keys} small />
             </div>
           ))}
-        </div>
-        <div className="mt-6 border-t border-[color:var(--border)] pt-4">
-          <div className="mb-3 text-[11px] font-medium uppercase tracking-wide text-[var(--text-faint)]">{keysTitle}</div>
-          <div className="grid grid-cols-2 gap-x-10 gap-y-2">
-            {groups.flatMap((group) => group.items).map((s) => (
-              <div key={s.label} className="flex items-center justify-between gap-3 text-[12.5px] text-[var(--text-muted)]">
-                <span className="min-w-0 truncate">{s.label}</span>
-                <Keys keys={s.keys} small />
-              </div>
-            ))}
-          </div>
-        </div>
-        <div className="mt-4 flex items-center justify-between text-[11.5px] text-[var(--text-faint)]">
-          <span>{hold.label}</span>
-          <Keys keys={hold.keys} small />
         </div>
       </div>
     </div>
@@ -157,5 +104,3 @@ function Art({ kind }: { kind: Step['art'] }) {
   );
 }
 
-/** The modifier's name as this computer's keyboard shows it. */
-export const MOD = MAC ? '⌘' : 'Ctrl';

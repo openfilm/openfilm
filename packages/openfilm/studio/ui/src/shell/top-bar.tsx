@@ -77,6 +77,23 @@ function Bar({ frame, loaded }: { frame: ReturnType<typeof useProjectFrame>; loa
   /* the workbench shown, as the top bar names it, and what it is for (by itself the first time it is shown) */
   const shownBench = surface ?? (canvasOpen ? 'canvas' : colorOpen ? 'color' : 'edit');
   const guide = useWorkbenchGuide(frame.noBench ? null : shownBench, benchPlugins);
+  /* ? (not while typing, nor over another dialog): the help of the editor shown, opened or put away */
+  const guideRef = React.useRef({ guide, shownBench, none: frame.noBench });
+  guideRef.current = { guide, shownBench, none: frame.noBench };
+  React.useEffect(() => {
+    const press = (e: KeyboardEvent) => {
+      if (e.key !== '?' || e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey) return;
+      const el = e.target as HTMLElement | null;
+      if (el?.closest('input, textarea, select, [contenteditable="true"], [data-studio-host-panel]')) return;
+      const { guide: g, shownBench: bench, none } = guideRef.current;
+      if (g.plugin) { e.preventDefault(); g.close(); return; }
+      if (none || !bench || document.querySelector('[role="dialog"][aria-modal="true"]')) return;
+      e.preventDefault();
+      g.open(bench);
+    };
+    window.addEventListener('keydown', press);
+    return () => window.removeEventListener('keydown', press);
+  }, []);
   const [renaming, setRenaming] = React.useState(false);
   const [titleDraft, setTitleDraft] = React.useState('');
   const history = useHistoryWindow(projectId, { projectName: title, onError: toast.showError, className: TOP_BTN });

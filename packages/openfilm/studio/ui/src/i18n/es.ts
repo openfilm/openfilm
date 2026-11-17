@@ -2489,6 +2489,7 @@ export const es: Words = {
     open: 'Cómo usar {name}',
     close: 'Cerrar',
     keysSwitch: 'Cambiar de editor',
+    keysHelp: 'Abrir esta ayuda',
   },
   canvas: {
     title: 'Lienzo',

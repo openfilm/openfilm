@@ -260,8 +260,11 @@ export const ko: Words = {
     unpin: '고정 해제',
   },
   starter: {
-    community: '커뮤니티: 플러그인, 스킬, 소재 추가',
-    library: '라이브러리: 소재 가져오기, 템플릿·음악·효과 찾기',
+    subtitle: '원하는 영상을 말하면 에이전트가 만듭니다. 소재부터 시작해도 됩니다.',
+    communityName: '커뮤니티',
+    communityNote: '플러그인, 스킬, 소재 추가',
+    libraryName: '라이브러리',
+    libraryNote: '소재 가져오기, 템플릿·음악·효과 찾기',
     title: '무엇을 만들고 싶으세요?',
   },
   turnAsk: {

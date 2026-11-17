@@ -18,18 +18,18 @@ import type { ClipSpan } from '@/lib/film-shape';
 import type { StageBox, StudioRef } from '@/lib/host';
 import { momentRef, regionRef } from '@/lib/studio-refs';
 import { Tooltip } from '@/components/Tooltip';
-import { chat, links, onCommand, project, toast } from '@/studio';
+import { chat, help, links, onCommand, project, toast } from '@/studio';
 import { useBlock, useProject, useProvide } from '@/studio/react';
 import { clock, cuesOf, linkOf, sameRef, timeLabel, timeOf, type Clock, type Cue, type View } from './screening-model';
 import { Scrubber, useClock, type Mark, type MarkState, type ScrubberHandle } from './Scrubber';
-import { Btn, PATH_HELP, SpeedMenu } from './Controls';
-import { Icon, PATH_FULLSCREEN, PATH_FULLSCREEN_EXIT, PATH_PAUSE, PATH_PLAY, VolumeControl } from '@/components/player-controls/controls-bar';
-import { MOD, ShortcutSheet, useHeldSheet } from './ShortcutSheet';
+import { Btn, FullscreenButton, SpeedMenu } from './Controls';
+import { Icon, PATH_PAUSE, PATH_PLAY, VolumeControl } from '@/components/player-controls/controls-bar';
+import { SheetBody } from './ShortcutSheet';
 import { Stage } from './Stage';
 
 addPluginWords('screening', import.meta.glob('../../../../../plugins/screening/i18n/*.json', { eager: true, import: 'default' }));
 
-/** The plugin's words: `w('helpHold', { mod: '⌘' })`. */
+/** The plugin's words: `w('kPlay')`, with `{name}` values filled in. */
 function useWords() {
   const t = useT();
   return React.useCallback((key: string, values: Record<string, string | number> = {}) => (
@@ -101,7 +101,6 @@ function Screening({ projectId }: { projectId: string }) {
   /* what the message being written points at (the chat says, numbered as it numbers them); with no chat, what was copied */
   const [draft, setDraft] = React.useState<StudioRef[]>([]);
   const [copied, setCopied] = React.useState<StudioRef[]>([]);
-  const [sheetOpen, setSheetOpen] = React.useState(false);
   const preview = React.useRef<PreviewHandle>(null);
   const player = React.useRef<Player | null>(null);
   player.current ??= new Player();
@@ -112,7 +111,6 @@ function Screening({ projectId }: { projectId: string }) {
   const folder = state?.film ?? null;
   const stage = film?.stage ?? STAGE;
   const duration = info?.duration ?? 0;
-  const held = useHeldSheet(shown);
 
   /* ── the film, read now and each time film.html changes ── */
   const read = React.useCallback(async () => {
@@ -193,7 +191,7 @@ function Screening({ projectId }: { projectId: string }) {
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
   }, [playing, pause, time]);
-  React.useEffect(() => { if (!shown) { pause(); setSheetOpen(false); } }, [shown, pause]);
+  React.useEffect(() => { if (!shown) pause(); }, [shown, pause]);
 
   /* ── captions: each caption track's lines ── */
   React.useEffect(() => {
@@ -318,6 +316,24 @@ function Screening({ projectId }: { projectId: string }) {
     return undefined;
   }, [blocks, state?.files, projectId]);
 
+  /* how the room is used and its keys, in the editor's help (the editor menu's "?", the ? key) */
+  React.useEffect(() => {
+    const steps = (['watch', 'time', 'picture', 'say'] as const).map((art) => ({ art, title: w(`${art}Title`), text: w(`${art}Text`) }));
+    const groups = [
+      { title: w('gWatch'), items: [
+        { keys: ['Space', 'K'], label: w('kPlay') }, { keys: ['←', '→'], label: w('kStep') }, { keys: ['⇧', '←', '→'], label: w('kFrame') },
+        { keys: ['+', '−'], label: w('kZoom') }, { keys: ['0'], label: w('kWhole') }, { keys: ['S'], label: w('kSpeed') }, { keys: ['F'], label: w('kFull') },
+      ] },
+      { title: w('gPoint'), items: [{ keys: ['M'], label: w('kMoment') }, { keys: ['Esc'], label: w('kCancel') }] },
+    ];
+    help.set('screening', (into) => {
+      const root = createRoot(into, { identifierPrefix: 'screening-help-' });
+      root.render(<SheetBody steps={steps} keysTitle={w('keysTitle')} groups={groups} />);
+      return () => queueMicrotask(() => root.unmount());
+    });
+    return () => help.set('screening', null);
+  }, [w]);
+
   /* ── keys, while the screening room is shown ── */
   React.useEffect(() => {
     if (!shown) return;
@@ -329,35 +345,22 @@ function Screening({ projectId }: { projectId: string }) {
       if (key === ' ') { take(); toggle(); }
       else if (key === 'ArrowLeft' || key === 'ArrowRight') { take(); pause(); seek(now() + (key === 'ArrowLeft' ? -1 : 1) * (e.shiftKey ? FRAME_S : STEP_S)); }
       else if (key === 'm') { take(); pointMoment(); }
-      else if (key === '?') { take(); setSheetOpen((open) => !open); }
       else if (key === 's') { take(); cycleSpeed(); }
       else if (key === 'k') { take(); toggle(); }
       else if (key === 'f') { take(); toggleFull(); }
       else if (key === '=' || key === '+') { take(); scrubber.current?.zoomIn(); }
       else if (key === '-') { take(); scrubber.current?.zoomOut(); }
       else if (key === '0') { take(); scrubber.current?.whole(); }
-      else if (key === 'Escape' && sheetOpen) { take(); setSheetOpen(false); }
     };
     window.addEventListener('keydown', press, true);
     return () => window.removeEventListener('keydown', press, true);
-  }, [shown, toggle, pause, seek, pointMoment, cycleSpeed, toggleFull, sheetOpen]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [shown, toggle, pause, seek, pointMoment, cycleSpeed, toggleFull]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* drawn into its block, which Studio lays out among the page's panels (the chat, the library) as its arrangement has it */
   if (!state || !folder) return createPortal(<div className="h-full bg-[var(--bg-viewer)]" />, block.slot);
   /* a film with nothing in it yet: its picture black, the bar and its controls there but out of use, as the edit's */
   const empty = film != null && !blocks.picture.length && !blocks.sound.length;
   const idle = empty || !duration;
-  const steps = (['watch', 'time', 'picture', 'say'] as const).map((art) => ({ art, title: w(`${art}Title`), text: w(`${art}Text`) }));
-  const sheet = [
-    { title: w('gWatch'), items: [
-      { keys: ['Space', 'K'], label: w('kPlay') }, { keys: ['←', '→'], label: w('kStep') }, { keys: ['⇧', '←', '→'], label: w('kFrame') },
-      { keys: ['+', '−'], label: w('kZoom') }, { keys: ['0'], label: w('kWhole') }, { keys: ['S'], label: w('kSpeed') }, { keys: ['F'], label: w('kFull') },
-    ] },
-    { title: w('gPoint'), items: [
-      { keys: ['M'], label: w('kMoment') }, { keys: ['Esc'], label: w('kCancel') }, { keys: ['?'], label: w('kHelp') },
-    ] },
-  ];
-
   return createPortal(
     <div ref={room} data-screening="" className={`relative flex h-full min-h-0 w-full flex-col gap-2 px-6 pb-2 pt-4 text-[var(--text)] ${full ? 'bg-black' : 'bg-[var(--bg-viewer)]'}`}>
       <Stage stage={stage} folder={folder} preview={preview} time={() => player.current?.time() ?? 0} onInfo={onInfo}
@@ -389,18 +392,12 @@ function Screening({ projectId }: { projectId: string }) {
             </Idle>
             <span className="flex-1" />
             <Idle idle={idle}><SpeedMenu rate={speed} label={w('speed')} normal={w('speedNormal')} onRate={rate} /></Idle>
-            <Tooltip label={`${w('help')} · ${w('helpHold', { mod: MOD })}`} shortcut="?">
-              <Btn label={w('help')} active={sheetOpen} onClick={() => setSheetOpen((open) => !open)}><Icon d={PATH_HELP} size={20} /></Btn>
-            </Tooltip>
             <Idle idle={idle}>
-              <Tooltip label={full ? w('exitFull') : w('kFull')} shortcut="F">
-                <Btn label={full ? w('exitFull') : w('kFull')} onClick={toggleFull}><Icon d={full ? PATH_FULLSCREEN_EXIT : PATH_FULLSCREEN} /></Btn>
-              </Tooltip>
+              <FullscreenButton full={full} label={full ? w('exitFull') : w('kFull')} onClick={toggleFull} />
             </Idle>
           </div>
         </div>
       )}
-      {held || sheetOpen ? <ShortcutSheet title={w('sheetTitle')} steps={steps} keysTitle={w('keysTitle')} groups={sheet} hold={{ keys: [MOD], label: w('kHold') }} onClose={held ? undefined : () => setSheetOpen(false)} /> : null}
     </div>
   , block.slot);
 }

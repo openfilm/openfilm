@@ -2501,6 +2501,7 @@ export const zhCN: Words = {
     open: '「{name}」怎么用',
     close: '关闭',
     keysSwitch: '切换编辑器',
+    keysHelp: '打开这份说明',
   },
   canvas: {
     title: '画布',

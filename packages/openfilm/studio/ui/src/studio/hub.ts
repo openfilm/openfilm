@@ -179,6 +179,25 @@ export interface TopBarTool {
 }
 
 let tools: ReadonlyMap<string, readonly TopBarTool[]> = new Map();
+/**
+ * More of how an editor is used, drawn by the editor itself into its help (the dialog the editor menu's "?" and the
+ * ? key open): `draw(into)` fills the element given and returns the way to take it out again.
+ */
+export type EditorHelp = (into: HTMLElement) => () => void;
+let helps: ReadonlyMap<string, EditorHelp> = new Map();
+const helpsChanged = listeners<void>();
+/** The editors' own help, by the editor's name. */
+export const editorHelps = {
+  get: () => helps,
+  subscribe: (listener: () => void) => helpsChanged.add(listener),
+  set: (editor: string, draw: EditorHelp | null) => {
+    const map = new Map(helps);
+    if (draw) map.set(editor, draw); else if (!map.delete(editor)) return;
+    helps = map;
+    helpsChanged.tell();
+  },
+};
+
 const toolsChanged = listeners<void>();
 /** The buttons on the top bar, by who put them there, in the order they were first put. */
 export const topBarTools = {

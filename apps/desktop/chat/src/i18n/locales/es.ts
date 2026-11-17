@@ -264,8 +264,11 @@ export const es: Words = {
     unpin: 'Dejar de fijar',
   },
   starter: {
-    community: 'Comunidad: añade plugins, habilidades y material',
-    library: 'Biblioteca: importa medios, busca plantillas, música y efectos',
+    subtitle: 'Describe la película que quieres y tu agente la hace, o empieza con tu material.',
+    communityName: 'Comunidad',
+    communityNote: 'Añade plugins, habilidades y material',
+    libraryName: 'Biblioteca',
+    libraryNote: 'Importa medios, busca plantillas, música y efectos',
     title: '¿Qué quieres hacer?',
   },
   turnAsk: {

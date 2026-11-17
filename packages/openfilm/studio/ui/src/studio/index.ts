@@ -22,7 +22,7 @@ import type { ImportProgress } from '@/components/MediaPool';
 import type { SettingsSection } from '@/components/settings/SettingsModal';
 import { pluginApi, type PluginApi } from '@/lib/plugin-api';
 import { frameStore } from '@/shell/frame';
-import { addTo, onCommand, open, provide, topBarTools, type TopBarTool, type Workbench, type WorkbenchCommand } from './hub';
+import { addTo, editorHelps, onCommand, open, provide, topBarTools, type EditorHelp, type TopBarTool, type Workbench, type WorkbenchCommand } from './hub';
 import { blockKey, drawing, mountOf, shownBlocks } from './blocks';
 import { boxOf, parseLink, timeOf } from '@/lib/links';
 
@@ -196,6 +196,15 @@ export const chat: {
 /** Buttons on the top bar, drawn before the workbench switch: `owner`'s (a plugin's id) in place of those it put there before; null takes them off. */
 export const topBar = {
   set(owner: string, bar: { tools: readonly TopBarTool[] } | null): void { topBarTools.set(owner, bar?.tools ?? null); },
+};
+
+/**
+ * More of how an editor is used, in its help (the dialog its "?" and the ? key open), under what its plugin says of it:
+ * `help.set(editor, draw)`, `draw(into)` filling the element it is given and returning the way to take it out; null
+ * takes it away.
+ */
+export const help = {
+  set(editor: string, draw: EditorHelp | null): void { editorHelps.set(editor, draw); },
 };
 
 /**

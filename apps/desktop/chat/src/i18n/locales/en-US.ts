@@ -265,8 +265,11 @@ export const enUS = {
     unpin: 'Unpin',
   },
   starter: {
-    community: 'Community: add plugins, skills and material',
-    library: 'Library: import media, find templates, music and effects',
+    subtitle: 'Describe the film you want and your agent makes it, or start with your material.',
+    communityName: 'Community',
+    communityNote: 'Add plugins, skills and material',
+    libraryName: 'Library',
+    libraryNote: 'Import media, find templates, music and effects',
     title: 'What do you want to make?',
   },
   turnAsk: {

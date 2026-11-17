@@ -264,8 +264,11 @@ export const ja: Words = {
     unpin: 'ピン留めを外す',
   },
   starter: {
-    community: 'コミュニティ：プラグイン・スキル・素材を追加',
-    library: 'ライブラリ：素材を読み込み、テンプレートや音楽を探す',
+    subtitle: '作りたい映像を伝えるとエージェントが作ります。素材から始めることもできます。',
+    communityName: 'コミュニティ',
+    communityNote: 'プラグイン・スキル・素材を追加',
+    libraryName: 'ライブラリ',
+    libraryNote: '素材を読み込み、テンプレートや音楽を探す',
     title: '何を作りますか？',
   },
   turnAsk: {

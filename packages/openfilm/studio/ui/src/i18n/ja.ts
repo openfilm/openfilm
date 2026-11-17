@@ -2489,6 +2489,7 @@ export const ja: Words = {
     open: '「{name}」の使い方',
     close: '閉じる',
     keysSwitch: 'エディターを切り替え',
+    keysHelp: 'このヘルプを開く',
   },
   canvas: {
     title: 'キャンバス',

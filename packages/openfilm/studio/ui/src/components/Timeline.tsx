@@ -184,8 +184,8 @@ import { cutNear, transitionSpan, type CutRef, type FilmTransition, type Transit
 const HEAD_W = 108;
 /** The column between the heads and the clips where the cover's tile stands, by the main track (components/cover CoverTile). */
 const COVER_COL_W = 84;
-/** The cover's tile at most (a square), however tall the main track is. */
-const COVER_TILE_MAX = 60;
+/** The cover's tile (a square): one size always, as tall as the main track at its lowest (MAIN_TRACK_MIN_H). */
+const COVER_TILE = MAIN_TRACK_MIN_H;
 /** A row at least this tall shows its track's name under the badge (a lower one says it on hover). */
 /** The room solo's S takes in a head. */
 const HEAD_SOLO_W = 24;
@@ -2949,7 +2949,7 @@ export const Timeline = React.memo(function Timeline({
         )) : null}
         {onResizeTrack && track.docIndex != null ? <TrackResizeHandle height={h} onResize={(height, done) => onResizeTrack(track, height, done)} /> : null}
         {/* the cover, in the column beside the heads, by the main track */}
-        {mainHead && cover ? <CoverTile thumb={cover.thumb} size={Math.min(h - 12, COVER_TILE_MAX)} gutter={COVER_COL_W} onOpen={cover.open} menu={cover.menu} /> : null}
+        {mainHead && cover ? <CoverTile thumb={cover.thumb} size={COVER_TILE} gutter={COVER_COL_W} onOpen={cover.open} menu={cover.menu} /> : null}
       </div>
     );
     headElements.set(track.lane, { pose, node });

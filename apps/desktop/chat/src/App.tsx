@@ -1207,7 +1207,7 @@ function ChatPane({ project, banners, selection, assetsOpen, assetsOverlay }: { 
                   <div
                     ref={thread.viewportRef}
                     onScroll={(event) => setScrolled(event.currentTarget.scrollTop > 2)}
-                    className={`flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto overflow-x-hidden [overflow-anchor:none] [scrollbar-gutter:stable] px-4${blank ? ' justify-center py-3.5' : ' pt-8 pb-24'}`}
+                    className={`flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto overflow-x-hidden [overflow-anchor:none] [scrollbar-gutter:stable] px-4${blank ? ' justify-end pt-3.5 pb-6' : ' pt-8 pb-24'}`}
                   >
                     {blank ? (
                       <div ref={thread.contentRef}>
