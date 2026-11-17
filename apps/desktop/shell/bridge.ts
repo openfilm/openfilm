@@ -25,6 +25,8 @@ interface Native {
   pickFolder(options?: { title?: string; button?: string; at?: string }): Promise<string | null>;
   capture(rect: { x: number; y: number; width: number; height: number }): Promise<string | null>;
   agents: NonNullable<StudioHost['agents']>;
+  /* the connectors (src/connectors.mjs) */
+  connectors: NonNullable<StudioHost['connectors']>;
   /* the window's tabs (src/tabs.mjs) */
   tabs: NonNullable<StudioHost['tabs']>;
   localAgents: Record<string, unknown>;
@@ -339,6 +341,7 @@ export const host: StudioHost = {
     onChange: (listener) => { panelListeners.add(listener); listener(panelState()); return () => { panelListeners.delete(listener); }; },
   },
   agents: native.agents,
+  connectors: native.connectors,
   asks: { show: (list, answer) => { answerAsk = answer; asks.set(list); } },
   developer,
   notifications,

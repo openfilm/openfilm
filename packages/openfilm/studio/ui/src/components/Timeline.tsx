@@ -161,6 +161,7 @@ import { OperationHistory, trackFlagStep, type SessionTimeline } from './Operati
 import { BlockThumbs } from './BlockThumbs';
 import { BlockWaveform } from './BlockWaveform';
 import { ContextMenu, type ContextMenuEntry } from './ContextMenu';
+import { CoverTile } from './cover/CoverChrome';
 import { MotionLaneHeads, MotionLaneRows, lanesHeight, type MotionLanes } from './MotionLanes';
 import { toggleClipEdits } from '@/lib/film-clip-edits';
 import type { PlaybackClock } from './LiveTime';
@@ -181,6 +182,8 @@ import { cutNear, transitionSpan, type CutRef, type FilmTransition, type Transit
 
 /** Track head column: kind badge + lock + hide + original sound. */
 const HEAD_W = 108;
+/** The column between the heads and the clips where the cover's tile stands, by the main track (components/cover CoverTile). */
+const COVER_COL_W = 84;
 /** A row at least this tall shows its track's name under the badge (a lower one says it on hover). */
 /** The room solo's S takes in a head. */
 const HEAD_SOLO_W = 24;
@@ -664,6 +667,8 @@ export interface TimelineProps {
   onEnterCompound?: (block: TimelineBlock) => void;
   /** Editing a compound clip's film: the way back to the film it is in, said on the toolbar. */
   crumb?: { outer: string; name: string; onBack: () => void } | null;
+  /** The film's cover, at the head of the main track: its picture (null: none yet), what a click and the menu do (components/cover). */
+  cover?: { thumb: string | null; open: () => void; menu: () => ContextMenuEntry[] };
   /**
    * Thumbnails: key (`mtime:clipId@intoMs#v`, see thumb-frame) → image address. Shot outside; keyed by the
    * clip's own millisecond, not film time, so moving a clip does not change its pictures.
@@ -1019,6 +1024,7 @@ export const Timeline = React.memo(function Timeline({
   onUncompound,
   onEnterCompound,
   crumb,
+  cover,
   onCopy,
   onPaste,
   onExportBlock,
@@ -1917,7 +1923,7 @@ export const Timeline = React.memo(function Timeline({
     if (targetLane && !tracks.some((tr) => tr.lane === targetLane)) setTargetLane(null);
   }, [tracks, targetLane]);
   /** The track whose name is being typed in its head (film.html index). */
-  const headW = layers ? layers.headWidth : HEAD_W + (solo ? HEAD_SOLO_W : 0);
+  const headW = layers ? layers.headWidth : HEAD_W + (solo ? HEAD_SOLO_W : 0) + (cover ? COVER_COL_W : 0);
   /* picking clips lets the gap go; so does an edit that fills or moves it */
   React.useEffect(() => { if (selected.length) setGap(null); }, [selected.length]);
   React.useEffect(() => {
@@ -2865,7 +2871,7 @@ export const Timeline = React.memo(function Timeline({
         ? <div key={track.lane}>{head}<div style={{ height: track.extra, background: laneTone(track, false) }} className="rounded-l-[3px]">{layers.extraHead(track)}</div></div>
         : head;
     }
-    const pose = `${liftingHead}:${lit}:${targeted}:${chatLit}`;
+    const pose = `${liftingHead}:${lit}:${targeted}:${chatLit}:${mainHead && cover ? `cover:${cover.thumb ?? ''}` : ''}`;
     const cached = headElements.get(track.lane);
     if (cached?.pose === pose) return withLaneHeads(track, cached.node);
     const node = (
@@ -2890,6 +2896,7 @@ export const Timeline = React.memo(function Timeline({
           height: h,
           /* what the row holds on the left, a label; its switches after it, each in its own column */
           gridTemplateColumns: `24px 4px repeat(${solo ? 4 : 3}, minmax(0, 1fr))`,
+          /* the main track's head keeps room on its right for the cover's tile */
           background: laneTone(track, lit),
           boxShadow: chatLit ? CHAT_RING : undefined,
           opacity: liftingHead ? 0.45 : 1,
@@ -2937,11 +2944,13 @@ export const Timeline = React.memo(function Timeline({
           <SoloButton on={solo.tracks.has(track.docIndex)} onToggle={(only) => solo.onToggle(track.docIndex!, only)} />
         )) : null}
         {onResizeTrack && track.docIndex != null ? <TrackResizeHandle height={h} onResize={(height, done) => onResizeTrack(track, height, done)} /> : null}
+        {/* the cover, in the column beside the heads, by the main track */}
+        {mainHead && cover ? <CoverTile thumb={cover.thumb} size={Math.min(h - 4, 72)} gutter={COVER_COL_W} onOpen={cover.open} menu={cover.menu} /> : null}
       </div>
     );
     headElements.set(track.lane, { pose, node });
     return withLaneHeads(track, node);
-  }), [tracks, t, laneOrder, onEditBlocks, startLaneReorder, toggleTrack, selectedLanes, openHeadMenu, chatTrack, targetLane, solo, onResizeTrack, nearFirst, nearLast, headElements, motionLanes, layers]);
+  }), [tracks, t, laneOrder, onEditBlocks, startLaneReorder, toggleTrack, selectedLanes, openHeadMenu, chatTrack, targetLane, solo, onResizeTrack, nearFirst, nearLast, headElements, motionLanes, layers, cover]);
 
   /* row backgrounds are fixed to the view and only follow vertical scroll; the clips move horizontally above them */
   const laneSkins = React.useMemo(() => tracks.map((track) => (
@@ -4428,7 +4437,7 @@ export const Timeline = React.memo(function Timeline({
           >
             {/* moved with the track area's vertical scroll (onScroll), as the rows' backgrounds are; its own block
                 (flow-root), so the first head's margin stays inside it and the reorder guide's top counts from it */}
-            <div ref={headShiftRef} className="relative flow-root" style={{ transform: rowsShift }}>
+            <div ref={headShiftRef} className="relative flow-root" style={{ transform: rowsShift, ...(cover ? { width: `calc(100% - ${COVER_COL_W}px)`, boxShadow: `1px 0 0 ${TL.line}` } : {}) }}>
               {heads}
               {laneOrder ? (() => {
                 const hover = laneOrder.hoverLane;

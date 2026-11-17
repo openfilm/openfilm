@@ -4,9 +4,10 @@
 <meta charset="utf-8">
 <title>Poster</title>
 <style>
-:root { --font: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; --bg: #111111; --ink: #f4f1ea; --accent: #ff4d2e; }
+:root { --font: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; --bg: transparent; --ink: #f4f1ea; --accent: #ff4d2e; }
 html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
 * { box-sizing: border-box; }
+/* its own color only when one is set: the cover's picture (a color, a frame) shows through by default */
 body { background: var(--bg); }
 .dot { position: fixed; right: -12vmin; top: -14vmin; width: 62vmin; height: 62vmin; border-radius: 50%; background: var(--accent); }
 .box { position: fixed; left: 6vw; right: 6vw; bottom: 10vh; font-family: var(--font); color: var(--ink); }

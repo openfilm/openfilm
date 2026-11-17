@@ -5,7 +5,7 @@ description: The film's color in OpenFilm, clip by clip. Read it when the person
 
 # Color
 
-A video clip's grade is the color transform files its style's `--of-lut` names, in order (SPEC.md). OpenFilm's grades
+A clip's grade is the color transform files its style's `--of-lut` names, in order (SPEC.md). OpenFilm's grades
 are in three parts, the part a file plays said by its name:
 
 ```html
@@ -42,10 +42,17 @@ A hue curve's x is the hue, 0 to 1 round from magenta: red 0.17, yellow 0.33, gr
 Change one operation and leave the rest of a file as it was: others' operations and comments are theirs. Ungrading a
 clip of ordinary footage takes its `--of-lut` away. Studio shows each change of a file a moment after it is written.
 
+A page (`<iframe>`) or a still (`<img>`) is graded the same way, by the same files, its picture being what the screen
+shows: its input and output are not applied, its layers work in ACEScct from its picture, and a filter or a `.cube`
+after the output on the picture as shown. On a page or a still, `GradingHueCurve` and `LUT3D` are left out (the
+browser draws the grade as an SVG filter, which cannot): grade it with the others, and say so when the person asks for
+what only a hue curve does. A code-made picture is often dark or saturated on purpose: read `look`'s `!` against what
+the film means before you balance it.
+
 ## Commands
 
-- `openfilm color look [clip…] [t | a-b]`: each clip's picture as it plays, measured (every video clip when none is
-  named): exposure in IRE, what is clipped or crushed, white (kelvin and tint of what is nearly grey), saturation,
+- `openfilm color look [clip…] [t | a-b]`: each clip's picture as it plays, measured (every clip with a picture, a
+  video, a page or a still, when none is named): exposure in IRE, what is clipped or crushed, white (kelvin and tint of what is nearly grey), saturation,
   skin-tone hues, and the jump from the clip before. `✗` and `!` say what is off. It saves a picture of each: the file
   as it is beside it graded, over its waveform and vectorscope. Read them.
 - `openfilm color input [clip…|all] [kind]`: what each clip's footage is and what its file says, and the kinds there

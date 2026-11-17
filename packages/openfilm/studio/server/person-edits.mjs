@@ -30,7 +30,7 @@
  */
 import { randomUUID } from 'node:crypto';
 import { readFile, rm, writeFile } from 'node:fs/promises';
-import { basename, join } from 'node:path';
+import { basename, join, relative, sep } from 'node:path';
 import { Worker } from 'node:worker_threads';
 import { deflateRawSync, inflateRawSync } from 'node:zlib';
 import { replaceFile, tempPath } from './atomic.mjs';
@@ -593,6 +593,29 @@ export function studioWrote(root, key, line) {
  * @param {string} root @param {string} agent @returns {{ id: string, line: string } | null}
  */
 export function noteFor(root, agent) {
+  /* the films inside the project (a cover, a compound clip's: covers/<name>, parts/<name>) are projects of their own
+     here, edited by the person in Studio; an agent asking about the project is about to read them too */
+  const inside = [...projects.keys()].filter((k) => k.startsWith(root + sep) && INSIDE.test(relative(root, k).split(sep).join('/')));
+  const own = noteOne(root, agent);
+  const more = inside.flatMap((k) => {
+    const note = noteOne(k, agent);
+    return note ? [{ ...note, line: `In ${relative(root, k).split(sep).join('/')}/film.html: ${note.line}` }] : [];
+  });
+  const all = [...(own ? [own] : []), ...more];
+  if (all.length < 2) return all[0] ?? null;
+  const id = randomUUID();
+  together.set(id, all.map((n) => n.id));
+  return { id, line: all.map((n) => n.line).join(' ') };
+}
+
+/** A film inside a project, by its folder there: a cover's or a compound clip's, at any depth. */
+const INSIDE = /^(covers|parts)\/[^/]+(\/(covers|parts)\/[^/]+)*$/;
+/** Notes given as one (the project's and its films'), by the id the agent passes on: theirs. */
+/** @type {Map<string, string[]>} */
+const together = new Map();
+
+/** The note for `agent` about one project's own film.html and files (noteFor). @param {string} root @param {string} agent */
+function noteOne(root, agent) {
   const s = projects.get(root);
   if (!s) return null;
   const now = Date.now();
@@ -616,8 +639,16 @@ export function noteFor(root, agent) {
   return { id, line: lines.join(' ') };
 }
 
-/** The note `id` was passed on to its agent: what it names is known to the agent. Whether there was such a note. */
-export function noteSaid(/** @type {string} */ id) {
+/**
+ * The note `id` was passed on to its agent: what it names is known to the agent. Whether there was such a note.
+ * @param {string} id @returns {boolean}
+ */
+export function noteSaid(id) {
+  const parts = together.get(id);
+  if (parts) {
+    together.delete(id);
+    return parts.map((/** @type {string} */ one) => noteSaid(one)).some(Boolean);
+  }
   const note = notes.get(id);
   if (!note) return false;
   notes.delete(id);

@@ -818,8 +818,22 @@ export function declarations(style) {
  * @param {{ src?: unknown, sound?: unknown, style?: unknown } | null | undefined} clip @returns {string[]}
  */
 export function lutsOf(clip) {
-  if (kindOf(clip) !== 'video' || typeof clip?.style !== 'string' || !clip.style.includes('--of-lut')) return [];
-  const value = declarations(clip.style).findLast(([prop]) => prop === '--of-lut')?.[1] ?? '';
+  return kindOf(clip) === 'video' ? lutUrls(clip?.style) : [];
+}
+
+/**
+ * The files a page or a still clip is graded by (SPEC.md `--of-lut`), in order as written; none for any other clip.
+ * The browser draws its grade (color/page-grade.mjs). @param {{ src?: unknown, sound?: unknown, style?: unknown } | null | undefined} clip
+ */
+export function pictureLutsOf(clip) {
+  const kind = kindOf(clip);
+  return kind === 'page' || kind === 'still' ? lutUrls(clip?.style) : [];
+}
+
+/** The `url()`s of a style's `--of-lut`. @param {unknown} style @returns {string[]} */
+function lutUrls(style) {
+  if (typeof style !== 'string' || !style.includes('--of-lut')) return [];
+  const value = declarations(style).findLast(([prop]) => prop === '--of-lut')?.[1] ?? '';
   return [...value.matchAll(/url\(\s*(?:"([^"]*)"|'([^']*)'|([^)"'\s]*))\s*\)/gi)].map((m) => (m[1] ?? m[2] ?? m[3]).trim()).filter(Boolean);
 }
 

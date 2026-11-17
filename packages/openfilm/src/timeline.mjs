@@ -2,7 +2,7 @@
 // in host.mjs); the file's own elements are the clips: an <iframe> a web page, a <video>, an <img> a still, an
 // <audio> a sound for the mix. Where each plays and sits is what film-doc.mjs reads in the file, the same reading
 // Studio plays and exports by; how each looks is the file's own CSS. Track 0, the first <section>, is on top.
-import { MEDIA_RATE_MAX, MEDIA_RATE_MIN, registerEffects, clipFade, clipSpan, clipTag, declarations, fadeGain, filmHead, fittedFade, keyframeBlocks, kindOf, lutsOf, mediaPlays, parseFilm, pictureRect, readFilmFile, sourceAt, srcHref } from './film-doc.mjs';
+import { MEDIA_RATE_MAX, MEDIA_RATE_MIN, registerEffects, clipFade, clipSpan, clipTag, declarations, fadeGain, filmHead, fittedFade, keyframeBlocks, kindOf, lutsOf, mediaPlays, pictureLutsOf, parseFilm, pictureRect, readFilmFile, sourceAt, srcHref } from './film-doc.mjs';
 import { override, restore } from './overrides.mjs';
 import { CAPTION_BASE_CSS, cueCss, cueLayout, cueNodes, readVtt, regionBox } from './captions.mjs';
 import { clearVideoEffects, drawVideoEffects, hideVideoEffects, suspendVideoEffects, retryVideoEffects, videoEffectsOn, videoEffectsState, setVideoPreview, clearVideoAnalysisCache } from './video-effects.mjs';
@@ -289,6 +289,8 @@ function dress(c, row) {
   if (c.span) c.el.style.setProperty('--clip-length', `${Math.round(c.span.length * 1000) / 1000}s`);
   moving(c);
   if (c.kind === 'page' && !c.el.style.border) c.el.style.border = '0';
+  /* its grade's filter, before its own CSS filter (which wear has just put back) */
+  if (c.gradeEl) showPictureGrade(c);
   c.el.style.zIndex = String(doc.tracks.length - c.ti); // track 0 on top
   /* a page coming on shows once it is drawn (see draw) */
   c.el.style.visibility = c.shown && !c.coming ? 'visible' : 'hidden';
@@ -1132,6 +1134,84 @@ function pollGrade(ask) {
   setTimeout(again, GRADE_POLL_MS);
 }
 
+/*
+ * A page or a still graded by LUTs (its style's --of-lut, SPEC.md) is drawn through an SVG filter the browser applies
+ * to its element (color/page-grade.mjs): its picture is what the screen shows already, so the grade's layers work on
+ * it in ACEScct without the input and output a camera's footage needs. The same in a preview and an export: a frame
+ * drawn exactly waits for the clip's filter. The grade's files are read once each, and again when they change on disk
+ * (regraded); an editor's grade not written yet (stage.grade) is drawn from its texts at once.
+ */
+/** @type {typeof import('./color/page-grade.mjs') | null} */
+let pageGrade = null;
+/** @type {Promise<typeof import('./color/page-grade.mjs')> | null} */
+let pageGradeLoading = null;
+let pictureGrades = 0;
+/** @type {Map<string, Promise<string>>} the texts of grade files read for pages and stills, by url */
+const pictureTexts = new Map();
+const readPictureText = (/** @type {string} */ href) => {
+  if (!pictureTexts.has(href)) {
+    const read = fetch(href, { cache: 'no-store' }).then((r) => (r.ok ? r.text() : Promise.reject(new Error(`${href}: ${r.status}`))));
+    read.catch(() => pictureTexts.delete(href));
+    pictureTexts.set(href, read);
+  }
+  return /** @type {Promise<string>} */ (pictureTexts.get(href));
+};
+/** The files a page or a still is graded by, as urls of the film's site; none from another site (not this page's to read). */
+function pictureFiles(row) {
+  const files = pictureLutsOf(row).map((f) => url(f));
+  return files.every((u) => u.origin === location.origin) ? files.map((u) => u.href) : [];
+}
+/**
+ * Clip `c` (a page or a still) graded as its row says, or as an editor has it (`draft`: its files, urls, and the texts
+ * it has of them): its filter made, and put on it. A frame drawn exactly waits for it (`c.gradePending`).
+ */
+function regradePicture(c, draft = null) {
+  const files = draft?.files ?? pictureFiles(c.row);
+  c.gradeKey = pictureFiles(c.row).join(' ');
+  c.pictureDraft = Boolean(draft);
+  if (draft) c.pictureDraftFiles = draft.files;
+  const token = c.pictureToken = (c.pictureToken ?? 0) + 1;
+  if (!files.length) { c.pictureStages = null; c.gradePending = null; showPictureGrade(c); return; }
+  const made = (async () => {
+    pageGrade ??= await (pageGradeLoading ??= import('./color/page-grade.mjs'));
+    const { leftOut, pageStages } = pageGrade;
+    const read = files.filter((href) => !leftOut(new URL(href).pathname));
+    const texts = await Promise.all(read.map((href) => draft?.texts?.[href] ?? readPictureText(href)));
+    if (c.pictureToken !== token) return;
+    const got = pageStages(read.map((href, i) => ({ name: new URL(href).pathname, text: texts[i] })));
+    c.pictureStages = got?.stages.length ? got.stages : null;
+    c.pictureSkipped = got?.skipped ?? [];
+    showPictureGrade(c);
+  })().catch((e) => {
+    if (c.pictureToken !== token) return;
+    c.pictureStages = null;
+    showPictureGrade(c);
+    console.warn(`clip "${c.id}": its grade could not be read (${e instanceof Error ? e.message : e})`);
+  });
+  c.gradePending = made.finally(() => { if (c.pictureToken === token) c.gradePending = null; });
+  window.__filmEditor.redraw?.();
+}
+/** Clip `c`'s filter on its element as it is now (or taken off: none, or every grade left off), before its own CSS filter. */
+function showPictureGrade(c) {
+  if (!c.el) return;
+  const own = (new Map(declarations(c.css ?? '')).get('filter') ?? '').replace(/\s*!important\s*$/i, '');
+  const stages = ungraded ? null : c.pictureStages;
+  if (!stages || !pageGrade) {
+    if (c.gradeEl) { c.gradeEl.remove(); c.gradeEl = null; }
+    if (own) c.el.style.setProperty('filter', own); else c.el.style.removeProperty('filter');
+    return;
+  }
+  const id = c.gradeId ??= `of-grade-${++pictureGrades}`;
+  if (!c.gradeEl) {
+    c.gradeEl = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    c.gradeEl.setAttribute('aria-hidden', 'true');
+    c.gradeEl.style.cssText = 'position: absolute; width: 0; height: 0; overflow: hidden; pointer-events: none';
+    document.body.append(c.gradeEl);
+  }
+  c.gradeEl.innerHTML = pageGrade.filterMarkup(stages, id, { split: splitAt });
+  c.el.style.setProperty('filter', `url(#${id})${own ? ` ${own}` : ''}`);
+}
+
 /**
  * Clip `c` drawn through its grade in the page (video-lut.mjs) while it plays its video as it is: an editor's grade not
  * written yet (`c.draft`), else its grade's own LUT while its graded copy is made (`c.liveLut`). Never in an export,
@@ -1203,6 +1283,8 @@ function settle(c, row, track, ti) {
   c.fade = fittedFade(clipFade(row), c.span.length);
   /* a video whose LUTs changed lets its file go, and is given it graded as it is now when drawn next (see wake) */
   if (c.kind === 'video' && c.awake && gradeAsk(row) !== c.graded) { rest(c); window.__filmEditor.redraw?.(); }
+  /* a page or a still whose LUTs changed is drawn through them as they are now (not over an editor's draft) */
+  if ((c.kind === 'page' || c.kind === 'still') && !c.pictureDraft && pictureFiles(row).join(' ') !== (c.gradeKey ?? '')) regradePicture(c);
   /* a page that sets no size of its own is laid out at its clip's size, else the stage's */
   if (c.kind === 'page') { const own = c.own ?? row.size ?? stage; c.nw = own.w; c.nh = own.h; }
   dress(c, row);
@@ -1411,6 +1493,8 @@ async function drawClip(c, t, live, play, turn, coming, going) {
   else c.el.style.visibility = on ? 'visible' : 'hidden';
   hold(c, t);
   if (on) fadeAt(c, t);
+  /* a frame drawn exactly shows a page's or a still's grade: its filter made first */
+  if (on && !live && c.gradePending) await c.gradePending;
   if (!on) {
     hideVideoEffects(c);
     if (c.kind !== 'video') return;
@@ -1952,7 +2036,21 @@ window.__filmEditor = {
      */
     grade(id, lut) {
       const c = clips.find((x) => x.id === id);
-      if (!c || c.kind !== 'video') return;
+      if (!c) return;
+      /* a page or a still: drawn from the editor's files and texts at once (its filter), or as written again */
+      if (c.kind === 'page' || c.kind === 'still') {
+        if (lut && 'files' in lut) {
+          const files = lut.files.map((f) => url(f).href);
+          const texts = Object.fromEntries(Object.entries(lut.texts ?? {}).map(([f, text]) => [url(f).href, text]));
+          regradePicture(c, { files, texts });
+          return;
+        }
+        /* written: its files read again as they are on disk now */
+        if (lut && 'written' in lut) for (const href of c.pictureDraftFiles ?? []) pictureTexts.delete(href);
+        regradePicture(c);
+        return;
+      }
+      if (c.kind !== 'video') return;
       /* its files as the editor has them, baked here: the last asked is the one shown */
       if (lut && 'files' in lut) {
         const token = c.drafting = (c.drafting ?? 0) + 1;
@@ -1983,17 +2081,23 @@ window.__filmEditor = {
       if (c.awake && (Boolean(had) !== Boolean(c.draft)) && (c.draft ? c.gradedSrc : true)) rest(c);
       window.__filmEditor.redraw?.();
     },
-    /** Every video drawn as its file is (`off`), or through its grade again. */
+    /** Every graded clip (a video, a page, a still) drawn as it is (`off`), or through its grade again; `split`: graded right of that share of the picture only. */
     compare(off, split = null) {
       const at = split == null ? null : Math.min(1, Math.max(0, Number(split)));
       if (ungraded === off && (splitAt == null) === (at == null)) {
         /* only the line moved: drawn again where it is now */
-        if (at != null && at !== splitAt) { splitAt = at; setVideoSplit(at); window.__filmEditor.redraw?.(); }
+        if (at != null && at !== splitAt) {
+          splitAt = at;
+          setVideoSplit(at);
+          for (const c of clips) if (c.gradeEl) showPictureGrade(c);
+          window.__filmEditor.redraw?.();
+        }
         return;
       }
       ungraded = off;
       splitAt = at;
       setVideoSplit(at);
+      for (const c of clips) if (c.gradeEl || c.pictureStages) showPictureGrade(c);
       /* those graded (or not, while their grade was left off) woken again: with their copy, or their own file */
       for (const c of clips) if (c.kind === 'video' && c.awake) rest(c);
       window.__filmEditor.redraw?.();
@@ -2002,6 +2106,9 @@ window.__filmEditor = {
     regraded(paths) {
       const changed = new Set(paths.map((p) => url(p).href));
       for (const ask of [...liveGrades.keys()]) if (askFiles(ask).some((f) => changed.has(f))) liveGrades.delete(ask);
+      /* the pages and stills they grade read them again, and are drawn through them */
+      for (const href of changed) pictureTexts.delete(href);
+      for (const c of clips) if ((c.kind === 'page' || c.kind === 'still') && !c.pictureDraft && pictureFiles(c.row).some((f) => changed.has(f))) regradePicture(c);
       for (const c of clips) {
         if (c.kind !== 'video' || c.draft) continue;
         const ask = gradeAsk(c.row);

@@ -12,6 +12,7 @@ import {
   factsOfProbe, mediaListingOf, type FilesListing, type MediaFacts, type MediaListing, type MediaResult, type MediaSources,
 } from './workspace-resources';
 import { recycleRefusalOf } from './recycle.ts';
+import { takeFavorites } from './library';
 
 /** The library's top folder as its paths name it. */
 export const SAVED = 'saved';
@@ -222,4 +223,41 @@ export async function pickFromComputer(title: string, folder: boolean): Promise<
   const answer = await res.json().catch(() => ({})) as { path?: unknown; paths?: unknown };
   if (!res.ok) return [];
   return folder ? (typeof answer.path === 'string' ? [answer.path] : []) : Array.isArray(answer.paths) ? answer.paths.map(String) : [];
+}
+
+/* ── the person's own files starred: among the favorites by their identity, shown under 收藏 wherever they are ── */
+
+let starredPaths: ReadonlySet<string> | null = null;
+let readingStars = false;
+const starListeners = new Set<() => void>();
+const tellStars = () => { for (const fn of starListeners) fn(); };
+
+/** The places of the person's own files starred (read once, then kept as stars change). */
+export function useStarredSaved(): ReadonlySet<string> {
+  const seen = React.useSyncExternalStore(
+    fn => { starListeners.add(fn); return () => { starListeners.delete(fn); }; },
+    () => starredPaths,
+    () => starredPaths,
+  );
+  const revision = useSavedRevision();
+  React.useEffect(() => {
+    if (readingStars) return;
+    readingStars = true;
+    void fetch('/api/saved/star', { cache: 'no-store' }).then(r => (r.ok ? r.json() : null), () => null)
+      .then((body: { paths?: string[] } | null) => { if (body && Array.isArray(body.paths)) { starredPaths = new Set(body.paths); tellStars(); } })
+      .finally(() => { readingStars = false; });
+  }, [revision]);
+  return seen ?? EMPTY_STARS;
+}
+const EMPTY_STARS: ReadonlySet<string> = new Set();
+
+/** One of the person's own files starred, or no longer (`on`). */
+export async function starSaved(path: string, on: boolean): Promise<void> {
+  starredPaths = new Set([...(starredPaths ?? [])].filter(p => p !== path).concat(on ? [path] : []));
+  tellStars();
+  const response = await send('PUT', '/api/saved/star', { path, on });
+  const body = await response.json().catch(() => null) as { ids?: string[]; paths?: string[] } | null;
+  if (body?.paths) { starredPaths = new Set(body.paths); tellStars(); }
+  if (body?.ids) takeFavorites(body.ids);
+  refreshSaved();
 }

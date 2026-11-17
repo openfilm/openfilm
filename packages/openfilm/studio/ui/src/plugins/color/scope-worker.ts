@@ -15,17 +15,22 @@
 import { parseColorTransform } from '../../../../../src/color/ctf.mjs';
 import { bake, compile, sampleBaked } from '../../../../../src/color/ops.mjs';
 import { adjustOf, withAdjust, ADJUST_RANGE } from '../../../../../src/color/adjust.mjs';
+import { pageStages, stagesFunction } from '../../../../../src/color/page-grade.mjs';
 import { measure } from '../../../../../plugins/color/measure.mjs';
 
 export type Scope = 'waveform' | 'parade' | 'vectorscope' | 'histogram';
 export type Chain = readonly { name: string; text: string }[];
 
+/**
+ * `drawn`: the chain grades a picture the browser draws (a page, a still), as the browser draws it
+ * (src/color/page-grade.mjs); else a video's footage through its input and output.
+ */
 export type ToWorker =
   | { type: 'frame'; key: string; w: number; h: number; data: ArrayBuffer }
-  | { type: 'render'; seq: number; key: string; chain: Chain; scopes: Scope[] }
-  | { type: 'thumb'; seq: number; key: string; chain: Chain }
+  | { type: 'render'; seq: number; key: string; chain: Chain; scopes: Scope[]; drawn?: boolean }
+  | { type: 'thumb'; seq: number; key: string; chain: Chain; drawn?: boolean }
   /** `x`, `y` 0–1 across the frame; `layer` the chain's file whose temperature and tint are solved */
-  | { type: 'pick'; seq: number; key: string; chain: Chain; layer: string; x: number; y: number };
+  | { type: 'pick'; seq: number; key: string; chain: Chain; layer: string; x: number; y: number; drawn?: boolean };
 
 export interface Drawn { w: number; h: number; image: ArrayBuffer }
 export interface Read { middle: number; kelvin: number; tint: number; clipped: number; crushed: number; saturation: number }
@@ -40,23 +45,30 @@ export const WAVE = { w: 512, h: 256 };
 export const VECTOR = 256;
 
 const frames = new Map<string, { w: number; h: number; rgb: Float32Array }>();
-/** the chains last baked, by their texts */
-const bakes = new Map<string, ReturnType<typeof bake> | null>();
-const bakedOf = (chain: Chain) => {
-  const key = chain.map((f) => `${f.name}\n${f.text}`).join('\0');
+type Grade = (r: number, g: number, b: number, out: number[]) => void;
+/** the chains last made into a function, by their texts: a video's baked, a drawn picture's as its filter */
+const bakes = new Map<string, Grade | null>();
+const gradeOf = (chain: Chain, drawn = false): Grade | null => {
+  const key = `${drawn ? 'drawn' : 'video'}\0${chain.map((f) => `${f.name}\n${f.text}`).join('\0')}`;
   let b = bakes.get(key);
   if (b === undefined) {
-    b = chain.length ? bake(chain.flatMap((f) => parseColorTransform(f.text, f.name)), { size: 33 }) : null;
+    if (drawn) {
+      const got = pageStages(chain);
+      b = got?.stages.length ? stagesFunction(got.stages) : null;
+    } else {
+      const baked = chain.length ? bake(chain.flatMap((f) => parseColorTransform(f.text, f.name)), { size: 33 }) : null;
+      b = baked ? (r, g, bl, out) => sampleBaked(baked, r, g, bl, out) : null;
+    }
     if (bakes.size > 120) bakes.delete(bakes.keys().next().value!);
     bakes.set(key, b);
   }
   return b;
 };
-const graded = (rgb: Float32Array, b: ReturnType<typeof bake> | null) => {
+const graded = (rgb: Float32Array, b: Grade | null) => {
   const pic = new Float32Array(rgb.length);
   const o = [0, 0, 0];
   for (let i = 0; i < rgb.length; i += 3) {
-    if (b) sampleBaked(b, rgb[i]!, rgb[i + 1]!, rgb[i + 2]!, o); else { o[0] = rgb[i]!; o[1] = rgb[i + 1]!; o[2] = rgb[i + 2]!; }
+    if (b) b(rgb[i]!, rgb[i + 1]!, rgb[i + 2]!, o); else { o[0] = rgb[i]!; o[1] = rgb[i + 1]!; o[2] = rgb[i + 2]!; }
     pic[i] = clamp01(o[0]!); pic[i + 1] = clamp01(o[1]!); pic[i + 2] = clamp01(o[2]!);
   }
   return pic;
@@ -78,7 +90,7 @@ self.onmessage = ({ data: m }: MessageEvent<ToWorker>) => {
   const started = performance.now();
   try {
     if (m.type === 'pick') { post({ type: 'picked', seq: m.seq, ...pickWhite(frame, m) }); return; }
-    const pic = graded(frame.rgb, bakedOf(m.chain));
+    const pic = graded(frame.rgb, gradeOf(m.chain, m.drawn));
     if (m.type === 'thumb') {
       const out = new Uint8ClampedArray((pic.length / 3) * 4);
       for (let i = 0, j = 0; i < pic.length; i += 3, j += 4) { out[j] = pic[i]! * 255 + 0.5; out[j + 1] = pic[i + 1]! * 255 + 0.5; out[j + 2] = pic[i + 2]! * 255 + 0.5; out[j + 3] = 255; }
@@ -183,7 +195,7 @@ const WARM_STOPS = 0.4, TINT_STOPS = 0.3;
  * the chain: each step moves them by how far red and blue are from green there, as the sliders move them, until it
  * is grey or they reach their ends.
  */
-function pickWhite(frame: { w: number; h: number; rgb: Float32Array }, m: { chain: Chain; layer: string; x: number; y: number }) {
+function pickWhite(frame: { w: number; h: number; rgb: Float32Array }, m: { chain: Chain; layer: string; x: number; y: number; drawn?: boolean }) {
   const cx = Math.round(m.x * (frame.w - 1)), cy = Math.round(m.y * (frame.h - 1));
   const at = [0, 0, 0];
   let n = 0;
@@ -200,7 +212,10 @@ function pickWhite(frame: { w: number; h: number; rgb: Float32Array }, m: { chai
   for (let step = 0; step < 8; step++) {
     const text = withAdjust(own, { temperature, tint }, m.layer.split('/').pop()!.replace(/\.ctf$/, ''));
     const chain = m.chain.some((f) => f.name === m.layer) ? m.chain.map((f) => (f.name === m.layer ? { ...f, text } : f)) : m.chain;
-    compile(chain.flatMap((f) => parseColorTransform(f.text, f.name)))(at[0]!, at[1]!, at[2]!, out);
+    if (m.drawn) {
+      const got = pageStages(chain);
+      if (got?.stages.length) stagesFunction(got.stages)(at[0]!, at[1]!, at[2]!, out); else { out[0] = at[0]!; out[1] = at[1]!; out[2] = at[2]!; }
+    } else compile(chain.flatMap((f) => parseColorTransform(f.text, f.name)))(at[0]!, at[1]!, at[2]!, out);
     const g = Math.max(1e-4, out[1]!);
     const a = Math.log2(Math.max(1e-4, out[0]!) / g), b = Math.log2(Math.max(1e-4, out[2]!) / g);
     if (Math.abs(a) < 0.004 && Math.abs(b) < 0.004) break;

@@ -43,7 +43,7 @@
      "at": ".tag"
     },
     {
-     "name": "Headline",
+     "name": "Title",
      "type": "text",
      "at": ".t1"
     },
@@ -72,6 +72,11 @@
      "type": "var",
      "var": "--ink"
     }
+   ],
+   "categories": [
+    "knowledge",
+    "review",
+    "game"
    ]
   },
   {
@@ -89,17 +94,17 @@
    "about": "Words on three tilted labels stacked, one in the accent color: a how-to or tips cover.",
    "props": [
     {
-     "name": "Line 1",
+     "name": "Title",
      "type": "text",
      "at": ".t1"
     },
     {
-     "name": "Line 2",
+     "name": "Highlight",
      "type": "text",
      "at": ".t2"
     },
     {
-     "name": "Line 3",
+     "name": "Subtitle",
      "type": "text",
      "at": ".t3"
     },
@@ -123,6 +128,11 @@
      "type": "var",
      "var": "--ink"
     }
+   ],
+   "categories": [
+    "knowledge",
+    "food",
+    "review"
    ]
   },
   {
@@ -145,12 +155,12 @@
      "at": ".t1"
     },
     {
-     "name": "Credit",
+     "name": "Subtitle",
      "type": "text",
      "at": ".t2"
     },
     {
-     "name": "Above",
+     "name": "Tag",
      "type": "text",
      "at": ".t3"
     },
@@ -169,6 +179,10 @@
      "type": "var",
      "var": "--ink"
     }
+   ],
+   "categories": [
+    "film",
+    "vlog"
    ]
   },
   {
@@ -191,17 +205,17 @@
      "at": ".t1"
     },
     {
-     "name": "Issue",
+     "name": "Tag",
      "type": "text",
      "at": ".t3"
     },
     {
-     "name": "Cover line",
+     "name": "Title",
      "type": "text",
      "at": ".t2"
     },
     {
-     "name": "Under it",
+     "name": "Subtitle",
      "type": "text",
      "at": ".t4"
     },
@@ -225,6 +239,10 @@
      "type": "var",
      "var": "--ink"
     }
+   ],
+   "categories": [
+    "vlog",
+    "food"
    ]
   },
   {
@@ -242,17 +260,17 @@
    "about": "A breaking label and a headline in a white box at the bottom, a live tag in the corner: a news cover.",
    "props": [
     {
-     "name": "Label",
+     "name": "Tag",
      "type": "text",
      "at": ".t3"
     },
     {
-     "name": "Headline",
+     "name": "Title",
      "type": "text",
      "at": ".t1"
     },
     {
-     "name": "Under it",
+     "name": "Subtitle",
      "type": "text",
      "at": ".t2"
     },
@@ -281,6 +299,9 @@
      "type": "var",
      "var": "--ink"
     }
+   ],
+   "categories": [
+    "news"
    ]
   },
   {
@@ -332,6 +353,10 @@
      "type": "var",
      "var": "--ink"
     }
+   ],
+   "categories": [
+    "vlog",
+    "food"
    ]
   },
   {
@@ -349,7 +374,7 @@
    "about": "Two sides tinted in two colors with a VS between them and a question on top: a comparison cover.",
    "props": [
     {
-     "name": "Question",
+     "name": "Title",
      "type": "text",
      "at": ".t3"
     },
@@ -383,6 +408,10 @@
      "type": "var",
      "var": "--ink"
     }
+   ],
+   "categories": [
+    "review",
+    "game"
    ]
   },
   {
@@ -400,7 +429,7 @@
    "about": "A paper card with a big number and a title, the picture showing through a rounded window: an explainer or series cover.",
    "props": [
     {
-     "name": "Number",
+     "name": "Tag",
      "type": "text",
      "at": ".t3"
     },
@@ -410,7 +439,7 @@
      "at": ".t1"
     },
     {
-     "name": "Under it",
+     "name": "Subtitle",
      "type": "text",
      "at": ".t2"
     },
@@ -434,6 +463,10 @@
      "type": "var",
      "var": "--ink"
     }
+   ],
+   "categories": [
+    "knowledge",
+    "design"
    ]
   },
   {
@@ -448,7 +481,7 @@
    },
    "src": "poster/look.html",
    "poster": "poster/poster.jpg",
-   "about": "A plain color, a big circle and huge words, no picture needed: a cover designed from nothing.",
+   "about": "A big circle and huge words over a plain color (the cover’s picture: pick a color or a gradient), no photo needed: a cover designed from nothing.",
    "props": [
     {
      "name": "Title",
@@ -456,12 +489,12 @@
      "at": ".t1"
     },
     {
-     "name": "Under it",
+     "name": "Subtitle",
      "type": "text",
      "at": ".t2"
     },
     {
-     "name": "Corner",
+     "name": "Tag",
      "type": "text",
      "at": ".t3"
     },
@@ -485,7 +518,93 @@
      "type": "var",
      "var": "--ink"
     }
+   ],
+   "categories": [
+    "design",
+    "knowledge"
    ]
+  }
+ ],
+ "categories": [
+  {
+   "id": "knowledge",
+   "name": {
+    "en": "Talks & tips",
+    "zh-CN": "口播知识",
+    "ja": "解説",
+    "ko": "지식·팁",
+    "es": "Charlas y consejos"
+   }
+  },
+  {
+   "id": "vlog",
+   "name": {
+    "en": "Vlog",
+    "zh-CN": "Vlog",
+    "ja": "Vlog",
+    "ko": "브이로그",
+    "es": "Vlog"
+   }
+  },
+  {
+   "id": "food",
+   "name": {
+    "en": "Food",
+    "zh-CN": "美食",
+    "ja": "グルメ",
+    "ko": "음식",
+    "es": "Comida"
+   }
+  },
+  {
+   "id": "game",
+   "name": {
+    "en": "Games",
+    "zh-CN": "游戏",
+    "ja": "ゲーム",
+    "ko": "게임",
+    "es": "Juegos"
+   }
+  },
+  {
+   "id": "review",
+   "name": {
+    "en": "Reviews",
+    "zh-CN": "测评",
+    "ja": "レビュー",
+    "ko": "리뷰",
+    "es": "Reseñas"
+   }
+  },
+  {
+   "id": "film",
+   "name": {
+    "en": "Film",
+    "zh-CN": "影视",
+    "ja": "映画",
+    "ko": "영화",
+    "es": "Cine"
+   }
+  },
+  {
+   "id": "news",
+   "name": {
+    "en": "News",
+    "zh-CN": "新闻",
+    "ja": "ニュース",
+    "ko": "뉴스",
+    "es": "Noticias"
+   }
+  },
+  {
+   "id": "design",
+   "name": {
+    "en": "Pure design",
+    "zh-CN": "纯设计",
+    "ja": "デザイン",
+    "ko": "디자인",
+    "es": "Diseño puro"
+   }
   }
  ]
 }

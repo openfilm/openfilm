@@ -16,11 +16,38 @@
     "es": "Diseños de Canva: el agente busca o crea una miniatura, una portada o un post para la película."
   },
   "details": {
-    "en": "When to use it: your brand kit or templates are in Canva, or the film needs a thumbnail.\nHow: turn it on, then ask \"make a YouTube thumbnail in Canva with our brand kit\". The first time it asks you to sign in to Canva.",
-    "zh-CN": "什么时候用：品牌素材和模板在 Canva 里，或片子需要一张封面。\n怎么用：打开后说「用我们的品牌套件在 Canva 做一张 YouTube 封面」。第一次会请你登录 Canva。",
-    "ja": "使うとき：ブランドキットやテンプレートが Canva にある、または映像にサムネイルが必要なとき。\n使い方：オンにして「ブランドキットで Canva の YouTube サムネイルを作って」と頼みます。初回は Canva へのサインインを求められます。",
-    "ko": "언제: 브랜드 키트나 템플릿이 Canva에 있거나 영상에 썸네일이 필요할 때.\n사용법: 켠 뒤 \"브랜드 키트로 Canva에서 YouTube 썸네일을 만들어 줘\"라고 말합니다. 처음에는 Canva 로그인을 요청합니다.",
-    "es": "Cuándo: tu kit de marca o tus plantillas están en Canva, o la película necesita una miniatura.\nCómo: actívalo y pide «haz una miniatura de YouTube en Canva con nuestro kit de marca». La primera vez te pedirá iniciar sesión en Canva."
+    "en": "When to use it: your brand kit or templates are in Canva, or the film needs a thumbnail.\nHow: Connect and sign in once in your browser, then just ask in the chat, for example \"Make a cover for this video in Canva\". The agent asks you before it changes anything in Canva.",
+    "zh-CN": "什么时候用：品牌素材和模板在 Canva 里，或片子需要一张封面。\n怎么用：点「连接」在浏览器里登录一次，之后在对话里直接说，比如「在 Canva 里给这条视频做一张封面」。智能体改动 Canva 里的东西前会先问你。",
+    "ja": "使うとき：ブランドキットやテンプレートが Canva にある、または映像にサムネイルが必要なとき。\n使い方：「接続」でブラウザから一度サインインし、あとはチャットで頼むだけ。例：「Canva でこの動画のカバーを作って」。Canva の中を変える前には確認されます。",
+    "ko": "언제: 브랜드 키트나 템플릿이 Canva에 있거나 영상에 썸네일이 필요할 때.\n사용법: 「연결」을 눌러 브라우저에서 한 번 로그인한 뒤 대화에서 바로 말하면 됩니다. 예: \"Canva에서 이 영상의 커버를 만들어 줘\". Canva의 내용을 바꾸기 전에는 먼저 묻습니다.",
+    "es": "Cuándo: tu kit de marca o tus plantillas están en Canva, o la película necesita una miniatura.\nCómo: conecta e inicia sesión una vez en el navegador; luego pídelo en el chat, por ejemplo «Haz una portada para este vídeo en Canva». El agente te pregunta antes de cambiar algo en Canva."
+  },
+  "examples": {
+    "zh-CN": [
+      "在 Canva 里给这条视频做一张封面",
+      "把我 Canva 里「新品发布」那套设计用到片子的字幕和片尾",
+      "用这部片子的画面在 Canva 里做三张社交媒体海报"
+    ],
+    "en": [
+      "Make a cover for this video in Canva",
+      "Use my \"New launch\" design in Canva for the film's captions and end card",
+      "Make three social posts in Canva from this film's frames"
+    ],
+    "ja": [
+      "Canva でこの動画のカバーを作って",
+      "Canva の「新製品発表」デザインを字幕とエンドカードに使って",
+      "この映像のカットで Canva の SNS 投稿画像を 3 枚作って"
+    ],
+    "ko": [
+      "Canva에서 이 영상의 커버를 만들어 줘",
+      "Canva의 「신제품 출시」 디자인을 자막과 엔딩 카드에 써 줘",
+      "이 영상의 장면으로 Canva에서 SNS 게시물 세 장을 만들어 줘"
+    ],
+    "es": [
+      "Haz una portada para este vídeo en Canva",
+      "Usa mi diseño «Lanzamiento» de Canva para los subtítulos y el cierre",
+      "Haz tres publicaciones para redes en Canva con fotogramas de esta película"
+    ]
   },
   "about": "finds and makes Canva designs (Canva's own MCP server)",
   "category": "picture",

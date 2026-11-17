@@ -57,7 +57,7 @@ const WORKBENCH = /^[a-z][a-z0-9-]{0,31}$/;
 
 /**
  * @typedef {{
- *   id: string, title: Record<string, string>, summary: Record<string, string>, details?: Record<string, string>, profile?: Profile, icon?: string, about: string,
+ *   id: string, title: Record<string, string>, summary: Record<string, string>, details?: Record<string, string>, examples?: Record<string, string[]>, profile?: Profile, icon?: string, about: string,
  *   workbench?: string, blocks?: string | (import('./plugin-blocks.mjs').BlockDecl | string)[], tab?: PluginTab, skills: readonly string[], requires: readonly string[], on: boolean, beta?: true, soon?: true,
  *   mcpServers?: Record<string, McpServer>,
  * }} Plugin
@@ -170,6 +170,12 @@ function readPlugin(dir, id) {
   if (typeof raw.icon === 'string' && ICON.test(raw.icon)) plugin.icon = raw.icon;
   const details = byLanguage(raw.details, 1000);
   if (Object.keys(details).length) plugin.details = details;
+  /* what a person could say to use it, a few in each language: the page offers each to put in the chat */
+  const examples = raw.examples && typeof raw.examples === 'object' ? Object.fromEntries(Object.entries(raw.examples)
+    .filter(([lang, list]) => /^[a-z]{2}(-[A-Za-z]{2,4})?$/.test(lang) && Array.isArray(list))
+    .map(([lang, list]) => [lang, list.filter((w) => typeof w === 'string' && w.trim()).slice(0, 4).map((w) => w.trim().slice(0, 200))])
+    .filter(([, list]) => list.length)) : {};
+  if (Object.keys(examples).length) plugin.examples = examples;
   const profile = profileOf(raw, byLanguage);
   if (profile) plugin.profile = profile;
   if (typeof raw.workbench === 'string' && WORKBENCH.test(raw.workbench) && !soon) plugin.workbench = raw.workbench;

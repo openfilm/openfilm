@@ -96,7 +96,11 @@ where, and CSS that says how each looks. A page draws a shot.
     `style="--of-lut: url(looks/in-sony-slog3.ctf) url(looks/beach.ctf) url(looks/out-rec709.ctf)"`. Each is an
     OpenColorIO Common Transform Format file (`.ctf`), an Academy/ASC Common LUT Format file (`.clf`), or a `.cube` LUT.
     The first takes the file's R′G′B′ code values (full range, 0–1); the last gives what the screen shows (BT.709
-    primaries). Clips that name the same file are graded by it together.
+    primaries). Clips that name the same file are graded by it together. A page or a still clip is graded by
+    `--of-lut` too, its picture being what the screen shows (sRGB): an input (`in-*.ctf`) or an output (`out-*.ctf`)
+    is not applied, the files between work on it in ACEScct (reached by the sRGB curve and ACEScct's, the primaries
+    as they are) and back, and a file after the output on the picture as shown. What changes each channel by itself,
+    a saturation and a mix of the channels are applied; any other operation (hue curves, a 3D LUT) is left out.
   - Video clips use local person effects through ordinary CSS custom properties. `--of-cutout: 1` enables
     background removal. `--of-cutout-mode` chooses fast portrait (0), bundled portrait detail (1, default), optional
     detailed subject extraction (2), chroma key (3), or optional person edge refinement (4). `--of-cutout-edge` is spatial, image-guided edge softness

@@ -32,6 +32,7 @@ import * as acp from '@agentclientprotocol/sdk';
 import { DefaultResourceLoader, ModelRuntime, SessionManager, SettingsManager, createAgentSession, formatDimensionNote, resizeImage } from '@earendil-works/pi-coding-agent';
 import { EnvHttpProxyAgent, install, setGlobalDispatcher } from 'undici';
 import { agentSessionsDir, openLog } from './chat-store.mjs';
+import { connectorTools } from './pi-connectors.mjs';
 import { IMAGE_BUDGET, THINKING, TOO_LARGE, WAIT_MINUTES, agentTools, contextUsed, effortOption, fitImages, modelOption, modelsJson, providerOf, retryNotice, stopReason, toolCall, toolContent } from './pi-config.mjs';
 
 /* stdout is the protocol's: anything else Pi or a library prints goes to stderr */
@@ -140,7 +141,7 @@ function modelLog(cwd, turnId) {
   };
 }
 
-async function open(client, cwd, resumeId) {
+async function open(client, cwd, resumeId, mcpServers = []) {
   const sessionDir = agentSessionsDir(cwd);
   const file = resumeId ? SessionManager.findById(cwd, resumeId, sessionDir) : null;
   if (resumeId && !file) throw new Error('That conversation is not here any more.');
@@ -174,6 +175,9 @@ async function open(client, cwd, resumeId) {
     if (update.sessionUpdate === 'agent_message_chunk' || update.sessionUpdate === 'notice') lastVisible = Date.now();
     void client.sessionUpdate({ sessionId, update }).catch(() => {});
   };
+  /* the connectors given (connectors.mjs doors): their tools Pi's (pi-connectors.mjs); one that changes things is asked
+     of the person at the door, as for every agent */
+  const connectors = await connectorTools(mcpServers, { log: (line) => process.stderr.write(`${line}\n`) });
   const resourceLoader = new DefaultResourceLoader({
     cwd, agentDir: config.agentDir, settingsManager, noExtensions: true, noPromptTemplates: true, noThemes: true,
     /* OpenFilm's skills, and no other Pi would find (in the project, or its own folders), listed in the order named */
@@ -230,6 +234,7 @@ async function open(client, cwd, resumeId) {
           imageContext: { keptBytes: imagesSent, removed: imagesRemoved, pruned: imagesPruned, reason: imagePruneReason } }; });
       } },
       { name: 'openfilm-ask', hidden: true, factory: (pi) => pi.registerTool(askTool(client, () => sessionId, (waiting) => { awaitingAnswer = waiting; })) },
+      { name: 'openfilm-connectors', hidden: true, factory: (pi) => { for (const tool of connectors.tools) pi.registerTool(tool); } },
     ],
   });
   await resourceLoader.reload();
@@ -237,7 +242,7 @@ async function open(client, cwd, resumeId) {
   const { session } = await createAgentSession({
     cwd, agentDir: config.agentDir, modelRuntime, model: piModel(startModel, startEffort),
     ...(startEffort !== 'auto' ? { thinkingLevel: startEffort } : {}),
-    resourceLoader, sessionManager, settingsManager, tools: agentTools(),
+    resourceLoader, sessionManager, settingsManager, tools: [...agentTools(), ...connectors.tools.map((tool) => tool.name)],
   });
   /* a request refused as too large is one Pi tries again (its retry: once, the failed attempt left out of what is sent)
      when it held pictures to leave out; Pi neither retries a 413 nor, but for Anthropic's own words, compacts for it */
@@ -247,7 +252,7 @@ async function open(client, cwd, resumeId) {
   const now = ownOf(session.model);
   const onModel = now.id ?? startModel;
   const levels = byId.get(onModel)?.levels ?? ['auto'];
-  const entry = { session, log: null, answer: null, overflow: null, model: onModel,
+  const entry = { session, connectors, log: null, answer: null, overflow: null, model: onModel,
     effort: now.thinking && levels.includes(session.thinkingLevel) ? session.thinkingLevel : !now.thinking && levels.includes('auto') ? 'auto' : byId.get(onModel)?.effort ?? 'auto' };
   /* a conversation taken up again on a model no longer set up: on the one a session starts on */
   if (!now.id) await use(entry, onModel, entry.effort);
@@ -291,7 +296,7 @@ async function open(client, cwd, resumeId) {
         break;
       }
       case 'tool_execution_start':
-        send({ sessionUpdate: 'tool_call', toolCallId: event.toolCallId, status: 'in_progress', ...toolCall(event.toolName, event.args) });
+        send({ sessionUpdate: 'tool_call', toolCallId: event.toolCallId, status: 'in_progress', ...toolCall(event.toolName, event.args, connectors.labels) });
         break;
       case 'tool_execution_update': {
         const content = toolContent(event.partialResult);
@@ -408,14 +413,15 @@ const connection = new acp.AgentSideConnection((client) => ({
   async initialize() {
     return {
       protocolVersion: acp.PROTOCOL_VERSION,
-      agentCapabilities: { loadSession: false, promptCapabilities: { image: true, embeddedContext: true }, sessionCapabilities: { resume: {} } },
+      /* remote MCP servers taken: the connectors' doors (pi-connectors.mjs) */
+      agentCapabilities: { loadSession: false, promptCapabilities: { image: true, embeddedContext: true }, mcpCapabilities: { http: true, sse: false }, sessionCapabilities: { resume: {} } },
       agentInfo: { name: 'pi', title: 'Pi', version: VERSION },
       authMethods: [],
     };
   },
   async authenticate() { return {}; },
-  newSession: said((params) => open(client, params.cwd, null)),
-  resumeSession: said((params) => open(client, params.cwd, params.sessionId)),
+  newSession: said((params) => open(client, params.cwd, null, params.mcpServers)),
+  resumeSession: said((params) => open(client, params.cwd, params.sessionId, params.mcpServers)),
   prompt: said(async (params) => {
     const entry = sessions.get(params.sessionId);
     if (!entry) throw new Error('This conversation has ended.');
@@ -454,7 +460,9 @@ const connection = new acp.AgentSideConnection((client) => ({
   }),
   async cancel(params) { await sessions.get(params.sessionId)?.session.abort(); },
   async closeSession(params) {
-    sessions.get(params.sessionId)?.session.dispose();
+    const entry = sessions.get(params.sessionId);
+    entry?.session.dispose();
+    void entry?.connectors.close();
     sessions.delete(params.sessionId);
   },
 }), acp.ndJsonStream(Writable.toWeb(process.stdout), Readable.toWeb(process.stdin)));

@@ -807,3 +807,41 @@ test('caption tracks in a merge: the person\'s removal and hiding stand over an 
   assert.equal(read(root).tracks[0].captions.label, 'English');
   assert.equal(clip(read(root), 't').at, 3);
 });
+
+test('the films inside a project (a cover) are in the note of the project: once told of them, the agent\'s write of the cover is taken as meant', async () => {
+  const root = await project(F([page('main')]));
+  const cover = join(root, 'covers', 'wide');
+  mkdirSync(cover, { recursive: true });
+  write(cover, F([page('title')]));
+  await settleProjectFilm(cover);
+  /* the person moves the cover's title in Studio */
+  const now = await settleProjectFilm(cover);
+  await editProjectFilm(cover, now.rev, [{ op: 'props', edits: [{ clip: 'title', prop: 'box', value: { x: 100, y: 100, w: 640, h: 360 } }] }]);
+  /* the agent, asking about the project only, writes the cover moving the title too: the person's move stands */
+  assert.equal(tell(root, 'pid:7'), null);
+  const theirs = read(cover);
+  clip(theirs, 'title').box = { x: 900, y: 500, w: 640, h: 360 };
+  write(cover, theirs);
+  await settleProjectFilm(cover);
+  assert.deepEqual(clip(read(cover), 'title').box, { x: 100, y: 100, w: 640, h: 360 });
+  /* its next `openfilm` in the project tells it, naming the cover; its write again is its own */
+  assert.match(tell(root, 'pid:7'), /^In covers\/wide\/film\.html: .*clip title box/);
+  write(cover, theirs);
+  await settleProjectFilm(cover);
+  assert.deepEqual(clip(read(cover), 'title').box, { x: 900, y: 500, w: 640, h: 360 }, 'the agent\'s move stands');
+  assert.equal(tell(root, 'pid:7'), null);
+});
+
+test('PROBE after told and taken, the person changes it again: the agent writing from its copy again', async () => {
+  const root = await project(F([page('title')]));
+  const edit = async (text) => { const now = await settleProjectFilm(root); await editProjectFilm(root, now.rev, [{ op: 'props', edits: [{ clip: 'title', prop: 'at', value: text }] }]); };
+  await edit(1);
+  const mine = read(root); clip(mine, 'title').at = 5; write(root, mine); await settleProjectFilm(root);
+  const a = clip(read(root), 'title').at;
+  const note = tell(root, 'app:c');
+  write(root, mine); await settleProjectFilm(root);
+  const b = clip(read(root), 'title').at;
+  await edit(2);
+  const again = structuredClone(mine); clip(again, 'title').at = 7; write(root, again); await settleProjectFilm(root);
+  console.log('PROBE', a, Boolean(note), b, clip(read(root), 'title').at);
+});

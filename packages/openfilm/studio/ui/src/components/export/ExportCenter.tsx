@@ -62,6 +62,7 @@ import {
 import { FILM_FRAME_IDS, filmFrameBox, filmFrameRatio, type FilmFrameFill, type FilmFrameId } from '@/lib/film-frame';
 import { cleanMoments, loadSharedMoments, MOMENTS_MAX, momentSeconds, saveMoments } from '@/lib/export-moments';
 import { MomentPicker } from './MomentPicker';
+import { coversApi, coverThumb, shapeOf, type CoverInfo } from '@/lib/covers';
 import { RangePicker } from './RangePicker';
 import { LARGE_DIALOG, LARGE_DIALOG_BACKDROP, LARGE_DIALOG_SIDE } from '../dialog-chrome';
 
@@ -256,6 +257,8 @@ export interface ExportCenterProps {
   focusClipId?: string;
   /** The exports were queued (the tray shows them). */
   onQueued?: (jobs: ExportJob[]) => void;
+  /** The film's covers (lib/covers): shown with a video, the ticked ones exported as pictures beside it; `edit` opens the cover studio. */
+  covers?: { projectId: string; list: readonly CoverInfo[]; main: string | null; edit: () => void } | null;
   /** The project's frame rate (`.film/settings.json`, else its footage's): a video's rate unless another is picked. */
   projectFps?: number;
   /** Media files the film uses that are gone: an export that draws or plays the film stops at them, so it is held back. */
@@ -281,6 +284,11 @@ export function ExportCenter(props: ExportCenterProps) {
   const [rangeParts, setRangeParts] = React.useState<ExportRangeDraft[]>([]);
   const [rangeDelivery, setRangeDelivery] = React.useState<RangeDelivery>('separate');
   const [working, setWorking] = React.useState<string | null>(null);
+  /* the covers exported as pictures with a video: the main one, until others are ticked */
+  const [coverPick, setCoverPick] = React.useState<readonly string[] | null>(null);
+  /* the film's cover as the video's first frame (platforms that take the first frame show it) */
+  const [coverFirst, setCoverFirst] = React.useState(false);
+  const coversTicked = coverPick ?? (props.covers?.main ? [props.covers.main] : []);
   const [result, setResult] = React.useState<{ ok: boolean; text: string } | null>(null);
   const [defaultFolder, setDefaultFolder] = React.useState<string>('');
   /** How many subtitle cues the film has (null until the server says). */
@@ -405,6 +413,16 @@ export function ExportCenter(props: ExportCenterProps) {
   const outMs = dest === 'alpha' && alphaBlock ? alphaBlock.durMs : rangeMs;
   const selectedVideoPreset = exportPreset(s.video.preset);
   const videoCodec: ExportVideoCodec = codecAvailable(s.video.codec, can) && VIDEO_CODECS.includes(s.video.codec) ? s.video.codec : 'h264';
+  /* the cover put first: the one shaped most like the video (the main one when two are as close) */
+  const firstCover = React.useMemo(() => {
+    const list = props.covers?.list ?? [];
+    if (!list.length) return null;
+    const want = filmFrameRatio(resolveFrame(s.video.frame), props.stage);
+    const off = (c: CoverInfo) => Math.abs(Math.log(c.stage.w / c.stage.h / want)) - (c.folder === props.covers?.main ? 1e-6 : 0);
+    return [...list].sort((a, b) => off(a) - off(b))[0]!.folder;
+  }, [props.covers, s.video.frame, props.stage]); // eslint-disable-line react-hooks/exhaustive-deps
+  const firstCoverInfo = props.covers?.list.find((c) => c.folder === firstCover);
+  const firstCoverRatio = firstCoverInfo ? shapeOf(firstCoverInfo.stage).ratio : '';
   /* a delivery's bitrate or size, for the codecs held to one on the processor (HEVC's needs libx265) */
   const targetable = TARGET_CODECS.includes(videoCodec) && (videoCodec !== 'hevc' || !can || can.hevcBitrate !== false);
   const videoTarget = targetable ? s.video.target : null;
@@ -447,6 +465,7 @@ export function ExportCenter(props: ExportCenterProps) {
           ...(selectedVideoPreset ? { preset: selectedVideoPreset.name } : {}),
           ...(captions > 0 && v.sidecar !== 'none' && videoCodec !== 'png' ? { sidecar: v.sidecar } : {}),
           ...(v.audio && v.loudness != null && videoCodec !== 'png' ? { loudness: v.loudness } : {}),
+          ...(coverFirst && firstCover && (videoCodec === 'h264' || videoCodec === 'hevc') ? { cover: firstCover } : {}),
         }];
       }
       case 'alpha': {
@@ -485,7 +504,7 @@ export function ExportCenter(props: ExportCenterProps) {
         }];
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dest, s, can, nleApp, nleAlpha, draftApp, props.frame, blocks, nleSourceFps, captions, captionTracks, projectParts, moments]);
+  }, [dest, s, can, nleApp, nleAlpha, draftApp, props.frame, blocks, nleSourceFps, captions, captionTracks, projectParts, moments, coverFirst, firstCover]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* the sound a video's size target leaves room for: none when the film is known to have none */
   const targetAudio = (r: ExportRequest) => (r.kind === 'video' && r.audio && !knownSilent ? targetAudioBps(r.codec) : 0);
@@ -594,6 +613,10 @@ export function ExportCenter(props: ExportCenterProps) {
       const named = typed ? jobs.map((job, index) => ({ ...job, name: typed + (canRange && range && rangeDelivery === 'separate' && (parsedRanges?.length ?? 0) > 1 ? ` - ${String(index + 1).padStart(2, '0')}` : '') })) : jobs;
       const queued = await startExports(props.projectId, named, s.folder || undefined);
       props.onQueued?.(queued);
+      /* the ticked covers, as pictures beside the video */
+      if (dest === 'video' && props.covers && coversTicked.length) {
+        void coversApi.draw(props.covers.projectId, [...coversTicked], 'jpg', { folder, reveal: false }).catch(() => {});
+      }
       onClose();
     } catch (e) {
       setResult({ ok: false, text: e instanceof TypeError ? t('exportCenter.engineDown') : (e instanceof Error ? e.message : String(e)) });
@@ -701,6 +724,40 @@ export function ExportCenter(props: ExportCenterProps) {
 
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-4 pt-3">
             <div className="flex flex-col gap-5">
+              {dest === 'video' && props.covers ? (
+                <Field label={t('covers.exportField')}>
+                  {props.covers.list.length ? (
+                    <div className="flex flex-wrap items-end gap-2.5" data-export-covers="">
+                      {props.covers.list.map((c) => {
+                        const on = coversTicked.includes(c.folder);
+                        const shape = shapeOf(c.stage);
+                        return (
+                          <button key={c.folder} type="button" role="checkbox" aria-checked={on} data-export-cover={c.folder}
+                            onClick={() => setCoverPick(on ? coversTicked.filter((f) => f !== c.folder) : [...coversTicked, c.folder])}
+                            className="flex flex-col items-center gap-1">
+                            <img src={coverThumb(props.covers!.projectId, c, 200)} alt="" draggable={false}
+                              className={`max-h-[84px] max-w-[120px] rounded-[5px] transition ${on ? 'ring-2 ring-[var(--accent)]' : 'opacity-45 ring-1 ring-[var(--border)]'}`} />
+                            <span className="text-[11px] text-[var(--text-muted)]">{on ? '✓ ' : ''}{shape.ratio}{c.folder === props.covers!.main ? ` · ${t('covers.mainBadge')}` : ''}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : <p className="text-[12px] text-[var(--text-faint)]">{t('covers.exportNone')}</p>}
+                  <button type="button" onClick={() => { onClose(); props.covers!.edit(); }} className="mt-2 self-start text-[12px] text-[var(--accent)] hover:underline">
+                    {props.covers.list.length ? t('covers.exportEdit') : t('covers.exportMake')} ›
+                  </button>
+                  <Hint>{t('covers.exportHint')}</Hint>
+                  {props.covers.list.length ? (
+                    <label className={`mt-2 flex items-start gap-2 text-[12px] ${videoCodec === 'h264' || videoCodec === 'hevc' ? 'text-[var(--text)]' : 'text-[var(--text-faint)]'}`}>
+                      <input type="checkbox" data-export-cover-first="" className="mt-0.5" checked={coverFirst} disabled={!(videoCodec === 'h264' || videoCodec === 'hevc')}
+                        onChange={(e) => setCoverFirst(e.target.checked)} />
+                      <span>{t('covers.exportFirst')}<span className="block text-[11px] text-[var(--text-faint)]">
+                        {videoCodec === 'h264' || videoCodec === 'hevc' ? t('covers.exportFirstNote').replace('{ratio}', firstCoverRatio) : t('covers.exportFirstCodec')}
+                      </span></span>
+                    </label>
+                  ) : null}
+                </Field>
+              ) : null}
               {['video', 'alpha', 'gif', 'nle'].includes(dest) && (
                 <Field label={t('exportCenter.workers')}>
                   <Segmented<number | 'auto'> value={s.workers} options={[

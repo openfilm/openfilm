@@ -28,6 +28,8 @@ import { fileOf, UsageError } from '../../src/shared.mjs';
 import { lookProject, runLook } from '../../src/plugin-look.mjs';
 import { parseColorTransform } from '../../src/color/ctf.mjs';
 import { compile } from '../../src/color/ops.mjs';
+import { intoWorking, leftOut, pageStages, stagesFunction } from '../../src/color/page-grade.mjs';
+import { open } from '../../src/shared.mjs';
 import { cdlXml, newCtf, setOp } from '../../src/color/edit.mjs';
 import { chainOf, LOOKS, OUTPUT, ownLayer, partsOf, SDR_INPUT, withChain, withInput, withLayer, withScreen } from '../../src/color/chain.mjs';
 import { filterCtf, filterOfUrl, filterUrl } from '../../src/color/adjust.mjs';
@@ -120,21 +122,30 @@ async function filmOf(root) {
   return film;
 }
 
-/** The film's video clips, by when they start (a hidden track's left out). @param {any} value */
-function videoClips(value) {
+/** The film's clips of `kinds`, by when they start (a hidden track's left out). @param {any} value @param {readonly string[]} kinds */
+function clipsOf(value, kinds) {
   /** @type {FilmClip[]} */
   const out = [];
-  for (const t of value.tracks ?? []) if (!t.hidden && !t.captions) for (const c of t.clips ?? []) if (kindOf(c) === 'video' && !c.disabled) out.push(c);
+  for (const t of value.tracks ?? []) if (!t.hidden && !t.captions) for (const c of t.clips ?? []) if (kinds.includes(kindOf(c)) && !c.disabled) out.push(c);
   return out.sort((a, b) => (a.at ?? 0) - (b.at ?? 0));
 }
+/** The film's video clips: those with footage (an input). @param {any} value */
+const videoClips = (value) => clipsOf(value, ['video']);
+/**
+ * The film's clips with a picture to grade: its videos, and its pages and stills, which the browser draws and their
+ * grade with them (src/color/page-grade.mjs). @param {any} value
+ */
+const gradedClips = (value) => clipsOf(value, ['video', 'page', 'still']);
+/** Whether a clip's picture is drawn by the browser (a page, a still): graded as shown, without an input or output. @param {FilmClip} clip */
+const drawn = (clip) => kindOf(clip) !== 'video';
 
-/** The clips `words` name (ids, or `all`), else a wrong command. @param {FilmClip[]} clips @param {string[]} words */
-function chosen(clips, words) {
+/** The clips `words` name (ids, or `all`), else a wrong command. @param {FilmClip[]} clips @param {string[]} words @param {string} [what] */
+function chosen(clips, words, what = 'clip with a picture') {
   if (!words.length || words.includes('all')) return clips;
   return words.map((w) => {
     const id = w.replace(/^film\.html#/, '');
     const c = clips.find((x) => x.id === id);
-    if (!c) throw new UsageError(`there is no video clip ${id} in ${FILM_FILE} (its ids: ${clips.map((x) => x.id).join(', ') || 'none'})`);
+    if (!c) throw new UsageError(`there is no ${what} ${id} in ${FILM_FILE} (its ids: ${clips.map((x) => x.id).join(', ') || 'none'})`);
     return c;
   });
 }
@@ -163,12 +174,64 @@ function momentsOf(clip) {
 function gradeOf(root, clip, layerText, working = false) {
   const own = ownLayer(String(clip.id));
   const chain = chainOf(clip.style), p = partsOf(chain);
+  const textOf = (/** @type {string} */ url) => (url === own && layerText !== undefined ? layerText : readFileSync(fileOf(root, FILM_FILE, srcHref(url)), 'utf8'));
+  if (drawn(clip)) {
+    /* a page's or a still's: as the browser draws it, its input and output left out (src/color/page-grade.mjs) */
+    if (working) {
+      const layers = compile(p.layers.flatMap((url) => parseColorTransform(textOf(url), url)));
+      const v = [0, 0, 0];
+      return (/** @type {number} */ r, /** @type {number} */ g, /** @type {number} */ b, /** @type {number[]} */ out) => { intoWorking(r, g, b, v); layers(v[0], v[1], v[2], out); };
+    }
+    const got = pageStages(chain.filter((url) => !leftOut(url)).map((url) => ({ name: url, text: textOf(url) })));
+    if (got?.stages.length) return stagesFunction(got.stages);
+    return (/** @type {number} */ r, /** @type {number} */ g, /** @type {number} */ b, /** @type {number[]} */ out) => { out[0] = r; out[1] = g; out[2] = b; };
+  }
   const urls = working ? [...(p.input ? [p.input] : []), ...p.layers] : chain;
-  const ops = urls.flatMap((url) => {
-    const text = url === own && layerText !== undefined ? layerText : readFileSync(fileOf(root, FILM_FILE, srcHref(url)), 'utf8');
-    return parseColorTransform(text, url);
+  return compile(urls.flatMap((url) => parseColorTransform(textOf(url), url)));
+}
+
+/**
+ * A clip's pictures at seconds of its own (its file's, a page's own time), `width` wide, as RGB 0–1 three a pixel: a
+ * video's or a still's read from its file at its own depth, a page's drawn as an export draws it (one opening of it in
+ * the headless browser for all of them). `seconds` null: its three moments (a page without a length: of its own).
+ * @param {string} root @param {FilmClip} clip @param {number[] | null} seconds @param {number} [width]
+ */
+async function picturesOf(root, clip, seconds = null, width = MEASURE_WIDTH) {
+  const file = fileOf(root, FILM_FILE, srcHref(String(clip.src)));
+  if (kindOf(clip) !== 'page') return Promise.all((seconds ?? momentsOf(clip)).map((t) => frameOf(file, t, width)));
+  const s = await open(file, { root });
+  try {
+    const { end } = timingOf(clip);
+    const own = s.film.meta.duration;
+    const at = seconds ?? (end === null && Number.isFinite(own) ? [0.25, 0.5, 0.75].map((f) => (clip.time?.[0] ?? 0) + own * f) : momentsOf(clip));
+    const out = [];
+    for (const t of at) {
+      await s.film.seek(Math.max(0, Number.isFinite(own) ? Math.min(t, own - 1 / 60) : t));
+      out.push(await pngRgb(await s.film.capture({ format: 'png' }), width));
+    }
+    return out;
+  } finally { await s.close(); }
+}
+
+/** A PNG as RGB 0–1, three a pixel, `width` wide. @param {Buffer} png @param {number} width */
+function pngRgb(png, width) {
+  return new Promise((done, fail) => {
+    const p = spawn('ffmpeg', ['-hide_banner', '-nostdin', '-loglevel', 'error', '-f', 'png_pipe', '-i', 'pipe:0', '-vf', `scale=w=${width}:h=-2:flags=area,format=rgb48le`, '-f', 'rawvideo', 'pipe:1'], { windowsHide: true });
+    /** @type {Buffer[]} */
+    const chunks = [];
+    let err = '';
+    p.stdout.on('data', (d) => chunks.push(d));
+    p.stderr.on('data', (d) => { err += d; });
+    p.on('error', fail);
+    p.on('close', (code) => {
+      if (code !== 0) { fail(new Error(`ffmpeg: ${err.trim().split('\n').pop() || `exit ${code}`}`)); return; }
+      const raw = Buffer.concat(chunks);
+      const rgb = new Float32Array(raw.length / 2);
+      for (let i = 0; i < rgb.length; i++) rgb[i] = raw.readUInt16LE(i * 2) / 65535;
+      done({ w: width, h: Math.round(rgb.length / 3 / width), rgb });
+    });
+    p.stdin.end(png);
   });
-  return compile(ops);
 }
 
 /** ACEScct of ordinary video's code values: OpenFilm's own input for it. */
@@ -199,8 +262,7 @@ const joined = (pics) => {
 
 /** A clip's finished pictures (its three moments), measured as one. @param {string} root @param {FilmClip} clip @param {string} [layerText] */
 async function finished(root, clip, layerText, frames = null) {
-  const file = fileOf(root, FILM_FILE, srcHref(String(clip.src)));
-  const pics = frames ?? await Promise.all(momentsOf(clip).map((t) => frameOf(file, t)));
+  const pics = frames ?? await picturesOf(root, clip);
   const rgb = joined(pics);
   return { m: measure(chainOf(clip.style).length ? graded(rgb, gradeOf(root, clip, layerText)) : rgb), pics };
 }
@@ -263,8 +325,7 @@ export function said(m, hasInput) {
 
 /** A picture: each clip's middle as its file is | as graded, over its waveform | vectorscope (PNG). @param {string} root @param {FilmClip} clip */
 async function pictureOf(dir, root, clip, at) {
-  const file = fileOf(root, FILM_FILE, srcHref(String(clip.src)));
-  const raw = await frameOf(file, at, 640);
+  const [raw] = await picturesOf(root, clip, [at], 640);
   const grade = chainOf(clip.style).length ? gradeOf(root, clip) : null;
   const shown = grade ? graded(raw.rgb, grade) : raw.rgb;
   const to16 = (/** @type {Float32Array} */ a) => { const b = Buffer.alloc(a.length * 2); for (let i = 0; i < a.length; i++) b.writeUInt16LE(Math.round(Math.min(1, Math.max(0, a[i])) * 65535), i * 2); return b; };
@@ -288,7 +349,7 @@ async function pictureOf(dir, root, clip, at) {
 async function look(asked, named = asked.what ? [asked.what] : []) {
   const root = asked.project;
   const { value } = await filmOf(root);
-  const clips = chosen(videoClips(value), named);
+  const clips = chosen(gradedClips(value), named);
   const t = asked.at ?? asked.range?.[0] ?? null;
   const lines = [], files = [], data = [];
   /** @type {ReturnType<typeof measure> | null} */
@@ -308,7 +369,7 @@ async function look(asked, named = asked.what ? [asked.what] : []) {
     data.push({ clip: clip.id, chain, ...m });
     before = m;
   }
-  if (!clips.length) lines.push('no video clip to look at');
+  if (!clips.length) lines.push('no clip with a picture to look at');
   for (const f of files) lines.push(`→ ${asked.shown(f)}`);
   return { lines, files, data: { clips: data } };
 }
@@ -317,7 +378,7 @@ async function look(asked, named = asked.what ? [asked.what] : []) {
 async function input(root, words) {
   const kind = words.find((w) => w in INPUTS);
   const { value, rev } = await filmOf(root);
-  const clips = chosen(videoClips(value), words.filter((w) => w !== kind));
+  const clips = chosen(videoClips(value), words.filter((w) => w !== kind), 'video clip');
   if (!kind) {
     const lines = [];
     for (const clip of clips) {
@@ -396,7 +457,7 @@ async function solveInto(root, clip, name, step) {
 async function balance(root, words) {
   if (!words.length) throw new UsageError('which clips? `balance <clip…|all>`');
   const { value, rev } = await filmOf(root);
-  const clips = chosen(videoClips(value), words);
+  const clips = chosen(gradedClips(value), words);
   const styles = new Map();
   const lines = [];
   for (const clip of clips) {
@@ -445,7 +506,7 @@ async function match(root, words) {
   if (to < 0 || !words[to + 1]) throw new UsageError('match to what? `match <clip…> --to <clip|picture>`');
   const target = words[to + 1];
   const { value, rev } = await filmOf(root);
-  const all = videoClips(value);
+  const all = gradedClips(value);
   const clips = chosen(all, words.filter((_, i) => i !== to && i !== to + 1));
   const ref = await referenceOf(root, all, target);
   const styles = new Map();
@@ -473,7 +534,8 @@ export async function referenceOf(root, all, target) {
   if (clip) {
     const { m, pics } = await finished(root, clip);
     const rgb = joined(pics);
-    return { clip, spread: spreadOf(chainOf(clip.style).length ? through(rgb, gradeOf(root, clip, undefined, true)) : through(rgb, sdrToWorking())), shown: m };
+    const working = chainOf(clip.style).length || drawn(clip) ? gradeOf(root, clip, undefined, true) : sdrToWorking();
+    return { clip, spread: spreadOf(through(rgb, working)), shown: m };
   }
   const file = join(root, target);
   if (!existsSync(file)) throw new UsageError(`${target} is neither a clip of the film nor a picture of the project`);
@@ -530,7 +592,7 @@ async function filter(root, words) {
   const named = rest.filter((w) => w !== amountWord);
   if (!named.length) throw new UsageError(`on which clips? \`filter <clip…|all> ${id}${amountWord ? ` ${amountWord}` : ''}\``);
   const { value, rev } = await filmOf(root);
-  const clips = chosen(videoClips(value), named);
+  const clips = chosen(gradedClips(value), named);
   const url = item ? filterUrl(item.id, amount) : null;
   if (item && url) writeWhole(join(root, ...url.split('/')), filterCtf(item.id, item.name.en ?? item.id, item.grade, amount));
   const styles = new Map();
@@ -563,7 +625,7 @@ export const HELP = `openfilm color <command>
 
 const CHANGES = { input, balance, match, filter };
 
-export { ensureTransform, facts, filmOf, frameOf, TRANSFORMS, videoClips };
+export { ensureTransform, facts, filmOf, frameOf, gradedClips, TRANSFORMS, videoClips };
 
 /**
  * Run `command` on the project around the current folder (the one the plugin's commands were given, else the one

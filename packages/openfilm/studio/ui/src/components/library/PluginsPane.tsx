@@ -16,10 +16,10 @@
  */
 import React from 'react';
 import {
-  ArrowLeft, ArrowUpRight, AudioLines, BadgeCheck, Box, Check, ChevronLeft, ChevronRight, Clapperboard, Github, Globe, BookOpenText, Loader2, Music, Power, Puzzle, RefreshCw, SquareTerminal, Trash2, Upload, X, type LucideIcon,
+  ArrowLeft, ArrowUpRight, AudioLines, BadgeCheck, Box, Check, ChevronLeft, ChevronRight, Clapperboard, Github, Globe, BookOpenText, Loader2, Music, Power, Puzzle, RefreshCw, SquareTerminal, Trash2, Unplug, Plug, Upload, X, type LucideIcon,
 } from 'lucide-react';
 import { useLanguage, useT } from '@/i18n';
-import { studioHost, type HostAgentId } from '@/lib/host';
+import { studioHost, type HostAgentId, type HostConnector } from '@/lib/host';
 import { inPersonsOrder, isInstalled, removePlugin, setPluginOn, setWorkbenchOrder, usePlugins, useWorkbenchOrder, type Plugin } from '@/lib/plugins';
 import { MAC } from '@/lib/keymap-store';
 import { openExample, showPluginsLine, type PluginsLine } from '@/lib/plugins-window';
@@ -35,16 +35,16 @@ import { ProfileStrip } from './PluginProfile';
 import { SettingsButton, SettingsGroup, SettingsSwitch } from '../settings/ui';
 import { LARGE_DIALOG_COLUMN as PAGE_INSET } from '../dialog-chrome';
 import { ASSET_KINDS, COMMUNITY_ICON, KindIcon, isCodeKind, type FeatureKind } from '../feature-kinds';
-import { BUILT_IN, inLibrary, libraryUrl, soundLook, nameOf, packItems, packOf, posterUrl, previewUrl, savePack, setAdded, templatePreviewUrl, TEXT_COMPONENT, useLibraryAdded, useLibraryIndex, type LibraryCategory, type LibraryItem, type LibraryPack } from '@/lib/library';
+import { byOpenFilm, inLibrary, libraryUrl, makerName, soundLook, nameOf, packItems, packOf, posterUrl, previewUrl, setAdded, templatePreviewUrl, TEXT_COMPONENT, useLibraryAdded, useLibraryIndex, type LibraryCategory, type LibraryItem, type LibraryPack } from '@/lib/library';
 import { isClipMotion } from '@/lib/clip-presets';
-import { copyFromLibrary, packKey, shelfActions, useLibraryPlaces } from '@/lib/library-places';
-import { refreshSaved, SAVED } from '@/lib/saved';
+import { packKey, shelfActions, useLibraryPlaces } from '@/lib/library-places';
 import { PLAIN } from './OnPicture';
 import { TextStyleSample } from './TextStyleSample';
 
 export { PLUGIN_ICONS } from '../WorkbenchMark';
 import { WorkbenchMark } from '../WorkbenchMark';
 import { AppIcon } from '../AppIcon';
+import { ConnectorActions, ConnectorBody, ConnectorMark, connectConnector, useConnectorStates } from './ConnectorPanel';
 import { DetailShell, Facts, ManageButton, PageButton, StateMark, STORE_GRID, StoreChips, StoreCard, StoreSection } from './Store';
 import { AddButton, ASSET_GRID, AssetCover, AssetTile, Badge, BenchGrid, GroupList, InMark, FoldedGroup, GradientCover, Hero, PackTile, packGrid, ROW_GRID, Scroller, Shelf, SoundList, shapeOf, type BenchTileItem, type Featured, type GroupItem } from './CommunityViews';
 
@@ -55,6 +55,22 @@ export function usePluginWords() {
 }
 
 const Beta = Badge;
+
+/** What a plugin does (its `details`), a line each: when to use it, how, and so on, each line's lead a shade brighter, to find at a glance. */
+export function PluginDetails({ text, className = '', small = false }: { text: string; className?: string; small?: boolean }) {
+  return (
+    <div className={className}>
+      {text.split('\n').map((line) => {
+        const lead = /^(.{1,24}?[：:])\s*(.+)$/.exec(line);
+        return (
+          <p key={line} className={small ? 'mt-1.5 text-[12.5px] leading-[19px] text-[var(--text-muted)]' : 'mt-2 text-[14px] leading-[21px] text-[var(--text-muted)]'}>
+            {lead ? <><span className="font-medium text-[var(--text)]">{lead[1]}</span> {lead[2]}</> : line}
+          </p>
+        );
+      })}
+    </div>
+  );
+}
 
 /** Where a workbench is picked: the edit's views (Motion: laid out in the edit's arrangement, lib/blocks) at the top of its timeline, any other at the top right. */
 const pickedOnTimeline = (plugin: Plugin) => plugin.workbench !== 'edit' && plugin.blocks === 'edit';
@@ -91,6 +107,8 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
   const words = useSkillWords();
   const pluginWords = usePluginWords();
   const own = usePlugins();
+  /* the connectors' sign-ins (the desktop app's; none in a browser) */
+  const connectorStates = useConnectorStates();
   const [skills, setSkills] = React.useState<SkillEntry[]>(() => seenSkills(projectId) ?? []);
   React.useEffect(() => {
     let live = true;
@@ -126,21 +144,15 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
   const library = useLibraryIndex();
   /* the community's packs and things added to the library; OpenFilm's own are in it unless taken out of the drawer */
   const added = useLibraryAdded();
-  const { hidden, folders } = useLibraryPlaces();
+  const { hidden } = useLibraryPlaces();
   const packIn = (p: LibraryPack) => (p.official ? !hidden.includes(packKey(p.group)) : added.includes(p.id));
-  const failed = (e: unknown) => setError(e instanceof Error && e.message !== 'failed' ? e.message : t('assetDrawer.mediaSaveFailed'));
-  /* a pack of media is kept as a folder of the person's own (its files copied in, the pack then added); any other is added */
+  /* a pack got: in the library under 社区, media too (kept in 我的 as well only when the person says so, from the drawer) */
   const addPack = (p: LibraryPack) => {
     if (p.official) { void shelfActions.hide(packKey(p.group), false); return; }
-    if (p.cats.length && p.cats.every((c) => (c as string) === 'media')) { setError(null); void savePack(p.id, lang).then(() => refreshSaved(), failed); return; }
     setAdded(p.id, true); seePackVersion(p);
   };
-  /* a media file alone goes into the person's first folder (as "Save to" puts things); any other thing is added */
-  const addThing = (it: LibraryItem) => {
-    if (it.kind !== 'file') { setAdded(it.id, true); return; }
-    setError(null);
-    void copyFromLibrary(`${BUILT_IN}/${it.id}`, folders[0]?.path ?? SAVED, nameOf(it.name, lang)).then(() => setAdded(it.id, true), failed);
-  };
+  /* a thing alone got: in the library under 社区 */
+  const addThing = (it: LibraryItem) => { setAdded(it.id, true); };
   /* a pack taken out of the library: one of OpenFilm's own hidden from the drawer (got back here), any other let go
      (media saved into a folder of the person's stay theirs) */
   const removePack = (p: LibraryPack) => {
@@ -149,10 +161,9 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
   };
   /* a community pack got, whose catalog has a newer version than the one the person got */
   const packNewer = (p: LibraryPack) => !p.official && packIn(p) && Boolean(p.version) && (p.version ?? 0) > seenPackVersion(p);
-  /* got again at its newer version: media saved anew into a folder of its own, any other is read from the catalog as it is */
+  /* got again at its newer version: read from the catalog as it is */
   const updatePack = (p: LibraryPack) => {
     seePackVersion(p);
-    if (p.cats.length && p.cats.every((c) => (c as string) === 'media')) { setError(null); void savePack(p.id, lang).then(() => refreshSaved(), failed); return; }
     setAdded(p.id, true);
   };
   /* a kind with thousands (OpenFilm's sounds): shown a page at a time */
@@ -198,6 +209,8 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
       return sourcesApi.skills(projectId).then(setSkills);
     }).catch((e: unknown) => setError(e instanceof Error && e.message !== 'failed' ? e.message : t('assetDrawer.pluginFailed')));
   };
+  /* a connector got: turned on, and its sign-in opened in the browser at once */
+  const getConnector = (plugin: Plugin) => { turnPlugin(plugin, true); void connectConnector(plugin.id); };
   /* one of OpenFilm's own the person got, removed: back in the store to get (one OpenFilm comes with is only turned off) */
   const dropPlugin = (plugin: Plugin) => {
     setError(null);
@@ -209,6 +222,13 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
     setSkills((list) => (skill.source === 'official' ? list.map((k) => (k.uid === skill.uid ? { ...k, installed: false } : k)) : list.filter((k) => k.uid !== skill.uid)));
     const done = skill.source === 'official' ? sourcesApi.setSkillInstalled(skill.uid, false) : sourcesApi.removeSkill(skill.uid, projectId);
     void Promise.resolve(done).catch(() => {}).finally(() => { void sourcesApi.skills(projectId).then(setSkills); });
+  };
+  /* a connector's own lines in its gear: connect (again), or disconnect */
+  const connectorItems = (p: Plugin): ContextMenuEntry[] => {
+    const state = connectorStates?.get(p.id);
+    return state?.connected
+      ? [{ id: 'disconnect', label: t('assetDrawer.connectorDisconnect'), icon: <Unplug size={15} />, onSelect: () => { void studioHost?.connectors?.disconnect(p.id); } }, { id: 'sep-c', separator: true }]
+      : [{ id: 'connect', label: t(state?.expired ? 'assetDrawer.connectorReconnect' : 'assetDrawer.connectorConnect'), icon: <Plug size={15} />, onSelect: () => { void connectConnector(p.id); } }, { id: 'sep-c', separator: true }];
   };
   /* what can be done with one of the person's own, from its gear: turn it off or on, remove it, see its page */
   const manageItems = (o: { on: boolean; title: string; onTurn: (on: boolean) => void; onRemove?: (() => void) | undefined; onOpen: () => void; trash?: boolean }): ContextMenuEntry[] => [
@@ -241,7 +261,8 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
   const ownPage = opened?.startsWith(PLUGIN_PAGE) ? own.find((p) => p.id === opened.slice(PLUGIN_PAGE.length)) : undefined;
   if (ownPage) {
     return <PluginPage plugin={ownPage} skills={skills} error={error} onBack={() => open(null)} onOpen={open}
-      onTurn={ownPage.soon ? undefined : (on) => turnPlugin(ownPage, on)} onRemove={ownPage.builtIn || !isInstalled(ownPage) ? undefined : () => dropPlugin(ownPage)} />;
+      onTurn={ownPage.soon ? undefined : (on) => turnPlugin(ownPage, on)} onRemove={ownPage.builtIn || !isInstalled(ownPage) ? undefined : () => dropPlugin(ownPage)}
+      {...(ownPage.mcpServers && connectorStates ? { connector: { state: isInstalled(ownPage) ? connectorStates.get(ownPage.id) : undefined, onGet: () => turnPlugin(ownPage, true) } } : {})} />;
   }
   const page = opened && !opened.startsWith(PLUGIN_PAGE) ? skills.find((k) => k.uid === opened) ?? skills.find((k) => (k.as ?? k.name) === opened) : undefined;
   if (page) {
@@ -262,13 +283,10 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
   /* a plugin, not a skill: it brings an editor (a workbench, a tab) or connects the agent to a service */
   const ownBench = (p: Plugin) => Boolean(p.workbench || p.tab || p.mcpServers);
 
-  /* the library's kinds as its tabs list them: OpenFilm's own first, then the community's (sent by someone, `by`); all
-     there already, in the library's tabs (a clip's motion and a moving line of words are another tab's, not shown) */
-  const assetsOf = (kind: LibraryCategory | 'media') => {
-    const all = (library?.items ?? []).filter((it) => (it.cat as string) === kind && !isClipMotion(it) && it.kind !== 'textmotion'
-      && matches(nameOf(it.name, lang), it.by, ...(it.tags ?? [])));
-    return [...all.filter((it) => !it.by), ...all.filter((it) => it.by)];
-  };
+  /* the Community's things of a kind (sent by someone, `by`, OpenFilm's own account among them); OpenFilm's built-in
+     library is not here: it is the drawer's 官方 (a clip's motion and a moving line of words are another tab's) */
+  const assetsOf = (kind: LibraryCategory | 'media') => (library?.items ?? []).filter((it) => it.by && (it.cat as string) === kind
+    && !isClipMotion(it) && it.kind !== 'textmotion' && matches(nameOf(it.name, lang), it.by, makerName(it.by), ...(it.tags ?? [])));
 
   /* Publish: one's own, published to the community from here (PublishFlow); the other ways; the community's other
      indexes are under Sources (from Added's foot) */
@@ -309,8 +327,11 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
     const got = isInstalled(p);
     return <StoreCard key={p.id} icon={<WorkbenchMark plugin={p} size={44} />} title={title} summary={summary} onOpen={() => open(`${PLUGIN_PAGE}${p.id}`)}
       by={publisher()} badges={p.beta && !p.soon ? <Beta>{t('assetDrawer.pluginBeta')}</Beta> : null} dim={got && !p.on}
-      action={p.soon ? <SoonMark /> : got ? <StateMark off={!p.on} />
-        : <AddButton label={t('assetDrawer.getNamed').replace('{name}', title)} onClick={() => turnPlugin(p, true)} />} />;
+      action={p.soon ? <SoonMark /> : p.mcpServers && connectorStates
+        ? (!got ? <AddButton label={t('assetDrawer.getNamed').replace('{name}', title)} onClick={() => getConnector(p)} />
+          : !p.on ? <StateMark off /> : <ConnectorMark state={connectorStates.get(p.id)} onConnect={() => { void connectConnector(p.id); }} />)
+        : got ? <StateMark off={!p.on} />
+          : <AddButton label={t('assetDrawer.getNamed').replace('{name}', title)} onClick={() => turnPlugin(p, true)} />} />;
   };
   /* a plugin or a skill of the catalog (OpenFilm's or the community's): Get installs it, asked first when it brings scripts */
   const catalogCard = (k: SkillEntry) => (
@@ -323,7 +344,7 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
   );
   /* a pack among its kind's things: its picture, its name, how many it holds; added whole to the library from here */
   const packTile = (p: LibraryPack) => (
-    <PackTile key={p.id} cat={p.cats[0] ?? 'sound'} name={nameOf(p.name, lang)} count={t('assetDrawer.countItems').replace('{n}', p.count.toLocaleString())} by={p.by ?? t('assetDrawer.skillsOfficial')}
+    <PackTile key={p.id} cat={p.cats[0] ?? 'sound'} name={nameOf(p.name, lang)} count={t('assetDrawer.countItems').replace('{n}', p.count.toLocaleString())} by={p.by ? makerName(p.by) : t('assetDrawer.skillsOfficial')}
       cover={<PackCover pack={p} first={packItems(library, p)[0]} lang={lang} />} here={packIn(p)} newer={packNewer(p)}
       onOpen={() => open(`${PACK_PAGE}${p.id}`)} onAdd={() => addPack(p)} />
   );
@@ -333,10 +354,9 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
       packOf={(it) => { const p = packOf(library, it); return p && !p.lone ? p : undefined; }} packIn={packIn} here={(it) => inLibrary(it, added)}
       onGetPack={addPack} onAdd={addThing} onPack={(p) => { setPreview(null); open(`${PACK_PAGE}${p.id}`); }} />
   ) : null;
-  /* the packs of a kind (none: of every kind): OpenFilm's first, then the community's (a thing listed alone is among the things, not here) */
+  /* the Community's packs of a kind (none: of every kind); a thing listed alone is among the things, not here */
   const packsOf = (kind: FeatureKind | null) => (library?.packs ?? [])
-    .filter((p) => !p.lone && (!kind || (p.cats as readonly string[]).includes(kind)) && matches(nameOf(p.name, lang), p.by))
-    .sort((a, b) => Number(Boolean(b.official)) - Number(Boolean(a.official)));
+    .filter((p) => !p.official && !p.lone && (!kind || (p.cats as readonly string[]).includes(kind)) && matches(nameOf(p.name, lang), p.by, p.by ? makerName(p.by) : undefined));
   /* the library's things as what they are: moving pictures, stickers, words in a grid; sounds and music in a list;
      each with one thing to do, adding it to the library */
   const assetTile = (it: LibraryItem, i: number, list: readonly LibraryItem[]) => (
@@ -413,7 +433,17 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
   if (line === 'mine') {
     const theirBenches = listed.filter((k) => isPlugin(k));
     const skillOf = new Map(theirBenches.map((k) => [k.uid, k]));
-    const benchList = inPersonsOrder([...ownPlugins.filter(isInstalled), ...theirBenches.map(pluginOfSkill)], benchOrder);
+    /* the workbenches, in the order the top right shows them; the connectors apart, with the agents' own (no place up there) */
+    const benchList = inPersonsOrder([...ownPlugins.filter((p) => isInstalled(p) && !p.mcpServers), ...theirBenches.map(pluginOfSkill)], benchOrder);
+    const connectorRows = ownPlugins.filter((p) => isInstalled(p) && p.mcpServers).map((p): GroupItem => {
+      const { title, summary } = pluginWords(p);
+      return { key: p.id, icon: <WorkbenchMark plugin={p} size={36} />, title, summary, dim: !p.on, onOpen: () => open(`${PLUGIN_PAGE}${p.id}`),
+        badges: p.beta ? <Beta>{t('assetDrawer.pluginBeta')}</Beta> : undefined,
+        control: <MineControl off={!p.on} label={t('assetDrawer.manageNamed').replace('{name}', title)}
+          note={connectorStates ? t(connectorStates.get(p.id)?.connected ? 'assetDrawer.connectorConnected' : 'assetDrawer.connectorNotConnected') : undefined}
+          items={[...(connectorStates ? connectorItems(p) : []),
+            ...manageItems({ on: p.on, title, onTurn: (on) => turnPlugin(p, on), onRemove: () => dropPlugin(p), onOpen: () => open(`${PLUGIN_PAGE}${p.id}`) })]} /> };
+    });
     /* the keys the top right's menu gives them (Motion is picked on the edit's timeline) */
     const keyed = benchList.filter((p) => p.on && p.workbench && p.workbench !== 'motion');
     const benchItems = benchList.map((p): BenchTileItem => {
@@ -455,7 +485,7 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
             items={manageItems({ on: !k.off, title: words(k).title, onTurn: (on) => turnSkill(k, on), onRemove: k.core ? undefined : () => dropSkill(k), onOpen: () => open(k.uid), trash: k.source !== 'official' })} />,
       })),
     ];
-    /* the library's packs the person got from the Community, and OpenFilm's own they took out (to put back) */
+    /* the library's packs the person got from the Community (OpenFilm's own taken out are put back from the drawer's + 添加) */
     const packThumb = (p: LibraryPack) => (
       <span className="relative block h-9 w-9 overflow-hidden rounded-[9px] bg-[var(--bg-pressed)]"><PackCover pack={p} first={packItems(library, p)[0]} lang={lang} /></span>
     );
@@ -464,7 +494,7 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
         const name = nameOf(p.name, lang);
         const newer = packNewer(p);
         return { key: `pack:${p.id}`, icon: packThumb(p), title: name, onOpen: () => open(`${PACK_PAGE}${p.id}`),
-          summary: [p.by, t('assetDrawer.countItems').replace('{n}', p.count.toLocaleString()), p.version ? `v${p.version}` : ''].filter(Boolean).join(' · '),
+          summary: [p.by ? makerName(p.by) : '', t('assetDrawer.countItems').replace('{n}', p.count.toLocaleString()), p.version ? `v${p.version}` : ''].filter(Boolean).join(' · '),
           badges: newer ? <span className="shrink-0 rounded-full bg-[var(--text)] px-1.5 py-0.5 text-[10.5px] font-semibold leading-none text-[var(--dialog-main)]">{t('assetDrawer.packNewer')}</span> : undefined,
           control: (
             <span className="flex items-center gap-1.5">
@@ -477,14 +507,9 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
             </span>
           ) };
       }),
-      ...(library?.packs ?? []).filter((p) => p.official && !p.lone && hidden.includes(packKey(p.group)) && matches(nameOf(p.name, lang))).map((p): GroupItem => ({
-        key: `hidden:${p.id}`, icon: packThumb(p), title: nameOf(p.name, lang), dim: true, onOpen: () => open(`${PACK_PAGE}${p.id}`),
-        summary: t('assetDrawer.packTakenOut'),
-        control: <AddButton label={t('assetDrawer.packPutBack')} text={t('assetDrawer.packPutBack')} onClick={() => addPack(p)} />,
-      })),
     ];
-    const nothing = !benchItems.length && !connectors.length && !skillRows.length && !agentsOwn.length && !packRows.length;
-    const count = t('assetDrawer.mineCount').replace('{plugins}', String(benchItems.length)).replace('{skills}', String(skillRows.length));
+    const nothing = !benchItems.length && !connectorRows.length && !connectors.length && !skillRows.length && !agentsOwn.length && !packRows.length;
+    const count = t('assetDrawer.mineCount').replace('{plugins}', String(benchItems.length + connectorRows.length)).replace('{skills}', String(skillRows.length));
     return (
       <PluginsPage key={line} title={t('assetDrawer.place_mine')} note={nothing ? undefined : count}>
         {consent.dialog}
@@ -524,8 +549,9 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
             <GroupList items={packRows} />
           </Shelf>
         ) : null}
-        {connectors.length ? (
+        {connectorRows.length || connectors.length ? (
           <Shelf title={t('assetDrawer.connectors')} note={t('assetDrawer.note_connectors')}>
+            {connectorRows.length ? <GroupList items={connectorRows} /> : null}
             {connectors.map((g) => (
               <FoldedGroup key={`mcp:${g.id}`} icon={Puzzle} title={t('assetDrawer.agentConnectorsTitle').replace('{name}', g.name)}
                 count={t('assetDrawer.agentConnectorsCount').replace('{n}', String(g.servers.length))}
@@ -605,7 +631,7 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
   const kind = line.startsWith('kind:') ? line.slice('kind:'.length) as FeatureKind : null;
   /* the media always (packs of footage, pictures and sounds of any kind: a kind that grows from the Community); the others
      when the library has some */
-  const kinds = ASSET_KINDS.filter((k) => k === 'media' || (library?.items ?? []).some((it) => it.cat === k));
+  const kinds = ASSET_KINDS.filter((k) => k === 'media' || (library?.items ?? []).some((it) => it.by && it.cat === k));
   const kindChips = (
     <StoreChips label={t('assetDrawer.tab_assets')} value={kind} onChange={(k) => showPluginsLine(k ? `kind:${k}` : 'assets')}
       items={[{ key: null, label: t('assetDrawer.allItems') }, ...kinds.map((k) => ({ key: k, label: kindName(k), count: assetsOf(k as LibraryCategory).length, icon: <KindIcon kind={k} size={14} /> }))]} />
@@ -737,8 +763,10 @@ function HeroButton({ label, onClick }: { label: string; onClick: () => void }) 
  * what to do (Get; once got Turn off or Turn on, and Remove, which one OpenFilm comes with has not: it is turned off);
  * then what it does, how to use it and what it brings, its facts at the side.
  */
-function PluginPage({ plugin, skills, error, onBack, onOpen, onTurn, onRemove }: {
+function PluginPage({ plugin, skills, error, onBack, onOpen, onTurn, onRemove, connector }: {
   plugin: Plugin; skills: readonly SkillEntry[]; error: string | null; onBack: () => void; onOpen: (key: string) => void;
+  /** a connector in the app: its sign-in's state, and Get (connecting follows) */
+  connector?: { state: HostConnector | undefined; onGet: () => void } | undefined;
   /** got and turned on, or off (none: not made yet) */
   onTurn?: ((on: boolean) => void) | undefined;
   /** removed (none: OpenFilm comes with it) */
@@ -753,7 +781,9 @@ function PluginPage({ plugin, skills, error, onBack, onOpen, onTurn, onRemove }:
   const how = plugin.workbench ? (pickedOnTimeline(plugin) ? 'assetDrawer.howTimeline' : 'assetDrawer.howWorkbench') : plugin.tab ? 'assetDrawer.howTab' : null;
   const got = isInstalled(plugin);
   const kind = t(plugin.mcpServers ? 'assetDrawer.kind_connector' : plugin.workbench || plugin.tab ? 'assetDrawer.kind_editor' : 'assetDrawer.kind_skill');
-  const actions = plugin.soon ? <SoonMark /> : !onTurn ? null : !got
+  const actions = plugin.soon ? <SoonMark /> : !onTurn ? null : connector
+    ? <ConnectorActions plugin={plugin} title={title} state={connector.state} got={got} onGet={connector.onGet} onTurn={onTurn} onRemove={onRemove} />
+    : !got
     ? <PageButton kind="main" onClick={() => onTurn(true)}>{t('assetDrawer.get')}</PageButton>
     : <>
       {plugin.on ? <PageButton onClick={() => onTurn(false)}>{t('assetDrawer.manageOff')}</PageButton>
@@ -771,28 +801,18 @@ function PluginPage({ plugin, skills, error, onBack, onOpen, onTurn, onRemove }:
         <Facts title={t('assetDrawer.factsTitle')} items={[
           { key: 'kind', name: t('assetDrawer.factKind'), value: kind },
           { key: 'maker', name: t('assetDrawer.factMaker'), value: t('assetDrawer.skillsOfficial') },
-          { key: 'state', name: t('assetDrawer.factState'), value: t(!got ? 'assetDrawer.stateNotGot' : plugin.on ? 'assetDrawer.stateInstalled' : 'assetDrawer.stateOff') },
+          { key: 'state', name: t('assetDrawer.factState'), value: t(!got ? 'assetDrawer.stateNotGot' : !plugin.on ? 'assetDrawer.stateOff'
+            : connector ? (connector.state?.connected ? 'assetDrawer.connectorConnected' : 'assetDrawer.connectorNotConnected') : 'assetDrawer.stateInstalled') },
           plugin.builtIn ? { key: 'builtin', name: t('assetDrawer.factBuiltIn'), value: t('assetDrawer.factBuiltInNote') } : null,
           plugin.profile?.cost ? { key: 'cost', name: t('assetDrawer.factCost'), value: t(`assetDrawer.cost_${plugin.profile.cost}`) } : null,
         ]} />
       )}>
-      <ProfileStrip profile={plugin.profile} uses={usesOfPlugin(plugin)} />
-      {/* what it does, each line's lead a shade brighter, to find at a glance */}
-      {details ? (
-        <div className="mt-2">
-          {details.split('\n').map((text) => {
-            const lead = /^(.{1,24}?[：:])\s*(.+)$/.exec(text);
-            return (
-              <p key={text} className="mt-2 text-[14px] leading-[21px] text-[var(--text-muted)]">
-                {lead ? <><span className="font-medium text-[var(--text)]">{lead[1]}</span> {lead[2]}</> : text}
-              </p>
-            );
-          })}
-        </div>
-      ) : null}
+      {/* a connector: connected or not, what to say, how it works and what it can do */}
+      {connector ? <ConnectorBody plugin={plugin} title={title} state={connector.state} /> : <ProfileStrip profile={plugin.profile} uses={usesOfPlugin(plugin)} />}
+      {details && !connector ? <PluginDetails text={details} className="mt-2" /> : null}
       {how && !plugin.soon ? <HowToUse where text={t(how)} /> : null}
       {/* a connector: got and on, the agent reaches the service; it signs in there the first time, as in its terminal */}
-      {plugin.mcpServers && !details ? <HowToUse text={t('assetDrawer.howConnector').replaceAll('{name}', title)} /> : null}
+      {plugin.mcpServers && !details && !connector ? <HowToUse text={t('assetDrawer.howConnector').replaceAll('{name}', title)} /> : null}
       <p className="mt-5 text-[13.5px] leading-[20px] text-[var(--text-faint)]">{plugin.mcpServers ? t('assetDrawer.connectorOffNote').replaceAll('{name}', title) : t(plugin.soon ? 'assetDrawer.pluginSoonNote' : 'assetDrawer.pluginOffNote')}</p>
       {/* what it is made of, for whoever makes such things: folded */}
       <ForDevelopers>
@@ -982,7 +1002,7 @@ function PackPage({ pack, items, view, lang, here, newer, onBack, onAdd, onRemov
   const t = useT();
   const kinds = pack.cats.map((c) => t(`assetDrawer.cat_${c}`)).join(t('assetDrawer.listSep'));
   const by = pack.by && onAuthor
-    ? <button type="button" onClick={onAuthor} className="text-[var(--text-muted)] underline-offset-2 hover:text-[var(--text)] hover:underline">{pack.by}</button>
+    ? <button type="button" onClick={onAuthor} className="inline-flex items-center gap-1 text-[var(--text-muted)] underline-offset-2 hover:text-[var(--text)] hover:underline">{makerName(pack.by)}{byOpenFilm(pack.by) ? <BadgeCheck size={13} strokeWidth={2} aria-hidden /> : null}</button>
     : <span className="inline-flex items-center gap-1 text-[var(--text-muted)]">{pack.by ?? 'OpenFilm'}{pack.by ? null : <BadgeCheck size={13} strokeWidth={2} aria-hidden />}</span>;
   const actions = !here ? <PageButton kind="main" onClick={onAdd}>{t('assetDrawer.get')}</PageButton> : (
     <>
@@ -998,7 +1018,7 @@ function PackPage({ pack, items, view, lang, here, newer, onBack, onAdd, onRemov
       actions={actions}
       aside={(
         <Facts title={t('assetDrawer.factsTitle')} items={[
-          { key: 'maker', name: t('assetDrawer.factMaker'), value: pack.by ?? t('assetDrawer.skillsOfficial') },
+          { key: 'maker', name: t('assetDrawer.factMaker'), value: pack.by ? makerName(pack.by) : t('assetDrawer.skillsOfficial') },
           { key: 'kind', name: t('assetDrawer.factKind'), value: kinds },
           { key: 'count', name: t('assetDrawer.factCount'), value: items.length.toLocaleString() },
           pack.version && !pack.official ? { key: 'version', name: t('assetDrawer.factVersion'), value: `v${pack.version}` } : null,
@@ -1064,7 +1084,7 @@ function AssetLightbox({ items, at, lang, onAt, onClose, packOf: packOfItem, pac
           <div className="min-w-0 flex-1">
             <h3 className="truncate text-[18px] font-semibold tracking-[-0.01em] text-[var(--text)]">{name}</h3>
             <p className="mt-1 flex flex-wrap items-center gap-x-2 text-[13px] text-[var(--text-faint)]">
-              <span>{item.by ?? t('assetDrawer.skillsOfficial')}</span>
+              <span className="inline-flex items-center gap-1">{item.by ? makerName(item.by) : t('assetDrawer.skillsOfficial')}{byOpenFilm(item.by) ? <BadgeCheck size={13} strokeWidth={2} aria-hidden /> : null}</span>
               <span aria-hidden>·</span>
               <span className="inline-flex items-center gap-1.5"><KindIcon kind={item.cat} size={13} />{t(`assetDrawer.cat_${item.cat}`)}</span>
               {pack ? <><span aria-hidden>·</span>
@@ -1128,10 +1148,11 @@ function AssetShow({ item, lang }: { item: LibraryItem; lang: ReturnType<typeof 
 }
 
 /** One of the person's own in Mine: Off when it is, and its gear (turn it off or on, remove it, its page). */
-function MineControl({ off, label, items }: { off: boolean; label: string; items: readonly ContextMenuEntry[] }) {
+function MineControl({ off, label, items, note }: { off: boolean; label: string; items: readonly ContextMenuEntry[]; note?: string | undefined }) {
   const t = useT();
   return (
     <span className="flex items-center gap-1.5">
+      {note && !off ? <span className="rounded-full bg-[var(--bg-pressed)] px-2 py-0.5 text-[11.5px] font-medium text-[var(--text-muted)]">{note}</span> : null}
       {off ? <span className="rounded-full bg-[var(--bg-pressed)] px-2 py-0.5 text-[11.5px] font-medium text-[var(--text-muted)]">{t('assetDrawer.stateOff')}</span> : null}
       <ManageButton label={label} items={items} />
     </span>

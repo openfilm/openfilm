@@ -19,7 +19,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { FILM_FILE, srcHref } from '../../src/film-doc.mjs';
 import { fileOf } from '../../src/shared.mjs';
-import { facts, filmOf, INPUTS, planBalance, planMatch, referenceOf, TRANSFORMS, videoClips } from './grade.mjs';
+import { facts, filmOf, gradedClips, INPUTS, planBalance, planMatch, referenceOf, TRANSFORMS } from './grade.mjs';
 
 /** The longest side of a picture the workbench asks for. */
 const MAX_BOX = 1920;
@@ -33,12 +33,12 @@ export default (studio) => {
     if (!src) throw new HttpError(400, 'say the file: ?src=<path>');
     try { return fileOf(root, FILM_FILE, srcHref(src)); } catch (e) { throw new HttpError(400, e instanceof Error ? e.message : String(e)); }
   };
-  /** A video clip of the film, or 404. @param {string} root @param {string} id */
+  /** A clip of the film with a picture to grade (a video, a page, a still), or 404. @param {string} root @param {string} id */
   const clipAt = async (root, id) => {
     const film = await filmOf(root).catch((e) => { throw new HttpError(409, e.message); });
-    const all = videoClips(film.value);
+    const all = gradedClips(film.value);
     const clip = all.find((c) => c.id === id);
-    if (!clip) throw new HttpError(404, `there is no video clip ${id}`);
+    if (!clip) throw new HttpError(404, `there is no clip with a picture ${id}`);
     return { clip, all };
   };
   /** What the workbench is told of a change worked out. @param {Awaited<ReturnType<typeof planBalance>>} done */

@@ -192,8 +192,11 @@ export function agentTools(platform = process.platform) {
 }
 
 /** A tool call as the chat reads it (ACP): its kind, its title, and what it was run with. */
-export function toolCall(name, args) {
+export function toolCall(name, args, connectorLabels) {
   const a = args && typeof args === 'object' ? args : {};
+  /* a connector's tool (pi-connectors.mjs): its service and its own title */
+  const connector = connectorLabels?.get(name);
+  if (connector) return { kind: connector.readOnly ? 'fetch' : 'other', title: connector.title, rawInput: a };
   const path = typeof a.path === 'string' ? a.path : typeof a.file_path === 'string' ? a.file_path : '';
   switch (name) {
     case 'bash': case 'powershell': return { kind: 'execute', title: String(a.command ?? name), rawInput: { command: String(a.command ?? '') } };

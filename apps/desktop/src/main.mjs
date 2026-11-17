@@ -28,6 +28,7 @@ import { applicationMenuTemplate } from './menu.mjs';
 import { registerLocalAgentIpc } from './local-agents-ipc.mjs';
 import { readPreferences, registerChatIpc } from './chat-ipc.mjs';
 import { registerSkillsIpc } from './skills-ipc.mjs';
+import { createConnectors, registerConnectorsIpc } from './connectors.mjs';
 import { createRoster } from './agent-roster.mjs';
 import { createOpenFilmAgent } from './openfilm-agent.mjs';
 import { createAgentCatalogs } from './agent-catalogs.mjs';
@@ -462,6 +463,15 @@ async function openProjectFolder() {
   }
 }
 
+/** What the app asks before an agent changes something in a connected service (connectors.mjs `confirm`). */
+const CONNECTOR_ASK = {
+  en: { message: 'Let the agent use “{tool}” in {name}?', detail: 'It may change what you have in {name}.', once: 'Allow once', always: 'Allow while OpenFilm is open', no: 'Don’t allow' },
+  'zh-CN': { message: '允许智能体在 {name} 里使用「{tool}」吗？', detail: '这会改动你在 {name} 里的内容。', once: '允许一次', always: '本次打开期间都允许', no: '不允许' },
+  ja: { message: 'エージェントに {name} の「{tool}」を使わせますか？', detail: '{name} の中身が変わることがあります。', once: '今回だけ許可', always: 'OpenFilm を開いている間は許可', no: '許可しない' },
+  ko: { message: '에이전트가 {name}에서 「{tool}」을(를) 쓰도록 허용할까요?', detail: '{name}에 있는 내용이 바뀔 수 있습니다.', once: '이번만 허용', always: 'OpenFilm이 열려 있는 동안 허용', no: '허용 안 함' },
+  es: { message: '¿Dejar que el agente use «{tool}» en {name}?', detail: 'Puede cambiar lo que tienes en {name}.', once: 'Permitir una vez', always: 'Permitir mientras OpenFilm esté abierto', no: 'No permitir' },
+};
+
 /* the own key, sealed with the system's keychain where there is one (macOS Keychain, Windows DPAPI) */
 const seal = (text) => (safeStorage.isEncryptionAvailable() ? Buffer.concat([Buffer.from('enc:'), safeStorage.encryptString(text)]) : Buffer.from(`raw:${text}`));
 const unseal = (data) => {
@@ -773,6 +783,29 @@ async function start() {
   /* which official skills are installed and which skills are off: the prefs.json every OpenFilm here shares (openfilm/skills usableSkills) */
   const prefsHome = env.OPENFILM_SHARED_HOME || env.OPENFILM_HOME;
   const mySkills = process.env.OPENFILM_SKILLS || (env.OPENFILM_LIBRARY ? join(dirname(env.OPENFILM_LIBRARY), 'Skills') : (await import('openfilm/skills')).mySkillsDir());
+  /* every connector there is (openfilm/plugins: a plugin with a .mcp.json), by its first remote server */
+  const connectors = createConnectors({
+    dataDir: DATA, seal, unseal, log: (line) => log(`${line}\n`),
+    openExternal: (url) => shell.openExternal(url),
+    defs: async () => (await import('openfilm/plugins')).pluginStates(prefsHome).flatMap((p) => {
+      const remote = Object.values(p.mcpServers ?? {}).find((server) => server.type === 'http');
+      return remote ? [{ id: p.id, title: p.title?.en ?? p.id, url: remote.url }] : [];
+    }),
+    onChange: () => { void connectors.states().then((states) => broadcast('desktop:connectors', states)); },
+    /* a tool that may change something in the service: the person says first, whatever the agent */
+    confirm: async ({ title, toolTitle, input }) => {
+      const words = CONNECTOR_ASK[appLanguage(state.language, app.getPreferredSystemLanguages())] ?? CONNECTOR_ASK.en;
+      const fill = (text) => text.replaceAll('{name}', title).replaceAll('{tool}', toolTitle);
+      const shown = JSON.stringify(input, null, 1);
+      const { response } = await dialog.showMessageBox(win, {
+        type: 'question', title: PRODUCT_NAME, message: fill(words.message),
+        detail: `${fill(words.detail)}${shown && shown !== '{}' ? `\n\n${shown.length > 700 ? `${shown.slice(0, 700)}…` : shown}` : ''}`,
+        buttons: [words.once, words.always, words.no], defaultId: 0, cancelId: 2, noLink: true,
+      });
+      return response === 0 ? 'once' : response === 1 ? 'always' : 'no';
+    },
+  });
+  app.on('will-quit', () => { void connectors.close(); });
   localAgents = registerLocalAgentIpc(ipcMain, {
     trusted: fromPage,
     log,
@@ -798,8 +831,10 @@ async function start() {
     /* Developer mode: an agent whose own record lacks what its model got logs it here (agent-logs.mjs) */
     logDir: () => (readPreferences(DATA).developer ? join(DATA, 'agent-logs') : null),
     /* each session's skills: its maker's, OpenFilm's, and of the person's own those let in (agent-skills.mjs) */
-    skills: { dataDir: DATA, mine: mySkills, prefsHome },
+    skills: { dataDir: DATA, mine: mySkills, prefsHome, connectorsFor: (servers) => connectors.forSession(servers) },
   });
+  /* the connectors: signed in here once, reached by every agent at their doors (connectors.mjs) */
+  registerConnectorsIpc(ipcMain, connectors, { trusted: fromPage, log });
   /* the composer's Skills button */
   registerSkillsIpc(ipcMain, {
     trusted: fromPage,

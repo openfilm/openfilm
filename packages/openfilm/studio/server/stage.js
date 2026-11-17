@@ -1800,12 +1800,12 @@
     async visionClear() { await hooks()?.visionClear?.(); return true; },
     visionRetry({ id }) { hooks()?.visionRetry?.(id); },
     /**
-     * Video clip `id` shown graded as the inspector has it, not written yet: `draft` its grade's files (film-folder
+     * Clip `id` (a video, a page, a still) shown graded as the inspector has it, not written yet: `draft` its grade's files (film-folder
      * paths, in order) with `texts`, those it changed, in place of theirs; `{ written: true }` its grade as written now,
      * the draft kept until that is ready; null as written.
      */
     grade({ id, draft }) { hooks()?.grade?.(id, draft ?? null); return true; },
-    /** Every video shown as its file is, its color grade left off (`off`), or graded again: a before and after. */
+    /** Every graded clip shown as it is, its color grade left off (`off`), or graded again (`split`: right of that share of the picture only): a before and after. */
     compare({ off, split }) { hooks()?.compare?.(Boolean(off), typeof split === "number" ? split : null); return true; },
     /** Color files (film-folder paths) changed on disk: the clips they grade drawn through them again. */
     regraded({ paths }) { hooks()?.regraded?.(paths); return true; },

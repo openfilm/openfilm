@@ -815,3 +815,17 @@ test("connectors' MCP servers go to the ACP session: programs always, remote one
   assert.deepEqual(acpServers(servers, undefined).map((s) => s.name), ['local'], 'an agent that takes no remote server');
   assert.deepEqual(acpServers([], { http: true }), []);
 });
+
+test('a connector\'s tool call is named by its service in the chat, whatever agent made it', async () => {
+  const { withConnectorTitle } = await import('./agents.mjs');
+  const given = [{ name: 'notion', title: 'Notion' }, { name: 'frameio', title: 'Frame.io' }];
+  const call = (title) => withConnectorTitle({ sessionUpdate: 'tool_call', toolCallId: '1', title }, given).title;
+  assert.equal(call('mcp__notion__search'), 'Notion · search');
+  assert.equal(call('notion.create-page'), 'Notion · create-page');
+  assert.equal(call('mcp.notion.search'), 'Notion · search', 'as Codex names it');
+  assert.equal(call('frameio_comments'), 'Frame.io · comments');
+  assert.equal(call('Terminal'), 'Terminal', 'any other call as it was');
+  assert.equal(withConnectorTitle({ sessionUpdate: 'agent_message_chunk' }, given).title, undefined);
+  assert.equal(call.length, 1);
+  assert.deepEqual(withConnectorTitle({ sessionUpdate: 'tool_call', title: 'mcp__notion__search' }, []), { sessionUpdate: 'tool_call', title: 'mcp__notion__search' });
+});

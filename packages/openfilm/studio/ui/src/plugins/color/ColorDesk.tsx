@@ -17,7 +17,7 @@
  */
 import * as React from 'react';
 import { createPortal } from 'react-dom';
-import { Download, Link2, MessageSquarePlus, Minus, Pipette, Plus, RotateCcw, Sparkles, Unlink, Upload, Wand2 } from 'lucide-react';
+import { Download, Link2, MessageSquarePlus, Minus, Palette, Pipette, Plus, RotateCcw, Sparkles, Unlink, Upload, Wand2 } from 'lucide-react';
 import { addPluginWords, useLanguage, useT } from '@/i18n';
 import { chat, pluginApi, project as projectOf, toast } from '@/studio';
 import { useBlock } from '@/studio/react';
@@ -36,6 +36,7 @@ import {
   type HueCurve, type Points, type RgbCurve, type Wheel, type Zone,
 } from '../../../../../src/color/adjust.mjs';
 import { parseColorTransform } from '../../../../../src/color/ctf.mjs';
+import { leftOut } from '../../../../../src/color/page-grade.mjs';
 import { elementsOf, newCtf, setOp } from '../../../../../src/color/edit.mjs';
 import { bake, cubeText } from '../../../../../src/color/ops.mjs';
 import { CurveEditor } from './CurveEditor';
@@ -47,8 +48,16 @@ addPluginWords('color', import.meta.glob('../../../../../plugins/color/i18n/*.js
 
 const server = pluginApi('color');
 
-/** A video clip of the film, as the desk reads it: its id, style, file and where it plays. */
-export interface GradedClip extends ColorClip { src: string; at: number; time?: readonly number[] | null; speed?: number }
+/**
+ * A clip of the film with a picture to grade, as the desk reads it: its id, style, file, where it plays and for how
+ * long (seconds on the film; null: as its `time` says). A video's picture is its footage, graded through its input
+ * and output; a page's or a still's is drawn by the browser, graded on it as shown (src/color/page-grade.mjs).
+ */
+export interface GradedClip extends ColorClip {
+  src: string; at: number; time?: readonly number[] | null; speed?: number;
+  kind: 'video' | 'page' | 'still';
+  length?: number | null;
+}
 
 type Words = (key: string, values?: Record<string, string | number>) => string;
 /** The plugin's words: `w('clips', { n: 2 })`. */
@@ -73,16 +82,23 @@ const kindOf = (input: string | null) => (input ? input.split('/').pop()!.replac
 const fileName = (path: string) => path.split('/').pop()!.replace(/#.*$/, '').replace(/\.[^.]+$/, '');
 const layerName = (path: string) => path.split('/').pop()!.replace(/\.(ctf|clf|cube)$/i, '');
 
+/** How long a clip is on the film, seconds (null: not known). */
+const lengthOf = (clip: GradedClip) => clip.length ?? (clip.time?.length === 2 ? (clip.time[1]! - clip.time[0]!) / (clip.speed || 1) : null);
+/** Whether a clip's picture is drawn by the browser (a page, a still): graded as shown, without an input or output. */
+const drawnOf = (clip: GradedClip | null) => Boolean(clip && clip.kind !== 'video');
+/** What a frame of a clip is asked by: a page by its clip (drawn with the changes made in it), else its file alone. */
+const pageOf = (clip: GradedClip | null) => (clip?.kind === 'page' ? clip.id : null);
+
 /** The second of its file a clip shows at film time `t` (seconds), or its middle when the playhead is not on it. */
 function secondOf(clip: GradedClip, t: number | null): number {
   const from = clip.time?.[0] ?? 0, speed = clip.speed || 1;
-  const length = clip.time?.length === 2 ? (clip.time[1]! - from) / speed : null;
+  const length = lengthOf(clip);
   if (t != null && t >= clip.at && (length == null || t < clip.at + length)) return from + (t - clip.at) * speed;
   return length == null ? from : from + (length * speed) / 2;
 }
 /** Where the playhead is along a clip, 0–1, or null when not on it. */
 function alongOf(clip: GradedClip, t: number): number | null {
-  const length = clip.time?.length === 2 ? (clip.time[1]! - clip.time[0]!) / (clip.speed || 1) : null;
+  const length = lengthOf(clip);
   if (t < clip.at || length == null || t >= clip.at + length) return null;
   return (t - clip.at) / length;
 }
@@ -156,7 +172,7 @@ function Measured({ className, children }: { className: string; children: (box: 
 /** The film's frame aspect for shots and styles. */
 const THUMB_ASPECT = 16 / 9;
 
-export function ColorDesk({ projectId, host, clips, current, timeMs, onShot, onPickPoint, onRefer }: {
+export function ColorDesk({ projectId, host, clips, current, timeMs, onShot, onSeek, onPickPoint, onRefer, onLeave }: {
   projectId: string;
   host: ColorHost;
   /** every video clip of the film, in its order */
@@ -166,10 +182,14 @@ export function ColorDesk({ projectId, host, clips, current, timeMs, onShot, onP
   timeMs: number;
   /** A shot taken in the strip: picked (with others when `more`), the playhead on it. */
   onShot: (id: string, more: boolean) => void;
+  /** The playhead put at film second `t` (a shot scrubbed in the strip). */
+  onSeek?: (t: number) => void;
   /** Ask for a point clicked on the picture (0–1 across and down the frame; null: let go without one). */
   onPickPoint?: (done: (point: { x: number; y: number } | null) => void) => void;
   /** The shots `ids` given to the chat as references (with an app that has one). */
   onRefer?: (ids: readonly string[]) => void;
+  /** Back to the edit, where footage is put in the film (said when the film has none). */
+  onLeave?: () => void;
 }) {
   const w = useWords();
   const lang = useLanguage();
@@ -196,6 +216,9 @@ export function ColorDesk({ projectId, host, clips, current, timeMs, onShot, onP
     return () => window.removeEventListener('keydown', esc, true);
   }, [picking]);
   React.useEffect(() => { setPicking(null); }, [first?.id]);
+  /* a page's or a still's picture has no hue curves (src/color/page-grade.mjs): its curves are shown instead */
+  const huelessShots = chosen.length > 0 && chosen.every(drawnOf);
+  React.useEffect(() => { if (huelessShots && tab === 'hue') setTab('curves'); }, [huelessShots, tab, setTab]);
 
   /* the files read: every shot's chain (the strip shows each graded) and the chosen ones' own layers */
   const paths = React.useMemo(() => [...new Set([...chosen.map(ownPath), ...clips.flatMap((c) => chainOf(c.style))])], [chosen, clips]);
@@ -228,6 +251,8 @@ export function ColorDesk({ projectId, host, clips, current, timeMs, onShot, onP
   }, []);
   React.useEffect(() => {
     for (const p of paths) {
+      /* an input or an output is OpenFilm's own, copied in as a chain first needs it: not a change of the grade */
+      if (roleOf(p) === 'input' || roleOf(p) === 'output') continue;
       const now = text(p);
       if (now === undefined) continue;
       if (!seenText.current.has(p)) { seenText.current.set(p, now); continue; }
@@ -274,7 +299,9 @@ export function ColorDesk({ projectId, host, clips, current, timeMs, onShot, onP
     const files = d ? d.files : chainOf(clip.style);
     const out: { name: string; text: string }[] = [];
     for (const f of files) {
-      const t = d?.texts[f] ?? write?.files.find((x) => x.path === f)?.text ?? text(f);
+      /* a page's or a still's input and output are not applied: not needed */
+      if (drawnOf(clip) && leftOut(f)) continue;
+      const t = d?.texts[f] ?? write?.files.find((x) => x.path === f)?.text ?? text(f) ?? STANDARD[f] ?? null;
       if (t == null) return null;
       out.push({ name: f, text: t });
     }
@@ -358,6 +385,17 @@ export function ColorDesk({ projectId, host, clips, current, timeMs, onShot, onP
     }
     onShot(clip.id, more);
   };
+  /* a shot's picture pressed and dragged across: the shot taken, the playhead along it where the pointer is (its line
+     on the picture follows), as a viewer's scrub bar does; a press without a drag is a click (takeShot) */
+  const scrub = React.useRef<{ id: string; x: number; moved: boolean } | null>(null);
+  const scrubbed = React.useRef(0);
+  const scrubTo = (clip: GradedClip, e: React.PointerEvent<HTMLElement>) => {
+    const length = lengthOf(clip);
+    if (!onSeek || length == null || !Number.isFinite(length)) return;
+    const r = e.currentTarget.getBoundingClientRect();
+    const f = Math.min(0.999, Math.max(0, (e.clientX - r.left) / r.width));
+    onSeek(clip.at + f * length);
+  };
   /* the strip's keys: ← → the shot before or after, ⌘C the grade of the one in hand, ⌘V it on those in hand */
   const [copied, setCopied] = React.useState<string | null>(null);
   const stripKey = (e: React.KeyboardEvent) => {
@@ -387,7 +425,8 @@ export function ColorDesk({ projectId, host, clips, current, timeMs, onShot, onP
   const second = first ? Math.round(secondOf(first, timeMs / 1000) * 24) / 24 : null;
   const [waveKind, setWaveKind] = useKept<Scope>('openfilm.color.scope', 'waveform');
   const scopeChain = React.useMemo(() => (first ? textsOf(first, draft) : null), [first, draft, textsOf]);
-  const scopes = useScopes(pictures, first?.src ?? null, second, scopeChain, waveKind === 'histogram' ? ['vectorscope'] : [waveKind, 'vectorscope']);
+  const shotIs = React.useMemo(() => ({ drawn: drawnOf(first), page: pageOf(first) }), [first]);
+  const scopes = useScopes(pictures, first?.src ?? null, second, scopeChain, waveKind === 'histogram' ? ['vectorscope'] : [waveKind, 'vectorscope'], shotIs);
   const latest = React.useRef({ scopes, first, chosen, text, layer, textsOf });
   latest.current = { scopes, first, chosen, text, layer, textsOf };
   /* the white balance picked off the picture: a spot that should be white or grey, made so through the whole grade */
@@ -409,13 +448,13 @@ export function ColorDesk({ projectId, host, clips, current, timeMs, onShot, onP
       const n = pictures.seq();
       void new Promise<Picked | null>((done) => {
         const off = pictures.listen((m: FromWorker) => { if ((m.type === 'picked' || m.type === 'failed') && m.seq === n) { off(); done(m.type === 'picked' ? m : null); } });
-        pictures.worker.postMessage({ type: 'pick', seq: n, key: now.scopes!.frame!, chain: chainNow.map((f) => ({ ...f })), layer: lay, x: point.x, y: point.y });
+        pictures.worker.postMessage({ type: 'pick', seq: n, key: now.scopes!.frame!, chain: chainNow.map((f) => ({ ...f })), layer: lay, x: point.x, y: point.y, drawn: drawnOf(now.first) });
       }).then((got) => {
         if (got) void write(adjustWrite(now.chosen, now.text, () => ({ temperature: got.temperature, tint: got.tint }), STANDARD, now.layer));
       });
     });
   };
-  const shotThumbs = useThumbs(pictures, React.useMemo(() => clips.map((c) => ({ id: c.id, src: c.src, second: Math.round(secondOf(c, null) * 4) / 4, chain: textsOf(c, null) })), [clips, textsOf]), 200);
+  const shotThumbs = useThumbs(pictures, React.useMemo(() => clips.map((c) => ({ id: c.id, src: c.src, second: Math.round(secondOf(c, null) * 4) / 4, chain: textsOf(c, null), drawn: drawnOf(c), page: pageOf(c) })), [clips, textsOf]), 200);
 
   const blockScopes = useBlock('color', 'scopes');
   const blockShots = useBlock('color', 'shots');
@@ -443,16 +482,27 @@ export function ColorDesk({ projectId, host, clips, current, timeMs, onShot, onP
           const shared = p.layers.filter((l) => groups.includes(l));
           const graded = p.after.length > 0 || p.layers.some((l) => !isEmptyLayer(text(l)));
           const kind = kindOf(p.input);
-          const note = shared.length ? w('groupNote', { name: layerName(shared[0]!) }) : kind !== 'rec709' ? w(`input.${kind}`) : graded ? '' : w('notGraded');
+          const note = shared.length ? w('groupNote', { name: layerName(shared[0]!) }) : drawnOf(c) ? w(c.kind === 'page' ? 'kindPage' : 'kindStill')
+            : kind !== 'rec709' ? w(`input.${kind}`) : graded ? '' : w('notGraded');
           const on = current.includes(c.id);
           const along = alongOf(c, t);
           const thumb = shotThumbs[c.id];
           return (
-            <div key={c.id} data-shot={c.id} role="option" aria-selected={on} tabIndex={0} title={c.src}
-              onClick={(e) => takeShot(c, e.shiftKey || e.metaKey || e.ctrlKey)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); takeShot(c, e.shiftKey); } }}
+            <div key={c.id} data-shot={c.id} role="option" aria-selected={on} tabIndex={0} title={`${c.src}\n${w('scrubTip')}`}
+              onClick={(e) => { if (Date.now() - scrubbed.current < 250) return; takeShot(c, e.shiftKey || e.metaKey || e.ctrlKey); }} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); takeShot(c, e.shiftKey); } }}
               className={`group flex h-full shrink-0 cursor-default flex-col gap-1 outline-none ${picking && first?.id !== c.id ? 'cursor-crosshair' : ''}`}
               style={{ width: `calc((100cqh - 19px) * ${THUMB_ASPECT})` }}>
-              <div style={{ boxShadow: lit.has(c.id) ? GLOW : undefined }} className={`relative min-h-0 flex-1 overflow-hidden rounded-[6px] bg-black ring-offset-0 transition-[box-shadow] duration-500 ${on ? 'ring-2 ring-[var(--accent)]' : picking && first?.id !== c.id ? 'ring-1 ring-white/30 group-hover:ring-2 group-hover:ring-white/70' : 'ring-1 ring-white/[0.06] group-hover:ring-white/25'}`}>
+              <div style={{ boxShadow: lit.has(c.id) ? GLOW : undefined }}
+                onPointerDown={(e) => { if (e.button !== 0 || picking || e.shiftKey || e.metaKey || e.ctrlKey) return; e.currentTarget.setPointerCapture(e.pointerId); scrub.current = { id: c.id, x: e.clientX, moved: false }; }}
+                onPointerMove={(e) => {
+                  const d = scrub.current;
+                  if (!d || d.id !== c.id || (!d.moved && Math.abs(e.clientX - d.x) < 3)) return;
+                  if (!d.moved) { d.moved = true; if (!current.includes(c.id) || current.length > 1) onShot(c.id, false); }
+                  scrubTo(c, e);
+                }}
+                onPointerUp={(e) => { const d = scrub.current; scrub.current = null; if (d?.moved) { e.stopPropagation(); scrubbed.current = Date.now(); } }}
+                onPointerCancel={() => { scrub.current = null; }}
+                className={`relative min-h-0 flex-1 cursor-ew-resize overflow-hidden rounded-[6px] bg-black ring-offset-0 transition-[box-shadow] duration-500 ${on ? 'ring-2 ring-[var(--accent)]' : picking && first?.id !== c.id ? 'ring-1 ring-white/30 group-hover:ring-2 group-hover:ring-white/70' : 'ring-1 ring-white/[0.06] group-hover:ring-white/25'}`}>
                 {thumb ? <img src={thumb} alt="" draggable={false} className="absolute inset-0 h-full w-full object-cover" /> : null}
                 <span className="absolute left-1 top-1 rounded-[4px] bg-black/70 px-1 font-mono text-[10px] leading-[14px] text-white/90">{String(i + 1).padStart(2, '0')}</span>
                 {graded ? <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-[var(--accent)] shadow-[0_0_0_1px_rgba(0,0,0,0.6)]" aria-label={w('graded')} /> : null}
@@ -491,8 +541,20 @@ export function ColorDesk({ projectId, host, clips, current, timeMs, onShot, onP
   );
 
   let tools: React.ReactNode;
-  if (!first) {
-    tools = <div className="flex h-full items-center justify-center bg-[var(--bg-panel)] px-8 text-center text-[12px] text-[var(--text-faint)]">{w('noClip')}</div>;
+  if (!clips.length) {
+    /* nothing to grade: what this workbench grades, why there is none here, and where it is put in */
+    tools = (
+      <Start icon={<Palette size={20} />} title={w('startNone')} body={w('startNoneBody')}
+        steps={[w('startNoneStep1'), w('startNoneStep2')]}
+        action={onLeave ? <button type="button" onClick={onLeave} className={START_BTN}>{w('toEdit')}</button> : null} />
+    );
+  } else if (!first) {
+    /* shots, none taken: how a grade starts, and the first shot a click away */
+    tools = (
+      <Start icon={<Palette size={20} />} title={w('startPick')} body={w('startPickBody')}
+        steps={[w('startStep1'), w('startStep2'), w('startStep3')]}
+        action={<button type="button" onClick={() => onShot(clips[0]!.id, false)} className={START_BTN}>{w('startFirst')}</button>} />
+    );
   } else {
     /* ── the stack: the grade's files in the order they apply ── */
     const sharedBy = (path: string) => clips.filter((c) => chainOf(c.style).includes(path)).length;
@@ -500,6 +562,8 @@ export function ColorDesk({ projectId, host, clips, current, timeMs, onShot, onP
     const summary = (path: string) => [...new Set(opsIn(draft?.files.find((f) => f.path === path)?.text ?? text(path)).map((n) => (KNOWN[n] ? w(KNOWN[n]) : w(`op.${n}`) !== `plugin.color.op.${n}` ? w(`op.${n}`) : n)))].join(' · ');
     const filterItemOf = (url: string) => { const f = filterOfUrl(url); return f ? index?.items.find((i) => i.grade && isFilter(f.slug, i.id)) : undefined; };
     const kindsHere = new Set(chosen.map((c) => kindOf(partsOf(chainOf(c.style)).input)));
+    /* every shot taken is drawn by the browser (a page, a still): graded as shown, without hue curves or an input */
+    const allDrawn = chosen.every(drawnOf);
     /* a file of the grade given to the chat, for the agent to read and change */
     const pointAt = (path: string) => (chat.refer ? (
       <RowAction label={w('pointAgent')} onClick={() => chat.refer?.({ kind: 'file', path, fileKind: 'color' })}><MessageSquarePlus size={11} /></RowAction>
@@ -512,13 +576,20 @@ export function ColorDesk({ projectId, host, clips, current, timeMs, onShot, onP
           <span className="text-[10.5px] text-[var(--text-faint)]">{w('stackHint')}</span>
         </div>
         <div role="listbox" aria-label={w('layers')} className="flex min-h-0 flex-1 flex-col gap-px overflow-y-auto px-2">
-          <div className="flex items-center gap-2 px-1">
-            <Swatch fill="#3a3a3c" />
-            <div className="min-w-0 flex-1">
-              <MenuSelect label={w('footage')} prefix={w('footage')} value={kindsHere.size === 1 ? [...kindsHere][0]! : ''} disabled={busy !== null} menuWidth="content" size="xs"
-                groups={[{ choices: INPUTS.map((k) => ({ value: k, label: w(`input.${k}`) })) }]} onPick={(k) => { void setInput(k); }} />
+          {allDrawn ? (
+            /* a page's or a still's picture is what the screen shows already: no footage to bring in */
+            <div className="flex h-8 items-center gap-2 px-2 text-[11.5px] text-[var(--text-muted)]" title={w('drawnInTip')}>
+              <Swatch fill="#3a3a3c" />{w('drawnIn', { kind: w(first.kind === 'page' ? 'kindPage' : 'kindStill') })}
             </div>
-          </div>
+          ) : (
+            <div className="flex items-center gap-2 px-1">
+              <Swatch fill="#3a3a3c" />
+              <div className="min-w-0 flex-1">
+                <MenuSelect label={w('footage')} prefix={w('footage')} value={kindsHere.size === 1 ? [...kindsHere][0]! : ''} disabled={busy !== null} menuWidth="content" size="xs"
+                  groups={[{ choices: INPUTS.map((k) => ({ value: k, label: w(`input.${k}`) })) }]} onPick={(k) => { void setInput(k); }} />
+              </div>
+            </div>
+          )}
           <Joint />
           {parts.layers.filter((l) => l !== ownPath(first)).map((l) => (
             <StackRow key={l} on={layer === l} lit={lit.has(l)} onPick={() => setLayer(l)} swatch={<Swatch fill={groupColor(l, groups)} />} name={layerName(l)} note={w('shared', { n: sharedBy(l) })}
@@ -541,7 +612,7 @@ export function ColorDesk({ projectId, host, clips, current, timeMs, onShot, onP
             );
           })}
           <Joint />
-          <div className="flex h-8 items-center gap-2 px-2 text-[11.5px] text-[var(--text-faint)]"><Swatch fill="#2a2a2c" />{w('output')}</div>
+          <div className="flex h-8 items-center gap-2 px-2 text-[11.5px] text-[var(--text-faint)]"><Swatch fill="#2a2a2c" />{allDrawn ? w('drawnOut') : w('output')}</div>
         </div>
         <div className="flex shrink-0 gap-1.5 px-3 pb-3 pt-2">
           <Tooltip label={w('addSharedTip')}><button type="button" className={SMALL_BTN} onClick={addShared}><Plus size={12} />{w('addShared')}</button></Tooltip>
@@ -657,7 +728,7 @@ export function ColorDesk({ projectId, host, clips, current, timeMs, onShot, onP
         <ActionRow label={w('copyTo')} note={w('copyNote')} tip={w('copyTip')} on={picking === 'copy'} disabled={busy !== null || chosen.length > 1 || clips.length < 2}
           onClick={() => setPicking((p) => (p === 'copy' ? null : 'copy'))} />
         <ActionRow icon={<RotateCcw size={12} />} label={w('reset')} tip={w('resetTip')} disabled={busy !== null} onClick={() => { void reset(); }} />
-        <ActionRow icon={<Download size={12} />} label={w('exportLut')} note=".cube" disabled={busy !== null || !chain.length} onClick={() => { void exportLut(); }} />
+        <ActionRow icon={<Download size={12} />} label={w('exportLut')} note=".cube" tip={allDrawn ? w('exportLutDrawn') : undefined} disabled={busy !== null || !chain.length || allDrawn} onClick={() => { void exportLut(); }} />
         {onRefer ? <ActionRow icon={<Sparkles size={12} />} label={w('toAgent')} note="⌘L" tip={w('toAgentTip')} onClick={() => onRefer(ids)} /> : null}
         {/* what the person and the agent changed, newest first: a click takes that shot */}
         <div className="mt-2 flex shrink-0 flex-col">
@@ -696,10 +767,12 @@ export function ColorDesk({ projectId, host, clips, current, timeMs, onShot, onP
         <div className="flex min-h-0 min-w-0 flex-col">
           <div role="tablist" aria-label={w('controls')} className="flex h-9 shrink-0 items-center gap-0.5 px-3">
             {TABS.map((k) => {
-              const off = k !== 'styles' && (isCube || layerIsFilter);
+              const off = (k !== 'styles' && (isCube || layerIsFilter)) || (k === 'hue' && allDrawn);
               return (
-                <button key={k} type="button" role="tab" aria-selected={tab === k} disabled={off} onClick={() => setTab(k)}
-                  className={`rounded-[6px] px-2.5 py-1 text-[12px] transition disabled:opacity-35 ${tab === k ? 'bg-[var(--bg-selected)] font-medium text-[var(--text)]' : 'text-[var(--text-muted)] hover:text-[var(--text)]'}`}>{w(k)}</button>
+                <Tooltip key={k} label={k === 'hue' && allDrawn ? w('hueDrawn') : w(`tabTip.${k}`)} side="top">
+                  <button type="button" role="tab" aria-selected={tab === k} disabled={off} onClick={() => setTab(k)}
+                    className={`rounded-[6px] px-2.5 py-1 text-[12px] transition disabled:opacity-35 ${tab === k ? 'bg-[var(--bg-selected)] font-medium text-[var(--text)]' : 'text-[var(--text-muted)] hover:text-[var(--text)]'}`}>{w(k)}</button>
+                </Tooltip>
               );
             })}
             <span className="flex-1" />
@@ -784,6 +857,32 @@ function Reading({ label, value, warn = false }: { label: string; value: string;
     </div>
   );
 }
+const START_BTN = 'mt-1 flex h-8 items-center rounded-[7px] bg-[var(--bg-selected)] px-3.5 text-[12px] font-medium text-[var(--text)] transition hover:bg-[var(--bg-pressed)]';
+
+/** Where the controls are while there is nothing to grade yet: what to do, in steps, and the first of them a click. */
+function Start({ icon, title, body, steps, action }: { icon: React.ReactNode; title: string; body: string; steps: readonly string[]; action: React.ReactNode }) {
+  return (
+    <div className="flex h-full min-h-0 items-center justify-center overflow-y-auto bg-[var(--bg-panel)] px-8 py-6">
+      <div className="flex max-w-[460px] flex-col items-start gap-3">
+        <span className="grid h-10 w-10 place-items-center rounded-full bg-[var(--bg-hover)] text-[var(--text-muted)]">{icon}</span>
+        <div className="flex flex-col gap-1">
+          <h3 className="text-[14px] font-medium text-[var(--text)]">{title}</h3>
+          <p className="text-[12.5px] leading-[19px] text-[var(--text-muted)]">{body}</p>
+        </div>
+        <ol className="flex flex-col gap-1.5">
+          {steps.map((step, i) => (
+            <li key={step} className="flex gap-2.5 text-[12.5px] leading-[19px] text-[var(--text-muted)]">
+              <span className="mt-[1px] grid h-[17px] w-[17px] shrink-0 place-items-center rounded-full bg-[var(--bg-hover)] font-mono text-[10px] text-[var(--text)]">{i + 1}</span>
+              <span>{step}</span>
+            </li>
+          ))}
+        </ol>
+        {action}
+      </div>
+    </div>
+  );
+}
+
 function Note({ children }: { children: React.ReactNode }) {
   return <p className="flex h-full items-center justify-center px-10 text-center text-[11.5px] leading-[17px] text-[var(--text-faint)]">{children}</p>;
 }
@@ -904,8 +1003,8 @@ function Styles({ w, items, first, chosen, text, textsOf, pictures, second, curr
     item ? { id: item.id, title: nameOf(item.name, 'en'), grade: item.grade! } : null, amount, STANDARD), [chosen, text]);
   const amount = current?.amount ?? 1;
   const thumbs = useThumbs(pictures, React.useMemo(() => (second == null ? [] : [
-    { id: NONE, src: first.src, second, chain: textsOf(first, writeOf(null, 0, [first])) },
-    ...filters.map((f) => ({ id: f.id, src: first.src, second, chain: textsOf(first, writeOf(f, 1, [first])) })),
+    { id: NONE, src: first.src, second, chain: textsOf(first, writeOf(null, 0, [first])), drawn: drawnOf(first), page: pageOf(first) },
+    ...filters.map((f) => ({ id: f.id, src: first.src, second, chain: textsOf(first, writeOf(f, 1, [first])), drawn: drawnOf(first), page: pageOf(first) })),
   ]), [filters, first, second, textsOf, writeOf]), 200);
   const on = current ? filters.find((f) => isFilter(current.slug, f.id)) ?? null : null;
   if (!filters.length) return <Note>{w('noFilters')}</Note>;

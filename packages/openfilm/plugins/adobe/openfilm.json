@@ -16,11 +16,38 @@
     "es": "Las herramientas creativas de Adobe para el agente: Express, Firefly, retoques de Photoshop y Adobe Stock."
   },
   "details": {
-    "en": "When to use it: you want a picture retouched, a design made or stock found with Adobe.\nHow: turn it on, then ask \"remove the background of the product shot with Adobe\". Some tools work signed out; the rest ask you to sign in with your Adobe ID.",
-    "zh-CN": "什么时候用：想用 Adobe 修图、做设计或找图库素材。\n怎么用：打开后说「用 Adobe 把产品图的背景去掉」。部分工具不登录也能用，其余会请你用 Adobe ID 登录。",
-    "ja": "使うとき：Adobe で画像を修正したり、デザインを作ったり、ストックを探したいとき。\n使い方：オンにして「Adobe で商品写真の背景を消して」と頼みます。一部はサインインなしで使え、残りは Adobe ID でのサインインを求められます。",
-    "ko": "언제: Adobe로 사진 보정, 디자인, 스톡 찾기를 하고 싶을 때.\n사용법: 켠 뒤 \"Adobe로 제품 사진 배경을 지워 줘\"라고 말합니다. 일부 도구는 로그인 없이 되고, 나머지는 Adobe ID 로그인을 요청합니다.",
-    "es": "Cuándo: quieres retocar una imagen, hacer un diseño o buscar stock con Adobe.\nCómo: actívalo y pide «quita el fondo de la foto del producto con Adobe». Algunas herramientas funcionan sin sesión; el resto te pide tu Adobe ID."
+    "en": "When to use it: you want a picture retouched, a design made or stock found with Adobe.\nHow: Connect and sign in once in your browser, then just ask in the chat, for example \"Make a title background with Adobe Firefly and put it at the start of the film\". The agent asks you before it changes anything in Adobe.",
+    "zh-CN": "什么时候用：想用 Adobe 修图、做设计或找图库素材。\n怎么用：点「连接」在浏览器里登录一次，之后在对话里直接说，比如「用 Adobe Firefly 生成一张片头背景图，放进片子开头」。智能体改动 Adobe 里的东西前会先问你。",
+    "ja": "使うとき：Adobe で画像を修正したり、デザインを作ったり、ストックを探したいとき。\n使い方：「接続」でブラウザから一度サインインし、あとはチャットで頼むだけ。例：「Adobe Firefly でタイトルの背景画像を作って、映像の冒頭に入れて」。Adobe の中を変える前には確認されます。",
+    "ko": "언제: Adobe로 사진 보정, 디자인, 스톡 찾기를 하고 싶을 때.\n사용법: 「연결」을 눌러 브라우저에서 한 번 로그인한 뒤 대화에서 바로 말하면 됩니다. 예: \"Adobe Firefly로 타이틀 배경 이미지를 만들어 영상 앞부분에 넣어 줘\". Adobe의 내용을 바꾸기 전에는 먼저 묻습니다.",
+    "es": "Cuándo: quieres retocar una imagen, hacer un diseño o buscar stock con Adobe.\nCómo: conecta e inicia sesión una vez en el navegador; luego pídelo en el chat, por ejemplo «Crea un fondo para el título con Adobe Firefly y ponlo al principio». El agente te pregunta antes de cambiar algo en Adobe."
+  },
+  "examples": {
+    "zh-CN": [
+      "用 Adobe Firefly 生成一张片头背景图，放进片子开头",
+      "从 Adobe Stock 找三段城市夜景的素材",
+      "用 Photoshop 把这张产品图去掉背景"
+    ],
+    "en": [
+      "Make a title background with Adobe Firefly and put it at the start of the film",
+      "Find three city-at-night clips on Adobe Stock",
+      "Remove the background of this product photo with Photoshop"
+    ],
+    "ja": [
+      "Adobe Firefly でタイトルの背景画像を作って、映像の冒頭に入れて",
+      "Adobe Stock で都市の夜景素材を 3 本探して",
+      "Photoshop でこの製品写真の背景を消して"
+    ],
+    "ko": [
+      "Adobe Firefly로 타이틀 배경 이미지를 만들어 영상 앞부분에 넣어 줘",
+      "Adobe Stock에서 도시 야경 소스를 세 개 찾아 줘",
+      "Photoshop으로 이 제품 사진의 배경을 지워 줘"
+    ],
+    "es": [
+      "Crea un fondo para el título con Adobe Firefly y ponlo al principio",
+      "Busca tres clips de ciudad de noche en Adobe Stock",
+      "Quita el fondo de esta foto de producto con Photoshop"
+    ]
   },
   "about": "Adobe Express, Firefly, Photoshop and Adobe Stock tools (Adobe's own MCP server)",
   "category": "picture",

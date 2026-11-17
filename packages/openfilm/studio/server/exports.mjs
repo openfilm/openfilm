@@ -23,6 +23,7 @@
  *                bitrate is asked with its peaks at it, so the file never comes out over
  *       preset   a platform's name, for the file name
  *       sidecar  'srt' | 'vtt': the subtitles as a file beside the video too
+ *       cover    a cover of the film (`covers/<name>`, covers.mjs) drawn as the video's first frame (h264 and hevc)
  *       loudness the sound brought to this many LUFS (-70 to -5), true peaks under -1 dBTP (render --loudness);
  *                none: as mixed
  *   { kind: 'gif', frame?, fill?, width? (long side, default 640), fps? (default 15) }
@@ -92,6 +93,7 @@ import { draftsRoot, jianyingClipLook, jianyingDraft } from './jianying.mjs';
 import { captionNeedsRendering, jianyingCaptionFonts } from './jianying-captions.mjs';
 import { slidesPdf, writePptx } from './slides.mjs';
 import { subtitlesForExport } from './captions.mjs';
+import { coverAsFirstFrame } from './covers.mjs';
 import { burned, even, frameBox, frameRatio, stageOf } from '../../src/burn.mjs';
 export { frameBox, frameRatio };
 import { filmSubtitleCuesInRange, filmSubtitleCuesInRanges, filmSubtitleShown, filmSubtitleSrt, filmSubtitleTranscript, filmSubtitleVtt } from './film-subtitle.mjs';
@@ -116,7 +118,7 @@ export { exportsRoot };
  * @typedef {{ frame?: FrameId, fill?: 'contain' | 'cover', burnSubtitles?: boolean }} Framing
  * @typedef {Framing & { kind: 'video', codec?: VideoCodec, shortEdge?: number, scale?: number,
  *   fps?: number, quality?: Quality, bitrate?: number, maxrate?: number, audio?: boolean, clip?: string, preset?: string, sidecar?: 'srt' | 'vtt', hardware?: boolean, loudness?: number,
- *   samples?: number, shutter?: number }} VideoAsk
+ *   samples?: number, shutter?: number, cover?: string }} VideoAsk
  * @typedef {Framing & { kind: 'gif', width?: number, fps?: number }} GifAsk
  * @typedef {{ kind: 'audio', format?: 'wav' | 'm4a' | 'mp3', mix?: boolean, stems?: boolean, loudness?: number }} AudioAsk
  * @typedef {Framing & { kind: 'stills', as?: 'files' | 'zip', format?: 'png' | 'jpg', shortEdge?: number, at?: number[] }} StillsAsk
@@ -378,6 +380,9 @@ function checked(/** @type {ExportAsk} */ ask) {
       if (ask.clip !== undefined && (typeof ask.clip !== 'string' || !ask.clip || ask.clip.length > 200)) throw new ExportError(`clip: a clip id of ${FILM_FILE}`);
       if (ask.preset !== undefined && (typeof ask.preset !== 'string' || ask.preset.length > 60)) throw new ExportError('preset: a name, at most 60 characters');
       if (ask.sidecar !== undefined && ask.sidecar !== 'srt' && ask.sidecar !== 'vtt') throw new ExportError('sidecar: srt or vtt');
+      if (ask.cover !== undefined && (typeof ask.cover !== 'string' || !/^covers\/[^/]+$/.test(ask.cover))) throw new ExportError('cover: a cover of the film, covers/<name>');
+      if (ask.cover !== undefined && !['h264', 'hevc'].includes(ask.codec ?? 'h264')) throw new ExportError('cover: for h264 and hevc');
+      if (ask.cover !== undefined && ask.clip !== undefined) throw new ExportError('cover: for the whole film, not a clip');
       if (ask.loudness !== undefined && !isLoudness(ask.loudness)) throw new ExportError(`loudness: ${LOUDNESS_RANGE[0]} to ${LOUDNESS_RANGE[1]} LUFS`);
       break;
     case 'gif':
@@ -1072,6 +1077,11 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
             broken(hw);
             await again(null);
           }
+        }
+        /* the film's cover as its first frame (covers.mjs), before the file is the export's */
+        if (ask.cover) {
+          update(job, { phase: 'encoding', rate: 0, etaMs: null });
+          await coverAsFirstFrame(root, ask.cover, part, size, codec === 'hevc' ? 'hevc' : 'h264');
         }
         await renameSafely(part, out);
         update(job, { out, outputs: [out] });

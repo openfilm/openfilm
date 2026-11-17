@@ -5,7 +5,6 @@
     "vectorscope": "Vector",
     "histogram": "Histograma"
   },
-  "noClip": "Elige un clip de vídeo en la línea de tiempo o lleva el cabezal sobre uno.",
   "clips": "{n} clips",
   "footage": "Material",
   "layers": "Capas",
@@ -87,7 +86,7 @@
   "groupNote": "{name} · grupo",
   "notGraded": "Sin corregir",
   "graded": "Corregido",
-  "noShots": "La película aún no tiene clips de vídeo.",
+  "noShots": "No hay planos que graduar",
   "read": {
     "middle": "Medios",
     "white": "Blanco",
@@ -136,5 +135,31 @@
   "byYou": "Tú",
   "justNow": "ahora",
   "minutesAgo": "hace {n} min",
-  "changed": "cambió la corrección"
+  "changed": "cambió la corrección",
+  "startNone": "Este vídeo aún no tiene imagen que graduar",
+  "startNoneBody": "Color gradúa la imagen de la película: vídeos, fotos e imágenes hechas con páginas web. La línea de tiempo aún no tiene ninguna, solo sonido.",
+  "startNoneStep1": "Vuelve a la edición y arrastra un vídeo o una foto de la biblioteca a la línea de tiempo, o pide a tu agente que haga una.",
+  "startNoneStep2": "Vuelve a Color: cada imagen es un plano de la tira; haz clic para graduarlo.",
+  "toEdit": "Volver a la edición",
+  "startPick": "Elige un plano para empezar a graduar",
+  "startPickBody": "La tira tiene todas las imágenes de la película: vídeos, fotos y páginas. Se gradúa un plano cada vez, o varios a la vez manteniendo ⇧.",
+  "startStep1": "Haz clic en un plano de la tira; la imagen salta a él. Arrastra sobre su imagen para recorrer el plano.",
+  "startStep2": "En Básico mueve los deslizadores de exposición, contraste y temperatura, o en Ruedas empuja sombras, medios tonos y luces hacia un color; mira el resultado en los scopes y en la imagen.",
+  "startStep3": "Cuando un plano esté bien, usa Copiar a… para los demás. O di en el chat «haz todos los planos un poco más cálidos» y sigue ajustando después de tu agente.",
+  "startFirst": "Empezar por el primer plano",
+  "tabTip": {
+    "basic": "Deslizadores de exposición, contraste, saturación y temperatura: lo habitual para empezar",
+    "wheels": "Empuja sombras, medios tonos y luces hacia un color; la línea bajo cada rueda aclara u oscurece",
+    "curves": "Por brillo: añade puntos a la curva y arrástralos para levantar sombras o contener luces",
+    "hue": "Por color: cambia el tono, la saturación o el brillo de un solo color, como un cielo más azul",
+    "styles": "Aplica un look con un clic y ajusta su intensidad"
+  },
+  "drawnIn": "Imagen · {kind}",
+  "drawnInTip": "La imagen de una página o una foto ya es lo que muestra la pantalla: no hay entrada de material que elegir.",
+  "kindPage": "Página",
+  "kindStill": "Foto",
+  "drawnOut": "Salida · tal cual",
+  "hueDrawn": "Las curvas de tono no se pueden dibujar en una página o una foto",
+  "exportLutDrawn": "La gradación de una página o una foto la dibuja el navegador, no se exporta como LUT",
+  "scrubTip": "Arrastra: recorre el plano"
 }

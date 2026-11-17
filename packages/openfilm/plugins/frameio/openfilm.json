@@ -16,11 +16,38 @@
     "es": "Revisión con Frame.io: el agente lee los comentarios del equipo, sube montajes y trae material."
   },
   "details": {
-    "en": "When to use it: you share cuts for review in Frame.io (V4 accounts).\nHow: turn it on, then ask \"apply the comments on v3 from Frame.io\". The first time it asks you to sign in with your Adobe ID.",
-    "zh-CN": "什么时候用：你在 Frame.io 上发版本给别人审（V4 账号）。\n怎么用：打开后说「按 Frame.io 上 v3 的批注改」。第一次会请你用 Adobe ID 登录。",
-    "ja": "使うとき：Frame.io でカットをレビューに出しているとき（V4 アカウント）。\n使い方：オンにして「Frame.io の v3 のコメントを反映して」と頼みます。初回は Adobe ID でのサインインを求められます。",
-    "ko": "언제: Frame.io에서 컷을 검토받을 때(V4 계정).\n사용법: 켠 뒤 \"Frame.io의 v3 코멘트를 반영해 줘\"라고 말합니다. 처음에는 Adobe ID 로그인을 요청합니다.",
-    "es": "Cuándo: compartes montajes para revisión en Frame.io (cuentas V4).\nCómo: actívalo y pide «aplica los comentarios de la v3 en Frame.io». La primera vez te pedirá iniciar sesión con tu Adobe ID."
+    "en": "When to use it: you share cuts for review in Frame.io (V4 accounts).\nHow: Connect and sign in once in your browser, then just ask in the chat, for example \"Read every comment on this film in Frame.io and make a new cut that answers them\". The agent asks you before it changes anything in Frame.io.",
+    "zh-CN": "什么时候用：你在 Frame.io 上发版本给别人审（V4 账号）。\n怎么用：点「连接」在浏览器里登录一次，之后在对话里直接说，比如「读一下 Frame.io 上这条片子的所有批注，按批注改一版」。智能体改动 Frame.io 里的东西前会先问你。",
+    "ja": "使うとき：Frame.io でカットをレビューに出しているとき（V4 アカウント）。\n使い方：「接続」でブラウザから一度サインインし、あとはチャットで頼むだけ。例：「Frame.io のこの映像へのコメントをすべて読んで、それに沿って直して」。Frame.io の中を変える前には確認されます。",
+    "ko": "언제: Frame.io에서 컷을 검토받을 때(V4 계정).\n사용법: 「연결」을 눌러 브라우저에서 한 번 로그인한 뒤 대화에서 바로 말하면 됩니다. 예: \"Frame.io에 달린 이 영상의 모든 코멘트를 읽고 그대로 고친 버전을 만들어 줘\". Frame.io의 내용을 바꾸기 전에는 먼저 묻습니다.",
+    "es": "Cuándo: compartes montajes para revisión en Frame.io (cuentas V4).\nCómo: conecta e inicia sesión una vez en el navegador; luego pídelo en el chat, por ejemplo «Lee todos los comentarios de esta película en Frame.io y haz una versión que los resuelva». El agente te pregunta antes de cambiar algo en Frame.io."
+  },
+  "examples": {
+    "zh-CN": [
+      "读一下 Frame.io 上这条片子的所有批注，按批注改一版",
+      "把这一版上传到 Frame.io 的「客户审片」项目",
+      "把 Frame.io 上客户标出的问题列成清单，告诉我哪些已经改了"
+    ],
+    "en": [
+      "Read every comment on this film in Frame.io and make a new cut that answers them",
+      "Upload this version to the \"Client review\" project in Frame.io",
+      "List the issues the client marked in Frame.io and tell me which are fixed"
+    ],
+    "ja": [
+      "Frame.io のこの映像へのコメントをすべて読んで、それに沿って直して",
+      "このバージョンを Frame.io の「クライアント確認」プロジェクトにアップロードして",
+      "Frame.io でクライアントが指摘した点を一覧にして、直した所を教えて"
+    ],
+    "ko": [
+      "Frame.io에 달린 이 영상의 모든 코멘트를 읽고 그대로 고친 버전을 만들어 줘",
+      "이 버전을 Frame.io의 「클라이언트 검수」 프로젝트에 올려 줘",
+      "Frame.io에서 클라이언트가 지적한 점을 목록으로 만들고 어떤 게 고쳐졌는지 알려 줘"
+    ],
+    "es": [
+      "Lee todos los comentarios de esta película en Frame.io y haz una versión que los resuelva",
+      "Sube esta versión al proyecto «Revisión cliente» de Frame.io",
+      "Haz una lista de lo que marcó el cliente en Frame.io y dime qué está corregido"
+    ]
   },
   "about": "reads review comments, uploads versions and fetches media in Frame.io (Frame.io's own MCP server)",
   "category": "edit",

@@ -305,12 +305,15 @@ function defaultsFile(dir, name, settings) {
  * @param {string} agent
  * `mine`: the person's own skills folder (openfilm/skills mySkillsDir); `prefsHome`: the Studio home whose prefs.json
  * says which official skills are installed and which skills are off (openfilm/skills usableSkills).
+ * `connectorsFor`: the connectors signed in, at their doors (connectors.mjs forSession); none without it.
  * @param {{ cwd: string, env?: Record<string, string>, dataDir: string, mine?: string, prefsHome?: string, allowed?: string[],
- *   mcpAllowed?: string[], home?: string }} o
+ *   mcpAllowed?: string[], home?: string, connectorsFor?: (servers: Array<{ name: string, plugin: string, type: string }>) => Promise<Array<{ name: string, type: string, url: string }>> }} o
  */
 export async function sessionSkills(agent, o) {
-  const [given, connectors] = await Promise.all([skillsOf(agent, o), pluginsLib().then((p) => p.connectorServers(o.prefsHome), () => [])]);
-  /* the connectors on (openfilm/plugins connectorServers): their MCP servers, given to the session (agents.mjs acpServers) */
+  const [given, on] = await Promise.all([skillsOf(agent, o), pluginsLib().then((p) => p.connectorServers(o.prefsHome), () => [])]);
+  /* the connectors on (openfilm/plugins connectorServers) that the person signed in to in OpenFilm, each at its door here
+     (connectors.mjs forSession): given to the session (agents.mjs acpServers), never with credentials of its own */
+  const connectors = on.length && o.connectorsFor ? await o.connectorsFor(on).catch(() => []) : [];
   return connectors.length ? { ...given, connectors, log: { ...given.log, connectors: connectors.map((c) => c.name) } } : given;
 }
 

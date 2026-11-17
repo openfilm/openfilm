@@ -76,6 +76,14 @@ contextBridge.exposeInMainWorld('openfilmNative', {
     allowMcp: (id, name, allowed) => ipcRenderer.invoke('desktop:agents:mcp-allow', { id, name, allowed: allowed === true }),
     onChange: on('desktop:agents'),
   },
+  /* the connectors: signed in here once for every agent (connectors.mjs) */
+  connectors: {
+    list: () => ipcRenderer.invoke('desktop:connectors:list'),
+    connect: (id) => ipcRenderer.invoke('desktop:connectors:connect', { id }),
+    cancel: (id) => ipcRenderer.invoke('desktop:connectors:cancel', { id }),
+    disconnect: (id) => ipcRenderer.invoke('desktop:connectors:disconnect', { id }),
+    onChange: on('desktop:connectors'),
+  },
   /* the agents' turns (local-agents-ipc.mjs) */
   localAgents: {
     list: () => ipcRenderer.invoke('desktop:local-agents:list'),

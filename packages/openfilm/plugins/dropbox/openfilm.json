@@ -16,11 +16,38 @@
     "es": "Tu Dropbox para el agente: busca material, imágenes y documentos y los trae a la película."
   },
   "details": {
-    "en": "When to use it: your footage or brief lives in Dropbox.\nHow: turn it on, then ask the agent, e.g. \"use the interview clips in Dropbox/Shoot\". The first time it asks you to sign in to Dropbox.",
-    "zh-CN": "什么时候用：素材或脚本存在 Dropbox 里。\n怎么用：打开后直接告诉智能体，比如「用 Dropbox/拍摄 里的采访片段」。第一次会请你登录 Dropbox。",
-    "ja": "使うとき：素材や台本が Dropbox にあるとき。\n使い方：オンにしてエージェントに「Dropbox/撮影 のインタビューを使って」と頼みます。初回は Dropbox へのサインインを求められます。",
-    "ko": "언제: 영상이나 대본이 Dropbox에 있을 때.\n사용법: 켠 뒤 에이전트에게 \"Dropbox/촬영의 인터뷰 클립을 써 줘\"라고 말합니다. 처음에는 Dropbox 로그인을 요청합니다.",
-    "es": "Cuándo: tu material o guion está en Dropbox.\nCómo: actívalo y pide al agente, p. ej., «usa las entrevistas de Dropbox/Rodaje». La primera vez te pedirá iniciar sesión en Dropbox."
+    "en": "When to use it: your footage or brief lives in Dropbox.\nHow: Connect and sign in once in your browser, then just ask in the chat, for example \"Cut the footage in the \"Product shoot\" folder of my Dropbox into a 30-second teaser\". The agent asks you before it changes anything in Dropbox.",
+    "zh-CN": "什么时候用：素材或脚本存在 Dropbox 里。\n怎么用：点「连接」在浏览器里登录一次，之后在对话里直接说，比如「把我 Dropbox 里「产品拍摄」文件夹的视频按时间剪成 30 秒预告片」。智能体改动 Dropbox 里的东西前会先问你。",
+    "ja": "使うとき：素材や台本が Dropbox にあるとき。\n使い方：「接続」でブラウザから一度サインインし、あとはチャットで頼むだけ。例：「Dropbox の「製品撮影」フォルダの映像で 30 秒の予告編を作って」。Dropbox の中を変える前には確認されます。",
+    "ko": "언제: 영상이나 대본이 Dropbox에 있을 때.\n사용법: 「연결」을 눌러 브라우저에서 한 번 로그인한 뒤 대화에서 바로 말하면 됩니다. 예: \"내 Dropbox의 「제품 촬영」 폴더 영상으로 30초 티저를 만들어 줘\". Dropbox의 내용을 바꾸기 전에는 먼저 묻습니다.",
+    "es": "Cuándo: tu material o guion está en Dropbox.\nCómo: conecta e inicia sesión una vez en el navegador; luego pídelo en el chat, por ejemplo «Monta un teaser de 30 segundos con los vídeos de la carpeta «Rodaje producto» de mi Dropbox». El agente te pregunta antes de cambiar algo en Dropbox."
+  },
+  "examples": {
+    "zh-CN": [
+      "把我 Dropbox 里「产品拍摄」文件夹的视频按时间剪成 30 秒预告片",
+      "从 Dropbox 找出上周拍的所有采访素材，挑最好的三段",
+      "把这部片子导出后传到 Dropbox 的「成片」文件夹"
+    ],
+    "en": [
+      "Cut the footage in the \"Product shoot\" folder of my Dropbox into a 30-second teaser",
+      "Find last week's interview footage in my Dropbox and pick the best three takes",
+      "Export this film and put it in the \"Finals\" folder of my Dropbox"
+    ],
+    "ja": [
+      "Dropbox の「製品撮影」フォルダの映像で 30 秒の予告編を作って",
+      "先週撮ったインタビュー素材を Dropbox から探して、いちばん良い 3 本を選んで",
+      "この映像を書き出して Dropbox の「完成」フォルダに入れて"
+    ],
+    "ko": [
+      "내 Dropbox의 「제품 촬영」 폴더 영상으로 30초 티저를 만들어 줘",
+      "지난주 찍은 인터뷰 소스를 Dropbox에서 찾아 가장 좋은 세 개를 골라 줘",
+      "이 영상을 내보내서 Dropbox의 「완성본」 폴더에 넣어 줘"
+    ],
+    "es": [
+      "Monta un teaser de 30 segundos con los vídeos de la carpeta «Rodaje producto» de mi Dropbox",
+      "Busca en mi Dropbox las entrevistas de la semana pasada y elige las tres mejores tomas",
+      "Exporta esta película y déjala en la carpeta «Finales» de mi Dropbox"
+    ]
   },
   "about": "finds and fetches files from the person's Dropbox (Dropbox's own MCP server)",
   "category": "material",

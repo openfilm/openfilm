@@ -57,7 +57,7 @@ const HELD_HERE: readonly string[] = ['edit', 'motion', 'color', 'canvas'];
  */
 export function useWorkbenchShown(projectId: string, canvasProject: string | undefined, showError: (message: string) => void, rearranging: React.RefObject<boolean>) {
   /* the canvas over the panes, or the edit: by project, as left */
-  const [canvasOpen, setCanvasOpenState] = React.useState(() => canvasShown(projectId));
+  const [canvasLeft, setCanvasOpenState] = React.useState(() => canvasShown(projectId));
   React.useEffect(() => { setCanvasOpenState(canvasShown(projectId)); }, [projectId]);
   /* the edit seen as an animation editor sees it (components/MotionTimeline), in the timeline's place */
   const [motionOpen, keepMotionOpen] = useKeptFlag('openfilm.project.motion', false);
@@ -71,7 +71,6 @@ export function useWorkbenchShown(projectId: string, canvasProject: string | und
     setCanvasOpenState(open);
     try { localStorage.setItem(`${CANVAS_KEY}:${projectId}`, open ? '1' : '0'); } catch { /* for this launch only */ }
   }, [projectId, rearranging]);
-  const workMode: 'canvas' | 'edit' | 'motion' | 'color' = canvasOpen ? 'canvas' : colorOpen ? 'color' : motionOpen ? 'motion' : 'edit';
   /* the motion view opens what it is worked in (the workbench's own panes) with it */
   const setWorkMode = React.useCallback((mode: 'canvas' | 'edit' | 'motion' | 'color') => {
     setCanvasOpen(mode === 'canvas');
@@ -91,6 +90,10 @@ export function useWorkbenchShown(projectId: string, canvasProject: string | und
     try { if (next) localStorage.setItem(`${SURFACE_KEY}:${projectId}`, next); else localStorage.removeItem(`${SURFACE_KEY}:${projectId}`); } catch { /* for this launch only */ }
   }, [projectId]);
   const surface = pickedSurface != null && workModes.includes(pickedSurface) ? pickedSurface : null;
+  /* the canvas as left for the project, shown only while no plugin's surface is in its place: one picked over it (its
+     own arrangement among the panels) is laid out as the panes are, not in the canvas's room */
+  const canvasOpen = canvasLeft && surface == null;
+  const workMode: 'canvas' | 'edit' | 'motion' | 'color' = canvasOpen ? 'canvas' : colorOpen ? 'color' : motionOpen ? 'motion' : 'edit';
   /* the plugins of the project, and the arrangements their workbenches are laid out in (lib/blocks) */
   const plugins = usePluginsOf(projectId);
   const specs = arrangementSpecs(plugins);

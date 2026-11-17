@@ -22,6 +22,7 @@ import { AppMenu } from '@/components/AppMenu';
 import { DesktopDialog } from '@/components/DesktopDialog';
 import { PLUGIN_ICONS } from '@/components/library/PluginsPane';
 import { ModeSwitcher } from '@/components/ModeSwitcher';
+import { useWorkbenchGuide, WorkbenchGuide } from '@/components/WorkbenchGuide';
 import { ProjectsPopover } from '@/components/ProjectsLibrary';
 import { ProjectTabs } from '@/components/ProjectTabs';
 import tabStyles from '@/components/ProjectTabs.module.css';
@@ -73,6 +74,9 @@ function Bar({ frame, loaded }: { frame: ReturnType<typeof useProjectFrame>; loa
     /* the page's panels are being rearranged (shell/layout): the workbench shown stays the one it is meanwhile */
     layoutEditing,
   } = frame;
+  /* the workbench shown, as the top bar names it, and what it is for (by itself the first time it is shown) */
+  const shownBench = surface ?? (canvasOpen ? 'canvas' : colorOpen ? 'color' : 'edit');
+  const guide = useWorkbenchGuide(frame.noBench ? null : shownBench, benchPlugins);
   const [renaming, setRenaming] = React.useState(false);
   const [titleDraft, setTitleDraft] = React.useState('');
   const history = useHistoryWindow(projectId, { projectName: title, onError: toast.showError, className: TOP_BTN });
@@ -139,7 +143,7 @@ function Bar({ frame, loaded }: { frame: ReturnType<typeof useProjectFrame>; loa
         {/* the buttons plugins put on the bar (openfilm/studio topBar) */}
         <PluginTools />
         {/* the edit or the canvas, in the panes' place: the one shown, by its name, and a click for the other */}
-        {pickBench ? <ModeSwitcher now={surface ?? (canvasOpen ? 'canvas' : colorOpen ? 'color' : 'edit')} plugins={benchPlugins} onPick={showWorkbench} disabled={layoutEditing} />
+        {pickBench ? <ModeSwitcher now={shownBench} plugins={benchPlugins} onPick={showWorkbench} onGuide={() => guide.open(shownBench)} disabled={layoutEditing} />
           : canToggleCanvas ? <Tooltip label={t(canvasOpen ? 'canvas.toEdit' : 'canvas.toCanvas')} action="work-mode" side="bottom">
           <button type="button" aria-label={t(canvasOpen ? 'canvas.toEdit' : 'canvas.toCanvas')} data-work-mode={canvasOpen ? 'canvas' : 'edit'} disabled={layoutEditing} onClick={() => setCanvasOpen(!canvasOpen)}
             className="flex h-[26px] shrink-0 items-center rounded-md bg-[var(--bg-hover)] px-2.5 text-[12.5px] font-medium text-[var(--text)] transition hover:bg-[var(--bg-pressed)]">
@@ -151,6 +155,7 @@ function Bar({ frame, loaded }: { frame: ReturnType<typeof useProjectFrame>; loa
     </div>
     {/* the version history's window, put over the page (on the document's body) */}
     {history.over}
+    <WorkbenchGuide plugin={guide.plugin} benches={pickBench ? benchPlugins.length : 0} onClose={guide.close} />
   </>);
 }
 

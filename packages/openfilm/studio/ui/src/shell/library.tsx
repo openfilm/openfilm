@@ -19,7 +19,8 @@ import { useT } from '@/i18n';
 import { HOST_PANEL_WIDTH, studioHost, type HostPanel } from '@/lib/host';
 import { BUILT_IN, fromLibrary, useLibraryIndex } from '@/lib/library';
 import type { Plugin } from '@/lib/plugins';
-import { importIntoSaved, refreshSaved, savedActions, savedSources, useSavedListing } from '@/lib/saved';
+import { importIntoSaved, refreshSaved, savedActions, savedSources, starSaved, useSavedListing, useStarredSaved } from '@/lib/saved';
+import { Star } from 'lucide-react';
 import { relOf, useLibraryPlaces } from '@/lib/library-places';
 import { fileRef, stillUrl } from '@/lib/studio-refs';
 import type { MediaListing, MediaSources, WorkspaceResource } from '@/lib/workspace-resources';
@@ -185,6 +186,13 @@ export function LibraryPlace({ frame }: { frame: ReturnType<typeof useProjectFra
     return () => { live = false; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId]);
+  /* the person's own files starred: the file menu stars them (or no longer), and they are under 收藏 */
+  const starred = useStarredSaved();
+  const starMenu = (files: WorkspaceResource[]) => {
+    const all = files.length > 0 && files.every((f) => starred.has(f.path));
+    return files.length ? [{ id: 'star', label: t(all ? 'assetDrawer.unstar' : 'assetDrawer.star'), icon: <Star size={14} />,
+      onSelect: () => { for (const f of files) void starSaved(f.path, !all); } }, { id: 'star-sep', separator: true } as const] : [];
+  };
   /* where the drawer writes the way out of a try when no workbench has a place for it */
   const noDismiss = React.useRef<() => boolean>(() => false);
   if (!loaded || failure) return null;
@@ -222,6 +230,7 @@ export function LibraryPlace({ frame }: { frame: ReturnType<typeof useProjectFra
       onBring={(paths, into, mode) => savedActions.bring(paths, into, mode)}
       {...(studioHost?.refer ? { onReferFile: (file: WorkspaceResource) => void referOutside(file) } : {})}
       scope="saved"
+      browser={{ menu: starMenu }}
       onAdd={canvasOpen ? (file) => { void requestCanvasFiles(file.path, true); } : library ? (file) => library.add(file, true) : undefined}
     />
   ) : (
@@ -273,7 +282,9 @@ export function LibraryPlace({ frame }: { frame: ReturnType<typeof useProjectFra
             onUpload={(files, into) => { if (into === 'project') void onImport(files, 'assets', () => {}); else void savedImport(files, into, () => {}).catch((e: unknown) => toast.showError(e instanceof Error ? e.message : String(e))); }}
             onKeep={(path, name, into) => saveFiles([{ path, name } as WorkspaceResource], into)}
             captions={library?.captions} covers={library?.covers} speak={library?.speak} recorder={library?.recorder} onServices={openServices}
-            projectId={projectId} folder={loaded.project.path} />
+            projectId={projectId} folder={loaded.project.path}
+            onPickSaved={pickSavedFile}
+            onAddSaved={canvasOpen ? (file) => { void requestCanvasFiles(file.path, true); } : library ? (file) => library.add(file, true) : undefined} />
       </WorkspaceLibraryPane>
       {/* the plugins, in a window of their own (lib/plugins-window opens it) */}
       <PluginsWindow projectId={projectId} onWorkbenchOn={workbenchOn} />

@@ -16,11 +16,38 @@
     "es": "Publica con Vimeo: el agente sube la película, pone título y descripción y consulta cómo va."
   },
   "details": {
-    "en": "When to use it: you host or share films on Vimeo (Professional, Studio or Enterprise plans; in beta).\nHow: turn it on, then ask \"upload the export to Vimeo as unlisted\". The first time it asks you to sign in to Vimeo.",
-    "zh-CN": "什么时候用：你在 Vimeo 上托管或分享片子（需要专业版、工作室版或企业版；测试中）。\n怎么用：打开后说「把导出的视频以不公开方式传到 Vimeo」。第一次会请你登录 Vimeo。",
-    "ja": "使うとき：Vimeo で映像を公開・共有しているとき（Professional、Studio、Enterprise プラン、ベータ）。\n使い方：オンにして「書き出しを限定公開で Vimeo にアップして」と頼みます。初回は Vimeo へのサインインを求められます。",
-    "ko": "언제: Vimeo에서 영상을 호스팅·공유할 때(Professional, Studio, Enterprise 요금제, 베타).\n사용법: 켠 뒤 \"내보낸 영상을 Vimeo에 일부 공개로 올려 줘\"라고 말합니다. 처음에는 Vimeo 로그인을 요청합니다.",
-    "es": "Cuándo: alojas o compartes películas en Vimeo (planes Professional, Studio o Enterprise; en beta).\nCómo: actívalo y pide «sube la exportación a Vimeo como oculta». La primera vez te pedirá iniciar sesión en Vimeo."
+    "en": "When to use it: you host or share films on Vimeo (Professional, Studio or Enterprise plans; in beta).\nHow: Connect and sign in once in your browser, then just ask in the chat, for example \"Upload this film to Vimeo and write its title and description\". The agent asks you before it changes anything in Vimeo.",
+    "zh-CN": "什么时候用：你在 Vimeo 上托管或分享片子（需要专业版、工作室版或企业版；测试中）。\n怎么用：点「连接」在浏览器里登录一次，之后在对话里直接说，比如「把这部片子上传到 Vimeo，标题和简介你来写」。智能体改动 Vimeo 里的东西前会先问你。",
+    "ja": "使うとき：Vimeo で映像を公開・共有しているとき（Professional、Studio、Enterprise プラン、ベータ）。\n使い方：「接続」でブラウザから一度サインインし、あとはチャットで頼むだけ。例：「この映像を Vimeo にアップロードして、タイトルと説明も書いて」。Vimeo の中を変える前には確認されます。",
+    "ko": "언제: Vimeo에서 영상을 호스팅·공유할 때(Professional, Studio, Enterprise 요금제, 베타).\n사용법: 「연결」을 눌러 브라우저에서 한 번 로그인한 뒤 대화에서 바로 말하면 됩니다. 예: \"이 영상을 Vimeo에 올리고 제목과 설명도 써 줘\". Vimeo의 내용을 바꾸기 전에는 먼저 묻습니다.",
+    "es": "Cuándo: alojas o compartes películas en Vimeo (planes Professional, Studio o Enterprise; en beta).\nCómo: conecta e inicia sesión una vez en el navegador; luego pídelo en el chat, por ejemplo «Sube esta película a Vimeo y escribe su título y descripción». El agente te pregunta antes de cambiar algo en Vimeo."
+  },
+  "examples": {
+    "zh-CN": [
+      "把这部片子上传到 Vimeo，标题和简介你来写",
+      "看看我 Vimeo 上最近三条视频的播放数据，哪条看完率最高",
+      "把 Vimeo 上「发布会」那条视频的简介改成新的版本"
+    ],
+    "en": [
+      "Upload this film to Vimeo and write its title and description",
+      "Look at the stats of my last three Vimeo videos: which one is watched to the end most?",
+      "Update the description of the \"Launch\" video on Vimeo"
+    ],
+    "ja": [
+      "この映像を Vimeo にアップロードして、タイトルと説明も書いて",
+      "Vimeo の最近の 3 本の再生データを見て、最後まで見られているのはどれ？",
+      "Vimeo の「発表会」動画の説明を新しくして"
+    ],
+    "ko": [
+      "이 영상을 Vimeo에 올리고 제목과 설명도 써 줘",
+      "내 Vimeo 최근 영상 세 개의 재생 데이터를 보고, 끝까지 본 비율이 가장 높은 건 어느 거야?",
+      "Vimeo의 「런칭」 영상 설명을 새 버전으로 바꿔 줘"
+    ],
+    "es": [
+      "Sube esta película a Vimeo y escribe su título y descripción",
+      "Mira las estadísticas de mis tres últimos vídeos de Vimeo: ¿cuál se ve hasta el final más?",
+      "Actualiza la descripción del vídeo «Lanzamiento» en Vimeo"
+    ]
   },
   "about": "uploads films, edits their details and reads their analytics on Vimeo (Vimeo's own MCP server, beta)",
   "category": "tool",

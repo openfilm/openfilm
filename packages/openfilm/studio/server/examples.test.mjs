@@ -51,6 +51,13 @@ test('the Community\'s listings: each in its publisher\'s repository, its poster
   });
 });
 
+test('a listing without a path: the top of its own repository', () => {
+  const commit = 'b'.repeat(40);
+  const [one] = readExamples({ examples: [{ name: 'dot-lab', repo: 'https://github.com/ana/dot-lab', commit, title: 'Dot Lab', poster: 'look.jpg' }] }, 'https://index.test/index.json');
+  assert.equal(one.url, 'https://github.com/ana/dot-lab/tree/main');
+  assert.equal(one.poster, `https://raw.githubusercontent.com/ana/dot-lab/${commit}/look.jpg`);
+});
+
 test('news: those of today, newest first, English always there; a link is https or a line of the Community', () => {
   const news = readNews({
     news: [

@@ -97,10 +97,15 @@ A plugin reaches a service your agent can use when its folder has a `.mcp.json`,
 
 Each server is a remote one (`"type": "http"`, an `https://` address, optional string `headers`) or a program to run
 (`"type": "stdio"`, its `command`, `args` and string `env`); at most eight, each named in lowercase letters, digits,
-`-` and `_`. While the plugin is on, the desktop app gives its servers to the agent's session over ACP (`mcpServers`
-of `session/new`; a remote one only to an agent that says it takes them). The agent signs in to the service itself the
-first time, as in its terminal: put no keys in the file. A plugin with only a `.mcp.json` and its `openfilm.json` is
-listed as a connector in the Community.
+`-` and `_`. Put no keys in the file.
+
+The desktop app signs the person in to a remote server once, in their browser (the MCP authorization flow: OAuth with
+PKCE, OpenFilm registering itself with the service's authorization server, a loopback redirect), keeps what it gets
+sealed with the system's keychain, and refreshes it. Every agent reaches the server through a door on 127.0.0.1 that
+puts the person's token on each request (ACP `mcpServers` of `session/new`), so OpenFilm's own agent, Claude Code and
+Codex all use it and none holds the credentials; a tool that may change something asks the person first. A plugin with
+only a `.mcp.json` and its `openfilm.json` is listed as a connector in the Community, with `examples` (a few things a
+person could say, in each language) offered on its page.
 
 ### `look`: what an agent sees of your dimension
 

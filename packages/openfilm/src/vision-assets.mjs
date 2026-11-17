@@ -114,6 +114,9 @@ const scripts = new Set([
   'color/bspline.mjs',
   'color/fixed-function.mjs',
   'color/aces2.mjs',
+  /* a page's or a still's grade, drawn as an SVG filter (timeline.mjs), and the parts of a grade's files by their names */
+  'color/page-grade.mjs',
+  'color/chain.mjs',
 ]);
 const files = new Set([
   'vision_bundle.mjs',

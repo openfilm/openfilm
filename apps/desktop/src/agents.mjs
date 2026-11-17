@@ -126,6 +126,20 @@ export function withToolKind(update, toolKinds) {
   return kind ? { ...update, kind } : update;
 }
 
+/**
+ * A connector's tool call as the chat names it: Claude Code's `mcp__notion__search`, Codex's `mcp.notion.search` (and
+ * the like) as "Notion · search", by the connectors the session was given (`connectors`: their names and titles).
+ */
+export function withConnectorTitle(update, connectors) {
+  if (!connectors?.length || (update?.sessionUpdate !== 'tool_call' && update?.sessionUpdate !== 'tool_call_update') || typeof update.title !== 'string') return update;
+  for (const c of connectors) {
+    const hit = new RegExp(`^(?:mcp__${c.name}__|mcp\\.${c.name}\\.|${c.name}[.:/])(.+)$`).exec(update.title)
+      ?? (update.title.startsWith(`${c.name}_`) ? [null, update.title.slice(c.name.length + 1)] : null);
+    if (hit) return { ...update, title: `${c.title ?? c.name} · ${hit[1]}` };
+  }
+  return update;
+}
+
 export const isAgentId = (id) => typeof id === 'string' && Object.hasOwn(AGENTS, id);
 
 /** The variables an agent is started with (`defaults`) that the person's shell does not set itself. */
@@ -1366,7 +1380,7 @@ export class AgentSession {
         return answers ? { action: 'accept', content: formContent(questions, answers) } : { action: 'decline' };
       })
       .onNotification(acp.methods.client.session.update, (ctx) => {
-        const update = withToolKind(ctx.params.update, this.spec.toolKinds);
+        const update = withConnectorTitle(withToolKind(ctx.params.update, this.spec.toolKinds), this.connectors);
         if (SPOKE.has(update?.sessionUpdate)) this.spoke = true;
         this.heard = Date.now();
         const phase = agentPhase(update);
@@ -1395,7 +1409,7 @@ export class AgentSession {
 
     const params = {
       cwd: this.opts.cwd,
-      mcpServers: acpServers(skills?.connectors ?? [], init.agentCapabilities?.mcpCapabilities),
+      mcpServers: acpServers((this.connectors = skills?.connectors ?? []), init.agentCapabilities?.mcpCapabilities),
       ...(skills?.additionalDirectories ? { additionalDirectories: skills.additionalDirectories } : {}),
       ...(claude ? { _meta: { systemPrompt: { append: instructions }, claudeCode: { options: {
         ...skills?.claude,

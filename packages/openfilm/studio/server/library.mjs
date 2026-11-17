@@ -361,11 +361,14 @@ export async function libraryFileFetched(/** @type {unknown} */ rel) {
 /** Where the starred things are kept in the shared prefs.json. */
 const FAVORITES = 'libraryFavorites';
 
+/** A file of the person's own library starred: by its identity there (asset-library.mjs), so it stays starred as it moves. */
+export const SAVED_STAR = /^saved:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
 /** Keep skill stars by UID so they survive going offline or moving between Installed and Discover. */
 function favoriteIds(/** @type {unknown} */ ids) {
   if (!Array.isArray(ids)) return [];
   const known = starrable();
-  return [...new Set(ids.filter((id) => typeof id === 'string' && (known.has(id) || (id.startsWith('skill:') && SKILL_UID.test(id.slice(6))))))];
+  return [...new Set(ids.filter((id) => typeof id === 'string' && (known.has(id) || SAVED_STAR.test(id) || (id.startsWith('skill:') && SKILL_UID.test(id.slice(6))))))];
 }
 
 export function libraryFavorites() {

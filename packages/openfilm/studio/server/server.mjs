@@ -17,6 +17,7 @@
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { createReadStream, existsSync, mkdirSync, openSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, extname, isAbsolute, join, normalize, relative, resolve, sep } from 'node:path';
+import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { createServer } from 'node:http';
 import { pipeline } from 'node:stream';
@@ -26,7 +27,7 @@ import { spawn } from 'node:child_process';
 import { EditError, editProjectFilm, pageClipLook, readProjectFilm, settleProjectFilm } from './film.mjs';
 import { compoundOuter, readPartFilm, writePartFilm } from './parts.mjs';
 import { COVERS, PARTS, compoundFolder, srcInto } from './compound.mjs';
-import { CoverFilmError, coverFolder, coverFrame, coverLook, coverLooks, drawCovers, listCovers, makeCover } from './covers.mjs';
+import { CoverFilmError, coverFolder, coverFrame, coverLook, coverLooks, coverPicture, discardCover, drawCovers, listCovers, mainCover, madeCoverPictures, makeCover, restoreCover, setMainCover } from './covers.mjs';
 import { readPage, writePage } from './page-text.mjs';
 import { FileError, bringIn, collect, extractAudio, freezeFrame, importFile, inside, listFiles, makeFolder, moveCheck, moveFile, readable, relink, trashFile } from './files.mjs';
 import { mediaReferences } from '../../src/media-links.mjs';
@@ -69,7 +70,7 @@ import { pluginOfSkill, pluginStates, pluginsDir, removePlugin, setPluginOn, set
 import { createReconnector, missingMedia, reconnect } from './media-reconnect.mjs';
 import { clearProjectCache, storage } from './storage.mjs';
 import { SavedError, TEXT_COMPONENT, TEXT_OWN_FONTS, bundlePoster, copyFromLibrary, libraryPath, savePack, libraryRel, libraryRoot as savedLibrary, bringClip, saveClip, saveFile, saveGroup, takeSaved } from './saved.mjs';
-import { addLibraryAsset, assetCatalog, assetUsage, catalogListing, existingLibraryAsset, moveAssetCatalog, refreshLibraryReferences, registerLibraryLinks, registerLibraryFolder, forgetLibraryPath } from './asset-library.mjs';
+import { addLibraryAsset, assetCatalog, assetUsage, catalogListing, existingLibraryAsset, moveAssetCatalog, refreshLibraryReferences, registerLibraryLinks, registerLibraryFolder, forgetLibraryPath, savedStarKey, starredListing, starredPaths } from './asset-library.mjs';
 import { defaultPlace, ensureShelf, readHidden, shelfMoved, shelfRemoved, writeShelf } from './library-places.mjs';
 import { FILM_FILE, clipKind, isPage } from '../../src/film-doc.mjs';
 import { listenLocal } from '../../src/host.mjs';
@@ -496,6 +497,17 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
         const { from, into, name } = /** @type {{ from?: unknown, into?: unknown, name?: unknown }} */ (await readJson(req) ?? {});
         return json(res, 200, { path: libraryPath(await savedCall(() => copyFromLibrary(from, rel(into), name))) });
       }
+      /* the person's own files starred: their places (GET); one starred or no longer, { path, on } (PUT), answered with
+         the favorites and those places */
+      if (sub === 'star' && req.method === 'GET') return json(res, 200, { paths: await starredPaths(libraryFavorites()) });
+      if (sub === 'star' && req.method === 'PUT') {
+        const { path: starred, on } = /** @type {{ path?: unknown, on?: unknown }} */ (await readJson(req) ?? {});
+        const key = await savedStarKey(starred);
+        /* the favorites as they are now (after the wait), the star put in or taken out */
+        const now = libraryFavorites();
+        const ids = setLibraryFavorites(on !== false ? [...new Set([...now, key])] : now.filter((id) => id !== key));
+        return json(res, 200, { ids, paths: await starredPaths(ids) });
+      }
       if (sub === 'usage' && req.method === 'GET') return json(res, 200, await assetUsage(at));
       if (sub === 'relink' && req.method === 'POST') {
         const { path: linked, to } = await readJson(req) ?? {};
@@ -509,6 +521,8 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
       if (sub === 'files') {
         /* `folder`: the library as the film's origin serves it, so a saved page plays in the media pane's viewer as a
            project's does */
+        /* `view=starred`: the person's own files starred, flat, wherever they are */
+        if (req.method === 'GET' && url.searchParams.get('view') === 'starred') return json(res, 200, { ...await starredListing(libraryFavorites()), folder: pages.folderUrl({ id: SAVED_ORIGIN_ID, path: lib }) });
         if (req.method === 'GET') return json(res, 200, { ...await catalogListing(url.searchParams.get('at') ?? '', url.searchParams.get('view') ?? '', url.searchParams.get('q') ?? ''), folder: pages.folderUrl({ id: SAVED_ORIGIN_ID, path: lib }) });
         if (req.method === 'PUT') return json(res, 200, { path: libraryPath((await importFile(lib, rel(at), req)).path) });
         if (req.method === 'PATCH') {
@@ -1273,12 +1287,16 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
       try { await readPartFilm(project.path, String(folder ?? '')); } catch (e) { throw new HttpError(404, e instanceof Error ? e.message : String(e)); }
       return json(res, 200, { project: await openProject(join(project.path, String(folder)), { create: false }) });
     }
-    /* the film's covers (covers.mjs): listed, made (from a moment of the film, a look, or another cover), opened to edit
-       as a compound clip's film is, given another moment or look, and drawn as pictures */
+    /* the film's covers (covers.mjs): listed (the one the film is shown by among them), made (from a moment of the film,
+       a picture, a color, a look, or another cover), opened to edit as a compound clip's film is, given another
+       picture or look, one made the film's own, and drawn as pictures */
     if (rest === 'covers' || rest.startsWith('covers/')) {
       try {
-        if (rest === 'covers' && req.method === 'GET') return json(res, 200, { covers: await listCovers(project.path), looks: await coverLooks() });
-        const ask = /** @type {{ folder?: unknown, folders?: unknown, at?: unknown, look?: unknown, name?: unknown, stage?: unknown, from?: unknown, format?: unknown }} */ (await readJson(req));
+        if (rest === 'covers' && req.method === 'GET') {
+          const covers = await listCovers(project.path);
+          return json(res, 200, { covers, main: await mainCover(project.path, covers), looks: await coverLooks(), made: await madeCoverPictures(project.path) });
+        }
+        const ask = /** @type {{ folder?: unknown, folders?: unknown, at?: unknown, picture?: unknown, color?: unknown, look?: unknown, name?: unknown, stage?: unknown, from?: unknown, format?: unknown, reveal?: unknown, text?: unknown }} */ (await readJson(req));
         if (rest === 'covers' && req.method === 'POST') return json(res, 200, { folder: await makeCover(project.path, ask) });
         if (rest === 'covers/open' && req.method === 'POST') {
           const { abs } = coverFolder(project.path, ask.folder);
@@ -1286,11 +1304,18 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
         }
         if (rest === 'covers/frame' && req.method === 'POST') return json(res, 200, { clip: await coverFrame(project.path, ask.folder, ask.at) });
         if (rest === 'covers/look' && req.method === 'POST') return json(res, 200, { clip: await coverLook(project.path, ask.folder, ask.look) });
+        if (rest === 'covers/picture' && req.method === 'POST') return json(res, 200, { clip: await coverPicture(project.path, ask.folder, ask) });
+        if (rest === 'covers/main' && req.method === 'POST') return json(res, 200, { main: await setMainCover(project.path, ask.folder) });
+        /* a design cancelled: a cover put back as it was, one made in it taken away */
+        if (rest === 'covers/restore' && req.method === 'POST') { await restoreCover(project.path, ask.folder, ask.text); return json(res, 200, {}); }
+        if (rest === 'covers/discard' && req.method === 'POST') { await discardCover(project.path, ask.folder); return json(res, 200, {}); }
         if (rest === 'covers/draw' && req.method === 'POST') {
           const folders = Array.isArray(ask.folders) ? ask.folders : [];
-          const files = await drawCovers(project.path, folders, exportsRoot(), ask.format === 'png' ? 'png' : 'jpg');
-          /* shown where they were put, as an export is */
-          if (files[0]) reveal(files[0]);
+          /* into the folder a video was exported to with them (`~` the home folder), else the exports folder */
+          const wanted = typeof ask.folder === 'string' ? ask.folder.replace(/^~(?=$|[\\/])/, homedir()) : '';
+          const files = await drawCovers(project.path, folders, wanted && isAbsolute(wanted) ? wanted : exportsRoot(), ask.format === 'png' ? 'png' : 'jpg');
+          /* shown where they were put, as an export is, unless they went with a video (its tray shows that) */
+          if (files[0] && ask.reveal !== false) reveal(files[0]);
           return json(res, 200, { files });
         }
       } catch (e) {

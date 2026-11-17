@@ -26,10 +26,12 @@ import { declarations } from '../../../../src/film-doc.mjs';
 import { PARTS, compoundFolder, compoundOf, dissolvedOf, srcInto, srcOutOf } from '../../../server/compound.mjs';
 import type { FilmValue } from '../../../server/ops.mjs';
 import { api, ApiError, projectEvents, type Clip, type Film, type Listing, type MediaMade, type Op, type ProjectSettings, type SavedGroupClip } from '@/api';
-import { coversApi, frameMoment, shapeOf, type CoverInfo, type CoverLook, type CoverLooks, type CoverShape } from '@/lib/covers';
-import { receiptOf } from '@/lib/canvas';
+import { COVER_SHAPES, coversApi, coverThumb, filmShots, frameMoment, isCoverLook, isCoverPicture, libraryLookPage, shapeOf, type CoverList, type CoverLook, type CoverShape } from '@/lib/covers';
+import { revealInLibrary } from '@/lib/library-reveal';
 import type { CoversActions } from './library/CoversPane';
-import { CoverBar, CoverSafeArea } from './CoverBar';
+import { CoverBottom, CoverFeed, CoverSafeArea, CoverTopBar } from './cover/CoverChrome';
+import { COVER_BACKGROUND_LEAD, COVER_PICTURE_LEAD, COVER_REDRAW_LEAD, CoverAiPanel, CoverLookPreview, madePath, type CoverMakeAsk } from './cover/CoverAi';
+import { CoverInspector, type CoverLayer } from './cover/CoverInspector';
 import { useLanguage, useT } from '@/i18n';
 import { useFilm, type OutsideStep, type Step } from '@/editor/use-film';
 import { Player } from '@/editor/player';
@@ -108,6 +110,9 @@ import { FILM_SUBTITLE_LANGUAGES } from '../../../server/film-subtitle.mjs';
 import { addCue, cueRule, placeCues, setCueRule, shifted, withIds } from '@/lib/caption-edits';
 import { cueClipId, cueEditOf, cueOf, cueStandIn, isCueClip, withCueBlocks, type KeptCue } from '@/lib/caption-blocks';
 
+/** How long a clip graded on the color workbench is on the film, seconds. */
+const shotLength = (g: GradedClip) => g.length ?? (g.time?.length === 2 ? (g.time[1]! - g.time[0]!) / (g.speed || 1) : Infinity);
+
 import { useFilmSubtitles } from '@/lib/use-film-subtitles';
 import { DEFAULT_INSPECTOR, DOCK_GAP, MIN_DOCK_H, MIN_INSPECTOR, MIN_STAGE_H, MIN_VIEWER } from './PaneDivider';
 import type { BlockPlace } from '@/lib/workspaces';
@@ -140,7 +145,7 @@ import type { StageEditFailure, StageTextEdit } from './FilmInspector';
 import { layerTarget, pageClipOf, recoverLayer } from '@/lib/stage-layers';
 import { pictureStyle, relativeTo, withText, withVar, type TemplateControls } from '@/lib/template-controls';
 import { numberOf, readVarMotion, writeVarMotion } from '@/lib/page-motion';
-import { propsAttr, propsOf, withPropValue, type ComponentProp } from '@/lib/component-props';
+import { propsAttr, propsOf, propValue, withPropValue, type ComponentProp } from '@/lib/component-props';
 import { pointersOf, propsWithoutDeleted, withDeleted } from '@/lib/layer-delete';
 import {
   isLayerClipboardKey, PASTE_OFFSET, pasteGoals, pasteOffset, readLayerClipboard, whyNowhere, writeLayerClipboard, type CopiedLayers,
@@ -167,8 +172,12 @@ import { isTextField, isTypingTarget } from './typing-target';
 import { blocks, chat, onCommand, openSettings, provide } from '@/studio';
 import { attachedBlocks, blockKey, TOP_BTN, useFrame, usePublishWiring, useSteady } from '@/studio/internal';
 
-/** No covers yet: the same empty list each time. */
-const NO_COVERS: CoverInfo[] = [];
+/** A film with no shots yet: the same empty list each time. */
+const NO_SHOTS: number[] = [];
+/* A cover design under way, from the cover tile to Cancel or Set as cover, across the covers it moves between: each
+   cover's film.html as it was when the design reached it (null: made in this design), to put back on Cancel. */
+const coverDesign = new Map<string, string | null>();
+const NO_MADE: string[] = [];
 
 /** How far a caption track's translation sits above it (% of the frame): about a line. */
 const TRANSLATION_LIFT_PCT = 7;
@@ -2211,7 +2220,7 @@ export function ProjectView({ projectId, onProject }: {
       try { taken = await api.takeSaved(projectId, `${BUILT_IN}/${item.id}`); } catch (e) { toast.show(e instanceof Error ? e.message : String(e)); return; }
       const before = clipIds();
       if ('path' in taken) {
-        if (await addMedia({ path: taken.path, name, dir: '', size: 0, kind: 'audio', mtimeMs: 0, ...(drag.durationMs ? { durationMs: drag.durationMs } : {}) }, { atPlayhead: true })) {
+        if (await addMedia({ path: taken.path, name, dir: '', size: 0, kind: item.kind === 'file' ? drag.kind : 'audio', mtimeMs: 0, ...(drag.durationMs ? { durationMs: drag.durationMs } : {}) }, { atPlayhead: true })) {
           toast.show(t('assetDrawer.added').replace('{name}', name));
           pickAdded(before);
         }
@@ -3851,9 +3860,18 @@ export function ProjectView({ projectId, onProject }: {
   /* the edit graded (plugins/color): its panel in the inspector's place, on the clips picked or the one at the playhead */
   const colorMode = workMode === 'color';
   React.useEffect(() => { if (!colorMode) setSplit(null); }, [colorMode]);
-  const gradedClips = React.useMemo<GradedClip[]>(() => (colorMode ? (film.film?.tracks ?? []).flatMap((track) => (track.captions ? [] : track.clips.flatMap((c) => (
-    !c.sound && filmSrcKind(c.src) === 'video' ? [{ id: c.id, style: c.style, src: c.src, at: c.at ?? 0, time: c.time ?? null, speed: c.speed ?? 1 }] : []
-  )))) : []), [colorMode, film.film]);
+  /* the clips with a picture to grade: videos, and the pages and stills the browser draws (src/color/page-grade.mjs),
+     each as long as the timeline has it */
+  const gradedClips = React.useMemo<GradedClip[]>(() => {
+    if (!colorMode) return [];
+    const lengths = new Map(timelineTracks.flatMap((tr) => tr.blocks).flatMap((b) => (b.clipId ? [[b.clipId, (b.endMs - b.startMs) / 1000] as const] : [])));
+    return (film.film?.tracks ?? []).flatMap((track) => (track.captions ? [] : track.clips.flatMap((c) => {
+      const kind = c.sound ? null : filmSrcKind(c.src);
+      return kind === 'video' || kind === 'page' || kind === 'still'
+        ? [{ id: c.id, kind, style: c.style, src: c.src, at: c.at ?? 0, time: c.time ?? null, speed: c.speed ?? 1, length: lengths.get(c.id) ?? null }] : [];
+    })));
+  }, [colorMode, film.film, timelineTracks]);
+
   const colorCurrent = React.useMemo(() => {
     if (!colorMode) return [];
     const picked = selectedBlocks.flatMap((b) => (b.clipId && gradedClips.some((c) => c.id === b.clipId) ? [b.clipId] : []));
@@ -3865,8 +3883,7 @@ export function ProjectView({ projectId, onProject }: {
       for (const c of track.clips) {
         const g = gradedClips.find((x) => x.id === c.id);
         if (!g) continue;
-        const length = g.time?.length === 2 ? (g.time[1]! - g.time[0]!) / (g.speed || 1) : Infinity;
-        if (t >= g.at && t < g.at + length) return [g.id];
+        if (t >= g.at && t < g.at + shotLength(g)) return [g.id];
       }
     }
     return [];
@@ -3886,9 +3903,8 @@ export function ProjectView({ projectId, onProject }: {
     if (!colorMode || selectedKeys.length !== 1) return;
     const c = gradedClips.find((x) => x.id === selectedKeys[0]);
     if (!c) return;
-    const length = c.time?.length === 2 ? (c.time[1]! - c.time[0]!) / (c.speed || 1) : Infinity;
     const t = timeMs / 1000;
-    if (t < c.at - 0.001 || t >= c.at + length) setSelectedKeys([]);
+    if (t < c.at - 0.001 || t >= c.at + shotLength(c)) setSelectedKeys([]);
   }, [colorMode, timeMs, selectedKeys, gradedClips]);
   /* a shot taken in the color workbench's strip: picked (with those picked already, with a modifier), the playhead on it */
   const takeShot = React.useCallback((id: string, more: boolean) => {
@@ -3896,8 +3912,7 @@ export function ProjectView({ projectId, onProject }: {
     setSelectedKeys([id]);
     const c = gradedClips.find((x) => x.id === id);
     /* the playhead stays where it is when it is on the shot already */
-    const length = c?.time?.length === 2 ? (c.time[1]! - c.time[0]!) / (c.speed || 1) : Infinity;
-    if (c && !(timeMs / 1000 >= c.at && timeMs / 1000 < c.at + length)) seek(c.at * 1000);
+    if (c && !(timeMs / 1000 >= c.at && timeMs / 1000 < c.at + shotLength(c))) seek(c.at * 1000);
   }, [gradedClips, timeMs, seek]);
   /* the inspector's Crop: crop mode on the picture, for the video or still in hand there */
   const startStageCrop = React.useCallback(() => { stageControl.current?.startCrop(); }, []);
@@ -5046,19 +5061,25 @@ export function ProjectView({ projectId, onProject }: {
     void api.setCover(projectId, { ms: Math.max(0, Math.min(totalMs - 1, timeRef.current)) })
       .then(coverSet, () => toast.showError(t('projects.coverFailed')));
   };
-  /* ── the film's covers (lib/covers, studio/server/covers.mjs): listed and made in the library's Covers, each opened
-     as a compound clip's film is; while one is open, its bar stands where the timeline is ── */
+  /* ── the film's covers (lib/covers, studio/server/covers.mjs). Over the film: the tile at the head of the main track
+     opens the cover design (a cover made first when the film has none). In one of them (a compound film under covers/):
+     the cover design, the edit's picture and inspector with its own top bar, library and bottom, no timeline; Cancel
+     puts back what the design changed, Set as cover keeps it ── */
   const coverOuter = loaded?.outer?.kind === 'cover' ? loaded.outer : null;
+  const inCover = Boolean(coverOuter);
   /* the project the covers are of: the film's, also while one of them is open */
   const coversOf = coverOuter ? coverOuter.id : projectId;
   const coverHere = coverOuter ? `covers/${coverOuter.folder}` : null;
   /* the film's folder on this computer, where what is made for a cover is kept (its assets) */
-  const coverRoot = coverOuter && loaded ? loaded.project.path.replace(/[\\/]covers[\\/][^\\/]+[\\/]?$/, '') : null;
-  const [coverList, setCoverList] = React.useState<{ covers: CoverInfo[]; looks: CoverLooks } | null>(null);
+  const coverRoot = loaded ? (coverOuter ? loaded.project.path.replace(/[\\/]covers[\\/][^\\/]+[\\/]?$/, '') : loaded.project.path) : null;
+  const [coverList, setCoverList] = React.useState<CoverList | null>(null);
   const [coverBusy, setCoverBusy] = React.useState<string | null>(null);
   const [coverSafe, setCoverSafe] = React.useState(true);
-  const [coverFilmSeconds, setCoverFilmSeconds] = React.useState<number | null>(null);
-  /* read again as a cover changes (its card's picture), a moment after the last change */
+  const [coverFeed, setCoverFeed] = React.useState(true);
+  const [coverAi, setCoverAi] = React.useState(false);
+  const [coverTry, setCoverTry] = React.useState<CoverLook | null>(null);
+  const [coverFilm, setCoverFilm] = React.useState<{ seconds: number | null; shots: number[]; name: string } | null>(null);
+  /* read again as a cover changes (its pictures in the tabs and the tile), a moment after the last change */
   const coverChanged = coverOuter ? film.film : null;
   React.useEffect(() => {
     let live = true;
@@ -5066,102 +5087,239 @@ export function ProjectView({ projectId, onProject }: {
     const timer = window.setTimeout(read, coverChanged ? 700 : 0);
     return () => { live = false; window.clearTimeout(timer); };
   }, [coversOf, coverChanged]);
+  /* in a cover: the film it is of, its length and its shots, for the strip and the library's Picture */
   React.useEffect(() => {
-    if (!coverOuter) return;
+    if (!coverOuter) { setCoverFilm(null); return; }
     let live = true;
-    void coversApi.length(coverOuter.id).then((s) => { if (live) setCoverFilmSeconds(s); });
+    void Promise.all([coversApi.length(coverOuter.id), api.film(coverOuter.id).catch(() => null)]).then(([seconds, outer]) => {
+      if (live) setCoverFilm({ seconds, shots: filmShots(outer?.value ?? null), name: coverOuter.name });
+    });
     return () => { live = false; };
   }, [coverOuter?.id]); // eslint-disable-line react-hooks/exhaustive-deps
-  /** the cover's clip whose file `match`es, and its track */
-  const coverClip = (match: (c: Clip) => boolean) => {
-    for (const [track, tr] of (film.film?.tracks ?? []).entries()) for (const c of tr.clips) if (match(c)) return { clip: c, track };
-    return null;
-  };
-  const isCoverPicture = (c: Clip) => c.id === 'frame' || /(?:^|\/)frame-\d+\.jpg$/.test(c.src);
+  /* a cover opened: the library shows its looks; the design keeps how it was, for Cancel */
+  React.useEffect(() => { if (coverHere) revealInLibrary('cover'); setCoverTry(null); }, [coverHere]);
+  React.useEffect(() => {
+    if (coverHere && loaded?.text != null && !coverDesign.has(coverHere)) coverDesign.set(coverHere, loaded.text);
+  }, [coverHere, loaded?.text]);
+  /* back on a film (not between covers, nor while one is still being read): the design is over, however it was left */
+  const onFilmProper = Boolean(loaded) && !loaded?.outer;
+  React.useEffect(() => { if (onFilmProper) coverDesign.clear(); }, [onFilmProper]);
+  const coverInfoHere = coverList?.covers.find((c) => c.folder === coverHere) ?? null;
+  const mainCoverInfo = coverList?.covers.find((c) => c.folder === coverList.main) ?? null;
+  /** the cover's clips, top layer first, each with its track and place */
+  const coverClips = (film.film?.tracks ?? []).flatMap((tr, track) => tr.clips.map((clip, i) => ({ clip, track, loc: filmDocLoc(track, i) })));
+  const coverPictureNow = coverClips.find((c) => isCoverPicture(c.clip)) ?? null;
+  const coverLookNow = coverClips.find((c) => isCoverLook(c.clip)) ?? null;
+  const lookIdOf = (src: string) => /^look-([^/]+)\.html$/.exec(src)?.[1] ?? null;
   const coverFailed = (e: unknown) => toast.showError(t('covers.failed').replace('{error}', e instanceof Error ? e.message : String(e)));
   const coverEdited = (why: string | null) => { if (why) toast.showError(why); };
-  const openCover = (cover: CoverInfo | string) => {
-    void coversApi.open(coversOf, typeof cover === 'string' ? cover : cover.folder).then(({ project }) => onProject(project.id), coverFailed);
+  /** run one cover job at a time, said on what started it */
+  const coverJob = (what: string, job: () => Promise<unknown>) => {
+    if (coverBusy) return;
+    setCoverBusy(what);
+    void job().catch(coverFailed).finally(() => setCoverBusy(null));
   };
-  const makeCover = (shape: CoverShape, frame: boolean, look: CoverLook | null) => {
-    setCoverBusy(look?.id ?? 'new');
-    const stage = { w: shape.w, h: shape.h };
-    const at = frame && totalMs > 0 ? Math.max(0, Math.min(totalMs - 1, timeRef.current)) / 1000 : undefined;
-    const ask = coverHere ? { name: shape.id, stage, from: coverHere }
-      : { name: shape.id, stage, ...(at != null ? { at } : {}), ...(look ? { look: look.id } : {}) };
-    void coversApi.make(coversOf, ask).then(({ folder }) => openCover(folder), coverFailed).finally(() => setCoverBusy(null));
-  };
-  const applyCoverLook = (look: CoverLook) => {
+  const openCover = (folder: string) => coversApi.open(coversOf, folder).then(({ project }) => onProject(project.id));
+  /** another cover, in `shape`: this one copied and laid out again */
+  const addCoverShape = (shape: CoverShape) => coverJob('new', async () => {
     if (!coverHere) return;
-    setCoverBusy(look.id);
-    void coversApi.look(coversOf, coverHere, look.id).then(async ({ clip }) => {
-      const had = coverClip((c) => c.id === 'look' || /^look-[^/]+\.html$/.test(c.src));
-      coverEdited(await edit(had
-        ? [{ op: 'set', clip: had.clip.id, field: 'src', value: clip.src }, { op: 'fields', clip: had.clip.id, fields: { attrs: clip.attrs ?? null } }]
-        : [{ op: 'insert', clip, track: { insert: 0 } }], 'covers.stepLook'));
-    }, coverFailed).finally(() => setCoverBusy(null));
-  };
+    const { folder } = await coversApi.make(coversOf, { name: shape.id, stage: { w: shape.w, h: shape.h }, from: coverHere });
+    coverDesign.set(folder, null);
+    await openCover(folder);
+  });
+  /** a look in place of the cover's own, the words written in it kept where the new one has words of the same name */
+  const applyCoverLook = (look: CoverLook) => coverJob(look.id, async () => {
+    if (!coverHere) return;
+    const { clip } = await coversApi.look(coversOf, coverHere, look.id);
+    const had = coverLookNow?.clip;
+    if (!had) { coverEdited(await edit([{ op: 'insert', clip, track: { insert: 0 } }], 'covers.stepLook')); return; }
+    const before = propsOf(had), after = propsOf({ attrs: clip.attrs });
+    let overrides: FilmOverride[] = [];
+    for (const p of after) {
+      if (p.type !== 'text') continue;
+      const same = before.find((b) => b.type === 'text' && b.name === p.name);
+      const value = same ? propValue(had.overrides as FilmOverride[] | undefined, same) : null;
+      if (value != null) overrides = withPropValue(overrides, p, value) ?? overrides;
+    }
+    coverEdited(await edit([
+      { op: 'set', clip: had.id, field: 'src', value: clip.src },
+      { op: 'fields', clip: had.id, fields: { attrs: clip.attrs ?? null, overrides: overrides.length ? overrides : null } },
+    ], 'covers.stepLook'));
+  });
   /** the cover's picture in place of the one it had (or under everything, when it had none) */
-  const putCoverPicture = async (clip: Partial<Clip> & { src: string; box?: { x: number; y: number; w: number; h: number } }, label: string) => {
-    const had = coverClip(isCoverPicture);
+  const putCoverPicture = async (clip: { src: string; box?: { x: number; y: number; w: number; h: number }; style?: string }, label: string) => {
+    const had = coverPictureNow?.clip;
     coverEdited(await edit(had
-      ? [{ op: 'set', clip: had.clip.id, field: 'src', value: clip.src }, { op: 'fields', clip: had.clip.id, fields: { box: clip.box ?? null } }]
+      ? [{ op: 'set', clip: had.id, field: 'src', value: clip.src }, { op: 'fields', clip: had.id, fields: { box: clip.box ?? null, style: clip.style ?? null } }]
       : [{ op: 'insert', clip: { id: 'frame', time: [0, 1], ...clip }, track: { insert: film.film?.tracks.length ?? 0 } }], label));
   };
-  const coverMoment = (seconds: number) => {
+  const coverMoment = (seconds: number) => coverJob('frame', async () => {
     if (!coverHere) return;
-    setCoverBusy('frame');
-    void coversApi.frame(coversOf, coverHere, seconds).then(({ clip }) => putCoverPicture(clip, 'covers.stepFrame'), coverFailed).finally(() => setCoverBusy(null));
-  };
-  /** the cover's picture as the film's folder names it (what a service is given to work from) */
-  const coverPictureFile = () => {
-    const had = coverClip(isCoverPicture);
-    if (!had || !coverHere) return null;
-    const src = had.clip.src.split('#')[0]!;
-    return { ...had, file: src.startsWith('../../') ? src.slice(6) : `${coverHere}/${src}` };
-  };
-  /** what a service made for the cover, by its receipt: the file, as the cover names it */
-  const madeForCover = (text: string) => {
-    const r = receiptOf<{ src?: string; images?: { src?: string }[] }>(text);
-    const made = r.src ?? r.images?.[0]?.src;
-    if (!made) throw new Error(t('covers.nothingMade'));
-    return `../../${made}`;
-  };
-  const coverCutout = () => {
-    const picture = coverPictureFile();
-    if (!picture || !coverRoot || !coverOuter) return;
-    setCoverBusy('cutout');
-    void api.make(coverRoot, 'cutout', { src: picture.file, out: `cover-${coverOuter.folder}-subject` }, {}).then(async (text) => {
-      const src = madeForCover(text);
-      coverEdited(await edit([{ op: 'insert', clip: { src, time: [0, 1], ...(picture.clip.box ? { box: picture.clip.box } : {}) }, track: { insert: picture.track } }], 'covers.stepCutout'));
-    }, coverFailed).finally(() => setCoverBusy(null));
-  };
-  const coverPicture = (words: string) => {
-    if (!coverRoot || !coverOuter || !film.film) return;
-    const stageNow = film.film.stage ?? { w: 1920, h: 1080 };
-    const picture = coverPictureFile();
-    setCoverBusy('picture');
-    /* the words of a picture made for a cover: OpenFilm's own, in English, as every model reads it, then the person's */
-    const lead = picture
-      ? 'Make a striking video cover picture from the reference picture: keep its people and main subject recognizable, a bold clear composition with one focal point, high contrast and rich light, readable at a small size, and no words, letters or logos anywhere in it. '
-      : 'Make a striking video cover picture: a bold clear composition with one focal point, high contrast and rich light, readable at a small size, and no words, letters or logos anywhere in it. ';
-    void api.make(coverRoot, 'image', {
-      out: `cover-${coverOuter.folder}-picture`, prompt: `${lead}${words}`, ratio: shapeOf(stageNow).ratio, quality: 'high',
-      ...(picture ? { ref: [picture.file] } : {}),
-    }, {}).then((text) => putCoverPicture({ src: madeForCover(text), box: { x: 0, y: 0, w: stageNow.w, h: stageNow.h } }, 'covers.stepPicture'), coverFailed)
-      .finally(() => setCoverBusy(null));
-  };
-  const exportCovers = (all: boolean) => {
-    const folders = all ? (coverList?.covers ?? []).map((c) => c.folder) : coverHere ? [coverHere] : [];
-    if (!folders.length) return;
-    setCoverBusy('export');
-    void coversApi.draw(coversOf, folders).then(({ files }) => toast.show(t('covers.exported').replace('{n}', String(files.length))), coverFailed)
-      .finally(() => setCoverBusy(null));
-  };
-  const coversActions = useSteady<CoversActions>({
-    projectId: coversOf, covers: coverList?.covers ?? NO_COVERS, looks: coverList?.looks ?? null, current: coverHere,
-    busy: coverBusy, open: (c) => openCover(c), make: makeCover, apply: applyCoverLook,
+    const { clip } = await coversApi.frame(coversOf, coverHere, seconds);
+    await putCoverPicture(clip, 'covers.stepFrame');
   });
+  const coverLocal = (file: File) => coverJob('picture', async () => {
+    if (!coverHere) return;
+    const picture = await coversApi.upload(coversOf, file);
+    const { clip } = await coversApi.picture(coversOf, coverHere, { picture });
+    await putCoverPicture(clip, 'covers.stepPicture');
+  });
+  const coverColor = (css: string) => coverJob('picture', async () => {
+    if (!coverHere) return;
+    const { clip } = await coversApi.picture(coversOf, coverHere, { color: css });
+    await putCoverPicture(clip, 'covers.stepPicture');
+  });
+  /** the cover's picture as the film's folder names it (what a service is given to work from); null for a color */
+  const coverPictureFile = () => {
+    const had = coverPictureNow?.clip;
+    if (!had || !coverHere || /^color-/.test(had.src)) return null;
+    const src = had.src.split('#')[0]!;
+    return src.startsWith('../../') ? src.slice(6) : `${coverHere}/${src}`;
+  };
+  /**
+   * a picture made with the person's service, in the cover's shape: drawn from the cover's picture, from words alone,
+   * or (the subject kept) the subject cut out onto a layer of its own and only a new background made under it
+   */
+  const coverMake = (ask: CoverMakeAsk) => coverJob('picture', async () => {
+    if (!coverRoot || !coverOuter || !film.film) return;
+    setCoverAi(false);
+    const ref = ask.fromPicture ? coverPictureFile() : null;
+    const ratio = shapeOf(film.film.stage ?? { w: 1920, h: 1080 }).ratio;
+    if (ask.keepSubject && !coverClips.some((c) => /-subject/.test(c.clip.src))) await cutSubject();
+    const lead = ask.keepSubject ? COVER_BACKGROUND_LEAD : ref ? COVER_REDRAW_LEAD : COVER_PICTURE_LEAD;
+    const text = await api.make(coverRoot, 'image', {
+      /* a name of its own each time: every picture made is kept to go back to, and the cover shows the new one at once */
+      out: `cover-${coverOuter.folder}-picture-${Date.now().toString(36)}`, prompt: `${lead}${ask.words}`, ratio, quality: 'high', ...(ref ? { ref: [ref] } : {}),
+    }, {});
+    await putCoverPicture({ src: `../../${madePath(text)}`, style: 'object-fit: cover' }, 'covers.stepPicture');
+    void coversApi.list(coversOf).then(setCoverList, () => {});
+  });
+  /** a picture made for a cover before, as the cover's picture */
+  const coverUse = (path: string) => coverJob('picture', async () => {
+    if (!coverHere) return;
+    setCoverAi(false);
+    const { clip } = await coversApi.picture(coversOf, coverHere, { picture: path });
+    await putCoverPicture(clip, 'covers.stepPicture');
+  });
+  /** the whole cover handed to the agent in the app's chat, this cover's file named */
+  const coverAgent = (words: string) => {
+    setCoverAi(false);
+    if (!coverHere) return;
+    studioHost?.ask?.({ text: t('covers.agentAsk').replace('{file}', `${coverHere}/film.html`).replace('{words}', words), refs: [] });
+  };
+  /** the subject of the cover's picture cut out onto a layer of its own, right over the picture */
+  const cutSubject = async () => {
+    const file = coverPictureFile();
+    const had = coverPictureNow;
+    if (!file || !had || !coverRoot || !coverOuter) return;
+    const text = await api.make(coverRoot, 'cutout', { src: file, out: `cover-${coverOuter.folder}-subject-${Date.now().toString(36)}` }, {});
+    coverEdited(await edit([{ op: 'insert', clip: { src: `../../${madePath(text)}`, time: [0, 1], ...(had.clip.box ? { box: had.clip.box } : {}), ...(had.clip.style ? { style: had.clip.style } : {}) }, track: { insert: had.track } }], 'covers.stepCutout'));
+  };
+  const coverCutout = () => coverJob('cutout', cutSubject);
+  /** no look: the cover's picture alone (and what else was put on it) */
+  const coverNoLook = () => {
+    const had = coverLookNow?.clip;
+    if (had) void edit([{ op: 'remove', clip: had.id }], 'covers.stepLook').then(coverEdited);
+  };
+  /** Set as cover: kept, the film shown by it, back to the film */
+  const finishCover = () => coverJob('finish', async () => {
+    if (!coverOuter || !coverHere) return;
+    await film.settled?.();
+    await coversApi.main(coversOf, coverHere);
+    coverDesign.clear();
+    onProject(coverOuter.id);
+  });
+  /** Cancel: each cover the design reached put back as it was, those it made taken away, back to the film */
+  const cancelCover = () => coverJob('finish', async () => {
+    if (!coverOuter) return;
+    await film.settled?.();
+    for (const [folder, text] of coverDesign) {
+      // eslint-disable-next-line no-await-in-loop
+      await (text == null ? coversApi.discard(coversOf, folder) : coversApi.restore(coversOf, folder, text)).catch(() => {});
+    }
+    coverDesign.clear();
+    onProject(coverOuter.id);
+  });
+  /** the cover's picture as the look's preview draws it (null: none) */
+  const coverPictureView = (() => {
+    const c = coverPictureNow?.clip;
+    if (!c || !folder) return null;
+    try {
+      return { url: new URL(c.src.split('#')[0]!, folder.endsWith('/') ? folder : `${folder}/`).href, page: /\.html?$/i.test(c.src), ...(c.box?.w != null && c.box.h != null ? { box: { x: c.box.x, y: c.box.y, w: c.box.w, h: c.box.h } } : {}) };
+    } catch { return null; }
+  })();
+  const BLUR = /\s*filter:\s*blur\([^)]*\)[^;]*;?/;
+  const coverBlurred = BLUR.test(coverPictureNow?.clip.style ?? '');
+  const coverBlur = (on: boolean) => {
+    const had = coverPictureNow?.clip;
+    if (!had) return;
+    const style = (had.style ?? '').replace(BLUR, '').trim();
+    const next = on ? `${style}${style && !style.endsWith(';') ? ';' : ''} filter: blur(14px) brightness(0.9);`.trim() : style;
+    void edit([{ op: 'fields', clip: had.id, fields: { style: next || null } }], 'covers.stepBlur').then(coverEdited);
+  };
+  /* the picture fitted to the cover again: filling it, centered */
+  const coverFill = () => {
+    const had = coverPictureNow?.clip;
+    if (!had) return;
+    const style = (had.style ?? '').replace(/\s*object-fit:[^;]*;?/, '').trim();
+    void edit([{ op: 'fields', clip: had.id, fields: { box: null, style: `object-fit: cover;${style ? ` ${style}` : ''}` } }], 'covers.stepFill').then(coverEdited);
+  };
+  const coverLayers: CoverLayer[] = coverClips.map(({ clip, loc }) => {
+    const look = lookIdOf(clip.src);
+    const name = look ? nameOf(coverList?.looks.items.find((l) => l.id === look)?.name ?? { en: look }, language)
+      : isCoverPicture(clip) ? t('covers.picture') : /-subject/.test(clip.src) ? t('covers.subject') : clip.src.split('/').pop()!.replace(/\.[^.]+$/, '');
+    const kind: CoverLayer['kind'] = look ? 'look' : isCoverPicture(clip) ? 'picture' : /-subject/.test(clip.src) ? 'subject' : filmSrcIsPage(clip.src) ? 'words' : 'other';
+    return { loc, kind, name };
+  });
+  const moveCoverLayer = (index: number, by: -1 | 1) => {
+    const from = coverClips[index]?.track, to = coverClips[index + by]?.track;
+    if (from == null || to == null) return;
+    void edit([{ op: 'reorder', from, to }], 'covers.stepLayer').then(coverEdited);
+  };
+  const coverPictureSaid = (() => {
+    const src = coverPictureNow?.clip.src;
+    if (!src) return null;
+    const at = frameMoment(src);
+    if (at != null) return { kind: 'frame' as const, said: `${t('covers.ofFilm')} ${at.toFixed(2)} s` };
+    if (/^color-/.test(src)) return { kind: 'color' as const, said: t('covers.colorSaid') };
+    return { kind: 'picture' as const, said: src.split('/').pop() ?? src };
+  })();
+  /* the inspector is the cover's own while nothing, or only its picture, is picked */
+  const coverInspecting = Boolean(coverOuter) && !stageElement
+    && (selectedClips.length === 0 || (selectedClips.length === 1 && selectedClips[0]!.clipId === coverPictureNow?.clip.id));
+  const exportCovers = (folders: string[]) => coverJob('export', async () => {
+    if (!folders.length) return;
+    const { files } = await coversApi.draw(coversOf, folders);
+    toast.show(t('covers.exported').replace('{n}', String(files.length)));
+  });
+  const coversActions = useSteady<CoversActions>({
+    projectId: coversOf, looks: coverList?.looks ?? null, lookNow: coverLookNow ? lookIdOf(coverLookNow.clip.src) : null,
+    shots: coverFilm?.shots ?? NO_SHOTS, busy: coverBusy, made: coverList?.made ?? NO_MADE,
+    thumbOf: (path: string) => `/api/projects/${encodeURIComponent(coversOf)}/media?what=poster&path=${encodeURIComponent(path)}`,
+    apply: applyCoverLook, none: coverNoLook, preview: setCoverTry, moment: coverMoment, local: coverLocal, color: coverColor,
+    use: coverUse, openAi: () => setCoverAi(true),
+  });
+  /* over the film: the tile at the head of the main track */
+  /** the cover design begun: on the film's main cover, else on a new one (the frame at the playhead, the film's shape) */
+  const designCover = () => coverJob('new', async () => {
+    coverDesign.clear();
+    if (mainCoverInfo) { await openCover(mainCoverInfo.folder); return; }
+    const at = Math.max(0, Math.min(totalMs - 1, timeRef.current)) / 1000;
+    const stage = film.film?.stage ?? { w: 1920, h: 1080 };
+    const shape = COVER_SHAPES.find((s) => s.id === (stage.h > stage.w ? 'portrait' : 'landscape'))!;
+    const { folder: made } = await coversApi.make(projectId, { name: shape.id, stage: { w: shape.w, h: shape.h }, ...(totalMs > 0 ? { at } : {}) });
+    coverDesign.set(made, null);
+    await openCover(made);
+  });
+  const coverTile = React.useMemo(() => (inCover ? undefined : {
+    thumb: mainCoverInfo ? coverThumb(projectId, mainCoverInfo, 200) : null,
+    open: () => designCover(),
+    menu: (): ContextMenuEntry[] => [
+      { id: 'open', label: mainCoverInfo ? t('covers.menuOpen') : t('covers.tileNewTip'), onSelect: () => designCover() },
+      ...(coverList?.covers.length ? [{ id: 'export', label: t('covers.menuExport'), onSelect: () => exportCovers(coverList.covers.map((c) => c.folder)) }] : []),
+    ],
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [inCover, mainCoverInfo, coverList, projectId, t]);
   /* captions of what is said (the library's captions): what went wrong, shown there; with no service to transcribe, it opens Services */
   const [subtitleProblem, setSubtitleProblem] = React.useState<{ text: string; connect: boolean } | null>(null);
   const [captionsMaking, setCaptionsMaking] = React.useState(false);
@@ -5273,13 +5431,22 @@ export function ProjectView({ projectId, onProject }: {
      (the layers' kept width while hidden, which rearranging begins from), its seam, and the timeline's fit */
   const blockSizer = React.useCallback<BlockSizer>((room, places, free) => {
     const drawn = editSizes(room, places, free);
+    /* a cover is one picture: no timeline, no layers of time; the cover studio's own strip and layers stand in */
+    if (inCover) {
+      return {
+        viewer: { shown: true, size: 0 },
+        layers: { shown: false, size: drawn.layersWidth },
+        inspector: { shown: true, size: drawn.inspectorShownWidth, seam: { min: MIN_INSPECTOR, minRest: MIN_VIEWER, label: t('inspector.resize') } },
+        timeline: { shown: false, size: drawn.timelineShownHeight },
+      };
+    }
     return {
       viewer: { shown: true, size: 0 },
       layers: { shown: drawn.layersShown, size: drawn.layersShown ? drawn.layersShownWidth : drawn.layersWidth, seam: { min: 180, minRest: MIN_VIEWER, label: t('layers.resize') } },
       inspector: { shown: drawn.inspectorShown, size: drawn.inspectorShownWidth, seam: { min: MIN_INSPECTOR, minRest: MIN_VIEWER, label: t('inspector.resize') } },
       timeline: { shown: drawn.timelineShown, size: drawn.timelineShownHeight, seam: { min: MIN_DOCK_H, minRest: MIN_STAGE_H, label: t('timeline.resize') }, fit: timelineFit },
     };
-  }, [editSizes, timelineFit, t]);
+  }, [editSizes, timelineFit, t, inCover]);
   /* the library is the shell's (shell/library); what it does in the edit is given here: a file of the media pane put in
      the film at the playhead or taken in hand (shown in the viewer and the inspector), the library's things added or
      tried over the picture, the captions, the voices. Each the same one until it changes (useSteady) */
@@ -5304,7 +5471,7 @@ export function ProjectView({ projectId, onProject }: {
     },
     usedSrcs, onDropClipsForAssets: dropClipsForAssets, litPath: chatPoint?.file ?? null,
     actions: library.actions, tried: libraryTrial?.id ?? null, templateStatus,
-    preview: libraryPreview, captions: libraryCaptions, covers: coversActions, speak: speakVoice, recorder,
+    preview: libraryPreview, captions: libraryCaptions, covers: inCover ? coversActions : undefined, speak: speakVoice, recorder,
   });
   /* the top bar is the shell's (shell/top-bar); what the edit has on it is given here, and drawn there in the shell's
      own React root: the edit's own buttons (its export and the exports' tray: the
@@ -5389,6 +5556,14 @@ export function ProjectView({ projectId, onProject }: {
 
               <InBlock id="viewer">
               <div className={`${PANE} min-w-0 flex-1 bg-[var(--bg-viewer)]`} data-viewer-pane="">
+                {coverOuter && coverHere ? (
+                  /* a cover: the way back to the film, its shapes, the safe areas, the feed preview, export */
+                  <CoverTopBar covers={coverList?.covers ?? []} current={coverHere} main={coverList?.main ?? null}
+                    thumbOf={(c) => coverThumb(coversOf, c, 96)} safe={coverSafe} feed={coverFeed}
+                    onOpen={(c) => { void openCover(c.folder).catch(coverFailed); }}
+                    onAddShape={addCoverShape} onMain={(c) => { void coversApi.main(coversOf, c.folder).then(() => coversApi.list(coversOf)).then(setCoverList, coverFailed); }}
+                    onExport={exportCovers} onSafe={setCoverSafe} onFeed={setCoverFeed} />
+                ) : (
                 <div className={PANE_BAR}>
                   {/* the layers and the inspector shown or hidden, where the arrangement shown has them */}
                   {own.places.layers ? (
@@ -5417,6 +5592,7 @@ export function ProjectView({ projectId, onProject }: {
                   </Tooltip>
                   ) : null}
                 </div>
+                )}
                 <input ref={relinkInputRef} type="file" accept="video/*,image/*,audio/*" className="hidden"
                   onChange={(e) => {
                     const picked = e.target.files?.[0];
@@ -5449,6 +5625,14 @@ export function ProjectView({ projectId, onProject }: {
                 <div className="relative flex min-h-0 flex-1 select-none items-center justify-center px-3 py-2.5" style={{ containerType: 'size' }} {...pictureDropProps}
                   data-viewer-picture="" data-viewer-focus={viewerFocus ? '1' : '0'}>
                   <div ref={setLibraryPreviewPicture} className="contents" />
+                  {/* a cover as a feed shows it, at the size it is seen there */}
+                  {coverOuter && coverFeed && coverInfoHere && !fullscreen ? <CoverFeed projectId={coversOf} cover={coverInfoHere} title={coverFilm?.name ?? coverOuter.name} /> : null}
+                  {coverOuter && !fullscreen ? (
+                    <button type="button" data-cover-ai-pill="" onClick={() => setCoverAi(true)}
+                      className="absolute bottom-3 right-3 z-20 flex h-9 items-center gap-2 rounded-full bg-[rgba(30,30,34,.92)] px-4 text-[12.5px] text-white shadow-[0_0_0_1px_rgba(0,193,205,.6),0_8px_24px_rgba(0,0,0,.45)] transition hover:shadow-[0_0_0_1.5px_var(--accent),0_8px_24px_rgba(0,0,0,.45)]">
+                      <span className="text-[var(--accent)]">✦</span>{t('covers.aiPill')}
+                    </button>
+                  ) : null}
                   {pictureDrop ? (
                     <div className="pointer-events-none absolute inset-2 z-30 flex items-center justify-center rounded-lg bg-[color-mix(in_srgb,var(--accent)_10%,transparent)] ring-2 ring-inset ring-[var(--accent)]">
                       <span className="rounded-md bg-[var(--bg-raised)] px-2.5 py-1 text-[12.5px] text-[var(--text)] shadow-sm">{t('project.dropOnPicture')}</span>
@@ -5558,6 +5742,8 @@ export function ProjectView({ projectId, onProject }: {
                             ) : null}
                           </Preview>
                           {/* a cover: where the platforms' buttons fall over it */}
+                          {/* a look tried from the library while the pointer rests on it */}
+                          {coverOuter && coverTry && !fullscreen ? <CoverLookPreview stage={shownStage} picture={coverPictureView} look={libraryLookPage(coverTry)} /> : null}
                           {coverOuter && coverSafe && !fullscreen ? <CoverSafeArea stage={shownStage} /> : null}
                           {/* a thing of the library tried from the assets drawer: over the picture, nothing written */}
                           {libraryTrial && !fullscreen ? <LibraryTrial key={libraryTrialRound} item={libraryTrial} frame={libraryFrame}
@@ -5601,6 +5787,12 @@ export function ProjectView({ projectId, onProject }: {
                   </div>
                 ) : null}
                 <div ref={setLibraryPreviewBar} data-library-preview-bar="" className="peer empty:hidden" />
+                {coverOuter ? (
+                  /* a cover: undo, a picture of its own or made with AI, the film's moments, Cancel or Set as cover */
+                  <CoverBottom outerId={coverOuter.id} filmSeconds={coverFilm?.seconds ?? null} frameAt={frameMoment(coverPictureNow?.clip.src)} busy={coverBusy}
+                    canUndo={film.canUndo} canRedo={film.canRedo} onUndo={() => stepHistory('undo')} onRedo={() => stepHistory('redo')} onFill={coverFill}
+                    onMoment={coverMoment} onLocal={coverLocal} onAi={() => setCoverAi(true)} onCancel={cancelCover} onDone={finishCover} />
+                ) : (
                 <div data-project-player="" hidden={Boolean(pickedMedia)} className="peer-[:not(:empty)]:hidden">
                   <ViewerBar
                     timeMs={timeMs}
@@ -5636,12 +5828,13 @@ export function ProjectView({ projectId, onProject }: {
                     </>}
                   />
                 </div>
+                )}
               </div>
               </InBlock>
 
               {/* the color workbench draws its own blocks (scopes, shots, tools) round the edit's viewer */}
-              {colorMode ? <ColorDesk projectId={projectId} host={colorHost} clips={gradedClips} current={colorCurrent} timeMs={timeMs} onShot={takeShot}
-                onPickPoint={pickPoint} onRefer={chat.refer ? referShots : undefined} /> : null}
+              {colorMode ? <ColorDesk projectId={projectId} host={colorHost} clips={gradedClips} current={colorCurrent} timeMs={timeMs} onShot={takeShot} onSeek={(t) => seek(Math.round(t * 1000))}
+                onPickPoint={pickPoint} onRefer={chat.refer ? referShots : undefined} onLeave={() => setWorkMode('edit')} /> : null}
               {inspectorShown ? (
                 <InBlock id="inspector">
                   <div className={`${PANE} flex-1 bg-[var(--bg-panel)]`} data-workspace-inspector>
@@ -5650,6 +5843,13 @@ export function ProjectView({ projectId, onProject }: {
                   ) : inspectorContent === 'captions' ? (
                     <CaptionInspector projectId={projectId} width={inspectorShownWidth} onClose={closeInspector} timeMs={timeMs} onSeek={seek} onTranslated={addTranslation}
                       infoOf={captionInfoOf} onCut={cutRanges} onAdd={addCaption} />
+                  ) : coverInspecting ? (
+                    /* a cover with nothing (or its picture) picked: its picture, a new one drawn from it, its layers */
+                    <div className={`${PANE} flex shrink-0 flex-col`} style={{ width: inspectorShownWidth }}>
+                      <CoverInspector layers={coverLayers} picture={coverPictureSaid} picked={selectedClips[0]?.loc ?? null} busy={coverBusy} blurred={coverBlurred}
+                        onPick={(loc) => selectStageClip(loc)} onMove={moveCoverLayer} onCutout={coverCutout} onBlur={coverBlur} onFill={coverFill}
+                        onSource={() => revealInLibrary('coverPicture')} onAi={() => setCoverAi(true)} />
+                    </div>
                   ) : motionOpen ? (
                     /* motion's own panel (components/MotionPanel): the picked layers' properties, the effects & presets */
                     <div className={`${PANE} flex shrink-0 flex-col`} style={{ width: inspectorShownWidth }}>
@@ -5751,15 +5951,7 @@ export function ProjectView({ projectId, onProject }: {
               <div className={`${PANE} flex-1 bg-[var(--bg-panel)]`} data-workspace-timeline
                 onPointerDownCapture={() => { dismissLibraryPreview.current(); if (pickedMedia) pickMedia(null); }}>
                 <div className="absolute inset-0 flex min-h-0 min-w-0 flex-col" data-timeline-scope="main" style={{ right: METERS_W }}>
-                  {coverOuter && coverHere ? (
-                  /* a cover: the film's moments to take its picture from, the film's covers, what is done with this one */
-                  <CoverBar outerId={coverOuter.id} outerName={coverOuter.name} folder={coverHere} stage={film.film?.stage ?? { w: 1920, h: 1080 }}
-                    covers={coverList?.covers ?? NO_COVERS} filmSeconds={coverFilmSeconds}
-                    frameAt={frameMoment(coverClip(isCoverPicture)?.clip.src)} hasPicture={Boolean(coverClip(isCoverPicture))}
-                    busy={coverBusy === 'frame' || coverBusy === 'cutout' || coverBusy === 'picture' || coverBusy === 'export' ? coverBusy : null}
-                    safe={coverSafe} onSafe={setCoverSafe} onBack={() => onProject(coverOuter.id)} onOpen={(c) => openCover(c)}
-                    onMoment={coverMoment} onCutout={coverCutout} onPicture={coverPicture} onExport={exportCovers} />
-                  ) : motionOpen && compBlock && compTracks ? (
+                  {motionOpen && compBlock && compTracks ? (
                   /* a composition: its page's elements as layers, on the timeline of the page's own time */
                   <Timeline
                     tracks={compTracks.map((r) => r.track)}
@@ -5825,6 +6017,7 @@ export function ProjectView({ projectId, onProject }: {
                     onUncompound={(block) => { void breakCompound(block).then((err) => { if (err) toast.showError(err); }); }}
                     onEnterCompound={enterCompound}
                     crumb={loaded?.outer ? { outer: loaded.outer.name, name: loaded.outer.folder, onBack: () => onProject(loaded.outer!.id) } : null}
+                    cover={coverTile}
                     onEditBlocks={editBlocks}
                     onEditOps={editOps}
                     links={clipLinks}
@@ -5878,8 +6071,15 @@ export function ProjectView({ projectId, onProject }: {
       </>, slots.over)}
       {/* the page's own windows, the library's pane and the layout's seams and editor are the shell's (shell/top-bar,
           shell/library, shell/layout), drawn between these two places */}
+      {/* AI in the cover design: a picture made, or the whole cover handed to the agent */}
+      {coverAi && coverOuter ? (
+        <CoverAiPanel ratio={shapeOf(film.film?.stage ?? { w: 1920, h: 1080 }).ratio} hasPicture={coverPictureFile() != null} busy={coverBusy === 'picture'}
+          made={coverList?.made ?? NO_MADE} thumbOf={coversActions.thumbOf} agent={Boolean(studioHost?.ask)}
+          onMake={coverMake} onUse={coverUse} onAgent={coverAgent} onClose={() => setCoverAi(false)} />
+      ) : null}
       {ReactDOM.createPortal(<>
       <ExportCenter
+        covers={coverOuter ? null : { projectId, list: coverList?.covers ?? [], main: coverList?.main ?? null, edit: () => coverTile?.open() }}
         open={exportOpen}
         onClose={() => { setExportOpen(false); setExportClipId(null); }}
         projectId={projectId}

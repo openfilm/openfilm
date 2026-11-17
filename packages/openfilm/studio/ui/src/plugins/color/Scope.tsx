@@ -12,8 +12,11 @@ export type { Chain, Read, Scope };
 /** The desk's worker, and the frames it holds (by key), asked once each. */
 export interface Pictures {
   worker: Worker;
-  /** A frame of `src` at file second `s`, its longer side `box`, read into the worker: resolves with its key (null: it could not be read). */
-  frame: (src: string, s: number, box: number) => Promise<string | null>;
+  /**
+   * A frame of `src` at file second `s`, its longer side `box`, read into the worker: resolves with its key (null: it
+   * could not be read). `page`: a page clip's (its id), drawn as the film draws it, with the changes made in it.
+   */
+  frame: (src: string, s: number, box: number, page?: string | null) => Promise<string | null>;
   /** Listen to what the worker says. */
   listen: (fn: (m: FromWorker) => void) => () => void;
   seq: () => number;
@@ -31,11 +34,26 @@ export function usePictures(projectId: string): Pictures | null {
       worker,
       listen: (fn) => { heard.add(fn); return () => { heard.delete(fn); }; },
       seq: () => ++n,
-      frame: (src, s, box) => {
-        const key = `${src}@${s.toFixed(3)}@${box}`;
+      frame: (src, s, box, page = null) => {
+        const key = `${page ? `${page}:` : ''}${src}@${s.toFixed(3)}@${box}`;
         let p = asked.get(key);
         if (!p) {
           p = (async () => {
+            if (page) {
+              /* a page has no file to cut a frame from: Studio draws it, as an export does (its 8 bits, as the screen shows it) */
+              const res = await fetch(`/api/projects/${encodeURIComponent(projectId)}/media?what=frame&path=${encodeURIComponent(src)}&ms=${Math.round(s * 1000)}&w=${Math.min(960, box)}&clip=${encodeURIComponent(page)}`);
+              if (!res.ok) throw new Error(`Studio answered ${res.status}`);
+              const bitmap = await createImageBitmap(await res.blob());
+              const c = new OffscreenCanvas(bitmap.width, bitmap.height);
+              const g = c.getContext('2d')!;
+              g.drawImage(bitmap, 0, 0);
+              const rgba = g.getImageData(0, 0, bitmap.width, bitmap.height).data;
+              const raw = new Uint16Array((rgba.length / 4) * 3);
+              for (let i = 0, j = 0; i < rgba.length; i += 4, j += 3) { raw[j] = rgba[i]! * 257; raw[j + 1] = rgba[i + 1]! * 257; raw[j + 2] = rgba[i + 2]! * 257; }
+              worker.postMessage({ type: 'frame', key, w: bitmap.width, h: bitmap.height, data: raw.buffer } satisfies ToWorker, [raw.buffer]);
+              bitmap.close();
+              return key;
+            }
             const res = await fetch(`/api/plugins/color/projects/${encodeURIComponent(projectId)}/frame?src=${encodeURIComponent(src)}&s=${s.toFixed(3)}&box=${box}`);
             if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? `Studio answered ${res.status}`);
             const w = Number(res.headers.get('x-width')), h = Number(res.headers.get('x-height'));
@@ -61,16 +79,17 @@ const chainKey = (chain: Chain | null) => (chain ? chain.map((f) => `${f.name}:$
  * vectorscope, its histogram, and what it measures. Drawn again as any of them changes, the frame read a moment after
  * the moment last moved.
  */
-export function useScopes(pictures: Pictures | null, src: string | null, second: number | null, chain: Chain | null, scopes: readonly Scope[]) {
+export function useScopes(pictures: Pictures | null, src: string | null, second: number | null, chain: Chain | null, scopes: readonly Scope[], shot: { drawn: boolean; page: string | null } = { drawn: false, page: null }) {
   const [frame, setFrame] = React.useState<string | null>(null);
   const [out, setOut] = React.useState<{ scopes: Partial<Record<Scope, Drawn>>; bins: Uint32Array; read: Read } | null>(null);
   const seq = React.useRef(0);
   React.useEffect(() => {
     if (!pictures || !src || second == null) return;
     let live = true;
-    const t = setTimeout(() => { void pictures.frame(src, second, 480).then((k) => { if (live && k) setFrame(k); }); }, 120);
+    /* a page's frame is drawn by Studio's browser, which takes a while: asked once the playhead rests, not as it plays */
+    const t = setTimeout(() => { void pictures.frame(src, second, 480, shot.page).then((k) => { if (live && k) setFrame(k); }); }, shot.page ? 600 : 120);
     return () => { live = false; clearTimeout(t); };
-  }, [pictures, src, second]);
+  }, [pictures, src, second, shot.page]);
   React.useEffect(() => pictures?.listen((m) => {
     if (m.type === 'rendered' && m.seq === seq.current) setOut({ scopes: m.scopes, bins: m.bins, read: m.read });
   }), [pictures]);
@@ -79,8 +98,8 @@ export function useScopes(pictures: Pictures | null, src: string | null, second:
   React.useEffect(() => {
     if (!pictures || !frame || !chain) return;
     seq.current = pictures.seq();
-    pictures.worker.postMessage({ type: 'render', seq: seq.current, key: frame, chain: chain.map((f) => ({ ...f })), scopes: wanted.split(',') as Scope[] } satisfies ToWorker);
-  }, [pictures, frame, ck, wanted]); // eslint-disable-line react-hooks/exhaustive-deps
+    pictures.worker.postMessage({ type: 'render', seq: seq.current, key: frame, chain: chain.map((f) => ({ ...f })), scopes: wanted.split(',') as Scope[], drawn: shot.drawn } satisfies ToWorker);
+  }, [pictures, frame, ck, wanted, shot.drawn]); // eslint-disable-line react-hooks/exhaustive-deps
   return React.useMemo(() => (out ? { ...out, frame } : null), [out, frame]);
 }
 
@@ -88,7 +107,7 @@ export function useScopes(pictures: Pictures | null, src: string | null, second:
  * Small pictures: each of `items` (a frame of its file at a second, graded by its chain) as a data URL once made, by
  * its id. Made again when its chain changes.
  */
-export function useThumbs(pictures: Pictures | null, items: readonly { id: string; src: string; second: number; chain: Chain | null }[], box = 240): Record<string, string> {
+export function useThumbs(pictures: Pictures | null, items: readonly { id: string; src: string; second: number; chain: Chain | null; drawn?: boolean; page?: string | null }[], box = 240): Record<string, string> {
   const [made, setMade] = React.useState<Record<string, string>>({});
   const want = React.useRef(new Map<number, string>());
   React.useEffect(() => pictures?.listen((m) => {
@@ -102,18 +121,18 @@ export function useThumbs(pictures: Pictures | null, items: readonly { id: strin
     const url = c.toDataURL('image/jpeg', 0.86);
     setMade((was) => ({ ...was, [id]: url }));
   }), [pictures]);
-  const key = items.map((i) => `${i.id}@${i.src}@${i.second.toFixed(2)}@${chainKey(i.chain)}`).join('\n');
+  const key = items.map((i) => `${i.id}@${i.src}@${i.second.toFixed(2)}@${i.drawn ? 'drawn' : ''}@${chainKey(i.chain)}`).join('\n');
   React.useEffect(() => {
     if (!pictures) return;
     let live = true;
     for (const item of items) {
       if (!item.chain) continue;
       const chain = item.chain.map((f) => ({ ...f }));
-      void pictures.frame(item.src, item.second, box).then((k) => {
+      void pictures.frame(item.src, item.second, box, item.page ?? null).then((k) => {
         if (!live || !k) return;
         const n = pictures.seq();
         want.current.set(n, item.id);
-        pictures.worker.postMessage({ type: 'thumb', seq: n, key: k, chain } satisfies ToWorker);
+        pictures.worker.postMessage({ type: 'thumb', seq: n, key: k, chain, drawn: Boolean(item.drawn) } satisfies ToWorker);
       });
     }
     return () => { live = false; };

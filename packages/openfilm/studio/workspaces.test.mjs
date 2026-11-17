@@ -402,3 +402,17 @@ test('preset thumbnail panel bounds match actual panels at the current window si
     }
   },{hasChat});
 });
+
+test('Screening picked over the canvas is shown, the canvas kept under it', {timeout:60_000},async()=>{
+  await withWorkspace(async page=>{
+    await showWorkbench(page, 'canvas');
+    await showWorkbench(page, 'screening');
+    const screening = page.locator('[data-screening]');
+    await screening.waitFor();
+    const shown = await rect(screening);
+    assert.ok(shown.width > 400 && shown.height > 300, `Screening is laid out (${shown.width}×${shown.height})`);
+    /* the canvas stays the one left for the project, under Screening, and comes back when picked */
+    await showWorkbench(page, 'canvas');
+    await page.locator('[data-workspace-canvas]:not([inert])').waitFor();
+  });
+});

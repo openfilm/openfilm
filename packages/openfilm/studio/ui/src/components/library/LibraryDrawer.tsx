@@ -14,15 +14,15 @@
  */
 import { onRevealInLibrary, takeRevealed, type Revealed } from '@/lib/library-reveal';
 import React from 'react';
-import { ChevronDown, ChevronsLeft, ChevronsRight, CircleHelp, FolderOpen, FolderPlus, Link2, Package, Pencil, Plus, Search, Star, Trash2, Upload, X } from 'lucide-react';
+import { AudioLines, BookmarkPlus, ChevronDown, ChevronsLeft, ChevronsRight, CircleHelp, FolderOpen, FolderPlus, Link2, Package, Pencil, Plus, Search, Star, Trash2, Upload, X } from 'lucide-react';
 import { useLanguage, useT } from '@/i18n';
 import { studioHost } from '@/lib/host';
-import { copyFromLibrary, inOrder, packKey, shelfActions, useLibraryPlaces } from '@/lib/library-places';
-import { pickFromComputer, SAVED, savedActions } from '@/lib/saved';
-import { safeName, type MediaLink } from '@/lib/workspace-resources';
+import { copyFromLibrary, inOrder, packKey, saveToEntry, shelfActions, useLibraryPlaces } from '@/lib/library-places';
+import { pickFromComputer, refreshSaved, SAVED, savedActions, savedSources, starSaved, useSavedListing } from '@/lib/saved';
+import { safeName, type MediaLink, type WorkspaceResource } from '@/lib/workspace-resources';
 import {
   BUILT_IN, TEXT_COMPONENT, askHere, toggleFavorite, builtInItem, prepareLibraryItem, isLibraryItemReady, libraryDragItem, libraryUrl, mayNeedFetch, nameOf, posterUrl, prepareTemplatePreview, previewUrl, setAdded, templateExamplePath, templatePreviewUrl,
-  inLibrary, useLibraryAdded, useLibraryFavorites, useLibraryHere, useLibraryIndex, type HereState, type LibraryCategory, type LibraryItem,
+  inLibrary, makerName, savePack, useLibraryAdded, useLibraryFavorites, useLibraryHere, useLibraryIndex, type HereState, type LibraryCategory, type LibraryItem,
 } from '@/lib/library';
 import { openPlugins } from '@/lib/plugins-window';
 import { COMMUNITY_ICON as Community, FEATURE_KINDS } from '../feature-kinds';
@@ -46,15 +46,17 @@ import { MY_VOICES } from '@/lib/private-voices';
 import { providerName } from '@/lib/providers';
 import { CaptionsPane, type CaptionsActions, type CaptionsSource } from './CaptionsPane';
 import { STARRED, VoicesPane, type VoiceSample } from './VoicesPane';
-import { CoversPane, type CoversActions, type CoversGroup } from './CoversPane';
+import { CoversPane, type CoversActions, type CoversLine } from './CoversPane';
 
-type OwnCategory = 'media' | 'voice' | 'captions' | 'cover' | LibraryCategory;
+type OwnCategory = 'media' | 'voice' | 'captions' | 'cover' | 'coverPicture' | LibraryCategory;
 /** One of OpenFilm's own categories, or a plugin's tab (by its plugin's id). */
 type Category = OwnCategory | (string & {});
 /* OpenFilm's order (the person's own in Settings › Advanced, lib/library-categories): the media, the voice-over and the
    captions, then the templates, the most a film is made with at once; the plugins' tabs come after these (the plugins
    themselves have a window of their own, PluginsWindow) */
-export const CATEGORIES: OwnCategory[] = ['media', 'voice', 'captions', 'cover', 'template', 'sound', 'music', 'text', 'sticker', 'filter', 'effect', 'transition'];
+export const CATEGORIES: OwnCategory[] = ['media', 'voice', 'captions', 'cover', 'coverPicture', 'template', 'sound', 'music', 'text', 'sticker', 'filter', 'effect', 'transition'];
+/** What a cover is made with (the cover studio's library), its own two first: its looks and its picture. */
+const COVER_CATEGORIES: string[] = ['cover', 'text', 'sticker', 'coverPicture'];
 /** The voice-over's line that records from the microphone. */
 const RECORD = 'record';
 
@@ -79,6 +81,9 @@ const HOVER_PREVIEW_MS = 280;
 /* a clip's motions (how it comes in, goes out, moves while shown) are not among the effects either: they are put on a
    clip from the inspector's Animation (ClipMotionSection); a camera move on a cut stays a transition */
 const NEW_TEXT = 'new';
+/* a namespace of the side bar shown whole: OpenFilm's own things of the category, or those got from the Community */
+const OFFICIAL_ALL = '@official';
+const COMMUNITY_ALL = '@community';
 const PRESETS = 'presets';
 const ART = 'art';
 const TEMPLATES = 'tpl';
@@ -97,7 +102,7 @@ const SHOWN = {
   line: {} as Partial<Record<Category, string>>,
 };
 /* the line a category opens on the first time: a new line of words for the text, captions of what is said */
-const firstLine = (cat: Category) => SHOWN.group[cat] ?? (cat === 'text' ? NEW_TEXT : cat === 'captions' ? 'speech' : '');
+const firstLine = (cat: Category) => SHOWN.group[cat] ?? (cat === 'text' ? NEW_TEXT : cat === 'captions' ? 'speech' : cat === 'coverPicture' ? 'film' : '');
 
 export interface LibraryActions {
   /** Enter or "+": a page or a sound at the playhead (a transition on the cut), a look on the clip. */
@@ -114,7 +119,7 @@ export interface LibraryActions {
  */
 export const footInset = (under: number, beside: number): number => (under > beside ? Math.round((under + beside) / 2 - 14) : beside + 10);
 
-export function LibraryDrawer({ media, mediaScope, onMediaScope, onUpload, onKeep, mediaRequest, actions, tried, templateStatus, previewBar, previewPicture, dismissRef, onPreviewStart, onDownloadFailed, captions, covers, speak, recorder, onServices, projectId = null, folder = '', under = 0, beside = under, shown: isShown = true }: {
+export function LibraryDrawer({ media, mediaScope, onMediaScope, onUpload, onKeep, onPickSaved, onAddSaved, mediaRequest, actions, tried, templateStatus, previewBar, previewPicture, dismissRef, onPreviewStart, onDownloadFailed, captions, covers, speak, recorder, onServices, projectId = null, folder = '', under = 0, beside = under, shown: isShown = true }: {
   /** the media pane on the project's files or one of the person's folders (`mediaScope`), showing only `kinds` (null: all) */
   media: (kinds: readonly ResourceKind[] | null) => React.ReactNode;
   /** the project's own media, or a place of the person's shelf (lib/library-places), by its `saved/` path */
@@ -124,6 +129,9 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, onUpload, onKee
   onUpload: (files: File[], into: string) => void;
   /** a file of the project kept in one of the person's folders (dropped on it) */
   onKeep: (path: string, name: string, into: string) => void;
+  /** one of the person's own files starred, under the media's 收藏: taken in hand (clicked), put in the film ("+") */
+  onPickSaved?: (file: WorkspaceResource | null) => void;
+  onAddSaved?: (file: WorkspaceResource) => void;
   mediaRequest?: number;
   actions: LibraryActions;
   tried?: string | null;
@@ -135,7 +143,7 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, onUpload, onKee
   onDownloadFailed: () => void;
   /** where a caption track comes from: what is said, a file, or by hand (none: no workbench makes captions, and they are not shown) */
   captions?: CaptionsActions;
-  /** the film's covers and the looks one takes (none: the workbench makes none, and they are not shown) */
+  /** a cover is open (the cover studio): its looks and its picture, and only what a cover is made with beside them */
   covers?: CoversActions;
   /** words spoken in a voice of the library, put on the film at the playhead (VoicesPane): null, or why not */
   speak?: SpeakVoice;
@@ -166,10 +174,11 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, onUpload, onKee
   const tabs = usePluginTabs(projectId);
   const categoryName = useCategoryName(tabs);
   const categories = arrangedCategories(withTabs(CATEGORIES, tabs), arranged)
-    .filter((c) => c.on && (c.id !== 'captions' || captions) && (c.id !== 'cover' || covers) && (c.id !== 'voice' || speak)).map((c) => c.id);
+    .filter((c) => c.on && (c.id !== 'captions' || captions) && (c.id !== 'voice' || speak) && (covers ? COVER_CATEGORIES.includes(c.id) : c.id !== 'cover' && c.id !== 'coverPicture'))
+    .sort((a, b) => (covers ? COVER_CATEGORIES.indexOf(a.id) - COVER_CATEGORIES.indexOf(b.id) : 0)).map((c) => c.id);
   const [shownCat, setCat] = React.useState<Category>(SHOWN.cat);
   /* one turned off while it was shown: the media in its place */
-  const cat: Category = categories.includes(shownCat) ? shownCat : 'media';
+  const cat: Category = categories.includes(shownCat) ? shownCat : categories.includes('media') ? 'media' : categories[0] ?? 'media';
   /* the plugin whose tab is shown */
   const tab = tabs.find((p) => p.id === cat);
   const [group, setGroup] = React.useState<string>(firstLine(SHOWN.cat));
@@ -251,7 +260,10 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, onUpload, onKee
   }, []);
   const pickGroup = (next: string) => { SHOWN.group[cat] = next; setGroup(next); setQuery(''); closePreview(); };
   React.useEffect(() => {
-    if (mediaRequest != null && cat !== 'media') show('media');
+    if (mediaRequest == null) return;
+    if (cat !== 'media') show('media');
+    /* the project's files, not a namespace of the media's */
+    SHOWN.group.media = ''; setGroup('');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mediaRequest]);
   const bar = useSideways();
@@ -293,12 +305,21 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, onUpload, onKee
       if (q) return Object.values(item.name).some((n) => n?.toLowerCase().includes(q)) || item.tags?.some((tag) => tag.toLowerCase().includes(q));
       /* the starred of this category, whatever their groups */
       if (group === STARRED) return favorites.includes(item.id);
-      if (cat === 'text') return text === section && (!of || item.group === of);
+      /* a namespace whole: OpenFilm's own, or the Community's got (the text's looks and templates, not its new line) */
+      if (group === OFFICIAL_ALL || group === COMMUNITY_ALL) return Boolean(item.by) === (group === COMMUNITY_ALL) && (cat !== 'text' || text === ART || text === TEMPLATES);
+      /* the text's looks or templates: OpenFilm's own all (a section alone), or a pack's */
+      if (cat === 'text') return text === section && (of ? item.group === of : !item.by);
       return item.group === group;
     }).sort((a, b) => Number(Boolean(a.still)) - Number(Boolean(b.still)));
   }, [index, cat, q, group, added, hidden, favorites]);
-  const sources = React.useMemo(() => sourcesIn(shown.map(sourceOf)), [shown]);
+  /* the person's own files starred: under the media's 收藏, beside the library's things starred */
+  const mineStarred = cat === 'media' && group === STARRED;
+  const starredListing = useSavedListing(mineStarred && isShown, true, { view: 'starred' });
+  const starredFiles = React.useMemo(() => (mineStarred ? [...starredListing.pages, ...starredListing.files] : [])
+    .filter((f) => !q || f.name.toLowerCase().includes(q)), [mineStarred, starredListing, q]);
+  const sources = React.useMemo(() => sourcesIn([...shown.map(sourceOf), ...(starredFiles.length ? ['mine' as const] : [])]), [shown, starredFiles]);
   const items = React.useMemo(() => source && sources.includes(source) ? shown.filter((item) => sourceOf(item) === source) : shown, [source, sources, shown]);
+  const mineItems = source && sources.includes(source) && source !== 'mine' ? [] : starredFiles;
   const presetItems = React.useMemo(() => presets.map((p, i): LibraryItem => ({
     id: `presets/${p.id}`, cat: 'text', group: PRESETS, kind: 'textstyle',
     name: { en: t('assetDrawer.textPreset').replace('{n}', String(i + 1)) }, vars: p.vars,
@@ -314,6 +335,12 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, onUpload, onKee
     return templateStatus[item.id] ?? (example === 'missing' ? 'missing' : 'here');
   };
   const pick = (item: LibraryItem) => {
+    /* a media file of the Community's: picked and fetched (it goes in with "+" or a drag), nothing tried over the picture */
+    if (item.kind === 'file') {
+      setPicked(item.id);
+      if (mayNeedFetch(item) && !isLibraryItemReady(item.id)) void prepareLibraryItem(item.id).then((ok) => { if (!ok) onDownloadFailed(); });
+      return;
+    }
     if (item.kind === 'sound') {
       setPicked(item.id);
       onPreviewStart();
@@ -373,10 +400,22 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, onUpload, onKee
   const onListMenu = (e: React.MouseEvent) => {
     const id = (e.target as HTMLElement).closest<HTMLElement>('[data-library-card], [data-library-audio]');
     const thing = id?.dataset.libraryCard ?? id?.dataset.libraryAudio;
-    if (!thing || !inCommunity || !index?.items.some((it) => it.id === thing)) return;
+    const item = thing ? index?.items.find((it) => it.id === thing) : undefined;
+    if (!item) return;
+    /* a media file of the Community's: kept as a file of the person's own too (a copy, theirs to change) */
+    const keep = item.kind === 'file' ? saveToEntry(folders, { id: 'save', label: t('saved.add'), many: t('saved.addTo'), icon: <BookmarkPlus size={14} />,
+      pick: (into) => keepInMine(`${BUILT_IN}/${item.id}`, into, nameOf(item.name, lang)) }) : [];
+    const details = inCommunity ? [{ id: 'details', label: t('assetDrawer.seeDetails'),
+      onSelect: () => openPlugins({ line: `kind:${cat as LibraryCategory}`, page: `asset:${item.id}` }) }] : [];
+    if (!keep.length && !details.length) return;
     e.preventDefault();
-    setMenu({ x: e.clientX, y: e.clientY, items: [{ id: 'details', label: t('assetDrawer.seeDetails'),
-      onSelect: () => openPlugins({ line: `kind:${cat as LibraryCategory}`, page: `asset:${thing}` }) }] });
+    setMenu({ x: e.clientX, y: e.clientY, items: [...keep, ...details] });
+  };
+  /* a thing of the library copied into one of the person's folders, said once it is there */
+  const keepInMine = (from: string, into: string, name?: string) => {
+    void copyFromLibrary(from, into, name).then(
+      () => setNotice(t('saved.added').replace('{n}', '1').replace('{place}', folders.find((f) => f.path === into)?.name ?? '')),
+      (error: unknown) => setNotice(error instanceof Error ? error.message : String(error)));
   };
   /* the text category's groups, word art or templates by what they hold */
   const textGroups = React.useMemo(() => {
@@ -398,7 +437,7 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, onUpload, onKee
      folders and the packs as one list in their order */
   /* the media's side bar is where the person's files are (this project, their folders); every other category's is its
      groups, in folding sections (OpenFilm's, the Community's added packs; the text's looks and templates) */
-  const sectioned = cat !== 'media' && cat !== 'voice' && cat !== 'captions' && cat !== 'cover';
+  const sectioned = cat !== 'media' && cat !== 'voice' && cat !== 'captions' && cat !== 'cover' && cat !== 'coverPicture';
   const head: Line[] = [
     ...(cat === 'text' ? [{ key: NEW_TEXT, kind: 'new' as const, name: t('assetDrawer.textNew') }] : []),
     ...(sectioned ? [] : [{ key: 'project', kind: 'project' as const, name: t('assetDrawer.mediaProject') }]),
@@ -406,25 +445,21 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, onUpload, onKee
   ];
   const packs: Line[] = cat === 'text'
     ? [ART, TEMPLATES].flatMap((section) => textGroups[section as TextSection]
-      .filter((g) => !g.by || added.includes(g.id) || (index?.items ?? []).some((it) => it.cat === 'text' && it.group === g.id && inLibrary(it, added)))
-      .map((g) => ({ key: packKey(g.id), kind: 'pack' as const, name: g.name, group: `${section}:${g.id}`, official: !g.by })))
-    /* the media's packs are folders of the person's own once added (studio/server/saved.mjs savePack), never lines */
-    : cat === 'media' ? []
+      /* OpenFilm's own text is under 官方 as its looks and its templates, not pack by pack: the Community's packs got */
+      .filter((g) => g.by && (added.includes(g.id) || (index?.items ?? []).some((it) => it.cat === 'text' && it.group === g.id && inLibrary(it, added))))
+      .map((g) => ({ key: packKey(g.id), kind: 'pack' as const, name: g.name, group: `${section}:${g.id}` })))
+    /* the media's too: OpenFilm's own packs of footage, pictures and sounds, and the Community's got (lines under 社区,
+       not copies in 我的; one is kept there as well from its menu or by a drag) */
     : [...own.map((g) => ({ key: packKey(g.id), kind: 'pack' as const, name: g.name, group: g.id, official: true })),
       ...addedPacks.map((g) => ({ key: packKey(g.id), kind: 'pack' as const, name: g.name, group: g.id }))];
   const packsShown = packs.filter((p, i) => !hidden.includes(p.key) && packs.findIndex((o) => o.key === p.key) === i);
-  const movable = sectioned ? packsShown : inOrder([
-    ...folders.map((f): Line => ({ key: f.path, kind: 'folder', name: f.name, ...(f.link ? { link: f.link } : {}) })),
-    ...packsShown,
-  ], (line) => line.key, order);
-  /* the sections of a category's side bar, each folded or open as the person left it */
-  const sections: { id: string; name: string; lines: Line[] }[] = !sectioned ? [] : cat === 'text' ? [
-    { id: ART, name: t('assetDrawer.textArt'), lines: packsShown.filter((p) => p.group?.startsWith(`${ART}:`)) },
-    { id: TEMPLATES, name: t('assetDrawer.textTemplates'), lines: packsShown.filter((p) => p.group?.startsWith(`${TEMPLATES}:`)) },
-  ] : [
-    { id: 'openfilm', name: t('assetDrawer.railOfficial'), lines: packsShown.filter((p) => p.official) },
-    { id: 'community', name: t('assetDrawer.railCommunity'), lines: packsShown.filter((p) => !p.official) },
-  ];
+  /* the person's folders (the media's 我的), in their order; a category's packs (under 官方 and 社区) */
+  const movable = sectioned ? packsShown : inOrder(
+    folders.map((f): Line => ({ key: f.path, kind: 'folder', name: f.name, ...(f.link ? { link: f.link } : {}) })),
+    (line) => line.key, order);
+  /* the packs of a category, under its namespaces: OpenFilm's own (官方), those got from the Community (社区) */
+  const officialPacks = cat === 'text' ? [] : packsShown.filter((p) => p.official);
+  const communityPacks = packsShown.filter((p) => !p.official);
   const [folded, setFolded] = React.useState<Record<string, boolean>>(readFolded);
   const fold = (id: string) => setFolded((was) => { const next = { ...was, [`${cat}:${id}`]: !was[`${cat}:${id}`] }; keepFolded(next); return next; });
   const lines = [...head, ...movable];
@@ -478,16 +513,21 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, onUpload, onKee
     return { transform: `translateY(${by}px)`, transition: 'transform 150ms cubic-bezier(.2,.8,.2,1)' };
   };
   /* the voice-over and the captions have lines of their own, not the library's folders */
-  const ownLines = cat === 'voice' || cat === 'captions' || cat === 'cover';
+  const ownLines = cat === 'voice' || cat === 'captions' || cat === 'cover' || cat === 'coverPicture';
   /* the line picked: the media's is the media pane's; elsewhere the one picked last, else the first pack */
   const picking = cat === 'media' ? mediaScope : lineKey;
   const current = lines.find((line) => line.key === picking)
     ?? (cat === 'media' ? head[0] : lines.find((line) => line.kind === 'new') ?? movable.find((line) => line.kind === 'pack') ?? head[0])!;
-  const ownShown = !ownLines && (current.kind === 'project' || current.kind === 'folder');
-  const lineOn = (line: Line) => line.key === current.key && !(q && !ownShown) && !(sectioned && group === STARRED);
+  /* the media's files (this project's, a folder of the person's), unless one of its namespaces is shown (`group`) */
+  const ownShown = !ownLines && (current.kind === 'project' || current.kind === 'folder') && !(cat === 'media' && group !== '');
+  /* a namespace shown whole (or the text's looks or templates, OpenFilm's): no line in it lit */
+  const wholeShown = group === STARRED || group === OFFICIAL_ALL || group === COMMUNITY_ALL || (cat === 'text' && (group === ART || group === TEMPLATES));
+  const lineOn = (line: Line) => !(q && !ownShown) && (cat === 'media'
+    ? (line.kind === 'pack' ? group === line.group : group === '' && line.key === current.key)
+    : line.key === current.key && !(sectioned && wholeShown));
   const pickLine = (line: Line) => {
     SHOWN.line[cat] = line.key; setLineKey(line.key);
-    if (line.kind === 'project' || line.kind === 'folder') onMediaScope(line.key);
+    if (line.kind === 'project' || line.kind === 'folder') { onMediaScope(line.key); if (cat === 'media') pickGroup(''); }
     else pickGroup(line.kind === 'new' ? NEW_TEXT : line.kind === 'presets' ? PRESETS : line.group ?? '');
   };  /* the side bar as namespaces (all but the media's): a box picks, or opens to the lines it holds */
   type RailNode = { key: string; name: string; on?: boolean; onPick?: () => void; line?: Line; children?: RailNode[] };
@@ -495,26 +535,41 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, onUpload, onKee
   const ofLine = (line: Line): RailNode => ({ key: line.key, name: line.name, on: lineOn(line), onPick: () => pickLine(line), line });
   /* the voice-over's own: the person's (recording, then their voices cloned), the starred, the services */
   const inMine = cat === 'voice' && (group === MY_VOICES || group === RECORD);
+  /* a category's namespaces: OpenFilm's own (shown only when it has some), then the Community's (always: the way to
+     get more); each box shows all it holds, its lines below it one pack each */
+  const officialChildren: RailNode[] = cat === 'text'
+    ? [ART, TEMPLATES].filter((section) => textGroups[section as TextSection].some((g) => !g.by))
+      .map((section) => ({ ...railPick(section), name: t(section === ART ? 'assetDrawer.textArt' : 'assetDrawer.textTemplates') }))
+    : officialPacks.map(ofLine);
+  const spaces: RailNode[] = [
+    ...(officialChildren.length ? [{ ...railPick(OFFICIAL_ALL), key: 'openfilm', name: t('assetDrawer.railOfficial'), children: officialChildren }] : []),
+    { ...railPick(COMMUNITY_ALL), key: 'community', name: t('assetDrawer.railCommunity'), children: communityPacks.map(ofLine) },
+  ];
   const nodes: RailNode[] = cat === 'voice' ? [
-    { key: 'mine', name: t('assetDrawer.railMine'), on: inMine && !q, onPick: () => pickGroup(MY_VOICES) },
     { ...railPick(STARRED), name: t('assetDrawer.favorites') },
+    { key: 'mine', name: t('assetDrawer.railMine'), on: inMine && !q, onPick: () => pickGroup(MY_VOICES) },
     { key: 'services', name: t('assetDrawer.railServices'), children: [
       { ...railPick(''), name: t('assetDrawer.all') },
       ...(voices?.providers ?? []).map((s) => ({ ...railPick(s.id), name: providerName(s, lang) })),
     ] },
   ] : cat === 'cover' ? [
     { ...railPick(''), name: t('covers.allLooks') },
-    { ...railPick('frame'), name: t('covers.groupFrame') },
-    { ...railPick('design'), name: t('covers.groupDesign') },
+    ...(covers?.looks?.categories ?? []).map((c) => ({ ...railPick(c.id), name: nameOf(c.name, lang) })),
+  ] : cat === 'coverPicture' ? [
+    { ...railPick('film'), name: t('covers.fromFilm') },
+    { ...railPick('local'), name: t('covers.fromLocal') },
+    { ...railPick('color'), name: t('covers.fromColor') },
+    { ...railPick('ai'), name: t('covers.fromAi') },
   ] : cat === 'captions' ? [
     { ...railPick('speech'), name: t('assetDrawer.captionsFromSpeech') },
     { ...railPick('file'), name: t('assetDrawer.captionsFromFile') },
     { ...railPick('hand'), name: t('assetDrawer.captionsByHand') },
   ] : [
-    /* the starred of the category first, then its own lines (the text's), then its namespaces */
+    /* the same order in every category: (the text's new line), 收藏, (the text's 我的: its looks saved), 官方, 社区 */
+    ...head.filter((l) => l.kind === 'new').map(ofLine),
     { ...railPick(STARRED), name: t('assetDrawer.favorites') },
-    ...head.map(ofLine),
-    ...sections.filter((sec) => sec.lines.length).map((sec) => ({ key: sec.id, name: sec.name, children: sec.lines.map(ofLine) })),
+    ...head.filter((l) => l.kind === 'presets').map((l) => ({ ...ofLine(l), name: t('assetDrawer.railMine') })),
+    ...spaces,
   ];
 
   /* the line shown is the pack's or the folder's it says (as the drawer opens, as the category changes) */
@@ -545,7 +600,12 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, onUpload, onKee
     { id: 'publish', label: t('assetDrawer.contribute'), icon: <Upload size={14} />, onSelect: () => openPlugins({ line: 'publish' }) },
     { id: 'delete', label: t(line.link ? 'resourceCenter.removeLink' : 'assets.delete'), icon: <Trash2 size={14} />, danger: true, onSelect: () => setGone(line) },
   ] : line.kind === 'pack' ? [
-    ...(inCommunity ? [{ id: 'community', label: t('assetDrawer.seeInCommunity'), icon: <Community size={14} />, onSelect: () => openPlugins({ line: `kind:${cat as LibraryCategory}` }) }] : []),
+    /* the Community's packs only: OpenFilm's own are not in the Community (they are its 官方) */
+    ...(inCommunity && !line.official ? [{ id: 'community', label: t('assetDrawer.seeInCommunity'), icon: <Community size={14} />, onSelect: () => openPlugins({ line: `kind:${cat as LibraryCategory}` }) }] : []),
+    /* a pack of the Community's media: its files kept as a folder of the person's own too */
+    ...(cat === 'media' && !line.official && line.group ? [{ id: 'save', label: t('assetDrawer.saveToMine'), icon: <BookmarkPlus size={14} />,
+      onSelect: () => { const id = line.group!; void savePack(id, lang).then((path) => { refreshSaved(); setNotice(t('saved.added').replace('{n}', '1').replace('{place}', path.split('/').at(-1) ?? '')); },
+        (error: unknown) => setNotice(error instanceof Error && error.message !== 'failed' ? error.message : t('assetDrawer.mediaSaveFailed'))); } }] : []),
     { id: 'remove', label: t('assetDrawer.removePack'), icon: <Trash2 size={14} />, onSelect: () => { if (line.official) void shelfActions.hide(line.key, true); else setAdded(line.key.slice(5), false); } },
   ] : [];
   /* what is dropped on one of the person's folders goes in it: files of this computer brought in, the folder's own moved,
@@ -561,7 +621,9 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, onUpload, onKee
       const name = thing.path.split('/').at(-1) ?? thing.name;
       if (thing.path.startsWith(`${SAVED}/`)) void savedActions.move(thing.path, `${line.key}/${name}`);
       else if (thing.saved?.startsWith(`${BUILT_IN}/`) || thing.path.startsWith(`${BUILT_IN}/`)) {
-        void copyFromLibrary(thing.saved ?? thing.path, line.key).catch((error: unknown) => setNotice(error instanceof Error ? error.message : String(error)));
+        /* a file of the Community's by its name (its own file is named for the catalog) */
+        const named = (thing.saved ?? thing.path).startsWith(`${BUILT_IN}/community/`) && thing.kind !== 'mg' && thing.kind !== 'other' ? thing.name : undefined;
+        void copyFromLibrary(thing.saved ?? thing.path, line.key, named).catch((error: unknown) => setNotice(error instanceof Error ? error.message : String(error)));
       } else onKeep(thing.path, thing.name, line.key);
     },
   });
@@ -642,6 +704,49 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, onUpload, onKee
       ...visible.filter((i) => i.kind === 'group').map(templateExamplePath)]);
   }, [isShown, items, drawn]);
 
+  /* a namespace of the side bar, as a box: one that shows its whole picks it (opened); its arrow, or a box that only
+     holds others, folds it; each line under it a pack (or the voice-over's services) */
+  const railNode = (node: RailNode): React.ReactNode => {
+    if (!node.children) {
+      return (
+        <button key={node.key} type="button" onClick={node.onPick} aria-pressed={node.on} title={node.name}
+          data-rail-line={node.line?.key} data-rail-kind={node.line?.kind}
+          className={`${RAIL_BOX} ${node.on ? 'text-[var(--accent)]' : 'text-[var(--text)]'}`}>
+          <span className="min-w-0 flex-1 truncate">{node.name}</span>
+        </button>
+      );
+    }
+    const open = !folded[`${cat}:${node.key}`];
+    const lit = Boolean(node.on) || node.children.some((c) => c.on);
+    const whole = Boolean(node.onPick);
+    return (
+      <div key={node.key} className="flex flex-col" data-rail-section={node.key}>
+        <button type="button" aria-expanded={node.children.length ? open : undefined} aria-pressed={whole ? Boolean(node.on) : undefined} title={node.name}
+          onClick={(e) => {
+            if (!whole || (e.target as HTMLElement).closest('[data-rail-fold]')) { fold(node.key); return; }
+            node.onPick?.();
+            if (!open) fold(node.key);
+          }}
+          className={`${RAIL_BOX} ${lit ? 'text-[var(--accent)]' : 'text-[var(--text)]'}`}>
+          <span className="min-w-0 flex-1 truncate">{node.name}</span>
+          {node.children.length ? (
+            <span data-rail-fold="" className="-mr-1 grid h-5 w-5 shrink-0 place-items-center rounded hover:bg-[var(--bg-hover)]">
+              <ChevronDown size={13} aria-hidden className={`transition-transform duration-150 ${open ? 'rotate-180' : ''}`} />
+            </span>
+          ) : null}
+        </button>
+        {open ? node.children.map((child) => (
+          <button key={child.key} type="button" onClick={child.onPick} aria-pressed={child.on} title={child.name}
+            data-rail-line={child.line?.key} data-rail-kind={child.line?.kind}
+            onContextMenu={child.line ? (e) => { e.preventDefault(); setRailMenu({ x: e.clientX, y: e.clientY, items: lineMenu(child.line!) }); } : undefined}
+            className={`${RAIL_CHILD} ${child.on ? 'text-[var(--accent)]' : 'text-[var(--text)] hover:text-[var(--accent)]'}`}>
+            <span className="min-w-0 flex-1 truncate">{child.name}</span>
+          </button>
+        )) : null}
+      </div>
+    );
+  };
+
   /* the bars and the library's things are the app's panel's (data-studio-host-panel): a press there keeps what is
      picked on the timeline and the picture, which a look or a transition goes on */
   return (
@@ -707,36 +812,11 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, onUpload, onKee
                 what of this category the line picked holds */}
             {/* the voice-over's, the captions' and every category's but the media's: namespaces, as boxes; one that holds
                 others opens to them, each a line of its words (the media's are its folders, below) */}
-            {ownLines || sectioned ? <div className="flex flex-col gap-2">{nodes.map((node) => node.children ? (() => {
-              const open = !folded[`${cat}:${node.key}`];
-              const lit = node.children.some((c) => c.on);
-              return (
-                <div key={node.key} className="flex flex-col" data-rail-section={node.key}>
-                  <button type="button" aria-expanded={open} onClick={() => fold(node.key)}
-                    className={`${RAIL_BOX} ${lit ? 'text-[var(--accent)]' : 'text-[var(--text)]'}`}>
-                    <span className="min-w-0 flex-1 truncate">{node.name}</span>
-                    <ChevronDown size={13} aria-hidden className={`shrink-0 transition-transform duration-150 ${open ? 'rotate-180' : ''}`} />
-                  </button>
-                  {open ? node.children.map((child) => (
-                    <button key={child.key} type="button" onClick={child.onPick} aria-pressed={child.on} title={child.name}
-                      data-rail-line={child.line?.key} data-rail-kind={child.line?.kind}
-                      onContextMenu={child.line ? (e) => { e.preventDefault(); setRailMenu({ x: e.clientX, y: e.clientY, items: lineMenu(child.line!) }); } : undefined}
-                      className={`${RAIL_CHILD} ${child.on ? 'text-[var(--accent)]' : 'text-[var(--text)] hover:text-[var(--accent)]'}`}>
-                      <span className="min-w-0 flex-1 truncate">{child.name}</span>
-                    </button>
-                  )) : null}
-                </div>
-              );
-            })() : (
-              <button key={node.key} type="button" onClick={node.onPick} aria-pressed={node.on} title={node.name}
-                data-rail-line={node.line?.key} data-rail-kind={node.line?.kind}
-                className={`${RAIL_BOX} ${node.on ? 'text-[var(--accent)]' : 'text-[var(--text)]'}`}>
-                <span className="min-w-0 flex-1 truncate">{node.name}</span>
-              </button>
-            ))}</div> : (
-              /* the media's: Import (this project), then Mine (the person's folders; one alone is Mine itself) */
+            {ownLines || sectioned ? <div className="flex flex-col gap-2">{nodes.map(railNode)}</div> : (
+              /* the media's: 导入 (this project), 收藏, 我的 (the person's folders; one alone is 我的 itself), then 官方 and 社区 */
               <div className="flex flex-col gap-2">
                 {head.map((line) => <RailLine key={line.key} look="box" line={line} on={lineOn(line)} onPick={() => pickLine(line)} />)}
+                {railNode({ ...railPick(STARRED), name: t('assetDrawer.favorites') })}
                 {movable.length === 1 && renaming !== movable[0]!.key ? mineLine(movable[0]!, 0, 'box') : movable.length ? (
                   <div className="flex flex-col" data-rail-section="mine">
                     <button type="button" aria-expanded={!folded[`${cat}:mine`]} onClick={() => fold('mine')}
@@ -747,6 +827,7 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, onUpload, onKee
                     {folded[`${cat}:mine`] ? null : movable.map((line, i) => mineLine(line, i, 'child'))}
                   </div>
                 ) : null}
+                {spaces.map(railNode)}
               </div>
             )}
             {making ? <RailName value={t('assets.newFolder')} onDone={(name) => { setMaking(false); void makeFolder(name); }} onCancel={() => setMaking(false)} /> : null}
@@ -780,7 +861,7 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, onUpload, onKee
         </div>
         <div className="relative flex min-h-0 min-w-0 flex-1 flex-col" data-studio-host-panel={ownShown ? undefined : ''}>
           {ownShown ? media(kindsOf(cat)) : cat === 'captions' ? (captions ? <CaptionsPane actions={captions} source={group as CaptionsSource} /> : null)
-            : cat === 'cover' ? (covers ? <CoversPane actions={covers} group={(group === 'frame' || group === 'design' ? group : '') as CoversGroup} /> : null)
+            : cat === 'cover' || cat === 'coverPicture' ? (covers ? <CoversPane actions={covers} category={cat === 'cover' ? 'cover' : 'coverPicture'} line={group as CoversLine} /> : null)
             : (
             <>
               {/* the person's own voice-over: recording at the top, then cloning their voice (and those cloned) */}
@@ -826,9 +907,12 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, onUpload, onKee
                         onPick={() => pick(item)} onAdd={() => addWhenHere(item)} onDrop={() => dropPreset(item.id.slice('presets/'.length))} />)}
                     </div>
                   ) : <Empty icon="star" text={t('assetDrawer.textNoPresets')} />
-                ) : !items.length ? (
+                ) : !items.length && !mineItems.length ? (
                   q ? <Empty icon="search" text={t('assetDrawer.nothing').replace('{q}', query.trim())} />
                     : group === STARRED ? <Empty icon="star" text={t('assetDrawer.noFavorites')} />
+                    /* nothing got from the Community yet: the way to get some, its kind's page there */
+                    : group === COMMUNITY_ALL ? <Empty icon="community" text={t('assetDrawer.communityNone').replace('{kind}', kindName)}
+                        action={t('assetDrawer.getMore')} block onAction={() => openPlugins(inCommunity ? { line: `kind:${cat as LibraryCategory}` } : {})} />
                     : cat === 'music' ? <Empty icon="music" text={t('assetDrawer.musicSoon')} action={askMusic ? t('assetDrawer.musicMake') : undefined}
                         onAction={() => askMusic?.({ text: t('assetDrawer.musicAsk'), refs: [] })} />
                         : null
@@ -850,9 +934,14 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, onUpload, onKee
                   </div>
                 ) : (
                   <div className={`grid gap-x-2.5 gap-y-3 ${cat === 'sticker' ? 'grid-cols-[repeat(auto-fill,minmax(104px,1fr))]' : cat === 'template' ? 'grid-cols-[repeat(auto-fill,minmax(150px,1fr))]' : textSquare || ON_FILM.has(cat) ? 'grid-cols-[repeat(auto-fill,minmax(84px,1fr))]' : cat === 'text' ? 'grid-cols-[repeat(auto-fill,minmax(120px,1fr))]' : 'grid-cols-[repeat(auto-fill,minmax(96px,1fr))]'}`}>
+                    {/* the person's own files starred (the media's 收藏), then the library's */}
+                    {mineItems.map((file) => (
+                      <SavedCard key={file.path} file={file} picked={picked === `saved:${file.path}`}
+                        onPick={() => { setPicked(`saved:${file.path}`); onPickSaved?.(file); }} onAdd={onAddSaved ? () => onAddSaved(file) : undefined} />
+                    ))}
                     {/* a page at a time as it is scrolled, as the sounds are (the emoji alone are some 1,600) */}
                     {items.slice(0, drawn).map((it) => (
-                      <Card key={it.id} item={it} lang={lang} picked={picked === it.id} kept={favorites.includes(it.id)}
+                      <Card key={it.id} item={it} lang={lang} picked={picked === it.id} kept={favorites.includes(it.id)} mark={group === STARRED}
                         /* a template as wide as its film (16:9, two a row: its places, length and buttons side by side) */
                         square={cat === 'sticker' || textSquare || (ON_FILM.has(cat) && cat !== 'template')}
                         here={cardHere(it)} hover={hoverCard(it)} previewing={hoverVisual === it.id}
@@ -1064,6 +1153,36 @@ function TemplateBadge({ item }: { item: LibraryItem }) {
 }
 
 /**
+ * One of the person's own files starred, among the media's 收藏: its picture (a recording, its sign), its name, its star
+ * (taken off here), "+" to put it in the film; dragged as a file of theirs is from the media pane.
+ */
+function SavedCard({ file, picked, onPick, onAdd }: { file: WorkspaceResource; picked: boolean; onPick: () => void; onAdd?: () => void }) {
+  const t = useT();
+  const picture = file.kind === 'video' || file.kind === 'mg' ? savedSources.poster?.(file) ?? savedSources.pagePoster?.(file)
+    : file.kind === 'image' ? savedSources.file(file) : undefined;
+  return (
+    <div data-saved-card={file.path} className="group relative min-w-0 cursor-default select-none" draggable aria-label={file.name}
+      onDragStart={(e) => { setResourceDragData(e.dataTransfer, { ...file, saved: file.path }); dragPicture(e); e.dataTransfer.effectAllowed = 'copyMove'; }}
+      onDragEnd={() => clearResourceDrag()} onClick={(e) => { if (e.detail < 2) onPick(); }}>
+      <div className={`relative aspect-video overflow-hidden rounded-md bg-[var(--bg-field)] ${picked ? 'ring-2 ring-[var(--accent)]' : 'ring-1 ring-transparent group-hover:ring-[var(--text-faint)]'}`}>
+        {picture ? <img src={picture} alt="" draggable={false} loading="lazy" decoding="async" className="absolute inset-0 h-full w-full object-cover" />
+          : <span className="absolute inset-0 grid place-items-center text-[var(--text-faint)]"><AudioLines size={22} aria-hidden /></span>}
+        <span className="absolute bottom-1 right-1 flex items-center gap-1">
+          <button type="button" aria-label={t('assetDrawer.unstar')} aria-pressed onClick={(e) => { e.stopPropagation(); void starSaved(file.path, false); }}
+            className={`${ROUND} grid bg-black/55 text-[#ffd35a]`}><Star size={11} fill="currentColor" strokeWidth={0} /></button>
+          {onAdd ? (
+            <button type="button" aria-label={t('assetDrawer.addPlayhead')} onClick={(e) => { e.stopPropagation(); onAdd(); }}
+              className={`${ROUND} ${ADD_COLOR} ${picked ? 'grid' : 'hidden group-hover:grid'}`}><Plus size={12} strokeWidth={2.6} /></button>
+          ) : null}
+        </span>
+        <SourceBadge source="mine" />
+      </div>
+      <div className={`mt-1.5 truncate px-0.5 text-[11.5px] ${picked ? 'text-[var(--accent)]' : 'text-[var(--text-muted)] group-hover:text-[var(--text)]'}`}>{file.name}</div>
+    </div>
+  );
+}
+
+/**
  * A row that scrolls sideways: whether it holds more than it shows (`over`) and is scrolled to its end, kept as it
  * scrolls and as it is sized; `toggle` takes it to its end, or from there back to its start.
  */
@@ -1093,9 +1212,11 @@ function useSideways() {
    own picture where they can be */
 const ON_FILM = new Set<Category>(['filter', 'effect', 'transition', 'template']);
 
-function Card({ item, lang, picked, kept, square, here, hover, previewing, onPick, onAdd }: {
+function Card({ item, lang, picked, kept, square, here, hover, previewing, onPick, onAdd, mark = false }: {
   item: LibraryItem; lang: ReturnType<typeof useLanguage>; picked: boolean; kept: boolean; square: boolean; here: HereState; hover: LibraryHover; previewing: boolean;
   onPick: () => void; onAdd: () => void;
+  /** its source on its corner (官方, 社区 · who made it): in 收藏, where things of every source are side by side */
+  mark?: boolean;
 }) {
   const t = useT();
   /* Static posters keep the grid from running pages or decoding video before a click. */
@@ -1118,6 +1239,8 @@ function Card({ item, lang, picked, kept, square, here, hover, previewing, onPic
       <div className={`relative overflow-hidden rounded-md bg-[var(--bg-field)] ${square ? 'aspect-square' : 'aspect-video'} ${picked ? 'ring-2 ring-[var(--accent)]' : 'ring-1 ring-transparent group-hover:ring-[var(--text-faint)]'}`}>
         {item.kind === 'look'
           ? <img src={item.sample ? libraryUrl(item.sample) : PLAIN} alt="" draggable={false} className="absolute inset-0 h-full w-full object-cover" style={{ filter: item.filter }} />
+          /* a recording of the Community's media: no picture of its own */
+          : item.kind === 'file' && item.media === 'audio' ? <span className="absolute inset-0 grid place-items-center text-[var(--text-faint)]"><AudioLines size={22} aria-hidden /></span>
           /* a sticker whole in its square card (a wide one is not cut at its ends); loaded as it comes into view */
           : drawn ? <TextStyleSample lang={lang} vars={item.vars} {...(item.id === TEXT_COMPONENT ? { words: name } : {})} />
           : <img src={posterUrl(item)} alt="" draggable={false} loading="lazy" decoding="async" className={`absolute inset-0 h-full w-full ${fit}`} />}
@@ -1133,7 +1256,7 @@ function Card({ item, lang, picked, kept, square, here, hover, previewing, onPic
           <HereButton here={here} addTip={addTip(item, t)} onAdd={onAdd} onRetry={onPick} className={`${ROUND} bg-black/55 text-white`} show={picked ? 'grid' : 'hidden group-hover:grid'} />
         </span>
         {item.kind === 'group' ? <TemplateBadge item={item} /> : null}
-        <SourceBadge source={sourceOf(item)} />
+        {mark ? <SourceBadge source={sourceOf(item)} by={item.by ? `${t('assetDrawer.source_community')} · ${makerName(item.by)}` : undefined} always /> : null}
       </div>
       {/* the new line's card says its name itself */}
       {item.id === TEXT_COMPONENT ? null : <div className={`mt-1.5 truncate px-0.5 text-[11.5px] ${picked ? 'text-[var(--accent)]' : 'text-[var(--text-muted)] group-hover:text-[var(--text)]'}`}>{name}</div>}

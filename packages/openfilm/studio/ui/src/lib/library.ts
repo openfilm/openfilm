@@ -231,6 +231,8 @@ export function libraryDragItem(item: LibraryItem, name: string): ResourceDragIt
   if (item.kind === 'motion' && item.place === 'cut') return { path: saved, name, kind: 'other', saved, apply: 'fade' };
   if (item.kind === 'sound') return { path: saved, name, kind: 'audio', ...(item.durationMs ? { durationMs: item.durationMs } : {}), saved };
   if (item.kind === 'group') return { path: saved, name, kind: 'mg', ...(item.durationMs ? { durationMs: item.durationMs } : {}), saved };
+  /* a file of the Community's media: footage, a picture, a recording, as one of the person's own goes in */
+  if (item.kind === 'file') return { path: saved, name, kind: item.media ?? 'video', ...(item.durationMs ? { durationMs: item.durationMs } : {}), saved };
   /* a text style: a new line of words in it (the drop takes the text component with its variables) */
   if (item.kind === 'textstyle') {
     const text = builtInItem(`${BUILT_IN}/${TEXT_COMPONENT}`);
@@ -488,6 +490,17 @@ export function setAdded(id: string, on: boolean): void {
 }
 
 /** Star a thing, or take its star away: shown at once, then kept. */
+/** The favorites as the server now has them (a file of the person's own starred: lib/saved starSaved). */
+export function takeFavorites(ids: readonly string[]): void {
+  favorites = ids;
+  tellStarred();
+}
+
+/** Who made a thing of the Community, as said: OpenFilm's own account by its name (with its tick where shown). */
+export const makerName = (by: string): string => (by.toLowerCase() === 'openfilm' ? 'OpenFilm' : by);
+/** Whether a thing of the Community was published by OpenFilm itself. */
+export const byOpenFilm = (by: string | undefined): boolean => by?.toLowerCase() === 'openfilm';
+
 export function toggleFavorite(id: string): void {
   const had = favorites ?? [];
   favorites = had.includes(id) ? had.filter((x) => x !== id) : [...had, id];

@@ -164,6 +164,43 @@ export async function catalogListing(at = '', view = '', query = '') {
   };
 }
 
+/**
+ * The person's own files starred (`saved:<id>` among `favorites`), as one flat list, each where it is now (an identity
+ * follows its file as it moves). Only files a listing has seen are known, as a star is given from one.
+ * @param {readonly string[]} favorites
+ */
+export async function starredListing(favorites) {
+  const ids = new Set(favorites.filter((id) => id.startsWith('saved:')).map((id) => id.slice('saved:'.length)));
+  const catalog = await readCatalog();
+  const snapshot = catalog.snapshot ?? emptyListing();
+  const files = snapshot.files.filter((file) => ids.has(catalog.items[file.path]?.id ?? ''));
+  const visible = new Set(files.map((file) => file.path));
+  const links = Object.fromEntries(Object.entries(snapshot.links).filter(([path]) => visible.has(path)));
+  return {
+    ...snapshot, files, folders: [], made: [], links, at: 'saved', missing: false, scanned: [],
+    catalog: { items: Object.fromEntries(files.flatMap((file) => catalog.items[file.path] ? [[file.path, catalog.items[file.path]]] : [])) },
+  };
+}
+
+/**
+ * What a file of the person's library is starred by among the favorites: `saved:<its identity>` (made the first time
+ * a file not yet seen is asked for).
+ * @param {unknown} path
+ */
+export async function savedStarKey(path) {
+  if (typeof path !== 'string' || !path.startsWith('saved/')) throw new HttpError(400, 'A file from the personal library.');
+  let catalog = await assetCatalog();
+  if (!catalog.items[path]) { await catalogListing(parentOf(path)); catalog = await assetCatalog(); }
+  const meta = catalog.items[path];
+  if (!meta) throw new HttpError(404, 'Asset not found.');
+  return `saved:${meta.id}`;
+}
+
+/** The places of the person's own files starred. @param {readonly string[]} favorites */
+export async function starredPaths(favorites) {
+  return (await starredListing(favorites)).files.map((file) => file.path);
+}
+
 /** Keep each file's identity through the library's physical rename/move operation. */
 export async function moveAssetCatalog(/** @type {string} */ from, /** @type {string} */ to) {
   await update(async (catalog) => {

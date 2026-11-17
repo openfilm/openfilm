@@ -89,13 +89,14 @@ export function readExamples(raw, source = EXAMPLES_INDEX) {
     /* the Community's listing: its own repository, folder and commit; else the older shape's folder of one repository */
     const listed = typeof entry.name === 'string' && typeof entry.repo === 'string';
     const own = listed ? /^https:\/\/github\.com\/([\w.-]+)\/([\w.-]+?)(?:\.git)?\/?$/.exec(entry.repo) : null;
-    const folder = listed ? entry.path : entry.folder;
+    /* a listing without a path is its repository's top: one example, one repository */
+    const folder = listed ? entry.path ?? '' : entry.folder;
     if (listed && (!own || !NAME.test(entry.name) || !/^[0-9a-f]{40}$/.test(String(entry.commit)))) continue;
-    if (!repoPath(folder)) continue;
+    if (!(listed && folder === '') && !repoPath(folder)) continue;
     const id = listed ? entry.name : folder;
     const [o, r, at] = own ? [own[1], own[2], entry.commit] : [owner, repo, branch];
     /* a listing's paths are in its folder; the older shape's from the repository's top */
-    const inRepo = (/** @type {string} */ v) => (listed ? `${folder}/${v}` : v);
+    const inRepo = (/** @type {string} */ v) => (listed && folder ? `${folder}/${v}` : v);
     const media = (/** @type {unknown} */ v) => (typeof v === 'string' && /^https:\/\//.test(v) ? v
       : !repoPath(v) ? null
         : local ? `/api/examples/file/${inRepo(String(v)).split('/').map(encodeURIComponent).join('/')}`
@@ -112,7 +113,7 @@ export function readExamples(raw, source = EXAMPLES_INDEX) {
       poster: media(entry.poster),
       video: media(entry.video),
       duration: exampleSeconds(entry.duration),
-      url: `https://github.com/${o}/${r}/tree/${own ? 'main' : branch}/${folder}`,
+      url: `https://github.com/${o}/${r}/tree/${own ? 'main' : branch}${folder ? `/${folder}` : ''}`,
       category: typeof entry.category === 'string' && /^[\w-]{1,30}$/.test(entry.category) ? entry.category : null,
       segments,
       owner: listed && typeof entry.owner === 'string' && NAME.test(entry.owner) ? entry.owner : o,

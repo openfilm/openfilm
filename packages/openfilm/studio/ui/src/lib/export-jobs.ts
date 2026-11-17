@@ -20,7 +20,9 @@ export type ExportRequest = { range?: [number, number]; ranges?: [number, number
   /* `bitrate`: the picture's bits a second, held on the processor, in place of `quality` (a delivery's rate or size);
      `maxrate`: its peaks (a size's are held to its bitrate) */
   | (Framing & { kind: 'video'; codec: ExportVideoCodec; shortEdge?: number; fps: number; quality?: ExportQuality; bitrate?: number; maxrate?: number; audio: boolean;
-    clip?: string; scale?: number; preset?: string; sidecar?: 'srt' | 'vtt'; loudness?: number })
+    clip?: string; scale?: number; preset?: string; sidecar?: 'srt' | 'vtt'; loudness?: number;
+    /** a cover of the film (`covers/<name>`) drawn as the first frame (h264 and hevc) */
+    cover?: string })
   | (Framing & { kind: 'gif'; width: number; fps: number })
   | { kind: 'audio'; format: 'wav' | 'm4a' | 'mp3'; mix: boolean; stems: boolean; loudness?: number }
   | (Framing & { kind: 'stills'; as?: 'files' | 'zip'; format: 'png' | 'jpg'; shortEdge: number; at?: number[] })

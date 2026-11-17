@@ -16,11 +16,38 @@
     "es": "Guiones y listas de planos de Notion: el agente lee tus páginas y escribe lo que hizo."
   },
   "details": {
-    "en": "When to use it: your script, brief or shot list is in Notion.\nHow: turn it on, then ask \"make the video from the Launch script page in Notion\". The first time it asks you to sign in to Notion.",
-    "zh-CN": "什么时候用：脚本、需求或分镜表写在 Notion 里。\n怎么用：打开后说「按 Notion 里的发布会脚本做片子」。第一次会请你登录 Notion。",
-    "ja": "使うとき：台本や要件、ショットリストが Notion にあるとき。\n使い方：オンにして「Notion の発表会台本のページから映像を作って」と頼みます。初回は Notion へのサインインを求められます。",
-    "ko": "언제: 대본, 요구 사항, 샷 리스트가 Notion에 있을 때.\n사용법: 켠 뒤 \"Notion의 런칭 대본 페이지로 영상을 만들어 줘\"라고 말합니다. 처음에는 Notion 로그인을 요청합니다.",
-    "es": "Cuándo: tu guion, briefing o lista de planos está en Notion.\nCómo: actívalo y pide «haz el vídeo con la página Guion de lanzamiento de Notion». La primera vez te pedirá iniciar sesión en Notion."
+    "en": "When to use it: your script, brief or shot list is in Notion.\nHow: Connect and sign in once in your browser, then just ask in the chat, for example \"Make a one-minute video from the \"Launch script\" page in Notion\". The agent asks you before it changes anything in Notion.",
+    "zh-CN": "什么时候用：脚本、需求或分镜表写在 Notion 里。\n怎么用：点「连接」在浏览器里登录一次，之后在对话里直接说，比如「按 Notion 里「发布会脚本」那一页做一条 1 分钟的视频」。智能体改动 Notion 里的东西前会先问你。",
+    "ja": "使うとき：台本や要件、ショットリストが Notion にあるとき。\n使い方：「接続」でブラウザから一度サインインし、あとはチャットで頼むだけ。例：「Notion の「発表会台本」ページから 1 分の映像を作って」。Notion の中を変える前には確認されます。",
+    "ko": "언제: 대본, 요구 사항, 샷 리스트가 Notion에 있을 때.\n사용법: 「연결」을 눌러 브라우저에서 한 번 로그인한 뒤 대화에서 바로 말하면 됩니다. 예: \"Notion의 「런칭 대본」 페이지로 1분짜리 영상을 만들어 줘\". Notion의 내용을 바꾸기 전에는 먼저 묻습니다.",
+    "es": "Cuándo: tu guion, briefing o lista de planos está en Notion.\nCómo: conecta e inicia sesión una vez en el navegador; luego pídelo en el chat, por ejemplo «Haz un vídeo de un minuto con la página «Guion de lanzamiento» de Notion». El agente te pregunta antes de cambiar algo en Notion."
+  },
+  "examples": {
+    "zh-CN": [
+      "按 Notion 里「发布会脚本」那一页做一条 1 分钟的视频",
+      "把这部片子的分镜表写到 Notion 的「项目」数据库里",
+      "读一下 Notion 里的品牌规范，按它调字幕和配色"
+    ],
+    "en": [
+      "Make a one-minute video from the \"Launch script\" page in Notion",
+      "Write this film's shot list into the \"Projects\" database in Notion",
+      "Read the brand guide in Notion and set the captions and colours by it"
+    ],
+    "ja": [
+      "Notion の「発表会台本」ページから 1 分の映像を作って",
+      "この映像のショットリストを Notion の「プロジェクト」データベースに書いて",
+      "Notion のブランドガイドを読んで、字幕と色をそれに合わせて"
+    ],
+    "ko": [
+      "Notion의 「런칭 대본」 페이지로 1분짜리 영상을 만들어 줘",
+      "이 영상의 샷 리스트를 Notion의 「프로젝트」 데이터베이스에 적어 줘",
+      "Notion의 브랜드 가이드를 읽고 자막과 색을 거기에 맞춰 줘"
+    ],
+    "es": [
+      "Haz un vídeo de un minuto con la página «Guion de lanzamiento» de Notion",
+      "Escribe la lista de planos de esta película en la base de datos «Proyectos» de Notion",
+      "Lee la guía de marca de Notion y ajusta los subtítulos y colores a ella"
+    ]
   },
   "about": "reads and writes the person's Notion pages and databases (Notion's own MCP server)",
   "category": "tool",

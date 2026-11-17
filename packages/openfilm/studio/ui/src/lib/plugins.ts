@@ -23,7 +23,7 @@ export interface PluginTab { title?: Record<string, string>; icon?: string }
  * project's files are for that page.
  */
 export interface Plugin {
-  id: string; title?: Record<string, string>; summary?: Record<string, string>; details?: Record<string, string>; profile?: Profile; icon?: string; appIcon?: string;
+  id: string; title?: Record<string, string>; summary?: Record<string, string>; details?: Record<string, string>; examples?: Record<string, string[]>; profile?: Profile; icon?: string; appIcon?: string;
   workbench?: Workbench; blocks?: string | readonly (BlockDecl | string)[]; tab?: PluginTab; skills: string[]; commands?: string[]; on: boolean; beta?: boolean; soon?: boolean; skill?: string; page?: string; files?: string; program?: boolean; runs?: boolean; inApp?: boolean; element?: string;
   /** a connector's MCP servers (src/plugins.mjs readMcpServers): given to the agent while it is on */
   mcpServers?: Record<string, { type: 'http'; url: string } | { type: 'stdio'; command: string }>;

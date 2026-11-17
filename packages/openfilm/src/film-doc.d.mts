@@ -159,3 +159,4 @@ export declare function pictureRect(kind: FilmClipKind | null, own: { w: number;
 export declare function declarations(style: string): [string, string][];
 /** The LUT files a video clip's picture is graded by, in order: its style's `--of-lut` `url(…)`s, as written. */
 export declare function lutsOf(clip: { src?: unknown; sound?: unknown; style?: unknown } | null | undefined): string[];
+export declare function pictureLutsOf(clip: { src?: unknown; sound?: unknown; style?: unknown } | null | undefined): string[];

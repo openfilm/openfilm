@@ -5,7 +5,6 @@
     "vectorscope": "Vector",
     "histogram": "Histogram"
   },
-  "noClip": "Pick a video clip on the timeline, or move the playhead onto one.",
   "clips": "{n} clips",
   "footage": "Footage",
   "layers": "Layers",
@@ -87,7 +86,7 @@
   "groupNote": "{name} · group",
   "notGraded": "Not graded",
   "graded": "Graded",
-  "noShots": "The film has no video clips yet.",
+  "noShots": "No shots to grade",
   "read": {
     "middle": "Midtones",
     "white": "White",
@@ -136,5 +135,31 @@
   "byYou": "You",
   "justNow": "just now",
   "minutesAgo": "{n} min ago",
-  "changed": "changed the grade"
+  "changed": "changed the grade",
+  "startNone": "This film has no picture to grade yet",
+  "startNoneBody": "The color workbench grades the film’s picture: videos, stills and pictures made of web pages. The timeline has none of them yet, only sound.",
+  "startNoneStep1": "Go back to the edit and drag a video or a still from the library onto the timeline, or ask your agent to make one.",
+  "startNoneStep2": "Come back to Color: each picture is a shot in the strip; click it to grade it.",
+  "toEdit": "Back to the edit",
+  "startPick": "Pick a shot to start grading",
+  "startPickBody": "The strip holds every picture of the film: videos, stills and pages. You grade one shot at a time, or hold ⇧ to grade several together.",
+  "startStep1": "Click a shot in the strip; the picture jumps to it. Drag across its picture to move through the shot.",
+  "startStep2": "In Basic drag the sliders for exposure, contrast and temperature, or in Wheels push the shadows, midtones and highlights toward a color; check the result on the scopes and the picture.",
+  "startStep3": "When one shot looks right, use Copy to… for the others. Or just tell the chat “make every shot a little warmer” and keep tuning after your agent.",
+  "startFirst": "Start with the first shot",
+  "tabTip": {
+    "basic": "Sliders for exposure, contrast, saturation and temperature: the usual place to start",
+    "wheels": "Push the shadows, midtones and highlights toward a color; the line under each wheel makes it brighter or darker",
+    "curves": "By brightness: add points on the curve and drag to lift shadows or hold highlights",
+    "hue": "By color: change the hue, saturation or brightness of one color only, like a bluer sky",
+    "styles": "Apply a look in one click, then set its strength"
+  },
+  "drawnIn": "Picture · {kind}",
+  "drawnInTip": "A page’s or a still’s picture is what the screen shows already: there is no footage input to pick.",
+  "kindPage": "Page",
+  "kindStill": "Still",
+  "drawnOut": "Output · as shown",
+  "hueDrawn": "Hue curves can’t be drawn on a page or a still: not here",
+  "exportLutDrawn": "A page’s or a still’s grade is drawn by the browser itself, not exported as a LUT",
+  "scrubTip": "Drag across: move through the shot"
 }

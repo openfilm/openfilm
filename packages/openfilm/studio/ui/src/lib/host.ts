@@ -16,6 +16,12 @@ export interface HostDeveloper { logs: boolean; changes: boolean }
 export interface HostProject { id: string; name: string; path: string }
 export type HostWritingModel = { agent: HostAgentId; options: Record<string, string | number | boolean> };
 
+/** A connector as the app has it: signed in or not (run out: `expired`), a sign-in under way, what failed, its tools. */
+export interface HostConnector {
+  id: string; connected: boolean; signingIn: boolean; expired: boolean; error?: string; server?: string; connectedAt?: number;
+  tools: Array<{ name: string; title: string; description: string; readOnly: boolean }>;
+}
+
 export interface StudioHost {
   /** the version of this interface the app speaks */
   version: 1;
@@ -102,6 +108,17 @@ export interface StudioHost {
    * has none of these). One not found that has an official installer (`HostAgent.installer`) can be installed:
    * `install` runs it in a terminal window, once the person agreed to that command (an older app has none).
    */
+  /**
+   * The connectors (the desktop app's connectors.mjs): signed in to once, in the browser, and reached by every agent
+   * from then on. `list` says each one's state and the tools its server offers; `onChange` tells of every change.
+   */
+  connectors?: {
+    list: () => Promise<HostConnector[]>;
+    connect: (id: string) => Promise<{ ok: true } | { ok: false; error: string; cancelled?: boolean }>;
+    cancel: (id: string) => Promise<unknown>;
+    disconnect: (id: string) => Promise<unknown>;
+    onChange: (listener: (connectors: HostConnector[]) => void) => () => void;
+  };
   agents?: {
     list: () => Promise<HostAgent[]>;
     /** Explicitly reload local configuration and idle sessions; no model prompt is sent. */

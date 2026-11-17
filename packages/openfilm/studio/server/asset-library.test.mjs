@@ -49,6 +49,25 @@ test('library renames preserve asset identity', async () =>
     assert.equal((await call('saved/catalog')).items['saved/brand.svg'].id, assetId);
   }));
 
+test('a file of the library starred is under 收藏 wherever it moves, and no longer once unstarred', async () =>
+  fixture(async ({ call }) => {
+    await call('saved/files');
+    const starred = await call('saved/star', 'PUT', { path: 'saved/logo.svg', on: true });
+    const assetId = (await call('saved/catalog')).items['saved/logo.svg'].id;
+    assert.ok(starred.ids.includes(`saved:${assetId}`));
+    assert.deepEqual(starred.paths, ['saved/logo.svg']);
+    await call('saved/folders', 'POST', { path: 'saved/Brand' });
+    await call('saved/files', 'PATCH', { from: 'saved/logo.svg', to: 'saved/Brand/logo.svg' });
+    assert.deepEqual((await call('saved/star')).paths, ['saved/Brand/logo.svg']);
+    const listing = await call('saved/files?view=starred');
+    assert.deepEqual(listing.files.map((f) => f.path), ['saved/Brand/logo.svg']);
+    assert.deepEqual(listing.folders, []);
+    assert.ok((await call('library/favorites')).ids.includes(`saved:${assetId}`));
+    const unstarred = await call('saved/star', 'PUT', { path: 'saved/Brand/logo.svg', on: false });
+    assert.deepEqual(unstarred.paths, []);
+    assert.deepEqual((await call('saved/files?view=starred')).files, []);
+  }));
+
 test('the first look makes the shelf: loose things move into its first place, folders and links stay places', async () =>
   fixture(async ({ call, scratch }) => {
     const saved = process.env.OPENFILM_SAVED;

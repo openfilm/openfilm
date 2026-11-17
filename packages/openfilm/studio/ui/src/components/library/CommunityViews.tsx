@@ -7,10 +7,10 @@
  * its own folded into one line until opened.
  */
 import * as React from 'react';
-import { AudioLines, Check, ChevronDown, ChevronLeft, ChevronRight, GripVertical, Music, Pause, Play, Plus, type LucideIcon } from 'lucide-react';
+import { AudioLines, BadgeCheck, Check, ChevronDown, ChevronLeft, ChevronRight, GripVertical, Music, Pause, Play, Plus, type LucideIcon } from 'lucide-react';
 import { useLanguage, useT } from '@/i18n';
 import type { Plugin } from '@/lib/plugins';
-import { libraryUrl, nameOf, posterUrl, previewUrl, templatePreviewUrl, TEXT_COMPONENT, type LibraryItem } from '@/lib/library';
+import { byOpenFilm, libraryUrl, makerName, nameOf, posterUrl, previewUrl, templatePreviewUrl, TEXT_COMPONENT, type LibraryItem } from '@/lib/library';
 import { AppIcon } from '../AppIcon';
 import { WorkbenchMark } from '../WorkbenchMark';
 import { PLAIN } from './OnPicture';
@@ -299,7 +299,7 @@ export function AssetTile({ item, lang, here, onOpen, onAdd }: {
         </button>
       </div>
       <div className={`mt-1.5 truncate text-[13px] text-[var(--text)] ${shape === 'sticker' ? 'text-center text-[12px]' : ''}`}>{name}</div>
-      {item.by && shape !== 'sticker' ? <div className="truncate text-[11.5px] text-[var(--text-faint)]">{item.by}</div> : null}
+      {item.by && shape !== 'sticker' ? <div className="flex items-center gap-1 truncate text-[11.5px] text-[var(--text-faint)]">{makerName(item.by)}{byOpenFilm(item.by) ? <BadgeCheck size={11} strokeWidth={2} aria-hidden className="shrink-0" /> : null}</div> : null}
     </div>
   );
 }
@@ -377,7 +377,7 @@ export function SoundList({ items, lang, onOpen, action }: {
             </button>
             <button type="button" onClick={() => onOpen(it)} className="flex min-w-0 flex-1 items-baseline gap-2 text-left">
               <span className={`truncate text-[14px] hover:underline ${on ? 'text-[var(--accent)]' : 'text-[var(--text)]'}`}>{nameOf(it.name, lang)}</span>
-              {it.by ? <span className="shrink-0 truncate text-[12px] text-[var(--text-faint)]">{it.by}</span> : null}
+              {it.by ? <span className="inline-flex shrink-0 items-center gap-1 truncate text-[12px] text-[var(--text-faint)]">{makerName(it.by)}{byOpenFilm(it.by) ? <BadgeCheck size={12} strokeWidth={2} aria-hidden /> : null}</span> : null}
             </button>
             <span className="w-12 shrink-0 text-right text-[12.5px] tabular-nums text-[var(--text-faint)]">{length(it.durationMs)}</span>
             {action(it)}

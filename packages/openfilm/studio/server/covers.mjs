@@ -9,22 +9,25 @@
 import { existsSync } from 'node:fs';
 import { copyFile, mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { basename, join, relative, resolve, sep } from 'node:path';
 import { FILM_FILE, filmHtml, readFilm, readFilmFile } from '../../src/film-doc.mjs';
 import { open } from '../../src/shared.mjs';
 import { builtInRoot } from './library.mjs';
+import { COVERS } from './compound.mjs';
+import { recycle } from './recycle-bin.mjs';
+import { changeProjectFilm } from './film.mjs';
 
 /** @typedef {import('./ops.mjs').FilmValue} FilmValue */
 /** @typedef {import('./ops.mjs').Clip} Clip */
-
-import { COVERS } from './compound.mjs';
 
 export { COVERS };
 
 /** How long each clip of a cover lasts: a cover is one frame, and a still needs a length. */
 const ONE = /** @type {[number, number]} */ ([0, 1]);
 
-/** The ids of the clips a cover is made with, which its editor finds again. */
+/** The ids of the clips a cover is made with, which its editor finds again: its picture (a moment of the film, a picture
+    of the project's, a color) and its look. */
 export const FRAME_ID = 'frame';
 export const LOOK_ID = 'look';
 
@@ -79,6 +82,85 @@ export async function listCovers(root) {
     covers.push({ folder: `${COVERS}/${name}`, name, stage: doc.stage ?? { w: 1920, h: 1080 }, made: info.birthtimeMs, changed: info.mtimeMs });
   }
   return covers.sort((a, b) => a.made - b.made);
+}
+
+/** Studio's note of the cover the film is shown by (its card, its start): `.film/covers.json`, `{ main: <folder> }`. */
+const mainNote = (/** @type {string} */ root) => join(root, '.film', 'covers.json');
+
+/**
+ * The cover the film is shown by: the one named, else the first made; null when there is none.
+ * @param {string} root @param {{ folder: string }[]} covers
+ */
+export async function mainCover(root, covers) {
+  const named = await readFile(mainNote(root), 'utf8').then((t) => JSON.parse(t).main, () => null);
+  return covers.find((c) => c.folder === named)?.folder ?? covers[0]?.folder ?? null;
+}
+
+/** The cover the film is shown by, from now on. @param {string} root @param {unknown} folder */
+export async function setMainCover(root, folder) {
+  const { rel, abs } = coverFolder(root, folder);
+  if (!existsSync(join(abs, FILM_FILE))) throw new CoverFilmError('no such cover', 404);
+  await mkdir(join(root, '.film'), { recursive: true });
+  await writeFile(mainNote(root), `${JSON.stringify({ main: rel })}\n`);
+  return rel;
+}
+
+/**
+ * A picture of the project (`assets/…`, as the project names it) as a cover's picture: filling the cover, cropped at its
+ * edges where the shapes differ.
+ * @param {string} root @param {unknown} src
+ * @returns {Clip}
+ */
+function pictureClip(root, src) {
+  const rel = String(src ?? '');
+  if (!rel.startsWith('assets/') || rel.split('/').includes('..') || !existsSync(join(root, rel))) throw new CoverFilmError('a picture of the project, under assets/');
+  return /** @type {Clip} */ ({ id: FRAME_ID, src: `../../${rel}`, time: ONE, style: 'object-fit: cover' });
+}
+
+/** A color or a gradient a cover's picture may be: CSS of a few plain words, nothing that loads or runs. */
+const PLAIN_CSS = /^(#[0-9a-f]{3,8}|(linear|radial)-gradient\([#a-z0-9(),.%\s-]{1,200}\))$/i;
+
+/**
+ * A color or a gradient as a cover's picture: a page of its own beside the cover, named by what it draws.
+ * @param {string} abs the cover's folder @param {unknown} css
+ * @returns {Promise<Clip>}
+ */
+async function colorClip(abs, css) {
+  const fill = String(css ?? '').trim();
+  if (!PLAIN_CSS.test(fill)) throw new CoverFilmError('a color (#rrggbb) or a linear or radial gradient');
+  const name = `color-${createHash('sha256').update(fill).digest('hex').slice(0, 10)}.html`;
+  await writeFile(join(abs, name), `<!doctype html>\n<html>\n<head>\n<meta charset="utf-8">\n<style>html, body { margin: 0; height: 100%; background: ${fill}; }</style>\n</head>\n<body>\n<script>window.film = { frame() {} };</script>\n</body>\n</html>\n`);
+  return /** @type {Clip} */ ({ id: FRAME_ID, src: name, time: ONE });
+}
+
+/**
+ * A cover put back as it was when its design began (its film.html as read then): what Cancel does. Written as Studio
+ * writes the person's edits (film.mjs), so it is one of theirs: a write of anyone else's would have their edits merged
+ * back over it. Its other files stay (a picture taken or made meanwhile is the project's to keep).
+ * @param {string} root @param {unknown} folder @param {unknown} text
+ */
+export async function restoreCover(root, folder, text) {
+  const { abs } = coverFolder(root, folder);
+  const was = typeof text === 'string' ? readFilmFile(text) : null;
+  if (!was?.doc || !was.value) throw new CoverFilmError('the cover as it was, please', 422);
+  const value = /** @type {FilmValue} */ (was.value);
+  await changeProjectFilm(abs, () => ({ value }));
+}
+
+/** A cover made in a design that was cancelled: to the recycle bin, whole. @param {string} root @param {unknown} folder */
+export async function discardCover(root, folder) {
+  const { abs } = coverFolder(root, folder);
+  if (!existsSync(join(abs, FILM_FILE))) throw new CoverFilmError('no such cover', 404);
+  await recycle(abs, 'folder');
+}
+
+/** The pictures made for the film's covers (`assets/image/cover-…`), the newest first: what a cover can go back to. @param {string} root */
+export async function madeCoverPictures(root) {
+  const dir = join(root, 'assets', 'image');
+  /* a subject cut out of one (`…-subject`) is a layer over a picture, not one */
+  const names = (await readdir(dir).catch(() => /** @type {string[]} */ ([]))).filter((n) => /^cover-.+\.(png|jpe?g|webp)$/i.test(n) && !/-subject(-[\w-]+)?\.png$/i.test(n));
+  const dated = await Promise.all(names.map(async (n) => ({ n, at: (await stat(join(dir, n)).catch(() => null))?.mtimeMs ?? 0 })));
+  return dated.sort((a, b) => b.at - a.at).slice(0, 40).map((d) => `assets/image/${d.n}`);
 }
 
 /** The looks a cover can take (library/covers/covers.json). */
@@ -182,11 +264,11 @@ export function restaged(film, stage) {
 }
 
 /**
- * A new cover, its folder returned: `stage` its size; `at` a moment of the film for its picture (none: no picture);
- * `look` a look of the library over it; `from` another cover's folder, copied and fitted to this stage (its files with
- * it). Written whole before anything opens it.
+ * A new cover, its folder returned: `stage` its size; its picture a moment of the film (`at`, seconds), a picture of the
+ * project (`picture`, `assets/…`) or a color (`color`), or none; `look` a look of the library over it; `from` another
+ * cover's folder, copied and fitted to this stage (its files with it). Written whole before anything opens it.
  * @param {string} root
- * @param {{ name?: unknown, stage?: unknown, at?: unknown, look?: unknown, from?: unknown }} ask
+ * @param {{ name?: unknown, stage?: unknown, at?: unknown, picture?: unknown, color?: unknown, look?: unknown, from?: unknown }} ask
  */
 export async function makeCover(root, ask) {
   const stage = stageOf(ask.stage);
@@ -216,7 +298,9 @@ export async function makeCover(root, ask) {
       const layers = [];
       if (ask.look != null && ask.look !== '') layers.push([await lookClip(abs, ask.look)]);
       const at = Number(ask.at);
-      if (ask.at != null && Number.isFinite(at) && at >= 0) layers.push([await frameClip(root, abs, at, stage)]);
+      if (ask.picture != null) layers.push([pictureClip(root, ask.picture)]);
+      else if (ask.color != null) layers.push([await colorClip(abs, ask.color)]);
+      else if (ask.at != null && Number.isFinite(at) && at >= 0) layers.push([await frameClip(root, abs, at, stage)]);
       film = { stage, tracks: layers.length ? layers.map((clips) => ({ clips })) : [{ clips: [] }] };
     }
     const { doc, problems } = readFilm(film);
@@ -241,6 +325,15 @@ export async function coverFrame(root, folder, at) {
   if (!doc) throw new CoverFilmError('the cover cannot be read', 422);
   if (!Number.isFinite(t) || t < 0) throw new CoverFilmError('a moment of the film, in seconds');
   return frameClip(root, abs, t, doc.stage ?? { w: 1920, h: 1080 });
+}
+
+/**
+ * Another picture for a cover already made, as the clip its picture becomes: a picture of the project, or a color.
+ * @param {string} root @param {unknown} folder @param {{ picture?: unknown, color?: unknown }} ask
+ */
+export async function coverPicture(root, folder, ask) {
+  const { abs } = coverFolder(root, folder);
+  return ask.picture != null ? pictureClip(root, ask.picture) : colorClip(abs, ask.color);
 }
 
 /** A look of the library copied into a cover's folder, as the clip that shows it. @param {string} root @param {unknown} folder @param {unknown} look */
@@ -275,3 +368,40 @@ export async function drawCovers(root, folders, dir, format) {
   }
   return out;
 }
+
+/**
+ * A cover put on a video as its first frame (an export's "cover at the start"): the frame drawn there in place of the
+ * film's first, fitted whole into the video's frame (bars where the shapes differ), the picture encoded once more and the
+ * sound left as it is, so nothing moves in time. For H.264 and HEVC; the file is replaced only once the new one is whole.
+ * @param {string} root @param {unknown} folder @param {string} video @param {{ w: number, h: number }} size
+ * @param {'h264' | 'hevc'} codec
+ */
+export async function coverAsFirstFrame(root, folder, video, size, codec) {
+  const { abs } = coverFolder(root, folder);
+  const probe = await open(join(abs, FILM_FILE), { root, playable: true });
+  let png;
+  try {
+    await probe.film.seek(0);
+    png = await probe.film.capture({ format: 'png' });
+  } finally {
+    await probe.close();
+  }
+  const part = `${video}.cover.part${video.slice(video.lastIndexOf('.'))}`;
+  const fit = `scale=${size.w}:${size.h}:force_original_aspect_ratio=decrease:flags=lanczos,pad=${size.w}:${size.h}:(ow-iw)/2:(oh-ih)/2:black,format=yuv420p`;
+  const encode = codec === 'hevc'
+    ? ['-c:v', 'libx265', '-crf', '16', '-preset', 'medium', '-tag:v', 'hvc1']
+    : ['-c:v', 'libx264', '-crf', '14', '-preset', 'medium'];
+  try {
+    await ffmpeg([
+      '-i', video, '-f', 'png_pipe', '-i', '-',
+      '-filter_complex', `[1:v]${fit}[c];[0:v][c]overlay=0:0:enable='eq(n,0)':eof_action=repeat,format=yuv420p[v]`,
+      '-map', '[v]', '-map', '0:a?', ...encode, '-pix_fmt', 'yuv420p',
+      '-colorspace', 'bt709', '-color_primaries', 'bt709', '-color_trc', 'bt709', '-c:a', 'copy', '-movflags', '+faststart', part,
+    ], png);
+    await rename(part, video);
+  } catch (e) {
+    await rm(part, { force: true });
+    throw e;
+  }
+}
+
