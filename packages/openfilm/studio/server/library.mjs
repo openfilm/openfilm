@@ -37,6 +37,7 @@ import { communityCatalog, communityReady, fetchCommunity, isCommunity, refreshC
 import { setSharedPref, sharedHome, sharedPref } from '../../src/locations.mjs';
 import { SKILL_UID } from '../../src/skills.mjs';
 import { ownVoiceKeys } from './voice-store.mjs';
+import { DOUBAO_PAIRS } from './providers/doubao-dialogue.mjs';
 
 export { refreshCommunity };
 
@@ -308,6 +309,16 @@ function addedIds(/** @type {unknown} */ ids) {
 
 /** The voices as library/voices.json has them: the services (each with its voice-over models) and their voices. */
 export const libraryVoices = () => read('voices.json', { version: 1, providers: [], voices: [] });
+
+/**
+ * The voices with the pairs that speak a dialogue together (`pair`, its two `members`; doubao-dialogue.mjs): a pair's
+ * id is its two voices' ("a+b"), as `openfilm get tts --voice` takes it.
+ * @param {{ voices: object[] }} voices
+ */
+export function withPairs(voices) {
+  return { ...voices, voices: [...voices.voices, ...DOUBAO_PAIRS.map((p) => ({ provider: 'doubao', id: p.id, name: p.name, description: p.description,
+    gender: null, age: null, language: p.language, accent: null, tags: [], sample: null, featured: true, uses: null, pair: true, members: p.members }))] };
+}
 
 /** Only an indexed public recording on the provider's own CDN, never an arbitrary URL supplied by the page. */
 function officialVoiceSample(/** @type {string} */ rel) {

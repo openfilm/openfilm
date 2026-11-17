@@ -4,6 +4,7 @@
  * results land, word timings, WAV and picture sizes, and subtitle translation's prompt and answer.
  */
 import { execFile } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { basename, extname, join } from 'node:path';
 
 /** @typedef {import('./contract.mjs').RunContext} RunContext */
@@ -291,6 +292,15 @@ export function wavSeconds(/** @type {Uint8Array} */ bytes) {
   return null;
 }
 
+/** The first `seconds` of a 16-bit mono PCM WAV (the voice samples Studio keeps), as a WAV of its own. */
+export function wavFirst(/** @type {Uint8Array} */ bytes, /** @type {number} */ seconds) {
+  const b = Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  if (b.length < 44 || b.toString('ascii', 0, 4) !== 'RIFF' || b.toString('ascii', 36, 40) !== 'data') return bytes;
+  const rate = b.readUInt32LE(24);
+  const keep = Math.min(b.length - 44, Math.floor(rate * seconds) * 2);
+  return wav(new Uint8Array(b.subarray(44, 44 + keep)), rate);
+}
+
 /** How long a constant-bitrate MP3 plays (what the services here deliver at the bitrate asked for). */
 export const mp3Seconds = (/** @type {Uint8Array} */ bytes, kbps = 128) => round((bytes.length * 8) / (kbps * 1000));
 
@@ -525,6 +535,72 @@ export function modelOf(models, verb, ctx) {
 }
 
 export const notes = (/** @type {string[]} */ list) => list.length ? { notes: list } : {};
+
+/**
+ * A provider's cloned voices, as the voice-from-a-recording runs (`sampleVoice`) and Studio's own voices use them:
+ * `make` clones one from a WAV and gives its id; `remove` deletes one; `list` gives the account's own clones, each with
+ * the name and description it was made with.
+ * @typedef {{
+ *   make: (ctx: RunContext, voice: { name: string, description?: string, wav: Uint8Array, language?: string | null }) => Promise<string>,
+ *   remove: (ctx: RunContext, voiceId: string) => Promise<void>,
+ *   list: (ctx: RunContext) => Promise<{ voiceId: string, name: string, description: string }[]>,
+ * }} VoiceClones
+ */
+
+const SAMPLE_PREFIX = 'openfilm-';
+const MADE = /made (\d{4}-\d\d-\d\dT[\d:.]+Z)/;
+/** The voices this process found or made, by provider and name, and when each was last spoken in. */
+const samples = new Map();
+const lastUsed = new Map();
+/** A provider saying the account has no room for another cloned voice. */
+const FULL = /maximum number of custom voices|voice_limit_reached|voice limit|too many voices|custom voice slots/i;
+
+/**
+ * The name a recording's clone goes by at a provider: from whose it is (`scope`) and the recording's SHA-256, so the
+ * same recording is cloned once for each person, and the service can find it again to delete it.
+ * @param {string} scope @param {string} sampleSha256
+ */
+export const sampleVoiceName = (scope, sampleSha256) => `${SAMPLE_PREFIX}${createHash('sha256').update(scope).update('\0').update(sampleSha256).digest('hex').slice(0, 32)}`;
+
+/**
+ * The voice of a recording a run brings (`--voice-sample`, a WAV): cloned at the provider the first time, then found
+ * there by its name (`sampleVoiceName`). The clone is kept as long as there is room: when the account has none, the
+ * one spoken in longest ago (or, not known here, made longest ago) gives way; cloning it again costs nothing.
+ * @param {Record<string, unknown>} args @param {RunContext & { scope?: string }} ctx @param {string} service @param {VoiceClones} clones
+ */
+export async function sampleVoice(args, ctx, service, clones) {
+  const bytes = await ctx.read(needed(args, 'voice-sample'));
+  const name = sampleVoiceName(ctx.scope ?? '', createHash('sha256').update(bytes).digest('hex'));
+  const at = `${service}\0${name}`;
+  const seen = samples.get(at);
+  if (seen && Date.now() - seen.at < 10 * 60_000) { lastUsed.set(seen.voiceId, Date.now()); return seen.voiceId; }
+  const now = Date.now();
+  const ours = (await clones.list(ctx)).filter((v) => v.name.startsWith(SAMPLE_PREFIX))
+    .map((v) => ({ ...v, used: lastUsed.get(v.voiceId) ?? (Date.parse(MADE.exec(v.description)?.[1] ?? '') || 0) }));
+  let voiceId = ours.find((v) => v.name === name)?.voiceId;
+  if (!voiceId) {
+    const make = () => clones.make(ctx, { name, description: `OpenFilm voice sample, made ${new Date().toISOString()}`, wav: bytes, language: text(args.language) || null });
+    try { voiceId = await make(); }
+    catch (e) {
+      if (!FULL.test(/** @type {Error} */ (e)?.message ?? '')) throw e;
+      /* the one spoken in longest ago gives way, never one used in the last ten minutes (it may be speaking now) */
+      const oldest = ours.filter((v) => now - v.used > 10 * 60_000).sort((a, b) => a.used - b.used)[0];
+      if (!oldest) throw Object.assign(new Error(`${service} has no room for another voice now. Try again in a few minutes.`), { code: 'balance' });
+      await forgetSampleVoice(ctx, clones, oldest.voiceId);
+      voiceId = await make();
+    }
+  }
+  samples.set(at, { voiceId, at: Date.now() });
+  lastUsed.set(voiceId, Date.now());
+  return voiceId;
+}
+
+/** Delete a recording's clone at a provider, and forget it here. @param {RunContext} ctx @param {VoiceClones} clones @param {string} voiceId */
+export async function forgetSampleVoice(ctx, clones, voiceId) {
+  await clones.remove(ctx, voiceId);
+  lastUsed.delete(voiceId);
+  for (const [key, value] of samples) if (value.voiceId === voiceId) samples.delete(key);
+}
 
 /** What a run tells the person about the bill. */
 export const billedBy = (/** @type {string} */ service) => ({ note: `billed by ${service} to your key` });

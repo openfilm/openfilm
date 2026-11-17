@@ -1,4 +1,4 @@
-/** Private voices are local resources, bound on the server to the connection that owns the remote voice. */
+/** Private voices: recordings kept on this computer, spoken by OpenFilm's service (studio/server/voices.mjs). */
 import React from 'react';
 import type { LibraryVoice, VoiceAccess } from './library-voices';
 import { useProviders } from './providers.ts';
@@ -14,18 +14,25 @@ export interface PrivateVoice extends LibraryVoice {
   problem: string | null;
   kind: 'clone' | 'import';
   updated: number;
-  activationFee?: boolean;
+  /** a voice of OpenFilm's service: the maker it is cloned at there (inworld, elevenlabs) */
+  engine?: string;
 }
+/** A maker OpenFilm's service clones voices at, with the models that speak them. */
+export interface VoiceEngine { id: string; name: string; models: string[] }
 export interface VoiceConnection {
   id: string;
   name: string;
   connected: boolean;
   clone: boolean;
   sync: boolean;
+  /** a voice already in the person's own account can be added by its ID */
+  import: boolean;
   minSeconds: number;
   maxSeconds: number;
   models: { id: string; name: string }[];
-  pricingUrl: string;
+  /** OpenFilm's service: the makers it clones at, its default first */
+  engines?: VoiceEngine[];
+  pricingUrl?: string;
   consoleUrl: string;
 }
 interface Catalog { voices: PrivateVoice[]; services: VoiceConnection[] }
@@ -76,16 +83,14 @@ async function action<T>(path: string, method: string, body?: unknown): Promise<
 }
 
 export interface CloneInput {
-  provider: string; name: string; language: string; consent: boolean; speakerId?: string; previewText?: string;
+  provider: string; name: string; language: string; consent: boolean; engine?: string;
   audio?: { data: string }; project?: { id: string; path: string }; start?: number; end?: number;
 }
 export const createPrivateVoice = (body: CloneInput) => action<{ voice: PrivateVoice }>('', 'POST', body);
-export const importPrivateVoice = (body: { provider: string; voiceId: string; name: string }) => action<{ voice: PrivateVoice }>('/import', 'POST', body);
-export const syncPrivateVoices = (provider: string) => action<Catalog>('/sync', 'POST', { provider });
 export const refreshPrivateVoice = (uid: string) => action<{ voice: PrivateVoice }>(`/${encodeURIComponent(uid)}/refresh`, 'POST');
 export const renamePrivateVoice = (uid: string, name: string) => action<{ voice: PrivateVoice }>(`/${encodeURIComponent(uid)}`, 'PATCH', { name });
 export const removePrivateVoice = (uid: string) => action<void>(`/${encodeURIComponent(uid)}`, 'DELETE');
-export const previewPrivateVoice = (uid: string, text: string, activate = false) => action<{ voice: PrivateVoice }>(`/${encodeURIComponent(uid)}/preview`, 'POST', { text, activate });
+export const previewPrivateVoice = (uid: string, text: string) => action<{ voice: PrivateVoice }>(`/${encodeURIComponent(uid)}/preview`, 'POST', { text });
 
 /** FileReader keeps conversion off the JS argument stack, even for a large WAV. */
 export function recordingBase64(file: File): Promise<string> {

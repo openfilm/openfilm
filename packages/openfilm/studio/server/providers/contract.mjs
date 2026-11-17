@@ -69,7 +69,8 @@
  * signed address of the service's own storage), so the file need not pass through the run (OpenFilm's service: the
  * person's computer fetches it straight from there). `checkpoint`: told the job a provider took (its own answer), right
  * after it is taken, so whoever ran it can keep it; `resume`: that job, given back when the same run starts again (a
- * restart): the provider waits for it instead of submitting it again and charging twice.
+ * restart): the provider waits for it instead of submitting it again and charging twice. `scope`: whose run it is, where
+ * one key runs for many people (OpenFilm's service): a voice cloned from a run's recording is kept apart by it.
  * @typedef {{
  *   key: string,
  *   model?: string,
@@ -87,6 +88,7 @@
  *   recoverOnly?: boolean,
  *   resume?: any,
  *   checkpoint?: (job: any) => Promise<void>,
+ *   scope?: string,
  * }} RunContext
  */
 
@@ -130,7 +132,7 @@
  *   billingUrl: string,
  *   pricingUrl?: string,
  *   verbs: Verb[],
- *   models?: Partial<Record<Verb, { id: string, name: string, spec?: ModelSpec }[]>>,
+ *   models?: Partial<Record<Verb, { id: string, name: string, spec?: ModelSpec, dialogue?: boolean }[]>>,
  *   checkKey?: (key: string) => void,
  *   signIn?: import('../sign-in.mjs').SignIn,
  *   refresh?: (options?: { force?: boolean }) => Promise<void>,
@@ -138,11 +140,12 @@
  *   ready?: () => boolean,
  *   speechFormat?: 'mp3',
  *   run: (verb: Verb, args: Record<string, unknown>, ctx: RunContext) => Promise<RunResult>,
+ *   clones?: import('./common.mjs').VoiceClones,
  *   added?: boolean,
  * }} Provider
  * `models`: the models it can make each kind of media with, its default first, each with the name people know it by
  * (Settings → Services shows "ElevenLabs · Eleven v4") and, for pictures and clips, what it makes (`spec`), so the
- * canvas offers only that.
+ * canvas offers only that. A voice-over model with `dialogue` speaks two voices taking turns, and only so.
  * `checkKey`: throws a sentence when a pasted key cannot work as it is (Azure's must carry its region), shown where it
  * is pasted instead of at the first run. Only for what the provider knows without calling anyone: it must not fetch.
  * `signIn`: connected by signing in on the provider's website instead of pasting a key (sign-in.mjs); the key it
@@ -153,6 +156,7 @@
  * `keyless`: it also works with no key (a free tier), so the person can connect it with one click and add a key for
  * higher limits. Connected without one, its `key` is ''. Like every provider, it serves nothing until it is connected.
  * `ready`: it takes no key at all (Local services): connected while it can run, which it says.
+ * `clones`: it clones voices (Studio's own voices, and `tts --voice-sample`, a voice from a recording).
  * `added`: one the person added in their shared home (added.mjs), not built in; set when it is read.
  * `pricingUrl`: the provider's own pricing page, linked as "Pricing" in Settings → Providers. Only the link: what is free
  * and what is paid changes on the provider's side. None for OpenFilm's own service (no price is shown in the app) and for

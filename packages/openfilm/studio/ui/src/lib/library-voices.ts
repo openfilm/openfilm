@@ -28,7 +28,17 @@ export interface LibraryVoice {
   featured?: boolean;
   /** how much it is used, where its service says (characters spoken in a year) */
   uses?: number | null;
+  /** two voices that speak a dialogue together (its id is theirs, "a+b"): each line of the words is one turn */
+  pair?: boolean;
+  members?: { id: string; name: string; gender: 'm' | 'f' | null }[];
 }
+
+/** A pair of two of a service's voices, made by the person (VoicesPane's "Choose two voices"). */
+export const voicePair = (a: LibraryVoice, b: LibraryVoice): LibraryVoice => ({
+  provider: a.provider, id: `${a.id}+${b.id}`, name: `${a.name} & ${b.name}`, description: null, gender: null, age: null,
+  language: a.language, accent: null, tags: [], sample: null, pair: true,
+  members: [{ id: a.id, name: a.name, gender: a.gender === 'f' || a.gender === 'm' ? a.gender : null }, { id: b.id, name: b.name, gender: b.gender === 'f' || b.gender === 'm' ? b.gender : null }],
+});
 
 export interface VoiceService { id: string; name: string; models: { id: string; name: string }[] }
 export interface LibraryVoices { version: number; providers: VoiceService[]; voices: LibraryVoice[] }

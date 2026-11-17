@@ -4,7 +4,7 @@
  * transcription. REST API (https://elevenlabs.io/docs/api-reference), key in `xi-api-key`. Audio comes as constant
  * 128 kbps MP3, so its length is known from its size.
  */
-import { billedBy, call, clamp, mp3Seconds, modelOf, needed, landing, notes, number, serviceUrl, speechUpload, text, wordsFromCharacters } from './common.mjs';
+import { billedBy, call, clamp, mp3Seconds, modelOf, needed, landing, notes, number, sampleVoice, serviceUrl, speechUpload, text, wordsFromCharacters } from './common.mjs';
 
 /** @typedef {import('./contract.mjs').Provider} Provider @typedef {import('./contract.mjs').RunContext} RunContext */
 
@@ -21,6 +21,46 @@ const MODELS = {
 };
 const FORMAT = 'mp3_44100_128';
 
+/** A request to ElevenLabs' API with the run's key. @param {RunContext} ctx */
+const elevenlabs = (/** @type {string} */ path, ctx, /** @type {RequestInit} */ init = {}) =>
+  call(NAME, `${serviceUrl('ELEVENLABS', 'https://api.elevenlabs.io')}${path}`, { redirect: 'error', ...init, headers: { 'xi-api-key': ctx.key, ...init.headers } }, ctx);
+
+/**
+ * Instant voice cloning (https://elevenlabs.io/docs/api-reference/voices/ivc/create): on a paid plan, no charge for the
+ * clone itself; the account keeps it in one of its plan's custom voice slots until it is deleted.
+ * @type {import('./common.mjs').VoiceClones}
+ */
+export const clones = {
+  async make(ctx, voice) {
+    const form = new FormData();
+    form.set('name', voice.name);
+    if (voice.description) form.set('description', voice.description);
+    if (voice.language) form.set('labels', JSON.stringify({ language: voice.language }));
+    form.append('files', new Blob([/** @type {Uint8Array<ArrayBuffer>} */ (voice.wav)], { type: 'audio/wav' }), 'reference.wav');
+    const body = /** @type {any} */ (await (await elevenlabs('/v1/voices/add', ctx, { method: 'POST', body: form })).json());
+    const id = text(body?.voice_id);
+    if (!id) throw new Error(`${NAME} returned no voice ID.`);
+    return id;
+  },
+  async remove(ctx, voiceId) {
+    await (await elevenlabs(`/v1/voices/${encodeURIComponent(voiceId)}`, ctx, { method: 'DELETE' })).body?.cancel();
+  },
+  async list(ctx) {
+    const found = [];
+    let cursor = '';
+    for (let page = 0; page < 30; page++) {
+      const query = new URLSearchParams({ page_size: '100', category: 'cloned', ...(cursor ? { next_page_token: cursor } : {}) });
+      const body = /** @type {any} */ (await (await elevenlabs(`/v2/voices?${query}`, ctx)).json());
+      for (const v of body?.voices ?? []) {
+        if (v?.is_owner !== false && text(v?.voice_id)) found.push({ voiceId: text(v.voice_id), name: text(v.name), description: text(v.description) });
+      }
+      if (!body?.has_more || !text(body?.next_page_token) || body.next_page_token === cursor) break;
+      cursor = text(body.next_page_token);
+    }
+    return found;
+  },
+};
+
 /** @type {Provider} */
 export default {
   id: 'elevenlabs',
@@ -32,6 +72,7 @@ export default {
   verbs: ['voice', 'tts', 'sfx', 'music', 'asr'],
   models: MODELS,
   speechFormat: 'mp3',
+  clones,
   async run(verb, args, ctx) {
     const base = serviceUrl('ELEVENLABS', 'https://api.elevenlabs.io');
     const send = (/** @type {string} */ path, /** @type {RequestInit} */ init = {}) =>
@@ -41,7 +82,9 @@ export default {
 
     if (verb === 'voice') return voices(args, send);
     if (verb === 'tts') {
-      const voice = needed(args, 'voice');
+      /* a recording's voice (`--voice-sample`) is cloned for it: `--voice` then only names it in what the run says */
+      const voice = text(args['voice-sample']) ? await sampleVoice(args, ctx, NAME, clones) : needed(args, 'voice');
+      const named = text(args['voice-sample']) ? text(args.voice) || 'sample' : voice;
       const said = needed(args, 'text');
       const path = landing('audio/vo', args.out, 'mp3');
       const model = modelOf(MODELS, 'tts', ctx);
@@ -53,8 +96,8 @@ export default {
       const words = Array.isArray(a?.characters) ? wordsFromCharacters(a.characters, a.character_start_times_seconds ?? [], a.character_end_times_seconds ?? [], dur) : [];
       return {
         files: [{ path, bytes }],
-        index: [{ src: path, kind: 'audio', dur, text: said, voice, ...(words.length ? { words } : {}), from: { mode: 'synth', text: said, voice, provider: 'elevenlabs', model } }],
-        receipt: { provider: 'elevenlabs', model, src: path, dur, voice, words: words.length },
+        index: [{ src: path, kind: 'audio', dur, text: said, voice: named, ...(words.length ? { words } : {}), from: { mode: 'synth', text: said, voice: named, provider: 'elevenlabs', model } }],
+        receipt: { provider: 'elevenlabs', model, src: path, dur, voice: named, words: words.length },
         cost: billedBy(NAME),
       };
     }

@@ -44,8 +44,8 @@ import { noteMade } from './media-made.mjs';
 import { addedDir } from './providers/added.mjs';
 import { isOutputName, mediaSeconds, translatedLines, translationAsk } from './providers/common.mjs';
 import { CALL_TIMEOUT_SEC, callService, servicesHelp } from './custom-services.mjs';
-import { privateVoiceForSpeech } from './voices.mjs';
-import { voiceWasUsed } from './voice-store.mjs';
+import { privateVoiceForSpeech, SAMPLE_INPUT } from './voices.mjs';
+import { voiceFolder } from './voice-store.mjs';
 import { mediaInput } from './media-input.mjs';
 
 /**
@@ -77,9 +77,10 @@ export const VERBS = /** @type {Record<string, VerbSpec>} */ ({
       limit: { value: 'n', min: 1, max: 100, integer: true, default: 5, alias: 'n' } },
   },
   tts: {
-    help: 'Voice-over: one line spoken. Returns src, dur and its transcript: a WebVTT of the text in pause-separated cues, in source seconds. Its word timing is kept, so never run asr on it.',
-    dir: 'assets/audio/vo', timeoutSec: 300,
-    options: { out, text: { value: 'text', required: true }, voice: { value: 'voiceId', required: true } },
+    help: 'Voice-over: one line spoken. Returns src, dur and its transcript: a WebVTT of the text in pause-separated cues, in source seconds. Its word timing is kept, so never run asr on it. '
+      + 'Two voices (--voice twice, or "a+b") speak a dialogue, where a service has a model for it: each line of --text is one turn, the voices taking turns from the first, or a line starting "1:" or "2:" says whose; each turn is a cue.',
+    dir: 'assets/audio/vo', timeoutSec: 600,
+    options: { out, text: { value: 'text', required: true }, voice: { value: 'voiceId', required: true, repeat: 'many' } },
   },
   sfx: {
     help: 'A sound effect. Returns src, its measured dur and, when measured, attack (seconds into the file where the hit is) and peakDb. --sec is a request: the dur returned is what it is.',
@@ -327,16 +328,17 @@ export async function runGet(root, verb, given, { via, model, yes = false, ask, 
     return show(await speechReceipt(root, 'asr', String(args.src), { skip: true, note: 'It has a transcript already, made since the file last changed (--force makes it again).' }));
   }
   const settings = await providerSettings();
-  let privateVoiceUid = '';
+  /* a voice of OpenFilm's service is its recording, sent with the run under SAMPLE_INPUT; --voice keeps its name */
+  let sampleOf = '';
   if (verb === 'tts' && typeof args.voice === 'string' && args.voice.startsWith('my:')) {
     const voice = await privateVoiceForSpeech(args.voice, settings);
     if (via && via !== voice.provider) throw usage('This private voice must use the service connection it belongs to.');
     if (model && !voice.models.includes(model)) throw usage('This model does not support the selected private voice.');
     via = voice.provider;
     model ??= voice.models[0];
-    args.voice = voice.voiceId;
+    if (voice.provider === 'openfilm') { args['voice-sample'] = SAMPLE_INPUT; sampleOf = join(voiceFolder(voice.uid), 'sample.wav'); }
+    else args.voice = voice.voiceId;
     args.language = voice.language;
-    privateVoiceUid = voice.uid;
   }
   /* `--via` names one: when it cannot, it says why (no such provider, not this verb, no key) */
   const provider = await chooseProvider(/** @type {Verb} */ (verb), { via: via ?? null, settings }).catch((e) => { throw usage(e.message); });
@@ -350,7 +352,22 @@ export async function runGet(root, verb, given, { via, model, yes = false, ask, 
   if (model !== undefined && !offered.some((m) => m.id === model)) {
     throw usage(offered.length ? `--model is one of ${offered.map((m) => m.id).join(', ')} with ${provider.name}` : `${provider.name} names no models for ${verb}`);
   }
-  const runModel = model ?? modelFor(settings, provider, verb);
+  let runModel = model ?? modelFor(settings, provider, verb);
+  /* two voices are a dialogue: spoken by the model that speaks one, and only it (one voice never is) */
+  if (verb === 'tts') {
+    const voices = (Array.isArray(args.voice) ? args.voice : [args.voice]).flatMap((v) => String(v ?? '').split('+')).filter(Boolean);
+    if (voices.length > 2) throw usage('--voice: one voice, or two for a dialogue.');
+    const dialogue = offered.find((m) => /** @type {{ dialogue?: boolean }} */ (m).dialogue);
+    if (voices.length === 2) {
+      if (!dialogue) throw usage(`${provider.name} speaks no dialogue of two voices: Doubao does (--via doubao, or OpenFilm).`);
+      args.voice = voices.join('+');
+      runModel = dialogue.id;
+    } else if (offered.find((m) => m.id === runModel && /** @type {{ dialogue?: boolean }} */ (m).dialogue)) {
+      const single = offered.find((m) => !/** @type {{ dialogue?: boolean }} */ (m).dialogue);
+      if (!single || model !== undefined) throw usage(`--model ${runModel} speaks a dialogue: give it two voices.`);
+      runModel = single.id;
+    }
+  }
   if (verb === 'video') {
     const videoSpec = (offered.find((m) => m.id === runModel) ?? offered[0])?.spec;
     for (const [flag, count] of /** @type {const} */ ([['video', videoSpec?.clip], ['voice', videoSpec?.voice]])) {
@@ -377,12 +394,17 @@ export async function runGet(root, verb, given, { via, model, yes = false, ask, 
     root,
     signal: clock.signal,
     say: (/** @type {string} */ line) => { said.push(line); },
-    read: (/** @type {string} */ path) => readInput(root, path, verb === 'asr' && path === args.src, clock.signal, provider.speechFormat),
+    read: (/** @type {string} */ path) => sampleOf && path === SAMPLE_INPUT ? readFile(sampleOf).then((b) => new Uint8Array(b))
+      : readInput(root, path, verb === 'asr' && path === args.src, clock.signal, provider.speechFormat),
     /* what was asked, kept with a paid run's saved request: asked again from the project to recover it (pendingRuns) */
     about: { verb, args: Object.fromEntries(Object.entries(given).filter(([name]) => name !== 'fresh')), via: provider.id, model: runModel ?? null },
     /* only what was already taken is collected: a run never taken is not started (and paid) from here */
     ...(recoverOnly ? { recoverOnly: true } : {}),
-    ...(provider.id === 'openfilm' ? { fresh, openInput: (/** @type {string} */ path) => mediaInput(root, path, { speech: verb === 'asr' && path === args.src, signal: clock.signal }) } : {}),
+    ...(provider.id === 'openfilm' ? { fresh, openInput: async (/** @type {string} */ path) => {
+      if (!sampleOf || path !== SAMPLE_INPUT) return mediaInput(root, path, { speech: verb === 'asr' && path === args.src, signal: clock.signal });
+      const bytes = new Uint8Array(await readFile(sampleOf));
+      return { bytes, size: bytes.byteLength, version: createHash('sha256').update(bytes).digest('hex'), stream: () => new Blob([bytes]).stream() };
+    } } : {}),
   };
   /* a job a provider takes on the person's own key (fal, OpenRouter, Volcengine) is kept as it is taken, and waited for
      again when the same run starts again after a restart: never submitted and paid twice (media-transfer.mjs) */
@@ -409,7 +431,6 @@ export async function runGet(root, verb, given, { via, model, yes = false, ask, 
     }
     result = await provider.run(/** @type {Verb} */ (verb), args, ctx);
     const files = await land(root, verb, args, result);
-    if (privateVoiceUid) await voiceWasUsed(privateVoiceUid).catch(() => {});
     /* how each was made, kept with the project (media-made.mjs): a generated file's name says nothing of it */
     const noted = await noteMade(root, { verb, args, paths: Object.keys(spec.options).filter((name) => spec.options[name].path), via: provider.id, by: provider.name,
       model: runModel, files, index: result.index });

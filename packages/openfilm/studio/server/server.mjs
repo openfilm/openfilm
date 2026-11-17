@@ -61,7 +61,7 @@ import { installedFonts } from './fonts.mjs';
 import { addTextFont, isFontFile, projectFonts, resolveIn } from './project-fonts.mjs';
 import { FILM_PAGE, PageFrameError, closePageFrames, compoundSound, filmPoster, pageFacts, pageFrame, warmFilmPoster } from './pageframes.mjs';
 import { COVER_FRAME_W, CoverError, clearCover, readCover, readCoverBody, setCover, setCoverFromFile } from './cover.mjs';
-import { BUILT_IN, fetchItem, libraryAdded, libraryFavorites, libraryFileFetched, libraryIndex, libraryVoices, notHere, refreshCommunity, setLibraryAdded, setLibraryFavorites } from './library.mjs';
+import { BUILT_IN, fetchItem, libraryAdded, libraryFavorites, libraryFileFetched, libraryIndex, libraryVoices, notHere, withPairs, refreshCommunity, setLibraryAdded, setLibraryFavorites } from './library.mjs';
 import { createMediaIndexer, mediaSummary } from './media-index.mjs';
 import { carryMade, madeView } from './media-made.mjs';
 import { pluginOfSkill, pluginStates, pluginsDir, setPluginOn } from '../../src/plugins.mjs';
@@ -539,7 +539,7 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
         await refreshCommunity();
         return json(res, 200, libraryIndex());
       }
-      if (parts[1] === 'voices' && parts.length === 2 && req.method === 'GET') return json(res, 200, libraryVoices());
+      if (parts[1] === 'voices' && parts.length === 2 && req.method === 'GET') return json(res, 200, withPairs(libraryVoices()));
       if (parts[1] === 'file' && parts.length === 2 && req.method === 'GET') return sendMedia(req, res, await libraryFileFetched(url.searchParams.get('path')), { check: true });
       /* which of these things still need fetching before they go in (a sound, an emoji, a template's music): { ids } */
       if (parts[1] === 'missing' && parts.length === 2 && req.method === 'POST') return json(res, 200, { ids: notHere((/** @type {{ ids?: unknown }} */ (await readJson(req) ?? {})).ids) });

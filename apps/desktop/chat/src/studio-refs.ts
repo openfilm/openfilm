@@ -354,7 +354,9 @@ function refLine(ref: StudioRef): string {
       const how = ref.via
         ? `speak in it with \`openfilm get tts --via ${ref.via}${model ? ` --model ${model}` : ''} --voice ${ref.id}\`${ref.models.length > 1 ? ` (models: ${ref.models.join(', ')})` : ''}`
         : `not connected: the person connects ${ref.service} or OpenFilm in Studio's Settings › Services first`;
-      return [`voice ${quote(ref.name, 80)} of ${ref.service} for voice-over, id \`${ref.id}\``, ref.language ? `speaks ${ref.language}` : null, how].filter(Boolean).join(' · ');
+      /* a pair ("a+b") speaks a dialogue: the same command, a turn a line */
+      const pair = ref.id.includes('+') ? 'two voices speaking a dialogue: each line of --text is one turn, taking turns from the first, or start a line with 1: or 2: for whose' : null;
+      return [`voice ${quote(ref.name, 80)} of ${ref.service} for voice-over, id \`${ref.id}\``, ref.language ? `speaks ${ref.language}` : null, pair, how].filter(Boolean).join(' · ');
     }
   }
 }

@@ -1,30 +1,37 @@
 // @ts-check
-/** Doubao Speech's HTTP TTS v3. Resource IDs distinguish stock voices and cloned voices. */
+/** Doubao Speech's HTTP TTS v3 (TTS 2.0) with its stock voices. */
 import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { billedBy, call, landing, needed, serviceUrl, wav, wavSeconds } from './common.mjs';
 
+/** `dialogue`: the model that speaks two voices taking turns (doubao-dialogue.mjs); a run with two voices takes it. */
 export const DOUBAO_TTS_MODELS = [
   { id: 'seed-tts-2.0', name: 'Doubao TTS 2.0' },
-  { id: 'seed-icl-2.0', name: 'Doubao Voice Clone 2.0' },
+  { id: 'seed-podcast', name: 'Doubao Podcast · two voices', dialogue: true },
 ];
-/** The same complete stock catalog the resource library shows, refreshed by scripts/library-voices.mjs. */
-export const DOUBAO_VOICES = /** @type {{ provider: string, id: string, name: string, language: string | null, gender: string | null, description: string | null }[]} */
-  (JSON.parse(readFileSync(new URL('../../../library/voices.json', import.meta.url), 'utf8')).voices.filter((/** @type {{ provider: string }} */ v) => v.provider === 'doubao'));
+/**
+ * The same complete stock catalog the resource library shows, refreshed by scripts/library-voices.mjs. Where the
+ * providers run without the library beside them (OpenFilm's service ships this folder alone), none: the person's
+ * Studio has the catalog, and a voice's language is then the text's own.
+ */
+export const DOUBAO_VOICES = /** @type {{ provider: string, id: string, name: string, language: string | null, gender: string | null, description: string | null }[]} */ ((() => {
+  try { return JSON.parse(readFileSync(new URL('../../../library/voices.json', import.meta.url), 'utf8')).voices.filter((/** @type {{ provider: string }} */ v) => v.provider === 'doubao'); }
+  catch { return []; }
+})());
 
 /** @param {Record<string, unknown>} args @param {import('./contract.mjs').RunContext} ctx */
 export async function doubaoTts(args, ctx) {
   const said = needed(args, 'text');
   const voice = needed(args, 'voice');
   const model = ctx.model ?? 'seed-tts-2.0';
-  if (!DOUBAO_TTS_MODELS.some((m) => m.id === model)) throw new Error('Choose a Doubao Speech TTS model.');
+  if (!DOUBAO_TTS_MODELS.some((m) => m.id === model && !m.dialogue)) throw new Error('Choose a Doubao Speech TTS model.');
   const requestId = randomUUID();
   const language = String(args.language || DOUBAO_VOICES.find((v) => v.id === voice)?.language || '').toLowerCase();
   const subtitles = (!language || /^(zh|en)(-|$)/.test(language)) && !/[\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}\p{Script=Arabic}\p{Script=Cyrillic}]/u.test(said);
   const res = await call('Doubao', serviceUrl('DOUBAO_TTS', 'https://openspeech.bytedance.com/api/v3/tts/unidirectional'), {
     method: 'POST', redirect: 'error', headers: { 'content-type': 'application/json', 'X-Api-Key': ctx.key,
       'X-Api-Resource-Id': model, 'X-Api-Request-Id': requestId },
-    body: JSON.stringify({ req_params: { text: said, speaker: voice, ...(model === 'seed-icl-2.0' ? { model: 'seed-tts-2.0-standard' } : {}),
+    body: JSON.stringify({ req_params: { text: said, speaker: voice,
       audio_params: { format: 'pcm', sample_rate: 24000, ...(subtitles ? { enable_subtitle: true } : {}) } } }),
   }, ctx);
   /** @type {Buffer[]} */

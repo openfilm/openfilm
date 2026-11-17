@@ -44,8 +44,12 @@ const KINDS = /** @type {Verb[]} */ (['tts', 'sfx', 'music', 'asr', 'image-searc
 const FRESH_MS = 5 * 60_000;
 const RETRY_MS = 30_000;
 
-/** What it makes each kind of media with, its default first, as the service last said (changed in place). */
-const MODELS = /** @type {Partial<Record<Verb, { id: string, name: string, spec?: import('./contract.mjs').ModelSpec }[]>>} */ ({});
+/**
+ * What it makes each kind of media with, its default first, as the service last said (changed in place). `clones`: a
+ * voice-over model that also speaks in the voice of a recording the run brings (`--voice-sample`), or only so ('only');
+ * `dialogue`: one that speaks two voices taking turns.
+ */
+const MODELS = /** @type {Partial<Record<Verb, { id: string, name: string, spec?: import('./contract.mjs').ModelSpec, clones?: 'also' | 'only', dialogue?: boolean }[]>>} */ ({});
 /** The providers the service runs models of, whose own models say what each makes. */
 const RUNS = [openai, google, fal, openrouter];
 /** What a model of the service makes: as the provider it is run at says for it (`openrouter/bytedance/seedance-2.0`). */
@@ -83,7 +87,7 @@ function take(/** @type {unknown} */ offer) {
       .map((m) => {
         const spec = m.spec === undefined ? specOf(kind, m.id)
           : m.spec && typeof m.spec === 'object' && !Array.isArray(m.spec) ? m.spec : undefined;
-        return { id: m.id, name: m.name, ...(spec ? { spec } : {}) };
+        return { id: m.id, name: m.name, ...(spec ? { spec } : {}), ...(m.clones === 'also' || m.clones === 'only' ? { clones: m.clones } : {}), ...(m.dialogue === true ? { dialogue: true } : {}) };
       });
     if (!list.length) continue;
     MODELS[kind] = list;
@@ -93,6 +97,7 @@ function take(/** @type {unknown} */ offer) {
 
 /** File options from get's media commands. Other values (including prompts and voice IDs) are plain text. */
 const FILE_FLAGS = /** @type {Partial<Record<Verb, string[]>>} */ ({
+  tts: ['voice-sample'],
   asr: ['src'],
   cutout: ['src'],
   image: ['ref', 'mask', 'markup'],
@@ -190,6 +195,18 @@ async function madeOf(files, ctx, transfer, key, refresh) {
 const service = () => serviceUrl('API', 'https://openfilm.dev');
 const SITE = service();
 const ACCOUNT = `${SITE}/account`;
+
+/**
+ * Ask the service to delete its clones of these recordings (each its SHA-256): the person removed the voices made from
+ * them. Throws when the service could not do it (unreachable, or one too old to know how), so it is asked again.
+ * @param {string} key @param {string[]} samples
+ */
+export async function forgetVoices(key, samples) {
+  const signal = AbortSignal.timeout(60_000);
+  await (await call(NAME, `${service()}/v1/media/voices/forget`, { method: 'POST', redirect: 'error',
+    headers: { authorization: `Bearer ${key}`, 'content-type': 'application/json', 'idempotency-key': randomUUID() }, body: JSON.stringify({ samples }) },
+  { key, root: '', signal, say: () => {}, read: async () => new Uint8Array() })).body?.cancel();
+}
 
 /** @type {Provider} */
 export default {

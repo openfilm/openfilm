@@ -4,11 +4,10 @@ import { Loader2, Mic, Square, Upload } from 'lucide-react';
 import { useLanguage, useT } from '@/i18n';
 import { startRecording, type Recording } from '@/lib/recorder';
 import {
-  createPrivateVoice, importPrivateVoice, previewPrivateVoice, recordingBase64, refreshPrivateVoice, renamePrivateVoice,
+  createPrivateVoice, previewPrivateVoice, recordingBase64, refreshPrivateVoice, renamePrivateVoice,
   type PrivateVoice, type VoiceConnection,
 } from '@/lib/private-voices';
 import { Card, CardActions, CardButton } from '../Card';
-import { providerName } from '@/lib/providers';
 import { MenuSelect } from '../MenuSelect';
 
 type Source = 'upload' | 'record' | 'project';
@@ -21,14 +20,15 @@ const PREVIEW_TEXT: Record<string, string> = {
   fr: 'Bonjour, voici ma voix. Je suis ravi de partager notre prochaine histoire avec vous.',
   de: 'Hallo, das ist meine Stimme. Ich freue mich auf unsere nächste gemeinsame Geschichte.',
 };
-export function CloneVoiceDialog({ mode, services, projectId, onClose, onSaved }: {
-  mode: 'clone' | 'import'; services: VoiceConnection[]; projectId?: string | null;
+/** A voice from a recording, made with OpenFilm's service: its engine (Inworld, recommended, or ElevenLabs) chosen here. */
+export function CloneVoiceDialog({ services, projectId, onClose, onSaved }: {
+  services: VoiceConnection[]; projectId?: string | null;
   onClose: () => void; onSaved: (voice: PrivateVoice, speak: boolean) => void;
 }) {
   const t = useT();
   const language = useLanguage();
-  const [provider, setProvider] = React.useState(() => services.find((s) => s.connected && (language.startsWith('zh') ? s.id === 'doubao' : s.id === 'elevenlabs'))?.id ?? services.find((s) => s.connected)?.id ?? 'elevenlabs');
-  const service = services.find((s) => s.id === provider);
+  const service = services.find((s) => s.id === 'openfilm');
+  const [engine, setEngine] = React.useState(() => service?.engines?.[0]?.id ?? 'inworld');
   const [source, setSource] = React.useState<Source>('upload');
   const [name, setName] = React.useState(t('myVoices.defaultName'));
   const [spokenLanguage, setSpokenLanguage] = React.useState(language.startsWith('zh') ? 'zh' : 'en');
@@ -37,13 +37,11 @@ export function CloneVoiceDialog({ mode, services, projectId, onClose, onSaved }
   const [path, setPath] = React.useState('');
   const [start, setStart] = React.useState('0');
   const [end, setEnd] = React.useState('30');
-  const [speakerId, setSpeakerId] = React.useState('');
   const [consent, setConsent] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
   const [problem, setProblem] = React.useState<string | null>(null);
   const [voice, setVoice] = React.useState<PrivateVoice | null>(null);
   const [previewText, setPreviewText] = React.useState(PREVIEW_TEXT[spokenLanguage] ?? PREVIEW_TEXT.en!);
-  const [activate, setActivate] = React.useState(false);
   const [recording, setRecording] = React.useState(false);
   const recorder = React.useRef<Recording | null>(null);
   const recordingAttempt = React.useRef(0);
@@ -115,9 +113,7 @@ export function CloneVoiceDialog({ mode, services, projectId, onClose, onSaved }
   };
   const create = () => run(async () => {
     if (!name.trim() || !service?.connected) return;
-    const result = mode === 'import'
-      ? await importPrivateVoice({ provider, voiceId: speakerId.trim(), name: name.trim() })
-      : await createPrivateVoice({ provider, name: name.trim(), language: spokenLanguage, consent, speakerId: speakerId.trim(), previewText,
+    const result = await createPrivateVoice({ provider: 'openfilm', name: name.trim(), language: spokenLanguage, consent, engine,
         ...(source === 'project' ? { project: { id: projectId!, path }, start: Number(start), end: Number(end) }
           : { audio: { data: await recordingBase64(file!) }, ...(start !== '0' || end !== '30' ? { start: Number(start), end: Number(end) } : {}) }) });
     setVoice(result.voice);
@@ -135,17 +131,17 @@ export function CloneVoiceDialog({ mode, services, projectId, onClose, onSaved }
     setSource(next); setProblem(null);
   };
   const field = 'w-full rounded-md border border-[var(--border)] bg-[var(--bg-field)] px-2.5 py-2 text-[12.5px] text-[var(--text)] outline-none focus:ring-1 focus:ring-[var(--accent)]';
-  const canCreate = name.trim() && service?.connected && (mode === 'import' ? speakerId.trim() : consent && !recording && (source === 'project' ? path && Number(end) > Number(start) : file));
+  const canCreate = name.trim() && service?.connected && consent && !recording && (source === 'project' ? path && Number(end) > Number(start) : file);
   return createPortal(
     <div className="fixed inset-0 z-[10100] flex items-center justify-center overflow-y-auto bg-black/45 p-4 backdrop-blur-[2px]" onClick={onClose}>
-      <div ref={dialog} role="dialog" aria-modal="true" aria-label={t(mode === 'import' ? 'myVoices.import' : 'myVoices.clone')} data-clone-voice-dialog="" className="my-auto w-full max-w-[460px]" onClick={(event) => event.stopPropagation()}>
-        <Card title={t(voice ? 'myVoices.review' : mode === 'import' ? 'myVoices.import' : 'myVoices.clone')} body={t(voice ? `myVoices.status.${voice.status}` : 'myVoices.createNote')} onClose={onClose}>
+      <div ref={dialog} role="dialog" aria-modal="true" aria-label={t('myVoices.clone')} data-clone-voice-dialog="" className="my-auto w-full max-w-[460px]" onClick={(event) => event.stopPropagation()}>
+        <Card title={t(voice ? 'myVoices.review' : 'myVoices.clone')} body={t(voice ? `myVoices.status.${voice.status}` : 'myVoices.createNote')} onClose={onClose}>
           <div className="mt-3 flex flex-col gap-3">
             <label className="flex flex-col gap-1 text-[12px] text-[var(--text-muted)]">{t('myVoices.name')}<input className={field} value={name} maxLength={80} disabled={busy} onChange={(event) => setName(event.target.value)} /></label>
             {!voice ? <>
-              <label className="flex flex-col gap-1 text-[12px] text-[var(--text-muted)]">{t('myVoices.service')}<MenuSelect label={t('myVoices.service')} value={provider} disabled={busy} onPick={setProvider} size="md" layer={10120}
-                groups={[{ choices: services.map((s) => ({ value: s.id, label: `${providerName(s)}${s.connected ? '' : ` · ${t('myVoices.notConnected')}`}` })) }]} /></label>
-              {mode === 'import' ? <label className="flex flex-col gap-1 text-[12px] text-[var(--text-muted)]">{t('myVoices.voiceId')}<input className={field} value={speakerId} maxLength={256} disabled={busy} onChange={(event) => setSpeakerId(event.target.value)} /></label> : <>
+              {service?.engines?.length ? <label className="flex flex-col gap-1 text-[12px] text-[var(--text-muted)]">{t('myVoices.engine')}<MenuSelect label={t('myVoices.engine')} value={engine} disabled={busy} onPick={setEngine} size="md" layer={10120}
+                groups={[{ choices: service.engines.map((e, i) => ({ value: e.id, label: i === 0 ? `${e.name} · ${t('myVoices.recommended')}` : e.name })) }]} /></label> : null}
+              {<>
                 <div className="flex gap-1 rounded-lg bg-[var(--bg-field)] p-1" aria-label={t('myVoices.source')}>
                   {(['upload', 'record', ...(projectId ? ['project'] : [])] as Source[]).map((s) => <button key={s} type="button" aria-pressed={source === s} disabled={busy} onClick={() => changeSource(s)} className={`min-w-0 flex-1 rounded-md px-2 py-1.5 text-[12px] ${source === s ? 'bg-[var(--bg-raised)] text-[var(--text)]' : 'text-[var(--text-muted)]'}`}>{t(`myVoices.source_${s}`)}</button>)}
                 </div>
@@ -161,23 +157,21 @@ export function CloneVoiceDialog({ mode, services, projectId, onClose, onSaved }
                 <label className="flex flex-col gap-1 text-[12px] text-[var(--text-muted)]">{t('myVoices.language')}<MenuSelect label={t('myVoices.language')} value={spokenLanguage} disabled={busy} size="md" layer={10120}
                   onPick={(value) => { setSpokenLanguage(value); setPreviewText(PREVIEW_TEXT[value] ?? PREVIEW_TEXT.en!); }}
                   groups={[{ choices: [['zh', '中文'], ['en', 'English'], ['ja', '日本語'], ['ko', '한국어'], ['es', 'Español'], ['fr', 'Français'], ['de', 'Deutsch']].map(([value, label]) => ({ value: value!, label: label! })) }]} /></label>
-                {provider === 'doubao' ? <details><summary className="text-[11px] text-[var(--text-muted)]">{t('myVoices.prepaid')}</summary><input className={`${field} mt-2`} value={speakerId} placeholder="S_…" maxLength={256} disabled={busy} onChange={(event) => setSpeakerId(event.target.value)} /></details> : null}
                 <label className="flex items-start gap-2 text-[11.5px] text-[var(--text-muted)]"><input type="checkbox" checked={consent} disabled={busy} onChange={(event) => setConsent(event.target.checked)} className="mt-0.5 accent-[var(--accent)]" /><span>{t('myVoices.consent')}</span></label>
               </>}
-              <p className="text-[11px] leading-relaxed text-[var(--text-faint)]">{t(provider === 'doubao' ? 'myVoices.doubaoFee' : 'myVoices.fee')} {service?.pricingUrl ? <a className="text-[var(--accent)] underline" target="_blank" rel="noreferrer" href={service.pricingUrl}>{t('myVoices.pricing')}</a> : null}</p>
+              <p className="text-[11px] leading-relaxed text-[var(--text-faint)]">{t(engine === 'elevenlabs' ? 'myVoices.engineNote_elevenlabs' : 'myVoices.engineNote')} {service?.pricingUrl ? <a className="text-[var(--accent)] underline" target="_blank" rel="noreferrer" href={service.pricingUrl}>{t('myVoices.pricing')}</a> : null}</p>
             </> : <>
               {voice.status === 'ready' ? <>
                 {voice.previewUrl ? <audio key={`${voice.previewUrl}:${voice.updated}`} ref={preview} controls src={`${voice.previewUrl}?v=${voice.updated}`} className="h-10 w-full" /> : null}
                 <label className="flex flex-col gap-1 text-[12px] text-[var(--text-muted)]">{t('myVoices.previewPassage')}<textarea className={field} rows={3} maxLength={300} value={previewText} onChange={(event) => setPreviewText(event.target.value)} disabled={busy} /></label>
-                {voice.activationFee ? <label className="flex items-start gap-2 text-[11.5px] text-[var(--text-muted)]"><input type="checkbox" checked={activate} onChange={(event) => setActivate(event.target.checked)} className="mt-0.5" /><span>{t('myVoices.activateFee')}</span></label> : null}
-                <CardButton disabled={busy || !previewText.trim() || (voice.activationFee && !activate)} onClick={() => { void run(async () => setVoice((await previewPrivateVoice(voice.uid, previewText, activate)).voice)); }}>{t('myVoices.generatePreview')}</CardButton>
+                <CardButton disabled={busy || !previewText.trim()} onClick={() => { void run(async () => setVoice((await previewPrivateVoice(voice.uid, previewText)).voice)); }}>{t('myVoices.generatePreview')}</CardButton>
               </> : <><p className="text-[12px] leading-relaxed text-[var(--text-muted)]">{t(voice.status === 'verification' ? 'myVoices.verifyNote' : 'myVoices.pendingNote')}</p><CardButton disabled={busy} onClick={() => { void run(async () => setVoice((await refreshPrivateVoice(voice.uid)).voice)); }}>{t('myVoices.refresh')}</CardButton></>}
             </>}
             {busy ? <p role="status" className="flex items-center gap-2 text-[11.5px] text-[var(--text-muted)]"><Loader2 size={13} className="animate-spin" />{t('myVoices.working')}</p> : null}
             {problem ? <p role="alert" className="break-words text-[11.5px] text-[var(--err)]">{problem}</p> : null}
           </div>
           <CardActions>{voice ? <><CardButton disabled={busy || !name.trim()} onClick={() => { void save(false); }}>{t('myVoices.save')}</CardButton><CardButton weight="primary" disabled={busy || !name.trim() || voice.status !== 'ready'} onClick={() => { void save(true); }}>{t('myVoices.saveSpeak')}</CardButton></>
-            : <><CardButton weight="quiet" onClick={onClose}>{t('confirm.cancel')}</CardButton><CardButton weight="primary" disabled={busy || !canCreate} onClick={() => { void create(); }}>{t(mode === 'import' ? 'myVoices.import' : 'myVoices.create')}</CardButton></>}</CardActions>
+            : <><CardButton weight="quiet" onClick={onClose}>{t('confirm.cancel')}</CardButton><CardButton weight="primary" disabled={busy || !canCreate} onClick={() => { void create(); }}>{t('myVoices.create')}</CardButton></>}</CardActions>
         </Card>
       </div>
     </div>, document.body,

@@ -1,6 +1,6 @@
 // @ts-check
 /** Private, reusable voices. Remote voice IDs are bound to the connection that created/imported them.
- * One folder per voice, outside projects; source recordings are never retained here. */
+ * One folder per voice, outside projects; source recordings are kept only for OpenFilm's service, whose voice it is. */
 import { createHash, randomUUID } from 'node:crypto';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { mkdir } from 'node:fs/promises';
@@ -18,8 +18,10 @@ export const voiceFolder = (/** @type {string} */ uid) => {
 
 /** @typedef {{ uid: string, provider: string, voiceId: string, connection: string, name: string,
  * language: string | null, status: 'creating' | 'training' | 'ready' | 'verification' | 'failed' | 'uncertain',
- * models: string[], created: number, updated: number, kind: 'clone' | 'import', custom?: boolean,
- * preview?: string, problem?: string, consentAt?: number, activated?: boolean }} VoiceAsset */
+ * models: string[], created: number, updated: number, kind: 'clone' | 'import',
+ * preview?: string, problem?: string, consentAt?: number, engine?: string }} VoiceAsset
+ * A voice of OpenFilm's service (`provider: 'openfilm'`) has no remote ID: its recording, `sample.wav` in its folder,
+ * goes with each run, and `engine` is the maker the service clones it at (inworld, elevenlabs). */
 
 export const voiceConnection = (/** @type {string} */ provider, /** @type {string} */ key) => createHash('sha256').update(`${provider}\0${key}`).digest('hex');
 
@@ -62,8 +64,3 @@ export const removeVoice = (/** @type {string} */ uid) => moveToTrash(voiceFolde
 /** The extra IDs that can be starred, including temporarily disconnected voices. */
 export const ownVoiceKeys = () => voiceAssets().map((v) => `voice:${v.provider}/my:${v.uid}`);
 
-/** Remember a successful formal synthesis without replacing newer voice metadata held by another action. */
-export async function voiceWasUsed(/** @type {string} */ uid) {
-  const asset = voiceAssets().find((v) => v.uid === uid);
-  if (asset?.custom && !asset.activated) { asset.activated = true; await keepVoice(asset); }
-}

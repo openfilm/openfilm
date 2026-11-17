@@ -7,17 +7,18 @@
  * puts them on the film at the playhead. A voice whose service is not connected says so; its "Connect" opens Services.
  */
 import React from 'react';
-import { AudioLines, Loader2, MoreHorizontal, Pause, Play, Plus, RotateCw, Square, Star, Trash2 } from 'lucide-react';
+import { AudioLines, Loader2, Pause, Play, Plus, RotateCw, Square, Star, Trash2 } from 'lucide-react';
 import { useLanguage, useT, type Language } from '@/i18n';
 import { studioHost } from '@/lib/host';
 import { toggleFavorite, askHere, useLibraryHere, type HereState } from '@/lib/library';
 import { ADD_COLOR, ADD_HOVER, DownloadBadge, FOOT_ROOM, MiniPlayer, PANEL_ROUND, ROUND, type Player } from './AudioList';
 import { Empty } from './icons';
 import { SpeakDialog } from './SpeakDialog';
+import { PairPicker } from './PairPicker';
 import { CloneVoiceDialog } from './CloneVoiceDialog';
 import { ConfirmDialog } from '../ConfirmDialog';
 import { MenuSelect } from '../MenuSelect';
-import { isPrivateVoice, MY_VOICES, privateVoiceAccess, refreshPrivateVoice, removePrivateVoice, syncPrivateVoices, usePrivateVoices, type PrivateVoice } from '@/lib/private-voices';
+import { isPrivateVoice, MY_VOICES, privateVoiceAccess, refreshPrivateVoice, removePrivateVoice, usePrivateVoices, type PrivateVoice } from '@/lib/private-voices';
 import { providerName } from '@/lib/providers';
 import {
   languageOf, sampleUrl, useLibraryVoices, useServices, voiceAccess, voiceKey, voiceLook, voiceRef,
@@ -58,14 +59,15 @@ export function VoicesPane({ group, query, favorites, onServices, onAll, onMyVoi
   const services = useServices();
   const access = React.useMemo(() => voiceAccess(library?.providers ?? [], services), [library, services]);
   const [language, setLanguage] = React.useState('');
-  const [gender, setGender] = React.useState<'' | 'm' | 'f'>('');
+  /* `pair`: the pairs of voices that speak a dialogue, listed only here */
+  const [gender, setGender] = React.useState<'' | 'm' | 'f' | 'pair'>('');
+  const [choosing, setChoosing] = React.useState(false);
   const [speaking, setSpeaking] = React.useState<LibraryVoice | null>(null);
   const mine = usePrivateVoices();
-  const [dialog, setDialog] = React.useState<'clone' | 'import' | null>(null);
+  const [dialog, setDialog] = React.useState(false);
   const [removing, setRemoving] = React.useState<PrivateVoice | null>(null);
   const [problem, setProblem] = React.useState<string | null>(null);
   const [busy, setBusy] = React.useState(false);
-  const more = React.useRef<HTMLDetailsElement>(null);
   React.useEffect(() => { setLanguage(''); setGender(''); setProblem(null); }, [group]);
   const hereOf = useLibraryHere();
   const sounding = player.playing || player.loading ? player.item?.id ?? null : null;
@@ -76,7 +78,8 @@ export function VoicesPane({ group, query, favorites, onServices, onAll, onMyVoi
     : (library?.voices ?? []).filter((v) => !group || v.provider === group)), [library, group, favorites, mine.voices]);
   const accessOf = (v: LibraryVoice) => isPrivateVoice(v) ? privateVoiceAccess(v) : access[v.provider];
   const q = query.trim().toLowerCase();
-  const voices = React.useMemo(() => shown.filter((v) => (!language || languageOf(v) === language) && (!gender || v.gender === gender)
+  const pairs = shown.some((v) => v.pair);
+  const voices = React.useMemo(() => shown.filter((v) => (!language || languageOf(v) === language) && (gender === 'pair' ? v.pair : !v.pair && (!gender || v.gender === gender))
     && (!q || [v.name, v.description, v.accent, ...v.tags].some((s) => s?.toLowerCase().includes(q)))), [shown, language, gender, q]);
 
   /* the languages the voices shown speak: the person's, then the five the app speaks, then the rest by how many */
@@ -122,23 +125,17 @@ export function VoicesPane({ group, query, favorites, onServices, onAll, onMyVoi
     try { await operation(); } catch (error) { setProblem(error instanceof Error ? error.message : String(error)); }
     finally { setBusy(false); }
   };
-  const openDialog = (mode: 'clone' | 'import') => {
-    if (more.current) more.current.open = false;
+  /* voices are made with OpenFilm's service: signed out, Settings → Services opens to sign in */
+  const openDialog = () => {
     if (!mine.services.some((s) => s.connected)) { onServices(); return; }
-    player.pause(); setDialog(mode);
+    player.pause(); setDialog(true);
   };
   return (
     /* focused by a click in it, so Enter and Esc reach it */
     <div className="flex min-h-0 flex-1 flex-col outline-none" tabIndex={-1} onKeyDown={onKey}>
       {group === MY_VOICES ? <div className="flex items-center gap-2 px-3 pb-3" data-my-voices-actions="">
         <span className="mr-auto text-[12px] font-medium text-[var(--text)]">{t('myVoices.title')}</span>
-        <button type="button" disabled={busy || mine.loading} onClick={() => openDialog('clone')} className="flex h-7 items-center gap-1.5 rounded-lg bg-[var(--bg-field)] px-2.5 text-[12px] text-[var(--text)] hover:bg-[var(--bg-hover)] disabled:opacity-50"><Plus size={13} />{t('myVoices.clone')}</button>
-        <details ref={more} className="relative"><summary aria-label={t('myVoices.more')} className="grid h-7 w-7 cursor-default list-none place-items-center rounded-md text-[var(--text-muted)] hover:bg-[var(--bg-field)]"><MoreHorizontal size={15} /></summary>
-          <div className="absolute right-0 top-8 z-30 flex w-44 flex-col rounded-lg border border-[var(--border)] bg-[var(--bg-raised)] p-1 shadow-lg">
-            <button type="button" onClick={() => openDialog('import')} className="rounded-md px-2.5 py-2 text-left text-[12px] text-[var(--text)] hover:bg-[var(--bg-hover)]">{t('myVoices.import')}</button>
-            <button type="button" disabled={busy} onClick={() => { if (more.current) more.current.open = false; void run(async () => { for (const s of mine.services.filter((s) => s.connected)) await syncPrivateVoices(s.id); }); }} className="rounded-md px-2.5 py-2 text-left text-[12px] text-[var(--text)] hover:bg-[var(--bg-hover)] disabled:opacity-50">{t('myVoices.sync')}</button>
-          </div>
-        </details>
+        <button type="button" disabled={busy || mine.loading} onClick={() => openDialog()} className="flex h-7 items-center gap-1.5 rounded-lg bg-[var(--bg-field)] px-2.5 text-[12px] text-[var(--text)] hover:bg-[var(--bg-hover)] disabled:opacity-50"><Plus size={13} />{t('myVoices.clone')}</button>
       </div> : null}
       {problem || (group === MY_VOICES && mine.error) ? <p role="alert" className="px-3 pb-2 text-[11.5px] text-[var(--err)]">{problem ?? mine.error}</p> : null}
       <div className="flex items-center gap-3 px-3 pb-2">
@@ -151,8 +148,12 @@ export function VoicesPane({ group, query, favorites, onServices, onAll, onMyVoi
           <button type="button" className={chip(!gender)} aria-pressed={!gender} onClick={() => setGender('')}>{t('assetDrawer.all')}</button>
           <button type="button" className={chip(gender === 'f')} aria-pressed={gender === 'f'} onClick={() => setGender('f')}>{t('assetDrawer.female')}</button>
           <button type="button" className={chip(gender === 'm')} aria-pressed={gender === 'm'} onClick={() => setGender('m')}>{t('assetDrawer.male')}</button>
+          {pairs ? <>
+            <span aria-hidden="true" className="h-3 w-px bg-[var(--border-strong)]" />
+            <button type="button" data-voice-pairs="" className={chip(gender === 'pair')} aria-pressed={gender === 'pair'} onClick={() => setGender('pair')}>{t('assetDrawer.pair')}</button>
+          </> : null}
         </span>
-        <span className="ml-auto whitespace-nowrap text-[10.5px] text-[var(--text-faint)]">{t('assetDrawer.voiceCount').replace('{n}', String(voices.length))}</span>
+        <span className="ml-auto whitespace-nowrap text-[10.5px] text-[var(--text-faint)]">{t(gender === 'pair' ? 'assetDrawer.pairCount' : 'assetDrawer.voiceCount').replace('{n}', String(voices.length))}</span>
       </div>
       {/* a click on nothing lets the picked voice go */}
       <div
@@ -164,7 +165,7 @@ export function VoicesPane({ group, query, favorites, onServices, onAll, onMyVoi
           !library ? null
             : q || language || gender ? <Empty icon="search" text={t('assetDrawer.nothing').replace('{q}', query.trim() || languageName(language) || '')} />
               : group === STARRED ? <Empty icon="star" text={t('assetDrawer.noFavorites')} action={t('assetDrawer.seeAll')} onAction={onAll} />
-                : group === MY_VOICES ? <div className="flex flex-col items-center gap-2 py-12 text-center"><p className="text-[12.5px] text-[var(--text-muted)]">{t(mine.loading ? 'myVoices.loading' : 'myVoices.empty')}</p><button type="button" disabled={mine.loading} onClick={() => openDialog('clone')} className="rounded-lg bg-[var(--primary)] px-3 py-2 text-[12px] text-[var(--on-primary)] disabled:opacity-50">{t('myVoices.clone')}</button><button type="button" onClick={() => openDialog('import')} className="text-[11.5px] text-[var(--text-muted)] hover:text-[var(--text)]">{t('myVoices.import')}</button></div> : null
+                : group === MY_VOICES ? <div className="flex flex-col items-center gap-2 py-12 text-center"><p className="text-[12.5px] text-[var(--text-muted)]">{t(mine.loading ? 'myVoices.loading' : 'myVoices.empty')}</p><button type="button" disabled={mine.loading} onClick={() => openDialog()} className="rounded-lg bg-[var(--primary)] px-3 py-2 text-[12px] text-[var(--on-primary)] disabled:opacity-50">{t('myVoices.clone')}</button></div> : null
         ) : voices.slice(0, drawn).map((v) => {
           const key = voiceKey(v);
           const loading = player.item?.id === key && player.downloading;
@@ -181,13 +182,21 @@ export function VoicesPane({ group, query, favorites, onServices, onAll, onMyVoi
             />
           );
         })}
+        {gender === 'pair' && speak ? (
+          <button type="button" data-voice-pair-choose="" onClick={() => setChoosing(true)}
+            className="grid w-full grid-cols-[40px_minmax(0,1fr)] items-center gap-2.5 rounded-lg px-2 py-2 text-left text-[12.5px] text-[var(--text-muted)] hover:bg-[var(--bg-field)] hover:text-[var(--text)]">
+            <span className="grid h-10 w-10 place-items-center"><Plus size={16} /></span>{t('assetDrawer.pairChoose')}
+          </button>
+        ) : null}
       </div>
+      {choosing ? <PairPicker voices={(library?.voices ?? []).filter((v) => !v.pair && v.provider === 'doubao' && accessOf(v))} languageName={languageName}
+        onClose={() => setChoosing(false)} onPick={(pair) => { setChoosing(false); player.pause(); setSpeaking(pair); }} /> : null}
       <MiniPlayer target={previewBar} player={player} name={player.item?.voice.name ?? ''} />
       {speaking && speak && accessOf(speaking) ? (
         <SpeakDialog voice={speaking} service={byId.get(speaking.provider)?.name ?? speaking.provider} onClose={() => { setSpeaking(null); void mine.reload(); }}
           onSpeak={(text) => speak(speaking, accessOf(speaking)!, text)} />
       ) : null}
-      {dialog ? <CloneVoiceDialog mode={dialog} services={mine.services} projectId={projectId} onClose={() => { setDialog(null); void mine.reload(); }} onSaved={(v, useNow) => { setDialog(null); setLanguage(''); setGender(''); onMyVoices(); onPick(voiceKey(v)); if (useNow && speak) setSpeaking(v); }} /> : null}
+      {dialog ? <CloneVoiceDialog services={mine.services} projectId={projectId} onClose={() => { setDialog(false); void mine.reload(); }} onSaved={(v, useNow) => { setDialog(false); setLanguage(''); setGender(''); onMyVoices(); onPick(voiceKey(v)); if (useNow && speak) setSpeaking(v); }} /> : null}
       <ConfirmDialog open={!!removing} title={t('myVoices.remove')} description={t('myVoices.removeNote')} danger onCancel={() => setRemoving(null)} onConfirm={() => { if (removing) void run(async () => { await removePrivateVoice(removing.uid); setRemoving(null); player.close(); }); }} />
     </div>
   );
@@ -291,6 +300,16 @@ function VoiceRow({ voice, service, access, showService, picked, sounding, here,
  */
 function VoiceAvatar({ voice, sounding, loading = false, label }: { voice: LibraryVoice; sounding: boolean; loading?: boolean; label: string }) {
   const look = React.useMemo(() => voiceLook(voice), [voice]);
+  /* a pair: its two voices, one over the other */
+  if (voice.pair && voice.members?.length === 2) return (
+    <span aria-label={label} className="relative h-10 w-10 shrink-0">
+      {voice.members.map((m, i) => (
+        <span key={m.id} className={`absolute top-1.5 h-7 w-7 overflow-hidden rounded-full ring-2 ring-[var(--bg-panel)] ${i ? 'left-3' : 'left-0'}`}>
+          <span className="absolute -inset-1 blur-[2px]" style={voiceLook({ provider: voice.provider, id: m.id, gender: m.gender, age: null })} />
+        </span>
+      ))}
+    </span>
+  );
   return (
     <span aria-label={label} className="relative grid h-10 w-10 shrink-0 place-items-center">
       <span className="absolute inset-0 overflow-hidden rounded-full">
