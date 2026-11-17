@@ -633,9 +633,11 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
 
   const drawnNodes = React.useMemo(() => {
     const defaultLayer = nextCardLayer(nodes);
+    /* a group picked or held is on top while it is, with what is in it, as a card is while held */
+    const lifted = new Set(nodes.filter((node) => node.type === 'frame' && (node.selected || node.dragging)).map((node) => node.id));
     return [
-      ...nodes.map((node) => node.type === 'frame' ? node : {
-        ...node, zIndex: (node.zIndex ?? defaultLayer) + (node.dragging ? defaultLayer : 0),
+      ...nodes.map((node) => node.type === 'frame' ? { ...node, zIndex: (node.zIndex ?? -1) + (lifted.has(node.id) ? defaultLayer * 2 : 0) } : {
+        ...node, zIndex: (node.zIndex ?? defaultLayer) + (node.dragging || (node.parentId && lifted.has(node.parentId)) ? defaultLayer * 2 : 0),
         ...(born.has(node.id) ? { className: `${node.className ?? ''} ${born.get(node.id)}` } : {}),
       }),
       ...activeUploads.filter((upload) => !upload.version).map((upload): FileNode => ({

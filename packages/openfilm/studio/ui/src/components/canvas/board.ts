@@ -51,7 +51,7 @@ export function toFlow(doc: CanvasDoc): { nodes: BoardNode[]; edges: Edge[] } {
     nodes: ordered.map((n): BoardNode => {
       const base = { id: n.id, position: { x: n.x, y: n.y }, ...(n.parent ? { parentId: n.parent } : {}), ...(n.z ? { zIndex: n.z } : {}) };
       const by = n.by ? { by: n.by } : {};
-      if (n.group != null) return { ...base, type: 'frame', width: n.w ?? 480, height: n.h ?? 320, zIndex: -1, ...GROUP_HELD, data: { label: n.group, color: n.color ?? 'gray' } };
+      if (n.group != null) return { ...base, type: 'frame', width: n.w ?? 480, height: n.h ?? 320, zIndex: n.z ?? -1, ...GROUP_HELD, data: { label: n.group, color: n.color ?? 'gray' } };
       if (n.make) {
         const { id: _id, x: _x, y: _y, w: _w, h: _h, z: _z, parent: _parent, text: _text, group: _group, color: _color, cut: _cut, ...data } = n;
         /* sized as resized; else (and on a board from before cards had a height) as its shape draws it */
@@ -78,7 +78,7 @@ export function fromFlow(nodes: readonly BoardNode[], edges: readonly Edge[]): C
       if (n.type === 'file') return { ...box, ...by, ...(n.width != null && n.height != null ? { w, h: h() } : {}), path: n.data.path, ...(n.data.title ? { title: n.data.title } : {}) };
       if (n.type === 'make') return { ...box, w, h: h(), ...n.data };
       if (n.type === 'cut') return { ...box, ...by, w, h: h(), cut: true as const };
-      if (n.type === 'frame') return { id: n.id, x: box.x, y: box.y, w, h: h(), group: n.data.label, color: n.data.color };
+      if (n.type === 'frame') return { id: n.id, x: box.x, y: box.y, ...(n.zIndex && n.zIndex > 0 ? { z: n.zIndex } : {}), w, h: h(), group: n.data.label, color: n.data.color };
       return { ...box, ...by, w, h: h(), ...(n.data.title ? { title: n.data.title } : {}), text: n.data.text, ...(n.data.color ? { color: n.data.color } : {}), ...(n.data.versions?.length ? { versions: n.data.versions } : {}) };
     }),
     edges: edges.map((e) => ({ id: e.id, from: e.source, to: e.target, ...(typeof e.data?.order === 'number' ? { order: e.data.order } : {}) })),
@@ -90,14 +90,26 @@ export function nextCardLayer(nodes: readonly BoardNode[]) {
   return Math.max(0, ...nodes.map((node) => node.zIndex ?? 0)) + 1;
 }
 
+/**
+ * The board's stack after `moved` were let go: what was moved goes on top, the rest keep their order. A group is an
+ * object like a card: it moves on top with everything in it, which stays above it.
+ */
 export function raiseCards(nodes: BoardNode[], moved: readonly BoardNode[]) {
-  const ids = new Set(moved.filter((node) => node.type !== 'frame').map((node) => node.id));
+  const ids = new Set(moved.map((node) => node.id));
   if (!ids.size) return nodes;
   const defaultLayer = nextCardLayer(nodes);
-  const ordered = nodes.filter((node) => node.type !== 'frame').sort((a, b) =>
-    Number(ids.has(a.id)) - Number(ids.has(b.id)) || (a.zIndex ?? defaultLayer) - (b.zIndex ?? defaultLayer));
-  const layers = new Map(ordered.map((node, index) => [node.id, index + 1]));
-  return nodes.map((node) => node.type === 'frame' ? node : { ...node, zIndex: layers.get(node.id) });
+  /* a group's layer when it has none: under the cards, as groups always were */
+  const layerOf = (node: BoardNode) => node.zIndex ?? (node.type === 'frame' ? 0 : defaultLayer);
+  const frames = new Set(nodes.filter((node) => node.type === 'frame').map((node) => node.id));
+  const inside = (node: BoardNode) => Boolean(node.parentId && frames.has(node.parentId));
+  /* the stack's units: each group with what is in it, and each card on its own */
+  const units = nodes.filter((node) => !inside(node)).map((head) => ({
+    head, members: head.type === 'frame' ? nodes.filter((node) => node.parentId === head.id).sort((a, b) => layerOf(a) - layerOf(b)) : [],
+  }));
+  const raised = (unit: (typeof units)[number]) => Number(ids.has(unit.head.id) || unit.members.some((m) => ids.has(m.id)));
+  units.sort((a, b) => raised(a) - raised(b) || layerOf(a.head) - layerOf(b.head));
+  const layers = new Map(units.flatMap((unit) => [unit.head, ...unit.members]).map((node, index) => [node.id, index + 1]));
+  return nodes.map((node) => ({ ...node, zIndex: layers.get(node.id) ?? node.zIndex }));
 }
 
 /** A node's box on the board, whatever group it is in, as it is drawn. */

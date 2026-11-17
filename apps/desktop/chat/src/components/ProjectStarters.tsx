@@ -3,8 +3,8 @@
 /**
  * The conversation column of an empty project, before anything has been said, in its middle: the question and what to
  * do (say what film you want), then a chip for each of the two buttons at the message box's right, with the same mark:
- * the library (this project's media, the person's own and what was added) and the Community (plugins, skills and
- * material to add). A click opens it, as the button does.
+ * the Community (plugins, skills and material to add), then the library (this project's media, the person's own and
+ * what was added). A click opens it, as the button does.
  */
 import React from 'react';
 import { LibraryBig, Shapes } from 'lucide-react';
@@ -13,9 +13,10 @@ import { app } from '../app-bridge';
 
 export function ProjectStarters() {
   const t = useT();
+  /* the Community first, the library after: as the person reads left to right */
   const cards = [
-    { id: 'library', icon: <LibraryBig size={14} strokeWidth={1.75} aria-hidden />, name: t('starter.libraryName'), note: t('starter.libraryNote'), open: () => app.setAssetsOpen(true) },
     ...(app.showExamples ? [{ id: 'community', icon: <Shapes size={14} strokeWidth={1.75} aria-hidden />, name: t('starter.communityName'), note: t('starter.communityNote'), open: () => app.showExamples?.({ kind: 'plugins' }) }] : []),
+    { id: 'library', icon: <LibraryBig size={14} strokeWidth={1.75} aria-hidden />, name: t('starter.libraryName'), note: t('starter.libraryNote'), open: () => app.setAssetsOpen(true) },
   ];
   return (
     <div className="mx-auto flex w-full max-w-[360px] flex-col items-center py-2 text-center" data-project-starters="">
