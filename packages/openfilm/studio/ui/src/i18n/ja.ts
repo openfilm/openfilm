@@ -1725,6 +1725,7 @@ export const ja: Words = {
     pluginSkills: "エージェントに教えるスキル",
     pluginOffNote: "オフにすると、エディターは表示されず、エージェントはそのスキルを受け取りません。これで作った映像は同じように再生・書き出しできます。",
     pluginSoonNote: "OpenFilm の全体が見えるように載せています。まだオンにできません。",
+    docAbout: "できること",
     metric_type: "種類",
     metricTip_type: "これは何か：独自の画面を持つエディター、またはエージェントがチャットで使うスキル",
     typeNote_editor: "独自の画面",

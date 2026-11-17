@@ -29,10 +29,11 @@ import { ConfirmDialog } from '../ConfirmDialog';
 import { Publisher } from '../ExamplesGallery';
 import type { ContextMenuEntry } from '../ContextMenu';
 import {
-  BringsLine, byOrder, CommandChips, ForDevelopers, HowToUse, TrustMark, hostOf, useScriptsConsent, inLanguage, PageSection, SkillCover, SkillMark, SkillPage, useSkillWords,
+  byOrder, TrustMark, hostOf, useScriptsConsent, inLanguage, SkillCover, SkillMark, SkillPage, useSkillWords,
 } from '../SkillPage';
-import { CATEGORIES, categoryOfSkill, usesOfPlugin, type Category } from '@/lib/plugin-profile';
+import { CATEGORIES, categoryOfSkill, type Category } from '@/lib/plugin-profile';
 import { ProfileStrip } from './PluginProfile';
+import { DocLines, DocOff, DocSay, DocSection, DocSteps, sortDetails } from './DocSections';
 import { SettingsButton, SettingsGroup, SettingsSwitch } from '../settings/ui';
 import { LARGE_DIALOG_COLUMN as PAGE_INSET } from '../dialog-chrome';
 import { ASSET_KINDS, COMMUNITY_ICON, KindIcon, isCodeKind, type FeatureKind } from '../feature-kinds';
@@ -261,7 +262,7 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
   /* a page: one of OpenFilm's own plugins, or a skill asked for by uid or by the name agents know it by (the chat's) */
   const ownPage = opened?.startsWith(PLUGIN_PAGE) ? own.find((p) => p.id === opened.slice(PLUGIN_PAGE.length)) : undefined;
   if (ownPage) {
-    return <PluginPage plugin={ownPage} skills={skills} error={error} onBack={() => open(null)} onOpen={open}
+    return <PluginPage plugin={ownPage} error={error} onBack={() => open(null)}
       onTurn={ownPage.soon ? undefined : (on) => turnPlugin(ownPage, on)} onRemove={ownPage.builtIn || !isInstalled(ownPage) ? undefined : () => dropPlugin(ownPage)}
       {...(ownPage.mcpServers && connectorStates ? { connector: { state: isInstalled(ownPage) ? connectorStates.get(ownPage.id) : undefined, onGet: () => turnPlugin(ownPage, true) } } : {})} />;
   }
@@ -766,8 +767,8 @@ function HeroButton({ label, onClick }: { label: string; onClick: () => void }) 
  * what to do (Get; once got Turn off or Turn on, and Remove, which one OpenFilm comes with has not: it is turned off);
  * then what it does, how to use it and what it brings, its facts at the side.
  */
-function PluginPage({ plugin, skills, error, onBack, onOpen, onTurn, onRemove, connector }: {
-  plugin: Plugin; skills: readonly SkillEntry[]; error: string | null; onBack: () => void; onOpen: (key: string) => void;
+function PluginPage({ plugin, error, onBack, onTurn, onRemove, connector }: {
+  plugin: Plugin; error: string | null; onBack: () => void;
   /** a connector in the app: its sign-in's state, and Get (connecting follows) */
   connector?: { state: HostConnector | undefined; onGet: () => void } | undefined;
   /** got and turned on, or off (none: not made yet) */
@@ -778,9 +779,7 @@ function PluginPage({ plugin, skills, error, onBack, onOpen, onTurn, onRemove, c
   const t = useT();
   const lang = useLanguage();
   const { title, summary } = usePluginWords()(plugin);
-  const skillWords = useSkillWords();
   const details = inLanguage(plugin.details, lang);
-  const taught = plugin.skills.map((name) => skills.find((k) => k.core && k.name === name)).filter((k): k is SkillEntry => k != null);
   const how = plugin.workbench ? (pickedOnTimeline(plugin) ? 'assetDrawer.howTimeline' : 'assetDrawer.howWorkbench') : plugin.tab ? 'assetDrawer.howTab' : null;
   const got = isInstalled(plugin);
   const kind = t(plugin.mcpServers ? 'assetDrawer.kind_connector' : plugin.workbench || plugin.tab ? 'assetDrawer.kind_editor' : 'assetDrawer.kind_skill');
@@ -810,50 +809,19 @@ function PluginPage({ plugin, skills, error, onBack, onOpen, onTurn, onRemove, c
         ]} />
       )}>
       {/* a connector: connected or not, what to say, how it works and what it can do */}
-      {connector ? <ConnectorBody plugin={plugin} title={title} state={connector.state} /> : <ProfileStrip profile={plugin.profile} uses={usesOfPlugin(plugin)} />}
-      {details && !connector ? <PluginDetails text={details} className="mt-2" /> : null}
-      {how && !plugin.soon ? <HowToUse where text={t(how)} /> : null}
-      {/* a connector: got and on, the agent reaches the service; it signs in there the first time, as in its terminal */}
-      {plugin.mcpServers && !details && !connector ? <HowToUse text={t('assetDrawer.howConnector').replaceAll('{name}', title)} /> : null}
-      {/* what turning it off does: a connector's; one coming soon says so (an editor's is in its own words, under 关掉后) */}
-      {plugin.mcpServers || plugin.soon || !details ? <p className="mt-5 text-[13.5px] leading-[20px] text-[var(--text-faint)]">{plugin.mcpServers ? t('assetDrawer.connectorOffNote').replaceAll('{name}', title) : t(plugin.soon ? 'assetDrawer.pluginSoonNote' : 'assetDrawer.pluginOffNote')}</p> : null}
-      {/* what it is made of, for whoever makes such things: folded */}
-      <ForDevelopers>
-        <PageSection title={t('assetDrawer.pluginBrings')}>
-          {plugin.workbench ? <BringsLine kind={t('assetDrawer.brings_workbench')}>{title}</BringsLine> : null}
-          {plugin.tab ? <BringsLine kind={t('assetDrawer.brings_tab')}>{inLanguage(plugin.tab.title, lang) ?? title}</BringsLine> : null}
-          {/* a connector's MCP servers, each where it is (an address, or the program run) */}
-          {plugin.mcpServers ? (
-            <BringsLine kind={t('assetDrawer.brings_mcp')}>
-              {Object.entries(plugin.mcpServers).map(([name, server]) => (
-                <div key={name} className="truncate font-mono text-[12.5px] text-[var(--text-muted)]" data-connector-server={name}>
-                  {name} · {server.type === 'http' ? server.url : server.command}
-                </div>
-              ))}
-            </BringsLine>
-          ) : null}
-          {/* the skills it teaches an agent, each opening its own page */}
-          {taught.length ? (
-            <BringsLine kind={t('assetDrawer.brings_skill')}>
-              {taught.map((k) => (
-                <div key={k.uid} role="button" tabIndex={0} onClick={() => onOpen(k.uid)} onKeyDown={(e) => { if (e.key === 'Enter') onOpen(k.uid); }}
-                  className="-mx-1 flex cursor-pointer items-center gap-2.5 rounded-[8px] px-1 py-1 outline-none hover:bg-[var(--bg-hover)] focus-visible:ring-1 focus-visible:ring-[var(--accent)]">
-                  <span className={k.off ? 'opacity-50' : ''}><SkillMark skill={k} /></span>
-                  <div className="min-w-0 flex-1">
-                    <div className={`truncate text-[14px] font-medium leading-[17px] ${k.off ? 'text-[var(--text-muted)]' : 'text-[var(--text)]'}`}>{skillWords(k).title}</div>
-                    <div className="line-clamp-2 text-[12px] leading-[15px] text-[var(--text-faint)]">{k.description}</div>
-                  </div>
-                </div>
-              ))}
-            </BringsLine>
-          ) : null}
-          {plugin.commands?.length ? <BringsLine kind={t('assetDrawer.brings_commands')}><CommandChips name={plugin.id} commands={plugin.commands} /></BringsLine> : null}
-        </PageSection>
-        <div className="mt-4 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[13.5px] text-[var(--text-muted)]">
-          <span className="shrink-0">{t('assetDrawer.pluginPart')}</span>
-          <span className="min-w-0 truncate font-mono text-[12px] text-[var(--text-faint)]">openfilm/{plugin.id}</span>
-        </div>
-      </ForDevelopers>
+      {/* the page laid out as every editor's, connector's and skill's: what it does, how to use it, what to say, off */}
+      {connector ? <ConnectorBody plugin={plugin} title={title} state={connector.state} /> : (() => {
+        const sorted = sortDetails(details);
+        const steps = [...(how && !plugin.soon ? [t(how)] : []), ...sorted.how];
+        const examples = plugin.examples?.[lang] ?? plugin.examples?.en ?? [];
+        return <>
+          <ProfileStrip profile={plugin.profile} />
+          {sorted.about.length ? <DocSection title={t('assetDrawer.docAbout')}><DocLines lines={sorted.about} /></DocSection> : null}
+          {steps.length ? <DocSection title={t('assetDrawer.connectorHow')}><DocSteps steps={steps} /></DocSection> : null}
+          {examples.length ? <DocSection title={t('assetDrawer.connectorSay')}><DocSay examples={examples} /></DocSection> : null}
+          <DocOff text={plugin.soon ? t('assetDrawer.pluginSoonNote') : sorted.off ?? t('assetDrawer.pluginOffNote')} />
+        </>;
+      })()}
     </DetailShell>
   );
 }
@@ -1150,14 +1118,16 @@ function AssetShow({ item, lang }: { item: LibraryItem; lang: ReturnType<typeof 
   );
 }
 
-/** One of the person's own in Mine: Off when it is, and its gear (turn it off or on, remove it, its page). */
+/**
+ * One of the person's own in Mine: a switch that turns it on or off (its menu's "turn"); removing it and its page are
+ * on the page it opens. A connector says whether it is connected beside it.
+ */
 function MineControl({ off, label, items, note }: { off: boolean; label: string; items: readonly ContextMenuEntry[]; note?: string | undefined }) {
-  const t = useT();
+  const turn = items.find((item): item is ContextMenuEntry & { onSelect: () => void } => 'id' in item && item.id === 'turn' && 'onSelect' in item);
   return (
-    <span className="flex items-center gap-1.5">
+    <span className="flex items-center gap-2.5" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
       {note && !off ? <span className="rounded-full bg-[var(--bg-pressed)] px-2 py-0.5 text-[11.5px] font-medium text-[var(--text-muted)]">{note}</span> : null}
-      {off ? <span className="rounded-full bg-[var(--bg-pressed)] px-2 py-0.5 text-[11.5px] font-medium text-[var(--text-muted)]">{t('assetDrawer.stateOff')}</span> : null}
-      <ManageButton label={label} items={items} />
+      {turn ? <SettingsSwitch checked={!off} label={label} onChange={() => turn.onSelect()} /> : null}
     </span>
   );
 }

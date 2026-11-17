@@ -12,15 +12,16 @@
 import React from 'react';
 import { AppIcon } from './AppIcon';
 import {
-  AudioLines, BadgeCheck, ChevronRight, Clapperboard, Flag, Folder, GitBranch, Github, MessageSquarePlus, Palette, RefreshCw, Scissors, Shapes, Trash2, Wand2, Wrench, type LucideIcon,
+  AudioLines, BadgeCheck, Clapperboard, Flag, Folder, GitBranch, Github, MessageSquarePlus, Palette, RefreshCw, Scissors, Shapes, Trash2, Wand2, Wrench, type LucideIcon,
 } from 'lucide-react';
 import { useLanguage, useT } from '@/i18n';
 import { usePlugins } from '@/lib/plugins';
 import { isPlugin } from '@/lib/project-plugins';
 import { communityOf, makerOf, ownerOf, sourcesApi, type SkillEntry } from '@/lib/project-sources';
-import { categoryOfSkill, usesOfSkill, type Category } from '@/lib/plugin-profile';
+import { categoryOfSkill, type Category } from '@/lib/plugin-profile';
 import { ConfirmDialog } from './ConfirmDialog';
 import { ProfileStrip } from './library/PluginProfile';
+import { DocLines, DocOff, DocSection, DocSteps, sortDetails } from './library/DocSections';
 import { SettingsSwitch } from './settings/ui';
 import { DetailShell, Facts, PageButton } from './library/Store';
 
@@ -45,61 +46,6 @@ export function useSkillWords() {
 
 /** An official one not installed is in the catalog only; the person's own and a project's are installed already. */
 const installedOf = (skill: SkillEntry) => skill.installed !== false;
-
-/** What a page's thing is made of (the skills an agent is given, commands, its name for code), folded under "For developers":
-    a person deciding whether to use it needs none of it. */
-export function ForDevelopers({ children }: { children: React.ReactNode }) {
-  const t = useT();
-  return (
-    <details className="group mt-6 border-t border-[var(--border)] pt-3">
-      <summary className="flex cursor-pointer list-none items-center gap-1.5 text-[13.5px] text-[var(--text-faint)] outline-none transition hover:text-[var(--text-muted)] [&::-webkit-details-marker]:hidden">
-        <ChevronRight size={14} className="transition-transform group-open:rotate-90" aria-hidden />{t('assetDrawer.forDevelopers')}
-      </summary>
-      <div className="pt-1">{children}</div>
-    </details>
-  );
-}
-
-/** A part of a plugin's or a skill's page: its head, and what is under it. */
-export function PageSection({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <section className="mt-5">
-      <h3 className="mb-1.5 text-[13px] font-medium text-[var(--text-muted)]">{title}</h3>
-      {children}
-    </section>
-  );
-}
-
-/** How to use it (or, `where`, where to open it), in one line under its head. */
-export function HowToUse({ text, where = false }: { text: string; where?: boolean }) {
-  const t = useT();
-  return (
-    <p data-how-to-use="" className="mt-4 rounded-[10px] bg-[var(--bg-field)] px-3 py-2 text-[14px] leading-[19px] text-[var(--text)]">
-      <span className="font-medium">{t(where ? 'assetDrawer.whereToOpen' : 'assetDrawer.howToUse')}</span> <span className="text-[var(--text-muted)]">{text}</span>
-    </p>
-  );
-}
-
-/** One thing it brings: what it is, and under it its name or what it is for. */
-export function BringsLine({ kind, children }: { kind: string; children: React.ReactNode }) {
-  return (
-    <div className="py-1 text-[14px] leading-[18px]">
-      <div className="text-[12px] leading-[15px] text-[var(--text-faint)]">{kind}</div>
-      <div className="mt-0.5 min-w-0 text-[var(--text)]">{children}</div>
-    </div>
-  );
-}
-
-/** The commands it brings, as an agent (or a plugin) runs them: `openfilm <its name> <command>`. */
-export function CommandChips({ name, commands }: { name: string; commands: readonly string[] }) {
-  return (
-    <div className="flex flex-wrap gap-1.5">
-      {commands.map((c) => (
-        <code key={c} className="rounded-[5px] border border-[var(--border)] px-1.5 py-[1px] font-mono text-[12px] text-[var(--text-muted)]">openfilm {name}{c === name ? '' : ` ${c}`}</code>
-      ))}
-    </div>
-  );
-}
 
 export function SkillPage({ skill, setSkills, projectId, onBack, onTry, onOn, onAuthor }: {
   skill: SkillEntry;
@@ -297,34 +243,31 @@ export function SkillPage({ skill, setSkills, projectId, onBack, onTry, onOn, on
         </PageBlock>
       ) : null}
 
-      {/* what it does: its details, a line's lead ("When it is used:") a shade brighter, to find at a glance */}
-      {details || needs || (skill.elsewhere && skill.platforms) || skill.origin ? (
-        <PageBlock title={t('assetDrawer.sectionAbout')}>
-          <Origin skill={skill} />
-          {details ? details.split('\n').map((line) => {
-            const lead = /^(.{1,24}?[：:])\s*(.+)$/.exec(line);
-            return (
-              <p key={line} className="mt-2 text-[14.5px] leading-[22px] text-[var(--text-muted)]">
-                {lead ? <><span className="font-medium text-[var(--text)]">{lead[1]}</span> {lead[2]}</> : line}
-              </p>
-            );
-          }) : null}
-          {/* the computers it runs on, when this one is not among them; what it needs beyond OpenFilm */}
-          {skill.elsewhere && skill.platforms ? (
-            <p role="note" className="mt-2.5 text-[14px] leading-[20px] text-[var(--warn)]">
-              {t('gallery.onlyOn').replace('{where}', skill.platforms.map((p) => t(`gallery.platform_${p}`)).join(' / '))}</p>
+      {/* laid out as every editor's and connector's page: how it measures up, what it does, how to use it */}
+      {skill.profile ? <ProfileStrip profile={skill.profile} /> : null}
+      {(() => {
+        const sorted = sortDetails(details ?? undefined);
+        const steps = [...(installed ? [t(!plugin ? 'assetDrawer.howSkill' : skill.tab ? 'assetDrawer.howTab' : 'assetDrawer.howWorkbench')] : []), ...sorted.how];
+        return <>
+          {sorted.about.length || needs || (skill.elsewhere && skill.platforms) || skill.origin ? (
+            <DocSection title={t('assetDrawer.docAbout')}>
+              <Origin skill={skill} />
+              <DocLines lines={sorted.about} />
+              {/* the computers it runs on, when this one is not among them; what it needs beyond OpenFilm */}
+              {skill.elsewhere && skill.platforms ? (
+                <p role="note" className="mt-2.5 text-[14px] leading-[20px] text-[var(--warn)]">
+                  {t('gallery.onlyOn').replace('{where}', skill.platforms.map((p) => t(`gallery.platform_${p}`)).join(' / '))}</p>
+              ) : null}
+              {needs ? <p className="mt-2.5 text-[14px] leading-[20px] text-[var(--text-muted)]"><span className="font-medium text-[var(--text)]">{t('gallery.needs')}</span> {needs}</p> : null}
+            </DocSection>
           ) : null}
-          {needs ? <p className="mt-2.5 text-[14px] leading-[20px] text-[var(--text-muted)]"><span className="font-medium text-[var(--text)]">{t('gallery.needs')}</span> {needs}</p> : null}
-        </PageBlock>
-      ) : null}
-
-      {/* summed up as a model's page does: how hard, how little work, what it costs, how it is used, who it is for */}
-      {skill.profile ? <PageBlock title={t('assetDrawer.sectionProfile')}><ProfileStrip profile={skill.profile} uses={usesOfSkill(skill)} /></PageBlock> : null}
-      {/* how to use it: a plugin's surface where it is, else ask the agent */}
-      {installed ? <HowToUse text={t(!plugin ? 'assetDrawer.howSkill' : skill.tab ? 'assetDrawer.howTab' : 'assetDrawer.howWorkbench')} /> : null}
+          {steps.length ? <DocSection title={t('assetDrawer.connectorHow')}><DocSteps steps={steps} /></DocSection> : null}
+          {sorted.off ? <DocOff text={sorted.off} /> : null}
+        </>;
+      })()}
 
       {(skill.scripts > 0 && !skill.core) || ((skill.surface || skill.program || skill.inApp) && installed) ? (
-        <PageBlock title={t('assetDrawer.pluginMay')}>
+        <DocSection title={t('assetDrawer.pluginMay')}>
           {/* scripts it brings run on this computer, with the agent's access */}
           {skill.scripts > 0 && !skill.core ? (
             <p className="text-[14px] leading-[20px] text-[var(--text-muted)]">{t(skill.scripts === 1 ? 'gallery.scriptsOne' : 'gallery.scriptsMany').replace('{n}', String(skill.scripts))}</p>
@@ -359,20 +302,9 @@ export function SkillPage({ skill, setSkills, projectId, onBack, onTry, onOn, on
               <p className="mt-1 text-[13px] leading-[17px] text-[var(--text-muted)]">{t('gallery.pluginRunsNote')}</p>
             </div>
           ) : null}
-        </PageBlock>
+        </DocSection>
       ) : null}
 
-      {/* what it is made of, for whoever makes such things: folded */}
-      <ForDevelopers>
-      <PageSection title={t('assetDrawer.pluginBrings')}>
-        {plugin ? <BringsLine kind={t(skill.tab ? 'assetDrawer.brings_tab' : 'assetDrawer.brings_workbench')}>{inLanguage(skill.tab?.title, lang) ?? words.title}</BringsLine> : null}
-        {/* the skill an agent is given, with what it is told of it */}
-        <BringsLine kind={t('assetDrawer.brings_skill')}><span className="font-mono text-[13px]">{skill.as ?? skill.name}</span><span className="block text-[13px] leading-[17px] text-[var(--text-muted)]">{skill.description}</span></BringsLine>
-        {skill.commands?.length ? <BringsLine kind={t('assetDrawer.brings_commands')}><CommandChips name={skill.name} commands={skill.commands} /></BringsLine> : null}
-      </PageSection>
-      {/* its uid, owner/name: how it is told apart, shared and searched */}
-      <p className="mt-4 truncate font-mono text-[12px] text-[var(--text-faint)]" title={skill.uid}>{skill.uid}</p>
-      </ForDevelopers>
       {/* the quiet end: reporting one from the community */}
       {ownerOf(skill) !== 'openfilm' && skill.source !== 'mine' && skill.source !== 'project' ? (
         <div className="mt-6">

@@ -1725,6 +1725,7 @@ export const es: Words = {
     pluginSkills: "Skills que enseña a tu agente",
     pluginOffNote: "Desactivado, su espacio de trabajo se oculta y tu agente no recibe sus skills. Un vídeo hecho con él se reproduce y se exporta igual.",
     pluginSoonNote: "Aparece para que veas todo OpenFilm. Todavía no se puede activar.",
+    docAbout: "Qué hace",
     metric_type: "Tipo",
     metricTip_type: "Qué es: un editor con su propia interfaz, o una habilidad que tu agente usa en la conversación",
     typeNote_editor: "Su propia interfaz",

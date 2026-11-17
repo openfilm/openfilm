@@ -4,6 +4,8 @@
  */
 import * as React from 'react';
 
+export interface Shortcut { keys: readonly string[]; label: string }
+
 export function Keys({ keys, small = false }: { keys: readonly string[]; small?: boolean }) {
   return (
     <span className="flex shrink-0 items-center gap-1">

@@ -1736,6 +1736,7 @@ export const zhCN: Words = {
     pluginSkills: "它教给智能体的技能",
     pluginOffNote: "关掉后，它的编辑器不显示，智能体也拿不到它的技能。用它做出来的片子照样播放和导出。",
     pluginSoonNote: "列在这里是为了让你看到 OpenFilm 的全貌，现在还不能打开。",
+    docAbout: "它能做什么",
     metric_type: "类型",
     metricTip_type: "它是什么：有自己界面的编辑器，或智能体在对话里用的技能",
     typeNote_editor: "有自己的界面",

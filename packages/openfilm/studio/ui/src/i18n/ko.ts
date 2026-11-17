@@ -1723,6 +1723,7 @@ export const ko: Words = {
     pluginSkills: "에이전트에게 알려 주는 스킬",
     pluginOffNote: "끄면 에디터가 보이지 않고, 에이전트가 그 스킬을 받지 않습니다. 이것으로 만든 영상은 똑같이 재생되고 내보내집니다.",
     pluginSoonNote: "OpenFilm의 전체 모습을 볼 수 있도록 올려 두었습니다. 아직 켤 수 없습니다.",
+    docAbout: "할 수 있는 일",
     metric_type: "유형",
     metricTip_type: "무엇인지: 자체 화면이 있는 에디터, 또는 에이전트가 대화에서 쓰는 스킬",
     typeNote_editor: "자체 화면",

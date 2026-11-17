@@ -1737,6 +1737,7 @@ export const en = {
     pluginSkills: "Skills it teaches your agent",
     pluginOffNote: "Off, its editor is hidden and your agent is not given its skills. A film made with it plays and exports the same.",
     pluginSoonNote: "Listed so you can see the whole of OpenFilm. It cannot be turned on yet.",
+    docAbout: "What it does",
     metric_type: "Type",
     metricTip_type: "What it is: an editor with its own interface, or a skill your agent uses in the chat",
     typeNote_editor: "Its own interface",

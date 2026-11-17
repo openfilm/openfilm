@@ -5,11 +5,11 @@
  * those) and how it works. Signing in is the desktop app's (lib/host connectors): once, in the browser, for every agent.
  */
 import React from 'react';
-import { Check, Eye, Loader2, MessageSquarePlus, PencilLine, Plug, Unplug } from 'lucide-react';
+import { Check, Eye, Loader2, PencilLine, Plug, Unplug } from 'lucide-react';
 import { useLanguage, useT } from '@/i18n';
+import { DocOff, DocSay, DocSection, DocSteps } from './DocSections';
 import { studioHost, type HostConnector } from '@/lib/host';
 import type { Plugin } from '@/lib/plugins';
-import { closePlugins } from '@/lib/plugins-window';
 import { PageButton } from './Store';
 
 /** Every connector's state, kept up to date (none: Studio without the app, where connectors are not signed in). */
@@ -83,47 +83,16 @@ export function ConnectorBody({ plugin, title, state }: { plugin: Plugin; title:
   const examples = plugin.examples?.[lang] ?? plugin.examples?.en ?? [];
   const read = state?.tools.filter((tool) => tool.readOnly) ?? [];
   const write = state?.tools.filter((tool) => !tool.readOnly) ?? [];
-  const say = (text: string) => { studioHost?.ask?.({ text, refs: [] }); closePlugins(); };
+  /* laid out as every editor's and skill's page: what it does, how to use it, what to say, then what turning it off does */
   return (
-    <div className="flex flex-col gap-8" data-connector-body={plugin.id}>
-      {state?.error ? <p role="alert" className="rounded-[10px] bg-[var(--bg-field)] px-4 py-3 text-[13.5px] text-[var(--warn)]">{t('assetDrawer.connectorFailed').replace('{why}', state.error)}</p> : null}
-      {state?.expired ? <p role="status" className="rounded-[10px] bg-[var(--bg-field)] px-4 py-3 text-[13.5px] text-[var(--text-muted)]">{t('assetDrawer.connectorExpired').replace('{name}', title)}</p> : null}
-
-      {/* what to say: each a line put in the chat by a click */}
-      {examples.length ? (
-        <section>
-          <h3 className="text-[16px] font-semibold text-[var(--text)]">{t('assetDrawer.connectorSay')}</h3>
-          <p className="mt-0.5 text-[13px] text-[var(--text-faint)]">{t(state?.connected ? 'assetDrawer.connectorSayNote' : 'assetDrawer.connectorSayFirst').replaceAll('{name}', title)}</p>
-          <div className="mt-3 flex flex-col gap-2">
-            {examples.map((text) => (
-              <button key={text} type="button" disabled={!studioHost?.ask} onClick={() => say(text)} data-connector-example=""
-                className="group flex items-center gap-3 rounded-[12px] bg-[var(--bg-field)] px-4 py-3 text-left text-[14px] leading-[20px] text-[var(--text)] transition hover:bg-[var(--bg-hover)] disabled:cursor-default disabled:hover:bg-[var(--bg-field)]">
-                <span className="min-w-0 flex-1">「{text}」</span>
-                {studioHost?.ask ? <MessageSquarePlus size={15} className="shrink-0 text-[var(--text-faint)] transition group-hover:text-[var(--text)]" aria-hidden /> : null}
-              </button>
-            ))}
-          </div>
-        </section>
-      ) : null}
-
-      {/* how it works, in three steps */}
-      <section>
-        <h3 className="text-[16px] font-semibold text-[var(--text)]">{t('assetDrawer.connectorHow')}</h3>
-        <ol className="mt-3 flex flex-col gap-2.5">
-          {['connectorStep1', 'connectorStep2', 'connectorStep3'].map((key, i) => (
-            <li key={key} className="flex items-start gap-3 text-[14px] leading-[20px] text-[var(--text-muted)]">
-              <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-[var(--bg-pressed)] text-[11.5px] font-semibold tabular-nums text-[var(--text)]">{i + 1}</span>
-              <span>{t(`assetDrawer.${key}`).replaceAll('{name}', title)}</span>
-            </li>
-          ))}
-        </ol>
-      </section>
+    <div data-connector-body={plugin.id}>
+      {state?.error ? <p role="alert" className="mt-6 rounded-[10px] bg-[var(--bg-field)] px-4 py-3 text-[13.5px] text-[var(--warn)]">{t('assetDrawer.connectorFailed').replace('{why}', state.error)}</p> : null}
+      {state?.expired ? <p role="status" className="mt-6 rounded-[10px] bg-[var(--bg-field)] px-4 py-3 text-[13.5px] text-[var(--text-muted)]">{t('assetDrawer.connectorExpired').replace('{name}', title)}</p> : null}
 
       {/* what it can do: the tools its server offers, read apart from those that change things */}
-      <section>
-        <h3 className="text-[16px] font-semibold text-[var(--text)]">{t('assetDrawer.connectorTools')}</h3>
+      <DocSection title={t('assetDrawer.docAbout')} note={state?.connected ? undefined : t('assetDrawer.connectorToolsLater').replace('{name}', title)}>
         {state?.connected ? (
-          <div className="mt-3 grid gap-5 sm:grid-cols-2">
+          <div className="grid gap-5 sm:grid-cols-2">
             {[{ list: read, icon: Eye, key: 'connectorToolsRead' }, { list: write, icon: PencilLine, key: 'connectorToolsWrite' }].filter((g) => g.list.length).map((g) => (
               <div key={g.key}>
                 <div className="flex items-center gap-1.5 text-[12.5px] font-medium text-[var(--text-faint)]"><g.icon size={13} aria-hidden />{t(`assetDrawer.${g.key}`)}</div>
@@ -135,8 +104,22 @@ export function ConnectorBody({ plugin, title, state }: { plugin: Plugin; title:
               </div>
             ))}
           </div>
-        ) : <p className="mt-1.5 text-[13.5px] text-[var(--text-faint)]">{t('assetDrawer.connectorToolsLater').replace('{name}', title)}</p>}
-      </section>
+        ) : null}
+      </DocSection>
+
+      {/* how it works, in three steps */}
+      <DocSection title={t('assetDrawer.connectorHow')}>
+        <DocSteps steps={['connectorStep1', 'connectorStep2', 'connectorStep3'].map((key) => t(`assetDrawer.${key}`).replaceAll('{name}', title))} />
+      </DocSection>
+
+      {/* what to say: each a line put in the chat by a click */}
+      {examples.length ? (
+        <DocSection title={t('assetDrawer.connectorSay')} note={t(state?.connected ? 'assetDrawer.connectorSayNote' : 'assetDrawer.connectorSayFirst').replaceAll('{name}', title)}>
+          <DocSay examples={examples} />
+        </DocSection>
+      ) : null}
+
+      <DocOff text={t('assetDrawer.connectorOffNote').replaceAll('{name}', title)} />
     </div>
   );
 }

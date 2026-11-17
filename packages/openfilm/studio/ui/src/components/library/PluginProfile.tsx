@@ -1,15 +1,15 @@
 /**
  * A plugin's or a skill's profile as its page shows it at the top, the way a model's page sums a model up: a strip of
- * a few measures, each a mark to read at a glance and its word under it (what it is: an editor or a skill; how hard it
- * is to start with, as dots; how much the agent does, as bolts), and who it is for across the foot; a measure it has
- * nothing for is left out. Every plugin is free, so cost is not one of them.
+ * a few measures, each a mark to read at a glance and its word under it (how hard it is to start with, as dots; how
+ * much the agent does, as bolts), and who it is for across the foot; a measure it has nothing for is left out. What
+ * it is (an editor, a skill) is said under its name, and every plugin is free, so neither is a measure here.
  */
 import React from 'react';
 import {
-  AppWindow, MessageSquare, Zap,
+  Zap,
 } from 'lucide-react';
 import { useLanguage, useT } from '@/i18n';
-import type { Profile, Use } from '@/lib/plugin-profile';
+import type { Profile } from '@/lib/plugin-profile';
 import { inLanguage } from '../SkillPage';
 
 /** A measure of five, as marks: so many lit, the rest dim. */
@@ -35,13 +35,10 @@ function Cell({ name, tip, children, word }: { name: string; tip: string; childr
 }
 
 /**
- * The strip: the measures its profile has, and how it is used (`uses`); who it is for across its foot. A thing with
- * no profile shows how it is used only.
+ * The strip: the measures its profile has; who it is for across its foot. Nothing to show: no strip.
  */
-export function ProfileStrip({ profile, uses: all }: { profile: Profile | undefined; uses: readonly Use[] }) {
+export function ProfileStrip({ profile }: { profile: Profile | undefined }) {
   const t = useT();
-  /* where a person meets it: its editor, the conversation (its commands are for code and agents, in its page's fold) */
-  const uses = all.filter((u) => u !== 'commands');
   const lang = useLanguage();
   const audience = inLanguage(profile?.audience, lang);
   const cells: React.ReactNode[] = [];
@@ -59,16 +56,6 @@ export function ProfileStrip({ profile, uses: all }: { profile: Profile | undefi
       </Cell>,
     );
   }
-  /* what it is: an editor (an interface of its own, picked at the top right) or a skill (the agent uses it in the chat) */
-  const editor = uses.includes('surface');
-  const TypeMark = editor ? AppWindow : MessageSquare;
-  cells.unshift(
-    <Cell key="type" name={t('assetDrawer.metric_type')} tip={t('assetDrawer.metricTip_type')} word={t(editor ? 'assetDrawer.typeNote_editor' : 'assetDrawer.typeNote_skill')}>
-      <span className="flex items-center gap-1.5 text-[15px] font-semibold leading-none text-[var(--text)]">
-        <TypeMark size={15} strokeWidth={2} aria-hidden />{t(editor ? 'assetDrawer.kind_editor' : 'assetDrawer.kind_skill')}
-      </span>
-    </Cell>,
-  );
   /* nothing to say (one still being made, with no profile yet): no strip */
   if (!cells.length && !audience) return null;
   return (
