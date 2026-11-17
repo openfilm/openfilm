@@ -121,3 +121,28 @@ test('a pack that names a thing of another maker, or a thing twice, makes the ca
   assert.throws(() => decodeForTest({ version: 1, items: [item], packs: [pack({ by: 'one', id: 'Bad Slug' })] }), /pack/);
   assert.equal(decodeForTest({ version: 1, items: [item], packs: [pack({ by: 'one' })] }).packs[0].id, 'one/p');
 });
+
+test('a text style, a filter and a sticker read from the catalog as the library draws them', async () => {
+  const { decodeForTest } = await import('./community-library.mjs');
+  const hex = (c) => c.repeat(64);
+  const file = (c) => ({ sha256: hex(c), bytes: 10 });
+  const name = { en: 'X', 'zh-CN': 'X', ja: 'X', ko: 'X', es: 'X' };
+  const base = { version: 1, revision: hex('a'), name, about: 'A test item.', tags: ['test'], by: 'tester' };
+  const grade = { sat: 0.9, all: Array.from({ length: 17 }, (_, i) => i / 16) };
+  const catalog = decodeForTest({ version: 1, items: [
+    { ...base, id: 'text/bold', durationMs: 0, vars: { '--weight': '900' }, files: {} },
+    { ...base, id: 'filter/warm', durationMs: 0, grade, files: { 'sample.jpg': file('b') } },
+    { ...base, id: 'sticker/star', durationMs: 3000, w: 400, h: 300, files: { 'saved.json': file('c'), 'files/sticker.html': file('d'), 'files/sticker.png': file('e') } },
+  ] });
+  const [text, filter, sticker] = catalog.items;
+  assert.equal(text.kind, 'textstyle');
+  assert.deepEqual(text.vars, { '--weight': '900' });
+  assert.equal(filter.kind, 'look');
+  assert.deepEqual(filter.grade, grade);
+  assert.match(String(filter.sample), /filter\/warm-v1-a+\/sample\.jpg$/);
+  assert.equal(sticker.kind, 'page');
+  assert.equal(sticker.src, 'sticker.html');
+  assert.deepEqual([sticker.w, sticker.h], [400, 300]);
+  assert.equal(catalog.bundles.get(sticker.id)?.length, 3);
+  assert.throws(() => decodeForTest({ version: 1, items: [{ ...base, id: 'text/bad', durationMs: 0, vars: { '--bg': 'url(x)' }, files: {} }] }), /Invalid/);
+});

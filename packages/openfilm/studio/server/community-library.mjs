@@ -14,14 +14,23 @@ const MEDIA_EXT = { video: ['mp4', 'mov', 'webm'], image: ['jpg', 'jpeg', 'png',
 const REFRESH = 60_000;
 const TIMEOUT = 8000;
 const HEX = /^[a-f0-9]{64}$/;
-const ITEM = /^(sound|music|transition|effect|media)\/[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const ITEM = /^(sound|music|transition|effect|media|text|sticker|filter)\/[a-z0-9]+(?:-[a-z0-9]+)*$/;
+/** A text style's variables and a filter's grade, as the catalog carries them (the community's scripts/check.mjs) */
+const TEXT_VAR = /^--[a-z][a-z0-9-]{0,39}$/;
+const textVars = (/** @type {any} */ vars) => vars && typeof vars === 'object' && !Array.isArray(vars) && Object.keys(vars).length >= 1 && Object.keys(vars).length <= 24 &&
+  Object.entries(vars).every(([key, value]) => TEXT_VAR.test(key) && typeof value === 'string' && value.length <= 200 && /^[\x20-\x7e]*$/.test(value) &&
+    !/[<>{};\\@]/.test(value) && !/\b(?:url|image-set|image|src|expression|var)\s*\(/i.test(value));
+const numbers = (/** @type {unknown} */ list, /** @type {number} */ n, /** @type {number} */ lo, /** @type {number} */ hi) => Array.isArray(list) && list.length === n && list.every((v) => typeof v === 'number' && Number.isFinite(v) && v >= lo && v <= hi);
+const gradeOk = (/** @type {any} */ g) => g && typeof g === 'object' && !Array.isArray(g) && Object.keys(g).length >= 1 &&
+  Object.keys(g).every((k) => ['mix', 'sat', 'all', 'r', 'g', 'b'].includes(k)) && (g.mix === undefined || numbers(g.mix, 12, -4, 4)) &&
+  (g.sat === undefined || (typeof g.sat === 'number' && g.sat >= 0 && g.sat <= 4)) && ['all', 'r', 'g', 'b'].every((k) => g[k] === undefined || numbers(g[k], 17, 0, 1));
 const languages = ['en', 'zh-CN', 'ja', 'ko', 'es'];
 const sha256 = (/** @type {Buffer} */ bytes) => createHash('sha256').update(bytes).digest('hex');
 const endpoint = () => (process.env.OPENFILM_COMMUNITY_LIBRARY_URL ??
   `${(process.env.OPENFILM_LIBRARY_URL || 'https://openfilm.dev/library').replace(/\/+$/, '')}/${PREFIX}`).replace(/\/+$/, '');
 
 /** @typedef {{ sha256: string, bytes: number }} Blob */
-/** @typedef {{ group: string, id: string, cat: string, kind: 'sound' | 'page' | 'file', name: Record<string,string>, durationMs: number, tags: string[], about: string, by: string, src?: string, place?: 'cut', media?: 'video' | 'image' | 'audio', poster?: string }} Item */
+/** @typedef {{ group: string, id: string, cat: string, kind: 'sound' | 'page' | 'file' | 'textstyle' | 'look', name: Record<string,string>, durationMs: number, tags: string[], about: string, by: string, src?: string, place?: 'cut', media?: 'video' | 'image' | 'audio', poster?: string, vars?: Record<string,string>, grade?: Record<string,unknown>, sample?: string, w?: number, h?: number, fit?: number }} Item */
 /**
  * A pack: things of one maker's put together (a music pack of forty pieces), or one thing listed alone, as a pack of
  * its own (`lone`). Its id is `<maker>/<name>`; its things' `group` in the library is that id, so it is a group of
@@ -85,17 +94,21 @@ function decode(json) {
     result.packs.push(pack);
   }
   for (const entry of json.items) {
-    const { id, version, revision, name, about, tags, by, durationMs, files, media } = entry ?? {};
+    const { id, version, revision, name, about, tags, by, durationMs, files, media, vars, grade, w, h } = entry ?? {};
     const kind = typeof id === 'string' && id.length < 100 ? ITEM.exec(id)?.[1] : undefined;
     /* a media file: footage, a picture or a recording, one file (a poster beside footage); a picture lasts nothing */
     const isMedia = kind === 'media';
     if (isMedia && !['video', 'image', 'audio'].includes(media)) throw new Error('Invalid community item');
+    /* a text style is its variables, a filter its grade (neither lasts); a sticker its picture at its size */
+    const timeless = kind === 'text' || kind === 'filter';
+    if ((kind === 'text' && !textVars(vars)) || (kind === 'filter' && !gradeOk(grade)) ||
+        (kind === 'sticker' && ![w, h].every((n) => Number.isInteger(n) && n >= 1 && n <= 1024))) throw new Error('Invalid community item');
     if (!kind || seen.has(id) || !Number.isSafeInteger(version) || version < 1 || !HEX.test(revision) ||
         typeof by !== 'string' || !/^[a-zA-Z0-9-]{1,39}$/.test(by) ||
         !name || !languages.every((lang) => typeof name[lang] === 'string' && name[lang].trim() && name[lang].length <= 60) ||
         typeof about !== 'string' || about.length > 300 ||
         !Array.isArray(tags) || tags.length > 12 || !tags.every((t) => typeof t === 'string' && /^[a-z0-9-]{1,40}$/.test(t)) ||
-        !Number.isInteger(durationMs) || durationMs < (isMedia && media === 'image' ? 0 : 1) || durationMs > 3_600_000 ||
+        !Number.isInteger(durationMs) || durationMs < ((isMedia && media === 'image') || timeless ? 0 : 1) || durationMs > 3_600_000 ||
         !files || typeof files !== 'object') throw new Error('Invalid community item');
     seen.add(id);
     const base = `${PREFIX}/${id}-v${version}-${revision}`;
@@ -103,8 +116,10 @@ function decode(json) {
     const basename = `community-${id.replace('/', '-')}`;
     const sound = [`${basename}.m4a`, `${basename}.mp3`].find((key) => Object.hasOwn(files, key));
     const mediaFile = isMedia ? MEDIA_EXT[/** @type {'video' | 'image' | 'audio'} */ (media)].map((ext) => `${basename}.${ext}`).find((key) => Object.hasOwn(files, key)) : undefined;
+    const picture = kind === 'sticker' ? ['files/sticker.png', 'files/sticker.webp'].find((key) => Object.hasOwn(files, key)) : undefined;
     const expected = isMedia ? [mediaFile, ...(media === 'video' ? ['poster.jpg'] : [])]
-      : audio ? [sound, `waves/${basename}.png`] : ['saved.json', 'files/overlay.html', 'poster.jpg', 'preview.mp4'];
+      : audio ? [sound, `waves/${basename}.png`] : kind === 'text' ? [] : kind === 'filter' ? ['sample.jpg']
+        : kind === 'sticker' ? ['saved.json', 'files/sticker.html', picture] : ['saved.json', 'files/overlay.html', 'poster.jpg', 'preview.mp4'];
     if (Object.keys(files).length !== expected.length) throw new Error('Invalid community files');
     for (const key of expected) {
       const file = key ? files[key] : null;
@@ -113,7 +128,8 @@ function decode(json) {
           !Number.isInteger(file.bytes) || file.bytes < 1 || file.bytes > limit) throw new Error('Invalid community file');
       result.files.set(`${base}/${key}`, file);
     }
-    if (!audio) result.bundles.set(base, ['saved.json', 'files/overlay.html'].map((key) => `${base}/${key}`));
+    if (kind === 'sticker') result.bundles.set(base, ['saved.json', 'files/sticker.html', /** @type {string} */ (picture)].map((key) => `${base}/${key}`));
+    else if (!audio && !timeless) result.bundles.set(base, ['saved.json', 'files/overlay.html'].map((key) => `${base}/${key}`));
     /* its pack, or one of its own when it is listed alone */
     let pack = packOf.get(id);
     if (pack && pack.by.toLowerCase() !== by.toLowerCase()) throw new Error('Invalid community pack');
@@ -126,8 +142,13 @@ function decode(json) {
     pack.items.push(itemId);
     const groups = (result.groups[kind] ??= []);
     if (!groups.some((g) => g.id === pack.id)) groups.push({ id: pack.id, name: pack.name, by: pack.by });
+    const common = { id: itemId, cat: kind, group: pack.id, name, about, tags, by, durationMs };
     result.items.push(isMedia
-      ? { id: itemId, cat: kind, group: pack.id, kind: 'file', media, name, about, tags, by, durationMs, ...(media === 'video' ? { poster: `${base}/poster.jpg` } : {}) }
+      ? { ...common, kind: 'file', media, ...(media === 'video' ? { poster: `${base}/poster.jpg` } : {}) }
+      /* OpenFilm's text component draws a text style; a filter's picture is shown with its grade; a sticker is a page */
+      : kind === 'text' ? { ...common, kind: 'textstyle', vars, w: 1600, h: 260, fit: 0.2 }
+      : kind === 'filter' ? { ...common, kind: 'look', grade, sample: `${base}/sample.jpg` }
+      : kind === 'sticker' ? { ...common, kind: 'page', src: 'sticker.html', w, h, fit: 0.32, poster: `${base}/${picture}` }
       : { id: itemId, cat: kind, group: pack.id, kind: audio ? 'sound' : 'page',
         name, about, tags, by, durationMs, ...(!audio ? { src: 'overlay.html', ...(kind === 'transition' ? { place: /** @type {const} */ ('cut') } : {}) } : {}) });
   }
