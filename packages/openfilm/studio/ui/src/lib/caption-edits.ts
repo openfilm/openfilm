@@ -225,9 +225,41 @@ export function addCue(vtt: Vtt, at: number, text: string, until = Infinity): { 
   return { vtt: { ...vtt, cues: [...vtt.cues, cue].sort(byStart) }, id };
 }
 
-/** A cue's words typed again: plain text (a cue's tags and timestamps go when its words change). */
+/**
+ * A correction inside one text span keeps the tags and timestamps around it. Find the changed characters in the
+ * plain words, then change only that span in the payload. Work in code points so an emoji is never half replaced.
+ * A rewrite across spans becomes plain text as before: its words no longer have known times or inline styles.
+ */
+function correctedText(payload: string, text: string): string {
+  const plain = cuePlain(payload);
+  if (plain === text) return payload;
+  if (!text) return ' ';
+  const before = [...plain], after = [...text];
+  let first = 0, last = 0;
+  while (first < before.length && first < after.length && before[first] === after[first]) first += 1;
+  while (last < before.length - first && last < after.length - first
+    && before[before.length - last - 1] === after[after.length - last - 1]) last += 1;
+  const from = before.slice(0, first).join('').length;
+  const to = plain.length - before.slice(before.length - last).join('').length;
+  const replacement = after.slice(first, after.length - last).join('');
+  let offset = 0;
+  /* Match the same text spans as cueNodes; cuePlain decodes their entities before comparing character offsets. */
+  for (const m of payload.matchAll(/<[^>]*>|([^<]+)/g)) {
+    if (m[1] == null) continue;
+    const span = cuePlain(m[1]), end = offset + span.length;
+    /* At a boundary an insertion belongs to the next span, except when appending to the end of the cue. */
+    if (from >= offset && to <= end && (from < end || end === plain.length)) {
+      const changed = span.slice(0, from - offset) + replacement + span.slice(to - offset);
+      return payload.slice(0, m.index!) + cueEscape(changed) + payload.slice(m.index! + m[0].length);
+    }
+    offset = end;
+  }
+  return cueEscape(text);
+}
+
+/** A cue's words corrected, keeping timing and inline styling when the correction stays inside one text span. */
 export function setCueText(vtt: Vtt, id: string, text: string): Vtt {
-  return { ...vtt, cues: vtt.cues.map((c) => (c.id === id && cuePlain(c.text) !== text ? { ...c, text: cueEscape(text) || ' ' } : c)) };
+  return { ...vtt, cues: vtt.cues.map((c) => (c.id === id && cuePlain(c.text) !== text ? { ...c, text: correctedText(c.text, text) } : c)) };
 }
 
 /** A cue's settings changed (a null value takes one out). */

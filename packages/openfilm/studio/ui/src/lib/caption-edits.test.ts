@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readVtt, writeVtt } from '../../../../src/captions.mjs';
+import { cueNodes, cuePlain, readVtt, writeVtt } from '../../../../src/captions.mjs';
 import {
   MIN_CUE_S, addCue, keepApart, resizeCues, setCueBlock, cueRule, cutIndex, joinText, mergeCues, moveCues, placeCues, removeCues, retimeCue, setCueRule, setCueText, splitCue, withIds,
 } from './caption-edits.ts';
@@ -135,4 +135,59 @@ test('cues made wider or narrower about their middle: the region of all of them,
   assert.equal(resizeCues(v, null, 60).regions[0], 'id:main\nwidth:60%\nlines:3\nregionanchor:50%,100%\nviewportanchor:50%,94%');
   const one = resizeCues(v, new Set(['a']), 40, new Map([['a', { left: 10, top: 80, width: 60, height: 6 }]]));
   assert.equal(one.cues[0]!.settings, 'line:86%,end position:40%,center size:40% align:center');
+});
+
+
+test('correcting a word keeps its timing, inline look and the other words as written', () => {
+  const v = readVtt(`WEBVTT
+
+STYLE
+::cue(b) { color: red; }
+
+c1
+00:00:01.000 --> 00:00:03.000 line:80%
+<v Rick><00:00:01.000>Hello <00:00:01.500><b>wrld</b><00:00:02.000> today</v>
+`);
+  const corrected = setCueText(v, 'c1', 'Hello world today');
+  assert.equal(corrected.cues[0]!.text, '<v Rick><00:00:01.000>Hello <00:00:01.500><b>world</b><00:00:02.000> today</v>');
+  assert.deepEqual(corrected, { ...v, cues: [{ ...v.cues[0]!, text: corrected.cues[0]!.text }] }, 'only the words change');
+  const saved = readVtt(writeVtt(corrected));
+  assert.equal(cuePlain(saved.cues[0]!.text), 'Hello world today');
+  assert.deepEqual(cueNodes(saved.cues[0]!.text), [{ type: 'tag', tag: 'v', classes: [], annotation: 'Rick', t: null, children: [
+    { type: 'text', text: 'Hello ', t: 1 },
+    { type: 'tag', tag: 'b', classes: [], annotation: '', t: 1.5, children: [{ type: 'text', text: 'world', t: 1.5 }] },
+    { type: 'text', text: ' today', t: 2 },
+  ] }], 'the renderer still sees the voice, emphasis and the original word times after saving');
+});
+
+test('small caption corrections handle entities, CJK and whole Unicode characters', () => {
+  const cases = [
+    ['<00:00:01.000>Helo <00:00:02.000>there', 'Hello there', '<00:00:01.000>Hello <00:00:02.000>there'],
+    ['<00:00:01.000>Helllo <00:00:02.000>there', 'Hello there', '<00:00:01.000>Hello <00:00:02.000>there'],
+    ['<00:00:01.000>你好<00:00:02.000>世介', '你好世界', '<00:00:01.000>你好<00:00:02.000>世界'],
+    ['<00:00:01.000>Hi <00:00:02.000>😀!', 'Hi 😃!', '<00:00:01.000>Hi <00:00:02.000>😃!'],
+    ['<00:00:01.000>Hi <00:00:02.000>&#x1F600;!', 'Hi 😃!', '<00:00:01.000>Hi <00:00:02.000>😃!'],
+    ['<v Ana><00:00:01.000>A &amp; B <00:00:02.000><i>wrng</i></v>', 'A & B <right>', '<v Ana><00:00:01.000>A &amp; B <00:00:02.000><i>&lt;right&gt;</i></v>'],
+    ['<00:00:01.000>A &amp; B <00:00:02.000>next', 'A & C next', '<00:00:01.000>A &amp; C <00:00:02.000>next'],
+    ['<00:00:01.000>Hello <00:00:02.000>world', 'Hello world!', '<00:00:01.000>Hello <00:00:02.000>world!'],
+    ['<00:00:01.000>Hello <00:00:02.000>world', 'Oh Hello world', '<00:00:01.000>Oh Hello <00:00:02.000>world'],
+  ];
+  for (const [before, text, expected] of cases) {
+    const v = readVtt(`WEBVTT\n\nc1\n00:00:01.000 --> 00:00:03.000\n${before}\n`);
+    const actual = setCueText(v, 'c1', text!).cues[0]!.text;
+    assert.equal(actual, expected, text);
+    assert.equal(cuePlain(actual), text);
+    assert.doesNotThrow(() => encodeURI(actual), 'no lone surrogate');
+    assert.equal(v.cues[0]!.text, before, 'undo still has the original file');
+  }
+});
+
+test('rewriting across timed or styled spans does not guess where new words were spoken', () => {
+  for (const before of ['<00:00:01.000>Hello <00:00:02.000>world', '<b>Hello</b> world']) {
+    const v = readVtt(`WEBVTT\n\nc1\n00:00:01.000 --> 00:00:03.000\n${before}\n`);
+    assert.equal(setCueText(v, 'c1', 'Other <words> & more').cues[0]!.text, 'Other &lt;words&gt; &amp; more');
+    assert.equal(setCueText(v, 'c1', '').cues[0]!.text, ' ');
+    assert.equal(setCueText(v, 'c1', 'Hello world').cues[0], v.cues[0], 'unchanged words keep the original cue');
+    assert.equal(setCueText(v, 'missing', 'Other').cues[0], v.cues[0], 'other cues are untouched');
+  }
 });
