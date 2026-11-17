@@ -181,6 +181,53 @@ export function communityReady(root, rel) {
 /** @type {Map<string, Promise<string | null>>} */
 const loading = new Map();
 
+/**
+ * A sound or a piece of music of the Community heard before it is here: its bytes passed on to `res` as they arrive, so
+ * it plays at once, then kept and checked once whole, as fetchCommunity keeps it. False, with nothing sent, when it is
+ * here already, being fetched, not the catalog's, or not reachable: the caller serves it the usual way.
+ * @param {string} root @param {string} rel @param {import('node:http').ServerResponse} res
+ */
+export async function streamCommunity(root, rel, res) {
+  await refreshCommunity();
+  const file = catalog.files.get(rel);
+  const target = join(root, rel);
+  if (!file || !/\.(m4a|mp3)$/.test(rel) || ready(root, rel) || loading.has(target)) return false;
+  /** @type {(sent: boolean) => void} */
+  let started = () => {};
+  const began = new Promise((resolve) => { started = resolve; });
+  const job = (async () => {
+    const response = await fetch(`${endpoint()}/blobs/${file.sha256}`, { signal: AbortSignal.timeout(60_000) });
+    if (!response.ok || !response.body || Number(response.headers.get('content-length') || file.bytes) !== file.bytes) throw new Error('Community library response unavailable');
+    res.writeHead(200, { 'content-type': rel.endsWith('.mp3') ? 'audio/mpeg' : 'audio/mp4', 'content-length': file.bytes, 'cache-control': 'no-store' });
+    started(true);
+    const chunks = [];
+    let total = 0;
+    const reader = response.body.getReader();
+    for (;;) {
+      const part = await reader.read();
+      if (part.done) break;
+      total += part.value.byteLength;
+      if (total > file.bytes) throw new Error('Community library response exceeds its size limit');
+      chunks.push(part.value);
+      /* the listener may have gone (another sound picked): the file is still kept for the next time */
+      if (!res.destroyed) res.write(part.value);
+    }
+    if (!res.destroyed) res.end();
+    const bytes = Buffer.concat(chunks, total);
+    if (bytes.length !== file.bytes || sha256(bytes) !== file.sha256) throw new Error('Community file checksum mismatch');
+    await mkdir(dirname(target), { recursive: true });
+    const temp = `${target}.part-${randomUUID()}`;
+    try {
+      await writeFile(temp, bytes, { flag: 'wx' });
+      await rename(temp, target);
+    } finally { await rm(temp, { force: true }); }
+    return target;
+  })().finally(() => loading.delete(target));
+  loading.set(target, job);
+  job.then(() => {}, () => { if (res.headersSent) res.destroy(); started(false); });
+  return began;
+}
+
 /** Only approved paths are served, even if a withdrawn asset is still cached. @param {string} root @param {string} rel */
 export async function fetchCommunity(root, rel) {
   await refreshCommunity();

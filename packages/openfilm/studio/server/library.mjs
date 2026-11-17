@@ -33,7 +33,7 @@ import { dirname, isAbsolute, join, normalize, relative, resolve, sep } from 'no
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { fileURLToPath } from 'node:url';
-import { communityCatalog, communityReady, fetchCommunity, isCommunity, refreshCommunity } from './community-library.mjs';
+import { communityCatalog, communityReady, fetchCommunity, isCommunity, refreshCommunity, streamCommunity } from './community-library.mjs';
 import { setSharedPref, sharedHome, sharedPref } from '../../src/locations.mjs';
 import { SKILL_UID } from '../../src/skills.mjs';
 import { ownVoiceKeys } from './voice-store.mjs';
@@ -350,6 +350,16 @@ export function libraryFile(/** @type {unknown} */ rel) {
   if (typeof rel !== 'string' || !rel) return null;
   const file = located(rel);
   return file && statSync(file).isFile() ? file : null;
+}
+
+/**
+ * A Community sound or piece of music not here yet, sent to `res` as it is fetched (so a click is heard at once);
+ * false when it is to be served the usual way.
+ * @param {unknown} rel @param {import('node:http').ServerResponse} res
+ */
+export function streamLibrary(rel, res) {
+  if (typeof rel !== 'string' || !isCommunity(rel) || !SAFE_PLACE.test(rel) || rel.split('/').some((part) => part === '..' || part === '.')) return Promise.resolve(false);
+  return streamCommunity(libraryCache(), rel, res);
 }
 
 /** libraryFile, fetching it first when it is a published part not here yet (fetchLibrary). */

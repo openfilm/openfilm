@@ -35,6 +35,7 @@ import {
 import { CATEGORIES, categoryOfSkill, type Category } from '@/lib/plugin-profile';
 import { Meter } from './PluginProfile';
 import { GhostPacks, GhostThings, SoonPill } from './StorePlaceholders';
+import { StoreAudio } from './StoreAudio';
 import { DocAgent, DocHighlights, DocKeys, DocLines, DocOff, DocSection, DocSteps, InfoBar, sortDetails } from './DocSections';
 import { SettingsButton, SettingsGroup, SettingsSwitch } from '../settings/ui';
 import { LARGE_DIALOG_COLUMN as PAGE_INSET } from '../dialog-chrome';
@@ -50,7 +51,7 @@ import { WorkbenchMark } from '../WorkbenchMark';
 import { AppIcon } from '../AppIcon';
 import { ConnectorActions, ConnectorBody, ConnectorMark, connectConnector, useConnectorStates } from './ConnectorPanel';
 import { CallOut, COVER_GRID, DetailShell, Facts, ManageButton, PageButton, StateMark, STORE_GRID, StoreCardSkeleton, StoreChips, StoreCard, StoreSection } from './Store';
-import { AddButton, ASSET_GRID, AssetCover, AssetTile, Badge, BenchGrid, GroupList, InMark, FoldedGroup, GradientCover, PackTile, packGrid, Shelf, SoundList, shapeOf, type BenchTileItem, type GroupItem } from './CommunityViews';
+import { AddButton, ASSET_GRID, AssetCover, AssetTile, Badge, BenchGrid, GroupList, FoldedGroup, GradientCover, PackTile, packGrid, Shelf, shapeOf, type BenchTileItem, type GroupItem } from './CommunityViews';
 
 /** A plugin as people see it: its title and summary in the language shown, else its id. */
 export function usePluginWords() {
@@ -369,9 +370,8 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
   const assetsView = (cat: string, list: readonly LibraryItem[]) => {
     const shape = shapeOf(cat);
     if (shape !== 'sound') return <div className={ASSET_GRID[shape]}>{list.map(assetTile)}</div>;
-    return <SoundList items={list} lang={lang} onOpen={(it) => setPreview({ items: list, at: Math.max(0, list.indexOf(it)) })}
-      action={(it) => (inLibrary(it, added) ? <InMark label={t('assetDrawer.inLibrary')} />
-        : <AddButton label={t('assetDrawer.addToLibrary')} text={t('assetDrawer.add')} onClick={() => addThing(it)} />)} />;
+    /* sounds and music heard in place, as the library drawer hears them; got with their pack */
+    return <StoreAudio items={list} lang={lang} />;
   };
   const status = (
     <>

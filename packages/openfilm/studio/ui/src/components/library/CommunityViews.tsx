@@ -7,7 +7,7 @@
  * its own folded into one line until opened. A page's parts share one header (Shelf, as library/Store StoreSection).
  */
 import * as React from 'react';
-import { AudioLines, BadgeCheck, Check, ChevronDown, ChevronRight, GripVertical, Music, Pause, Play, Plus, type LucideIcon } from 'lucide-react';
+import { AudioLines, BadgeCheck, Check, ChevronDown, ChevronRight, GripVertical, Music, Plus, type LucideIcon } from 'lucide-react';
 import { useLanguage, useT } from '@/i18n';
 import type { Plugin } from '@/lib/plugins';
 import { byOpenFilm, libraryUrl, makerName, nameOf, posterUrl, previewUrl, templatePreviewUrl, TEXT_COMPONENT, type LibraryItem } from '@/lib/library';
@@ -288,56 +288,6 @@ export function PackTile({ cover, cat, name, count, by, here, newer = false, onO
 /** Packs in a grid: smaller where their pictures are square. */
 export const packGrid = (cat: string) => (shapeOf(cat) === 'sound' || shapeOf(cat) === 'sticker'
   ? 'grid grid-cols-[repeat(auto-fill,minmax(140px,1fr))] gap-x-3 gap-y-4' : ASSET_GRID.video);
-
-/** One sound heard at a time: which is playing, and the press that plays it or stops it. */
-export function useAudioPreview() {
-  const [playing, setPlaying] = React.useState<string | null>(null);
-  const player = React.useRef<HTMLAudioElement | null>(null);
-  React.useEffect(() => () => { player.current?.pause(); }, []);
-  const play = (it: LibraryItem) => {
-    const a = player.current ?? (player.current = new Audio());
-    if (playing === it.id) { a.pause(); setPlaying(null); return; }
-    a.src = libraryUrl(it.id);
-    a.onended = () => setPlaying(null);
-    void a.play().then(() => setPlaying(it.id), () => setPlaying(null));
-  };
-  return { playing, play };
-}
-
-const length = (ms?: number) => (ms ? `${Math.floor(ms / 60000)}:${String(Math.round(ms / 1000) % 60).padStart(2, '0')}` : '');
-
-/**
- * Sounds and music as a list to listen to: each its play button, its name (and whose, when someone sent it), its
- * length, its star and its control (`action`); its name opens its page.
- */
-export function SoundList({ items, lang, onOpen, action }: {
-  items: readonly LibraryItem[]; lang: Lang;
-  onOpen: (item: LibraryItem) => void; action: (item: LibraryItem) => React.ReactNode;
-}) {
-  const t = useT();
-  const { playing, play } = useAudioPreview();
-  return (
-    <div className="flex flex-col" data-sound-list="">
-      {items.map((it) => {
-        const on = playing === it.id;
-        return (
-          <div key={it.id} className="group -mx-3 flex h-12 items-center gap-3 rounded-[8px] px-3 transition hover:bg-[var(--bg-hover)]">
-            <button type="button" onClick={() => play(it)} aria-label={t(on ? 'assetDrawer.pauseThing' : 'assetDrawer.playThing')}
-              className={`grid h-8 w-8 shrink-0 place-items-center rounded-full ${on ? 'bg-[var(--accent)] text-[var(--on-accent)]' : 'bg-[var(--bg-field)] text-[var(--text)]'}`}>
-              {on ? <Pause size={14} aria-hidden /> : <Play size={14} aria-hidden />}
-            </button>
-            <button type="button" onClick={() => onOpen(it)} className="flex min-w-0 flex-1 items-baseline gap-2 text-left">
-              <span className={`truncate text-[14px] hover:underline ${on ? 'text-[var(--accent)]' : 'text-[var(--text)]'}`}>{nameOf(it.name, lang)}</span>
-              {it.by ? <span className="inline-flex shrink-0 items-center gap-1 truncate text-[12px] text-[var(--text-faint)]">{makerName(it.by)}{byOpenFilm(it.by) ? <BadgeCheck size={12} strokeWidth={2} aria-hidden /> : null}</span> : null}
-            </button>
-            <span className="w-12 shrink-0 text-right text-[12.5px] tabular-nums text-[var(--text-faint)]">{length(it.durationMs)}</span>
-            {action(it)}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
 
 /**
  * A part of a page, as a store page's (library/Store StoreSection): its name, a word under it, and what it holds; `all`:
