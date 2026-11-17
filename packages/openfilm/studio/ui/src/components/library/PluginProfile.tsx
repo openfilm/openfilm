@@ -1,19 +1,16 @@
 /**
  * A plugin's or a skill's profile as its page shows it at the top, the way a model's page sums a model up: a strip of
- * a few measures, each a mark to read at a glance and its word under it (how hard it is to start with, as dots; how
- * little work a result takes, as bolts; whether it costs money; how it is used, the ways it has lit and the others
- * dim), and who it is for across the foot; a measure it has nothing for is left out.
+ * a few measures, each a mark to read at a glance and its word under it (what it is: an editor or a skill; how hard it
+ * is to start with, as dots; how much the agent does, as bolts), and who it is for across the foot; a measure it has
+ * nothing for is left out. Every plugin is free, so cost is not one of them.
  */
 import React from 'react';
 import {
-  AppWindow, Coins, MessageSquare, SquareTerminal, Zap, type LucideIcon,
+  AppWindow, MessageSquare, Zap,
 } from 'lucide-react';
 import { useLanguage, useT } from '@/i18n';
 import type { Profile, Use } from '@/lib/plugin-profile';
-import { USES } from '@/lib/plugin-profile';
 import { inLanguage } from '../SkillPage';
-
-const USE_ICONS: Record<Use, LucideIcon> = { surface: AppWindow, chat: MessageSquare, commands: SquareTerminal };
 
 /** A measure of five, as marks: so many lit, the rest dim. */
 function Meter({ value, mark }: { value: number; mark: 'dot' | 'bolt' }) {
@@ -43,7 +40,7 @@ function Cell({ name, tip, children, word }: { name: string; tip: string; childr
  */
 export function ProfileStrip({ profile, uses: all }: { profile: Profile | undefined; uses: readonly Use[] }) {
   const t = useT();
-  /* where a person meets it: its workbench, the conversation (its commands are for code and agents, in its page's fold) */
+  /* where a person meets it: its editor, the conversation (its commands are for code and agents, in its page's fold) */
   const uses = all.filter((u) => u !== 'commands');
   const lang = useLanguage();
   const audience = inLanguage(profile?.audience, lang);
@@ -62,30 +59,13 @@ export function ProfileStrip({ profile, uses: all }: { profile: Profile | undefi
       </Cell>,
     );
   }
-  if (profile?.cost) {
-    cells.push(
-      <Cell key="cost" name={t('assetDrawer.metric_cost')} tip={t('assetDrawer.metricTip_cost')} word={t(`assetDrawer.costNote_${profile.cost}`)}>
-        <span className="flex items-center gap-1 text-[15px] font-semibold leading-none text-[var(--text)]">
-          {profile.cost === 'generation' ? <Coins size={14} strokeWidth={2} aria-hidden className="text-[var(--text-muted)]" /> : null}
-          {t(`assetDrawer.cost_${profile.cost}`)}
-        </span>
-      </Cell>,
-    );
-  }
-  if (uses.length) cells.push(
-    <Cell key="uses" name={t('assetDrawer.metric_uses')} tip={t('assetDrawer.metricTip_uses')}
-      word={uses.map((u, i) => <React.Fragment key={u}>{i ? t('assetDrawer.listSep') : null}<span className="whitespace-nowrap">{t(`assetDrawer.use_${u}`)}</span></React.Fragment>)}>
-      <span className="flex items-center gap-1.5">
-        {USES.filter((u) => u !== 'commands').map((u) => {
-          const Mark = USE_ICONS[u];
-          const has = uses.includes(u);
-          return (
-            <span key={u} role="img" aria-label={`${t(`assetDrawer.use_${u}`)}${has ? '' : ` ${t('assetDrawer.useNone')}`}`}
-              className={`flex h-[18px] w-[18px] items-center justify-center rounded-[4px] ${has ? 'text-[var(--text)] ring-1 ring-[var(--text-muted)]' : 'text-[var(--border-strong)] ring-1 ring-[var(--border)]'}`}>
-              <Mark size={11} strokeWidth={2} aria-hidden />
-            </span>
-          );
-        })}
+  /* what it is: an editor (an interface of its own, picked at the top right) or a skill (the agent uses it in the chat) */
+  const editor = uses.includes('surface');
+  const TypeMark = editor ? AppWindow : MessageSquare;
+  cells.unshift(
+    <Cell key="type" name={t('assetDrawer.metric_type')} tip={t('assetDrawer.metricTip_type')} word={t(editor ? 'assetDrawer.typeNote_editor' : 'assetDrawer.typeNote_skill')}>
+      <span className="flex items-center gap-1.5 text-[15px] font-semibold leading-none text-[var(--text)]">
+        <TypeMark size={15} strokeWidth={2} aria-hidden />{t(editor ? 'assetDrawer.kind_editor' : 'assetDrawer.kind_skill')}
       </span>
     </Cell>,
   );

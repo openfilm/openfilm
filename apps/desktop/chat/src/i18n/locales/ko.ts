@@ -280,7 +280,7 @@ export const ko: Words = {
     coverInvalid: '5 MB 이하의 올바른 PNG, JPEG 또는 WebP 이미지를 선택하세요.',
     button: 'Skills',
     addTitle: '가져오기',
-    addHint: 'GitHub 또는 GitLab 주소를 붙여 넣으세요. 작업대인지 스킬인지는 자동으로 알아냅니다.',
+    addHint: 'GitHub 또는 GitLab 주소를 붙여 넣으세요. 에디터인지 스킬인지는 자동으로 알아냅니다.',
     add: '가져오기',
     adding: '가져오는 중…',
     scriptsWarning: '에이전트가 실행할 수 있는 스크립트가 {n}개 들어 있습니다. 신뢰하는 것만 가져오세요.',

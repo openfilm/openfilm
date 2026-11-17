@@ -284,7 +284,7 @@ export const zhCN: Words = {
     coverInvalid: '请选择有效的 PNG、JPEG 或 WebP 图片，最大 5 MB。',
     button: 'Skills',
     addTitle: '导入',
-    addHint: '粘贴 GitHub 或 GitLab 上的地址。工作台还是技能，会自动识别。',
+    addHint: '粘贴 GitHub 或 GitLab 上的地址。编辑器还是技能，会自动识别。',
     add: '导入',
     adding: '正在导入…',
     scriptsWarning: '它带有 {n} 个智能体可以运行的脚本。只导入你信任的内容。',

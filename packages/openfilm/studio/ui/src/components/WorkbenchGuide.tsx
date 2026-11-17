@@ -92,13 +92,6 @@ export function WorkbenchGuide({ plugin, benches, onClose }: {
           ) : null}
         </dl>
       ) : null}
-      <div className="mt-3.5 flex items-center gap-3">
-        <span className="min-w-0 flex-1 text-[11px] leading-[15px] text-[var(--text-faint)]">{t('guide.again')}</span>
-        <button type="button" onClick={onClose}
-          className="h-7 shrink-0 rounded-md bg-[var(--accent)] px-3.5 text-[12px] font-medium text-[var(--on-accent)] transition hover:brightness-110">
-          {t('guide.gotIt')}
-        </button>
-      </div>
     </section>,
     document.body,
   );

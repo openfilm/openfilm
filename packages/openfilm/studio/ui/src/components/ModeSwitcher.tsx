@@ -48,7 +48,7 @@ export function ModeSwitcher({ now, plugins, onPick, onGuide, disabled = false }
         </button>
       )}>
       <div role="menu" aria-label={t('canvas.workspaceLabel')}
-        className="flex w-[232px] flex-col rounded-[10px] border border-[var(--border-strong)] bg-[var(--bg-raised)] p-1 text-[12.5px] text-[var(--text)] shadow-[var(--shadow-lg)]">
+        className="flex w-[184px] flex-col rounded-[10px] border border-[var(--border-strong)] bg-[var(--bg-raised)] p-1 text-[12.5px] text-[var(--text)] shadow-[var(--shadow-lg)]">
         {/* its title, and beside it how the workbench shown is used (with the keys that go from one to another) */}
         <div className="flex h-8 items-center justify-between pl-2.5 pr-0.5">
           <strong className="text-[12.5px] font-semibold">{t('canvas.workspaceLabel')}</strong>

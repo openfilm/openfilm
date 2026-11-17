@@ -284,7 +284,7 @@ export const ja: Words = {
     coverInvalid: '5 MB 以下の有効な PNG、JPEG、WebP 画像を選択してください。',
     button: 'Skills',
     addTitle: '読み込む',
-    addHint: 'GitHub または GitLab のアドレスを貼り付けます。ワークベンチかスキルかは自動で判別します。',
+    addHint: 'GitHub または GitLab のアドレスを貼り付けます。エディターかスキルかは自動で判別します。',
     add: '読み込む',
     adding: '読み込み中…',
     scriptsWarning: 'エージェントが実行できるスクリプトが {n} 個含まれています。信頼できるものだけ読み込んでください。',

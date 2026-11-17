@@ -807,7 +807,6 @@ function PluginPage({ plugin, skills, error, onBack, onOpen, onTurn, onRemove, c
           { key: 'state', name: t('assetDrawer.factState'), value: t(!got ? 'assetDrawer.stateNotGot' : !plugin.on ? 'assetDrawer.stateOff'
             : connector ? (connector.state?.connected ? 'assetDrawer.connectorConnected' : 'assetDrawer.connectorNotConnected') : 'assetDrawer.stateInstalled') },
           plugin.builtIn ? { key: 'builtin', name: t('assetDrawer.factBuiltIn'), value: t('assetDrawer.factBuiltInNote') } : null,
-          plugin.profile?.cost ? { key: 'cost', name: t('assetDrawer.factCost'), value: t(`assetDrawer.cost_${plugin.profile.cost}`) } : null,
         ]} />
       )}>
       {/* a connector: connected or not, what to say, how it works and what it can do */}
@@ -816,7 +815,8 @@ function PluginPage({ plugin, skills, error, onBack, onOpen, onTurn, onRemove, c
       {how && !plugin.soon ? <HowToUse where text={t(how)} /> : null}
       {/* a connector: got and on, the agent reaches the service; it signs in there the first time, as in its terminal */}
       {plugin.mcpServers && !details && !connector ? <HowToUse text={t('assetDrawer.howConnector').replaceAll('{name}', title)} /> : null}
-      <p className="mt-5 text-[13.5px] leading-[20px] text-[var(--text-faint)]">{plugin.mcpServers ? t('assetDrawer.connectorOffNote').replaceAll('{name}', title) : t(plugin.soon ? 'assetDrawer.pluginSoonNote' : 'assetDrawer.pluginOffNote')}</p>
+      {/* what turning it off does: a connector's; one coming soon says so (an editor's is in its own words, under 关掉后) */}
+      {plugin.mcpServers || plugin.soon || !details ? <p className="mt-5 text-[13.5px] leading-[20px] text-[var(--text-faint)]">{plugin.mcpServers ? t('assetDrawer.connectorOffNote').replaceAll('{name}', title) : t(plugin.soon ? 'assetDrawer.pluginSoonNote' : 'assetDrawer.pluginOffNote')}</p> : null}
       {/* what it is made of, for whoever makes such things: folded */}
       <ForDevelopers>
         <PageSection title={t('assetDrawer.pluginBrings')}>

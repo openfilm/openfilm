@@ -16,10 +16,10 @@
     "es": "Crear y cortar el vídeo: la imagen, la línea de tiempo y la exportación."
   },
   "details": {
-    "en": "When to use it: in every film: placing material, trimming, ordering, adding captions and sound, exporting.\nWhat your agent does: say what you want and it changes the timeline; you can also drag, cut and adjust by hand.\nTurned off: no timeline, only the conversation and the other workbenches on; films made still play and export.",
-    "zh-CN": "什么时候用：做任何片子都会用到：放素材、剪长短、排顺序、加字幕和声音、导出。\n智能体能做什么：你说要什么，它直接改时间线；你也可以自己拖、剪、调。\n关掉后：看不到时间线，只剩对话和其他打开的工作台；做好的片子照样播放和导出。",
-    "ja": "使うとき：どの映像でも：素材を置く、長さを切る、順番を並べる、字幕と音を入れる、書き出す。\nエージェントにできること：欲しいことを言えばタイムラインを直します。自分でドラッグ、カット、調整もできます。\nオフにすると：タイムラインが見えず、会話と他のワークベンチだけになります。作った映像は再生と書き出しができます。",
-    "ko": "언제 쓰나요: 모든 영상에서: 소스 배치, 길이 자르기, 순서 정하기, 자막과 소리 넣기, 내보내기.\n에이전트가 하는 일: 원하는 것을 말하면 타임라인을 바로 고칩니다. 직접 끌고 자르고 조정할 수도 있습니다.\n끄면: 타임라인이 보이지 않고 대화와 다른 작업대만 남습니다. 만든 영상은 그대로 재생하고 내보낼 수 있습니다.",
+    "en": "When to use it: in every film: placing material, trimming, ordering, adding captions and sound, exporting.\nWhat your agent does: say what you want and it changes the timeline; you can also drag, cut and adjust by hand.\nTurned off: no timeline, only the conversation and the other editors on; films made still play and export.",
+    "zh-CN": "什么时候用：做任何片子都会用到：放素材、剪长短、排顺序、加字幕和声音、导出。\n智能体能做什么：你说要什么，它直接改时间线；你也可以自己拖、剪、调。\n关掉后：看不到时间线，只剩对话和其他打开的编辑器；做好的片子照样播放和导出。",
+    "ja": "使うとき：どの映像でも：素材を置く、長さを切る、順番を並べる、字幕と音を入れる、書き出す。\nエージェントにできること：欲しいことを言えばタイムラインを直します。自分でドラッグ、カット、調整もできます。\nオフにすると：タイムラインが見えず、会話と他のエディターだけになります。作った映像は再生と書き出しができます。",
+    "ko": "언제 쓰나요: 모든 영상에서: 소스 배치, 길이 자르기, 순서 정하기, 자막과 소리 넣기, 내보내기.\n에이전트가 하는 일: 원하는 것을 말하면 타임라인을 바로 고칩니다. 직접 끌고 자르고 조정할 수도 있습니다.\n끄면: 타임라인이 보이지 않고 대화와 다른 에디터만 남습니다. 만든 영상은 그대로 재생하고 내보낼 수 있습니다.",
     "es": "Cuándo usarlo: en todo vídeo: colocar material, recortar, ordenar, añadir subtítulos y sonido, exportar.\nQué hace tu agente: dile lo que quieres y cambia la línea de tiempo; también puedes arrastrar, cortar y ajustar a mano.\nSi se desactiva: no hay línea de tiempo, solo la conversación y las otras mesas activas; los vídeos hechos se siguen reproduciendo y exportando."
   },
   "about": "the film itself and its timeline: making and cutting the film",
