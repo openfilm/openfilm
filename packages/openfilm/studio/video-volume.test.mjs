@@ -83,7 +83,7 @@ test('default video audio stays at 0 dB; a muted video keeps its waveform and ca
     await until(async () => (await film()).tracks[0].clips[0].volume === 0, 'restore is undoable');
     await page.locator('[data-volume-restore]').click();
     await until(async () => ((await film()).tracks[0].clips[0].volume ?? 1) === 1, 'one click restores the original level');
-    assert.equal(await level.inputValue(), '0');
+    await until(async () => (await level.inputValue()) === '0', 'the inspector shows the restored level');
     assert.ok((await film()).tracks[0].clips.slice(1).every((c) => c.volume == null), 'other clips keep their original level');
     assert.deepEqual(errors, []);
   } finally {

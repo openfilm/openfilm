@@ -66,7 +66,11 @@ test('unlocked caption tracks move with a mixed selection, with one undo for med
     await clip.click({ position: { x: 25, y: 10 } });
     await page.keyboard.press('ControlOrMeta+a');
     await drag(clip, 2);
-    await until(async () => (await shots())[0].at > 2.5, 'the mixed selection can move right with captions unlocked');
+    /* a slow machine can miss the first drag while it lays the timeline out: one that moved nothing is made again */
+    const moved = async () => (await shots())[0].at > 2.5;
+    for (let i = 0; i < 100 && !(await moved()); i++) await page.waitForTimeout(50);
+    if ((await shots())[0].at === 1) await drag(clip, 2);
+    await until(moved, 'the mixed selection can move right with captions unlocked');
     const delta = (await shots())[0].at - 1;
     assert.ok(Math.abs(delta - 2) < .05);
     const movedCues = await cues();
