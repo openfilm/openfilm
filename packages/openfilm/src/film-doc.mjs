@@ -694,8 +694,13 @@ const VOID_TAGS = new Set(['img', 'meta', 'link', 'br', 'hr', 'base', 'input', '
 const RAW_TEXT = new Set(['script', 'style', 'iframe', 'textarea', 'title', 'xmp', 'noembed', 'noframes', 'noscript']);
 const ENTITIES = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: '\u00a0' };
 
+/** A numeric reference as HTML reads it: 0, a surrogate or beyond 0x10FFFF is U+FFFD, never a throw. */
+const codePoint = (e) => {
+  const n = e[1] === 'x' || e[1] === 'X' ? parseInt(e.slice(2), 16) : Number(e.slice(1));
+  return n > 0 && n <= 0x10ffff && !(n >= 0xd800 && n <= 0xdfff) ? String.fromCodePoint(n) : '\uFFFD';
+};
 const decode = (v) => v.replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (all, e) => {
-  if (e[0] === '#') return String.fromCodePoint(e[1] === 'x' || e[1] === 'X' ? parseInt(e.slice(2), 16) : Number(e.slice(1)));
+  if (e[0] === '#') return codePoint(e);
   return ENTITIES[e.toLowerCase()] ?? all;
 });
 const escapeAttr = (v) => String(v).replace(/&/g, '&amp;').replace(/"/g, '&quot;');

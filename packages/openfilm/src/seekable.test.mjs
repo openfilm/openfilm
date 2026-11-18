@@ -14,6 +14,17 @@ import { look } from './look.mjs';
 const hasFfmpeg = (() => { try { execFileSync('ffmpeg', ['-version'], { stdio: 'ignore' }); return true; } catch { return false; } })();
 const ffmpeg = { skip: !hasFfmpeg && 'no ffmpeg', timeout: 120_000 };
 
+/* On CI's virtual Macs the media engine (VideoToolbox) at times hangs for good, and every ffmpeg and browser test after
+   it hangs with it until the job's limit. There these copies are made on the processor: an ffmpeg that refuses the
+   engine stands in front of the real one. The engine's own path is still tested where it can hang (the test below). */
+if (process.platform === 'darwin' && process.env.CI && hasFfmpeg) {
+  const bin = mkdtempSync(join(tmpdir(), 'of-no-engine-'));
+  const real = execFileSync('sh', ['-c', 'command -v ffmpeg']).toString().trim();
+  writeFileSync(join(bin, 'ffmpeg'), `#!/bin/sh\ncase " $* " in *videotoolbox*) exit 1;; esac\nexec '${real}' "$@"\n`);
+  chmodSync(join(bin, 'ffmpeg'), 0o755);
+  process.env.PATH = `${bin}:${process.env.PATH}`;
+}
+
 /** 4 s at 30 fps with a key frame every `gop` frames. */
 const clip = (file, gop) => execFileSync('ffmpeg', ['-v', 'error', '-y', '-f', 'lavfi', '-i', 'testsrc2=size=320x180:rate=30', '-t', '4',
   '-c:v', 'libx264', '-preset', 'ultrafast', '-g', String(gop), '-keyint_min', String(gop), '-sc_threshold', '0', '-pix_fmt', 'yuv420p', file]);

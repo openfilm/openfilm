@@ -1048,6 +1048,22 @@ test('only requests addressed to this machine by name are answered, on both orig
   const upgrade = { connection: 'Upgrade', upgrade: 'websocket', 'sec-websocket-version': '13', 'sec-websocket-key': 'dGhlIHNhbXBsZSBub25jZQ==', 'x-studio-key': studio.key };
   assert.equal(await asHost(`${studio.origin}/api/events`, `evil.test:${editorPort}`, upgrade), 403);
   assert.equal(await asHost(`${studio.origin}/api/events`, `127.0.0.1:${editorPort}`, upgrade), 101);
+  /* opened as localhost or [::1], the editor goes to Studio's own address: its cookie, its writes' Origin and its
+     film origin's CORS are all that origin's, so a page left on the alias loads but cannot write */
+  const where = (host, path, headers = {}) => new Promise((done, fail) => {
+    const req = request(`${studio.origin}${path}`, { headers: { host, ...headers } });
+    req.on('response', (res) => { res.resume(); done({ status: res.statusCode, location: res.headers.location }); });
+    req.on('error', fail);
+    req.end();
+  });
+  for (const host of [`localhost:${editorPort}`, `[::1]:${editorPort}`]) {
+    assert.deepEqual(await where(host, `/?key=${studio.key}`), { status: 302, location: `${studio.origin}/?key=${studio.key}` }, host);
+    assert.deepEqual(await where(host, '/assets/missing.js'), { status: 302, location: `${studio.origin}/assets/missing.js` }, host);
+    /* a caller that showed its key in the cookie keeps it in the address it lands on */
+    assert.deepEqual(await where(host, '/', { cookie: `openfilm_studio_${editorPort}=${studio.key}` }), { status: 302, location: `${studio.origin}/?key=${studio.key}` }, host);
+  }
+  /* the key is not handed to a caller that did not show it */
+  assert.deepEqual(await where(`localhost:${editorPort}`, '/'), { status: 302, location: `${studio.origin}/` });
 });
 
 test('the film origin serves the film\'s files only: no dot file or folder (.git, .env), no Windows stream, nothing a link leads out to', async () => {
