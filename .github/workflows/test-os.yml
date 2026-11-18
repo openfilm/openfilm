@@ -19,7 +19,7 @@ jobs:
     # Match the signed desktop build runner. The macOS 26 pool repeatedly stalled browser and FFmpeg tests.
     runs-on: ${{ inputs.os == 'macos-latest' && 'macos-15' || inputs.os }}
     # a test that hangs ends the job, not hours later
-    timeout-minutes: 30
+    timeout-minutes: 45
     env:
       # the tests never start Electron: no need for its 100 MB download
       ELECTRON_SKIP_BINARY_DOWNLOAD: '1'

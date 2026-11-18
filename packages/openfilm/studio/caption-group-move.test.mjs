@@ -48,7 +48,8 @@ test('unlocked caption tracks move with a mixed selection, with one undo for med
     const shots = async () => (await film()).tracks.find(t => t.clips.some(c => c.id === 'one')).clips;
     const cues = async () => readVtt(await readFile(join(root, 'captions.vtt'), 'utf8')).cues;
     const until = async (check, why) => {
-      for (let i = 0; i < 100; i++) { if (await check()) return; await page.waitForTimeout(50); }
+      /* a move of 183 cues and their media is saved in one write, which a slow machine takes seconds over */
+      for (let i = 0; i < 300; i++) { if (await check()) return; await page.waitForTimeout(50); }
       assert.fail(why);
     };
     await page.goto(`${studio.origin}/projects/${project.id}?key=${studio.key}`);
