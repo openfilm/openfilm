@@ -5002,6 +5002,13 @@ export function ProjectView({ projectId, onProject }: {
         if (once) commands.overwriteTrack(cmd === 'overwrite-track-up' ? -1 : 1);
         return;
       case 'zoom-fit': take(); commands.zoomFit(); return;
+      case 'zoom-in': case 'zoom-out': case 'zoom-reset':
+        /* pressed in the picture (the film's frame passes its keys on, with no target here); the window's own presses
+           are the timeline's (Timeline zooms on them itself) */
+        if (event.target) return;
+        take();
+        commands.zoom(cmd);
+        return;
       case 'toggle-skimming': take(); if (once) commands.toggleSkimming(); return;
       case 'select-left': case 'select-right': take(); if (once) commands.selectSide(cmd === 'select-left' ? -1 : 1); return;
       case 'ripple-start': take(); if (once) commands.rippleTrimStart(); return;

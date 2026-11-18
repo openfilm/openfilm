@@ -191,8 +191,15 @@ test('the built-in schemes: each app\'s keys where Studio has the action, OpenFi
   assert.deepEqual(schemeKeymap('premiere', false)['clear-range'], ['mod+shift+x']);
   assert.equal(actionOf(press('k', { metaKey: true }), premiere, true), 'split');
   assert.equal(actionOf(press('\\'), premiere, true), 'zoom-fit');
+  assert.equal(actionOf(press('='), premiere, true), 'zoom-in', 'Zoom In');
+  assert.equal(actionOf({ ...press('+', { shiftKey: true }), code: 'Equal' }, premiere, true), 'zoom-in', '+ is the = key with ⇧');
+  assert.equal(actionOf({ ...press('+'), code: 'NumpadAdd' }, premiere, true), 'zoom-in', 'the keypad\'s +');
+  assert.equal(actionOf(press('-'), premiere, true), 'zoom-out');
 
   const fcp = schemeKeymap('fcp', true);
+  assert.equal(actionOf({ ...press('+', { shiftKey: true }), code: 'Equal' }, fcp, true), 'zoom-in', 'plain + zooms there too');
+  assert.equal(actionOf(press('-'), fcp, true), 'zoom-out');
+  assert.equal(actionOf(press('=', { metaKey: true }), fcp, true), 'zoom-in');
   assert.deepEqual(fcp.loop, ['mod+l']);
   assert.deepEqual(fcp.refer, [], '⌘L loops there');
   assert.deepEqual(fcp['ripple-delete'], ['Backspace', 'Delete'], 'Delete closes the gap');

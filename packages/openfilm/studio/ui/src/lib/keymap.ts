@@ -166,7 +166,8 @@ const PREMIERE: Partial<Record<ActionId, Binding>> = {
   'nudge-forward': { mac: ['mod+ArrowRight'], other: ['alt+ArrowRight'] },
   /* Snap in Timeline */
   'toggle-snap': ['s'],
-  'zoom-in': ['='],
+  /* Zoom In is the = key, which types + with ⇧ (and the keypad's +) */
+  'zoom-in': ['=', '+'],
   'zoom-out': ['-'],
   /* Zoom to Sequence */
   'zoom-fit': ['\\'],
@@ -233,8 +234,9 @@ const FINAL_CUT: Partial<Record<ActionId, Binding>> = {
   'nudge-forward': ['.'],
   /* Snapping */
   'toggle-snap': ['n'],
-  'zoom-in': ['mod++', 'mod+='],
-  'zoom-out': ['mod+-'],
+  /* ⌘+ / ⌘−; plain + / − as well, as in Studio's other schemes (the app has no other use for them) */
+  'zoom-in': ['mod++', 'mod+=', '+', '='],
+  'zoom-out': ['mod+-', '-'],
   'zoom-fit': ['shift+z'],
   'add-marker': ['m'],
   'next-marker': ["ctrl+'"],

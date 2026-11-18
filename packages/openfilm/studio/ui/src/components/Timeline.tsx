@@ -180,6 +180,9 @@ import { isFilterLayer, isLibraryEffect, isLibrarySticker, libraryItemOfClip, na
 import { CategoryIcon } from './library/icons';
 import { cutNear, transitionSpan, type CutRef, type FilmTransition, type TransitionAsk, type TransitionKind } from '@/lib/transitions';
 
+/** Whether a node is in the edit's viewer (the picture and its bars), where + / − zoom the timeline too. */
+const viewerOf = (node: Node): boolean => Boolean((node instanceof Element ? node : node.parentElement)?.closest('[data-viewer-pane]'));
+
 /** Track head column: kind badge + lock + hide + original sound. */
 const HEAD_W = 108;
 /** The column between the heads and the clips where the cover's tile stands, by the main track (components/cover CoverTile). */
@@ -812,6 +815,8 @@ export interface TimelineCommands {
   overwriteTrack: (dir: -1 | 1) => void;
   /** ⇧Z: the whole film in view. */
   zoomFit: () => void;
+  /** + / − / ⌘0 pressed in the picture (the film's frame passes its keys on): the timeline zoomed, as from the window. */
+  zoom: (action: 'zoom-in' | 'zoom-out' | 'zoom-reset') => void;
   /** The targeted track (film.html index): the one last pressed; null when none is. */
   target: () => number | null;
 }
@@ -1447,6 +1452,15 @@ export const Timeline = React.memo(function Timeline({
   /* stable for the key handlers and buttons; they act on what is current */
   const zoomToStable = React.useCallback((next: number, place?: { at?: number; scroll?: number }) => zoomFns.current.zoomTo(next, place), []);
   const zoomByStable = React.useCallback((factor: number) => zoomFns.current.zoomBy(factor), []);
+  /** + / − / ⌘0: the timeline zoomed, while it is shown with a film in it; whether it was. */
+  const zoomKey = (action: 'zoom-in' | 'zoom-out' | 'zoom-reset'): boolean => {
+    if (!playable || !scrollRef.current?.checkVisibility?.({ visibilityProperty: true })) return false;
+    if (action === 'zoom-reset') zoomToStable(ZOOM_DEFAULT);
+    else zoomByStable(action === 'zoom-out' ? 1 / ZOOM_STEP : ZOOM_STEP);
+    return true;
+  };
+  const zoomKeyRef = React.useRef(zoomKey);
+  zoomKeyRef.current = zoomKey;
 
   /* after every render: a zoom laid out goes to its scroll before paint, and a gesture is redrawn against what is laid
      out now (or ends, once it has stopped and the layout shows it) */
@@ -1965,6 +1979,7 @@ export const Timeline = React.memo(function Timeline({
   selectedRef.current = selected;
   /* whether the last press was on the timeline: ⌘A selects all clips only then */
   const activeRef = React.useRef(false);
+  const zoomPressRef = React.useRef(false);
   /* the row the pointer is over, or left the timeline from (`inside` false) */
   const pointerRowRef = React.useRef<{ lane: string | null; inside: boolean }>({ lane: null, inside: false });
 
@@ -2329,18 +2344,17 @@ export const Timeline = React.memo(function Timeline({
         void (action === 'ripple-delete' ? rippleRemove(picked) : magnetRemove(picked));
         return;
       }
-      /* Plain + / = / - zoom in the timeline; modified shortcuts also work elsewhere in Studio. */
+      /* Plain + / = / - zoom in the timeline and in the viewer above it (the picture's own keys come through
+         ProjectView: commands.zoom); modified shortcuts also work elsewhere in Studio. */
       if (action === 'zoom-in' || action === 'zoom-out' || action === 'zoom-reset') {
         if (e.defaultPrevented || e.isComposing) return;
         if (!e.metaKey && !e.ctrlKey && !e.altKey) {
-          const inside = e.target instanceof Node && rootRef.current?.contains(e.target);
-          if (!inside && !(activeRef.current && e.target === document.body)) return;
+          const inside = e.target instanceof Node && (rootRef.current?.contains(e.target) || viewerOf(e.target));
+          if (!inside && !(zoomPressRef.current && e.target === document.body)) return;
           if (document.querySelector('[role="menu"], [role="listbox"], [data-popover-panel]')) return;
         }
-        if (!playable || !scrollRef.current?.checkVisibility?.({ visibilityProperty: true })) return;
+        if (!zoomKeyRef.current(action)) return;
         e.preventDefault();
-        if (action === 'zoom-reset') zoomToStable(ZOOM_DEFAULT);
-        else zoomByStable(action === 'zoom-out' ? 1 / ZOOM_STEP : ZOOM_STEP);
         return;
       }
       if (action === 'copy') {
@@ -2367,11 +2381,13 @@ export const Timeline = React.memo(function Timeline({
     /* the playhead is read from a ref: as a dependency the listener would be swapped twenty times a second */
   }, [onRemove, onRemoveMany, onEditOps, onCopy, onPaste, hasClipboard, removeMany, rippleRemove, magnetRemove, selected, tracks, setSelected, playable, zoomByStable, zoomToStable, gap, closeGap, pickedTransition, onTransition, onPickTransition, range, onRangeChange, t]);
 
-  /* whether the last press was on the timeline (for ⌘A); capture phase, since presses here are often stopped */
+  /* whether the last press was on the timeline (for ⌘A), or on it or the viewer (for + / −); capture phase, since
+     presses here are often stopped */
   React.useEffect(() => {
     const onDown = (e: PointerEvent): void => {
       const root = scrollRef.current?.closest('[data-timeline]');
       activeRef.current = Boolean(root && e.target instanceof Node && root.contains(e.target));
+      zoomPressRef.current = activeRef.current || (e.target instanceof Node && viewerOf(e.target));
     };
     window.addEventListener('pointerdown', onDown, true);
     return () => window.removeEventListener('pointerdown', onDown, true);
@@ -3917,6 +3933,7 @@ export const Timeline = React.memo(function Timeline({
         else setNotice(t(dir < 0 ? 'timeline.overwriteUpUnavailable' : 'timeline.overwriteDownUnavailable'));
       },
       zoomFit: () => zoomToStable(ZOOM_DEFAULT, { scroll: 0 }),
+      zoom: (action) => { zoomKeyRef.current(action); },
       target: () => tracks.find((tr) => tr.lane === targetLaneRef.current)?.docIndex ?? null,
     };
     return () => { commandsRef.current = null; };
@@ -4423,7 +4440,8 @@ export const Timeline = React.memo(function Timeline({
       <div className="flex min-h-0 min-w-0 flex-1">
         {/* left: track heads */}
         <div
-          className="relative z-20 shrink-0 overflow-hidden border-r"
+          /* with the cover's column the line is the heads' own (drawn below): heads | cover, then the clips */
+          className={`relative z-20 shrink-0 overflow-hidden ${cover ? '' : 'border-r'}`}
           style={{
             width: headW,
             background: TL.head,
@@ -4437,8 +4455,7 @@ export const Timeline = React.memo(function Timeline({
           <div
             className="relative overflow-hidden"
             /* the ground the heads lie on, seen in the gaps between them as between the rows */
-            /* with the cover's column: the line between the heads' side and the clips on its right, the cover inside it */
-            style={{ height: `calc(100% - ${RULER_H}px - ${H_SCROLL_H}px)`, background: 'var(--tl-gap)', ...(cover ? { boxShadow: `inset -1px 0 0 ${TL.line}` } : {}) }}
+            style={{ height: `calc(100% - ${RULER_H}px - ${H_SCROLL_H}px)`, background: 'var(--tl-gap)' }}
           >
             {/* moved with the track area's vertical scroll (onScroll), as the rows' backgrounds are; its own block
                 (flow-root), so the first head's margin stays inside it and the reorder guide's top counts from it */}
@@ -4466,6 +4483,8 @@ export const Timeline = React.memo(function Timeline({
               })() : null}
             </div>
           </div>
+          {/* with the cover's column: the line between the heads on its left and the cover, top to bottom */}
+          {cover ? <div aria-hidden className="pointer-events-none absolute inset-y-0 z-10 w-px" style={{ right: COVER_COL_W, background: TL.line }} /> : null}
         </div>
 
         {/* right: ruler + track area; the only part that scrolls, and where media-pane drops land */}
