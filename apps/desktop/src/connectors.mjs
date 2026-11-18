@@ -69,7 +69,9 @@ export function createConnectors(o) {
   const allowed = new Set();
   const changed = () => { try { o.onChange?.(); } catch { /* a listener's own trouble */ } };
 
-  const file = (id) => join(dir, `${id}.json`);
+  /* a connector's id names its file, encoded: a name in the folder whatever the id holds, never a path out of it
+     (an official id, letters and dashes, is its own name) */
+  const file = (id) => join(dir, `${encodeURIComponent(String(id))}.json`);
   /** what is kept of a connector: its OAuth state and what its server offers */
   const read = (id) => {
     try { return JSON.parse(o.unseal(readFileSync(file(id)))); } catch { return null; }
