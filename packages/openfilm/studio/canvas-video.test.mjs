@@ -62,7 +62,8 @@ test('a canvas video uploads in place and keeps its frame while playing, renamin
       return [...context.getImageData(10, 10, 1, 1).data];
     }, png.toString('base64'));
     const checkFirstFrame = async () => {
-      const deadline = Date.now() + 1000;
+      /* the video is ready before its picture reaches the screen: on a slow machine (Windows CI) that takes seconds */
+      const deadline = Date.now() + 5000;
       let pixel;
       do {
         pixel = await sample(await node.screenshot());
