@@ -210,6 +210,9 @@ test('another community index the person adds is read after OpenFilm\'s own: nev
   writeFileSync(other, JSON.stringify({ version: 1, skills: [entry(B, '9.9.9'), { name: 'demo', repo: 'https://github.com/someone/skill-demo', path: 'skills/demo', version: '2.0.0', commit: B }],
     revoked: [{ uid: 'openfilm/demo', reason: 'malware' }] }));
   assert.throws(() => setCommunitySources(['ftp://x']), /Not an index address/);
+  /* a file on a Windows computer is named by its drive */
+  setCommunitySources(['D:\\skills\\index.json']);
+  assert.deepEqual(communitySources(), ['D:\\skills\\index.json']);
   setCommunitySources([other]);
   assert.deepEqual(communitySources(), [other]);
   const catalog = await refreshCatalog({ hosts: gh.hosts });
