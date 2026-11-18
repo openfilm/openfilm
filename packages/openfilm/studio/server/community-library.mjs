@@ -15,6 +15,8 @@ const REFRESH = 60_000;
 const TIMEOUT = 8000;
 const HEX = /^[a-f0-9]{64}$/;
 const ITEM = /^(sound|music|transition|effect|media|text|sticker|filter|template)\/[a-z0-9]+(?:-[a-z0-9]+)*$/;
+/** Any item id, of a kind this OpenFilm knows or of one added to the Community later (skipped, not refused) */
+const ANY_ITEM = /^[a-z][a-z0-9-]{0,31}\/[a-z0-9]+(?:-[a-z0-9]+)*$/;
 /** A text style's variables and a filter's grade, as the catalog carries them (the community's scripts/check.mjs) */
 const TEXT_VAR = /^--[a-z][a-z0-9-]{0,39}$/;
 /** How a sticker may move while shown (its page and its tile draw the same keyframes) */
@@ -83,7 +85,7 @@ function decode(json) {
         typeof by !== 'string' || !/^[a-zA-Z0-9-]{1,39}$/.test(by) ||
         !name || !languages.every((lang) => typeof name[lang] === 'string' && name[lang].trim() && name[lang].length <= 60) ||
         typeof about !== 'string' || about.length > 300 || (license !== undefined && typeof license !== 'string') ||
-        !Array.isArray(items) || !items.length || items.length > 200 || !items.every((x) => typeof x === 'string' && ITEM.test(x) && !packOf.has(x)) ||
+        !Array.isArray(items) || !items.length || items.length > 200 || !items.every((x) => typeof x === 'string' && ANY_ITEM.test(x) && !packOf.has(x)) ||
         new Set(items).size !== items.length) throw new Error('Invalid community pack');
     const pack = /** @type {Pack} */ ({ id: `${by.toLowerCase()}/${id}`, name, about, by, version, items: [], ...(typeof license === 'string' ? { license } : {}) });
     if (result.packs.some((p) => p.id === pack.id)) throw new Error('Invalid community pack');
@@ -94,10 +96,13 @@ function decode(json) {
     }
     for (const item of items) packOf.set(item, pack);
     result.packs.push(pack);
+    /* a pack of only kinds a later OpenFilm knows has nothing here, and is left out with its things (below) */
   }
   for (const entry of json.items) {
     const { id, version, revision, name, about, tags, by, durationMs, files, media, vars, grade, w, h, idle, slots } = entry ?? {};
     const kind = typeof id === 'string' && id.length < 100 ? ITEM.exec(id)?.[1] : undefined;
+    /* a kind added to the Community after this OpenFilm: skipped, so the rest of the catalog still shows */
+    if (!kind && typeof id === 'string' && ANY_ITEM.test(id) && !seen.has(id)) { seen.add(id); continue; }
     /* a media file: footage, a picture or a recording, one file (a poster beside footage); a picture lasts nothing */
     const isMedia = kind === 'media';
     if (isMedia && !['video', 'image', 'audio'].includes(media)) throw new Error('Invalid community item');

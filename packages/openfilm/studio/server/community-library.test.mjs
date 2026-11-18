@@ -146,3 +146,17 @@ test('a text style, a filter and a sticker read from the catalog as the library 
   assert.equal(catalog.bundles.get(sticker.id)?.length, 3);
   assert.throws(() => decodeForTest({ version: 1, items: [{ ...base, id: 'text/bad', durationMs: 0, vars: { '--bg': 'url(x)' }, files: {} }] }), /Invalid/);
 });
+
+test('a kind added to the Community later is skipped, the rest of the catalog still shows', async () => {
+  const { decodeForTest } = await import('./community-library.mjs');
+  const hex = (c) => c.repeat(64);
+  const name = { en: 'X', 'zh-CN': 'X', ja: 'X', ko: 'X', es: 'X' };
+  const base = { version: 1, revision: hex('a'), name, about: 'A test item.', tags: ['test'], by: 'tester' };
+  const catalog = decodeForTest({ version: 1, items: [
+    { ...base, id: 'hologram/orb', durationMs: 1000, files: { 'orb.glb': { sha256: hex('b'), bytes: 10 } } },
+    { ...base, id: 'text/bold', durationMs: 0, vars: { '--weight': '900' }, files: {} },
+  ], packs: [{ id: 'mixed', version: 1, revision: hex('c'), name, about: 'A mixed pack.', by: 'tester', items: ['hologram/orb', 'text/bold'] },
+    { id: 'future', version: 1, revision: hex('d'), name, about: 'A pack of a later kind.', by: 'tester', items: ['hologram/other'] }] });
+  assert.deepEqual(catalog.items.map((i) => i.cat), ['text']);
+  assert.deepEqual(catalog.packs.map((p) => [p.id, p.items.length]), [['tester/mixed', 1]]);
+});
