@@ -2,7 +2,7 @@ import { test, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, mkdirSync, mkdtempSync, realpathSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { fingerprint } from '../../src/media-fingerprint.mjs';
 import { scanProject } from './media-index.mjs';
 import { placeOf } from './media-library.mjs';
@@ -56,7 +56,7 @@ test('an agent finds the person\'s own media by words, sees what each is, and br
   const id = (await fingerprint(join(folder, 'beach', 'Sunrise 01.mp4'))).slice(3);
   assert.deepEqual(sunrise.lines.slice(2, 6), [
     ` 1. Sunrise 01.mp4   video · 80 KB · ${new Date().toISOString().slice(0, 10)}`,
-    `    id ${id}`, `    in Saved / ${folder.split('/').pop()} / beach, kept by the person to use in every film`, '    not used in any project yet',
+    `    id ${id}`, `    in Saved / ${basename(folder)} / beach, kept by the person to use in every film`, '    not used in any project yet',
   ]);
   assert.match((await myMediaGet({ prompt: 'dawn' }, film.path)).lines[0], /^Nothing in the person's media library for “dawn”/);
   assert.match((await myMediaGet({ kind: 'video', n: '1' }, film.path)).lines[0], /^1 of 2 in the person's media library \(video\)/);

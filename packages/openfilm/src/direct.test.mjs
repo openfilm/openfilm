@@ -232,7 +232,8 @@ test('a film of footage, a title and captions renders to the same frames with it
     if (process.platform === 'darwin') assert.equal(read.straight, 105, 'every second but the title\'s: 0 to 2 and 3 to 4.5');
     if (read.straight) assert.ok(read.lines.includes(`  ${read.straight} of them read straight from the footage`), read.lines.join('\n'));
     const log = join(dir, 'psnr.log');
-    execFileSync('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-i', read.out, '-i', drawn.out, '-lavfi', `psnr=stats_file=${log}`, '-f', 'null', '-']);
+    /* named from its folder: a filter's argument would take a Windows path's drive colon and backslashes as its own */
+    execFileSync('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-i', read.out, '-i', drawn.out, '-lavfi', 'psnr=stats_file=psnr.log', '-f', 'null', '-'], { cwd: dir });
     const frames = readFileSync(log, 'utf8').trim().split('\n').map((l) => (/psnr_avg:inf/.test(l) ? 99 : Number(/psnr_avg:([\d.]+)/.exec(l)?.[1])));
     assert.equal(frames.length, 135);
     /* another frame of this footage, a caption missing or a cut a frame off is under 25 dB */

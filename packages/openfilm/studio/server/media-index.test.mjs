@@ -31,7 +31,8 @@ function media(path, seed, size = 300_000) {
   writeFileSync(path, bytes);
   return path;
 }
-const elsewhere = () => realpathSync(mkdtempSync(join(tmpdir(), 'of-media-elsewhere-')));
+/* where it really is: on Windows the temp folder may be named in its short form, which the native call spells out */
+const elsewhere = () => realpathSync.native(mkdtempSync(join(tmpdir(), 'of-media-elsewhere-')));
 
 test('a project records each media file under assets/ once, and reads a file again only when it changed', async () => {
   const { path: root } = await createProject('One');

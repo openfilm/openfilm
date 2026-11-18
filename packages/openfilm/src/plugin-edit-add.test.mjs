@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { addToFilm, addedLines, STILL_SECONDS } from '../plugins/edit/add.mjs';
 
 /** A project folder with the files named (empty: only their names matter) and a film.html with `body`. */
@@ -14,7 +14,7 @@ const project = (files, body = '') => {
 };
 const LENGTHS = { 'a.mp4': 2.5, 'b.mp4': 1.2, 'v.m4a': 3, 'long.mp4': 10 };
 /** A file's length without ffprobe: by its name; null for one it cannot read. */
-const facts = async (file) => { const d = LENGTHS[file.split('/').pop()]; return d ? { duration: d } : null; };
+const facts = async (file) => { const d = LENGTHS[basename(file)]; return d ? { duration: d } : null; };
 const clipsOf = (root) => [...readFileSync(join(root, 'film.html'), 'utf8').matchAll(/<(section|\/section|video|img|audio|iframe)\b([^>]*)>/g)].map((m) => `${m[1]}${m[2]}`);
 
 test('edit add: files go at the end of the track of their kind, one after the other, on new tracks in an empty film', async () => {
