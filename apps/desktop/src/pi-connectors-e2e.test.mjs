@@ -84,6 +84,8 @@ test('a connector on and signed in is the app\'s own agent\'s: Pi calls its tool
     session.close();
     llm.close();
     await svc.close();
+    /* Windows will not remove a folder a process still works in */
+    await session.ended();
     rmSync(cwd, { recursive: true, force: true });
     rmSync(prefsHome, { recursive: true, force: true });
   }
