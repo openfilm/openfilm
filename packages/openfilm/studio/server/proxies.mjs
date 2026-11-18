@@ -168,6 +168,20 @@ function stopLightening() {
   if (making && !making.needed && (!lighten || [...jobs.values()].some((job) => job.needed && job.state === 'waiting'))) making.stop?.abort();
 }
 
+/** Who hears of each file the editor's browser does not decode, as it is said (the film's origin, in a thread of its
+    own, keeps its own list: pages.mjs). @type {((file: string) => void)[]} */
+const hearers = [];
+/** Hear of each file the editor's browser does not decode, as it is said. */
+export function onUndecoded(/** @type {(file: string) => void} */ hear) {
+  hearers.push(hear);
+}
+/** The files the editor's browser does not decode, said so far. */
+export const undecodedNow = () => [...undecoded];
+/** A file the editor's browser does not decode, said in another thread (see onUndecoded). */
+export function markUndecoded(/** @type {string} */ file) {
+  undecoded.add(file);
+}
+
 /** Whether the editor's browser does not decode the project's video `rel` (said to ensureProxies). */
 export function undecodable(/** @type {string} */ root, /** @type {string} */ rel) {
   try { return undecoded.has(readable(root, rel)); } catch { return false; }
@@ -212,7 +226,7 @@ export async function ensureProxies(root, rels, height, { on = true, undecoded: 
     let file;
     try { file = proxyFile(root, rel, height); } catch { continue; }
     const { abs, out } = file;
-    if (told.includes(rel)) undecoded.add(abs);
+    if (told.includes(rel) && !undecoded.has(abs)) { undecoded.add(abs); for (const hear of hearers) hear(abs); }
     const needed = undecoded.has(abs);
     if (!needed && !(on && (heavy(facts) || await slowToScrub(root, rel, facts)))) continue;
     const mark = needed ? { needed: /** @type {const} */ (true) } : {};

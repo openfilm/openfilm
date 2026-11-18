@@ -23,12 +23,13 @@ import { createHash, createHmac } from 'node:crypto';
 import { readFileSync, realpathSync, statSync } from 'node:fs';
 import { mkdir, rename } from 'node:fs/promises';
 import { createServer } from 'node:http';
+import { Worker } from 'node:worker_threads';
 import { basename, dirname, isAbsolute, join, normalize, relative, resolve, sep } from 'node:path';
-import { HOST_FLAG, folderFiles, listenLocal } from '../../src/host.mjs';
+import { HOST_FLAG, folderFiles } from '../../src/host.mjs';
 import { readableLink, referenceSource } from '../../src/media-links.mjs';
 import { clipKind } from '../../src/film-doc.mjs';
 import { readPrefs } from './prefs.mjs';
-import { readyProxy, undecodable } from './proxies.mjs';
+import { onUndecoded, readyProxy, undecodable, undecodedNow } from './proxies.mjs';
 import { gradedCopy, gradeSoon, madeCopy } from '../../src/seekable.mjs';
 import { isPreviewKey, previewDir } from './preview-cache.mjs';
 import { probe, soundOf } from './derived.mjs';
@@ -118,20 +119,20 @@ export function servable(root, plain) {
 }
 
 /**
- * `secret`: what tokens are signed with (Studio's key). `projects`: the projects there are, for a token not seen since
- * this launch (a page open from before Studio restarted).
- * @param {{ port: number, editorOrigin: () => string, secret: string, projects: () => Promise<{ id: string, path: string }[]> }} options
+ * The film origin's server, not listening yet: the files of the folder each token reaches (`rootOf`, null for none),
+ * answered as the module's head says. `editorOrigin`: the only origin its pages answer, and that may read them.
+ * @param {{ editorOrigin: string, rootOf: (token: string) => string | null | Promise<string | null> }} options
  */
-export async function startPages({ port, editorOrigin, secret, projects }) {
+export function filmServer({ editorOrigin, rootOf }) {
   /* read by the editor (its mixer fetches the media). Framed by it with no frame-ancestors rule: that rule is checked
      against every frame up to the window, so Studio shown inside another app's frame (an agent's preview pane) would
      lose its picture; a page is reached only through its project's token, which only the editor has */
   const policy = () => ({
-    'access-control-allow-origin': editorOrigin(),
+    'access-control-allow-origin': editorOrigin,
     'x-content-type-options': 'nosniff',
   });
   /* Studio's scripts, told the editor's origin (the only one they answer) */
-  const scripts = (/** @type {string[]} */ ...list) => list.map((js) => `<script>${js.replaceAll('__EDITOR__', JSON.stringify(editorOrigin()))}</script>`).join('');
+  const scripts = (/** @type {string[]} */ ...list) => list.map((js) => `<script>${js.replaceAll('__EDITOR__', JSON.stringify(editorOrigin))}</script>`).join('');
   /* the timeline page (the preview) gets the bridge and the stage; a web page gets the bridge too, so the editor can
      play one on its own (the media pane's viewer) — inside the timeline it stays quiet: its parent is not the editor */
   const filesOf = (/** @type {string} */ root) => folderFiles(root, {
@@ -140,15 +141,16 @@ export async function startPages({ port, editorOrigin, secret, projects }) {
     headers: policy(),
     /* heavy footage is played from its proxy once it is made, while proxies are on, and footage the editor's browser
        does not decode whether they are or not (proxies.mjs); else from a copy made for footage a render's browser does
-       not decode, or that seeks slowly (src/seekable.mjs), when there is one. A video graded by LUTs is played from
-       its graded copy, the one an export draws, asked for by its key (`?of-grade`), proxies on or off */
+       not decode, or that seeks slowly (src/seekable.mjs), when there is one (looked for again each time: copies are
+       made on Studio's thread, not this one). A video graded by LUTs is played from its graded copy, the one an export
+       draws, asked for by its key (`?of-grade`), proxies on or off */
     swap: (file, query) => {
       if (clipKind(file) !== 'video') return null;
       const graded = gradedCopy(root, query?.get('of-grade') ?? '');
       if (graded) return graded;
       const { proxies } = readPrefs();
       const rel = relative(root, file).split(sep).join('/');
-      return (proxies.on || undecodable(root, rel) ? readyProxy(root, rel, proxies.height) : null) ?? madeCopy(referenceSource(root, file) ?? file, root);
+      return (proxies.on || undecodable(root, rel) ? readyProxy(root, rel, proxies.height) : null) ?? madeCopy(referenceSource(root, file) ?? file, root, { recheck: true });
     },
     /* a video graded by LUTs: its graded copy begun in the project's cache, the preview playing it as it is meanwhile */
     grade: (/** @type {string} */ file, /** @type {string[]} */ luts, /** @type {[number, number] | null} */ time) => gradeSoon(file, luts, root, time),
@@ -157,31 +159,13 @@ export async function startPages({ port, editorOrigin, secret, projects }) {
   /** a project's playable copies (UNPLAYABLE), served as its files are */
   const copiesOf = (/** @type {string} */ root) => folderFiles(join(root, PLAYABLE_DIR), { headers: policy() });
 
-  /** @type {Map<string, { root: string, files: ReturnType<typeof folderFiles> }>} */
+  /** each token's folder and its files, as last reached @type {Map<string, { root: string, files: ReturnType<typeof folderFiles> }>} */
   const byToken = new Map();
-  const tokenOf = (/** @type {string} */ id) => createHmac('sha256', secret).update(`film origin\0${id}`).digest().subarray(0, 18).toString('base64url');
-  /**
-   * The project's token, pointing at its folder as it is now (a renamed folder keeps its token). A compound clip's film
-   * (parts.mjs) is served from the project it is in, whose files it names (`../../assets/a.mp4`).
-   */
-  const serve = (/** @type {{ id: string, path: string }} */ project) => {
-    const token = tokenOf(project.id);
-    const root = compoundOuter(project.path);
-    if (byToken.get(token)?.root !== root) byToken.set(token, { root, files: filesOf(root) });
-    return token;
-  };
-  /** Where the project's folder is in what its token serves: nothing, or a compound clip's `parts/<name>/`. */
-  const within = (/** @type {string} */ path) => {
-    const sub = relative(compoundOuter(path), resolve(path)).split(sep).join('/');
-    return sub ? `${sub}/` : '';
-  };
-  /** The folder a token reaches: one served since this launch, else the listed project it is the token of. */
   const entryOf = async (/** @type {string} */ token) => {
-    if (!byToken.has(token)) {
-      const project = (await projects().catch(() => [])).find((p) => tokenOf(p.id) === token);
-      if (project) serve(project);
-    }
-    return byToken.get(token);
+    const root = await rootOf(token);
+    if (!root) return null;
+    if (byToken.get(token)?.root !== root) byToken.set(token, { root, files: filesOf(root) });
+    return byToken.get(token) ?? null;
   };
 
   const server = createServer(async (req, res) => {
@@ -225,15 +209,99 @@ export async function startPages({ port, editorOrigin, secret, projects }) {
     }
     if (!entry.files(req, res, path, url.searchParams)) res.writeHead(403, headers).end();
   });
-  await listenLocal(server, port);
+  return server;
+}
+
+/** How long the film origin's thread may take to come up (ms). */
+const START_MS = 20_000;
+
+/**
+ * The film origin, served in a thread of its own (pages-worker.mjs), so footage and pages load while Studio is busy
+ * (a film read, a waveform made, an export prepared): served on Studio's own thread, every range request of a video
+ * waited behind that work, and the preview stood still. Studio keeps the tokens: the thread is told each folder as
+ * it is given an address, and asks for a token it was not told of. A thread that stops is started again on its port.
+ *
+ * `secret`: what tokens are signed with (Studio's key). `projects`: the projects there are, for a token not seen since
+ * this launch (a page open from before Studio restarted).
+ * @param {{ port: number, editorOrigin: () => string, secret: string, projects: () => Promise<{ id: string, path: string }[]> }} options
+ */
+export async function startPages({ port, editorOrigin, secret, projects }) {
+  /** each token's folder, as given out @type {Map<string, string>} */
+  const byToken = new Map();
+  const tokenOf = (/** @type {string} */ id) => createHmac('sha256', secret).update(`film origin\0${id}`).digest().subarray(0, 18).toString('base64url');
+  /** @type {Worker | null} */
+  let worker = null;
+  let closing = false;
+  /**
+   * The project's token, pointing at its folder as it is now (a renamed folder keeps its token). A compound clip's film
+   * (parts.mjs) is served from the project it is in, whose files it names (`../../assets/a.mp4`).
+   */
+  const serve = (/** @type {{ id: string, path: string }} */ project) => {
+    const token = tokenOf(project.id);
+    const root = compoundOuter(project.path);
+    if (byToken.get(token) !== root) { byToken.set(token, root); worker?.postMessage({ token, root }); }
+    return token;
+  };
+  /** Where the project's folder is in what its token serves: nothing, or a compound clip's `parts/<name>/`. */
+  const within = (/** @type {string} */ path) => {
+    const sub = relative(compoundOuter(path), resolve(path)).split(sep).join('/');
+    return sub ? `${sub}/` : '';
+  };
+  /** The folder a token reaches: one given out since this launch, else the listed project it is the token of. */
+  const rootOf = async (/** @type {string} */ token) => {
+    if (!byToken.has(token)) {
+      const project = (await projects().catch(() => [])).find((p) => tokenOf(p.id) === token);
+      if (project) serve(project);
+    }
+    return byToken.get(token) ?? null;
+  };
+  /** @type {((file: string) => void) | null} */
+  let tell = null;
+  onUndecoded((file) => tell?.(file));
+
+  /** The thread, listening on `at` (0: any port); resolves to its port. */
+  const start = (/** @type {number} */ at) => new Promise((resolveStart, failStart) => {
+    const w = new Worker(new URL('./pages-worker.mjs', import.meta.url), { workerData: { port: at, editorOrigin: editorOrigin(), roots: [...byToken] } });
+    let up = false;
+    const timer = setTimeout(() => { if (!up) { void w.terminate(); failStart(new Error('the film origin did not start')); } }, START_MS);
+    w.on('message', (/** @type {any} */ m) => {
+      if (m.listening) {
+        up = true;
+        clearTimeout(timer);
+        worker = w;
+        tell = (file) => w.postMessage({ undecoded: file });
+        resolveStart(m.listening);
+        return;
+      }
+      if (m.failed) { clearTimeout(timer); failStart(Object.assign(new Error(m.failed), m.code ? { code: m.code } : {})); return; }
+      if (m.find) void rootOf(m.token).then((root) => w.postMessage({ found: m.find, root }));
+    });
+    w.on('error', (e) => { if (!up) { clearTimeout(timer); failStart(e); } else console.error('film origin:', e); });
+    w.on('exit', () => {
+      if (worker !== w) return;
+      worker = null;
+      tell = null;
+      /* stopped by itself: started again on its port, so the pages open keep their address */
+      if (!closing) void start(listening).catch((e) => console.error('film origin did not start again:', e));
+    });
+    /* the thread keeps Studio's process up only through Studio (its own servers): stopping Studio stops it */
+    w.unref();
+    for (const file of undecodedNow()) w.postMessage({ undecoded: file });
+  });
+  const listening = /** @type {number} */ (await start(port));
   /* named `localhost`, not 127.0.0.1 as the editor is: another site to the browser, not only another origin, so it puts
      the film (footage decoding, pages drawing) in a process of its own, away from the editor's */
-  const origin = `http://localhost:${/** @type {import('node:net').AddressInfo} */ (server.address()).port}`;
+  const origin = `http://localhost:${listening}`;
 
   return {
     origin,
     /** The address of a project's folder on the film's origin; a renamed folder keeps it (pass the project as it is now). */
     folderUrl: (/** @type {{ id: string, path: string }} */ project) => `${origin}/p/${serve(project)}/${within(project.path)}`,
-    close: () => new Promise((done) => { server.closeAllConnections(); server.close(() => done(undefined)); }),
+    close: async () => {
+      closing = true;
+      const w = worker;
+      worker = null;
+      if (w) await w.terminate();
+    },
   };
 }

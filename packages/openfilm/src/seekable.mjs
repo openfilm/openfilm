@@ -144,15 +144,16 @@ const copyBase = (/** @type {string} */ file, /** @type {string} */ root, /** @t
 const found = new Map();
 /**
  * The copy of `file` already made in `root`'s cache (seekableCopies), or null; nothing is made. Asked on every request
- * a playing video makes, so a copy found is remembered, and one not found is looked for again a moment later.
- * @param {string} file @param {string} root
+ * a playing video makes, so a copy found is remembered, and one not found is looked for again a moment later; at once
+ * with `recheck` (asked from another thread than the one that makes copies, which would hear of a new one too late).
+ * @param {string} file @param {string} root @param {{ recheck?: boolean }} [options]
  */
-export function madeCopy(file, root) {
+export function madeCopy(file, root, { recheck = false } = {}) {
   let stat;
   try { stat = statSync(file); } catch { return null; }
   const key = `${root}\0${file}\0${stat.size}\0${stat.mtimeMs}`;
   const hit = found.get(key);
-  if (hit && (hit.copy ? existsSync(hit.copy) : Date.now() - hit.at < 2000)) return hit.copy;
+  if (hit && (hit.copy ? existsSync(hit.copy) : !recheck && Date.now() - hit.at < 2000)) return hit.copy;
   const base = copyBase(file, root, stat);
   const copy = [`${base}.mp4`, `${base}.webm`].find((f) => existsSync(f)) ?? null;
   found.set(key, { copy, at: Date.now() });
