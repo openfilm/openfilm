@@ -209,7 +209,7 @@ const BILLING = new Set(['budget', 'balance', 'spent', 'plan', 'planName', 'pric
 
 /** Why a get did not run; `code` is the CLI's exit status (2: not a project or a wrong command, 1: it did not run). */
 export class GetError extends Error {
-  /** @param {string} message @param {1 | 2} [code] @param {'balance'} [reason] why it did not run, for a page to say in its own words */
+  /** @param {string} message @param {1 | 2} [code] @param {'balance' | 'prompt-too-long' | 'invalid-picture'} [reason] why it did not run, for a page to say in its own words */
   constructor(message, code = 1, reason) {
     super(message);
     this.code = code;
@@ -448,14 +448,18 @@ export async function runGet(root, verb, given, { via, model, yes = false, ask, 
     if (clock.timedOut()) throw new GetError(provider.id === 'openfilm'
       ? `OpenFilm did not deliver this within ${waitSec} s. The task may already be complete and paid. Run the same command to recover its original result; use --fresh only when the person intentionally wants another paid take.`
       : `${provider.name} did not finish within ${waitSec} s, so Studio stopped waiting. Nothing landed in the project; try again later.`);
-    if (/** @type {{ code?: string, limit?: boolean }} */ (e)?.code === 'balance' && /** @type {{ limit?: boolean }} */ (e).limit) {
+    const failure = /** @type {{ code?: string, limit?: boolean } | null | undefined} */ (e);
+    if (failure?.code === 'balance' && failure.limit) {
       throw new GetError(`This did not run: the ${provider.name} key reached the spending limit set on it. The person can raise or remove that limit where `
         + `the key was made (${provider.keysUrl}), or use another key. Nothing was made. Stop and tell them; do not run it again until they say so.`, 1, 'balance');
     }
-    if (/** @type {{ code?: string }} */ (e)?.code === 'balance') {
+    if (failure?.code === 'balance') {
       tell?.({ kind: 'balance', provider: provider.name, providerId: provider.id });
       throw new GetError(`This did not run: ${provider.name} doesn't have enough balance. The person can top it up at ${provider.billingUrl}, `
         + 'or switch to another service. Nothing was made. Stop and tell them; do not run it again until they say so.', 1, 'balance');
+    }
+    if (e instanceof Error && (failure?.code === 'prompt-too-long' || failure?.code === 'invalid-picture')) {
+      throw new GetError(e.message, 1, failure.code);
     }
     throw e;
   } finally {

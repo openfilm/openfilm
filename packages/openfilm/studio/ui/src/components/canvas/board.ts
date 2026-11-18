@@ -6,6 +6,7 @@
 import React from 'react';
 import type { Edge, Node } from '@xyflow/react';
 import { api, type CanvasCharacter } from '@/api';
+import { lookup } from '@/i18n';
 import type { RedrawStart } from './redraw';
 import { AUDIO_W, CARD_H, CUT_W, FILE_W, MAKE_MEDIA, NOTE_H, NOTE_W, cardWidth, makeSize, readCanvasDoc, withVersion, type CanvasDoc, type CanvasNode, type GroupColor, type MakeKind, type MediaOf, type ModelSpec, receiptOf } from '@/lib/canvas';
 import type { ProvidersState } from '@/lib/providers';
@@ -306,9 +307,15 @@ const runWatchers = new Set<() => void>();
 export const runsChanged = () => { runsVersion += 1; for (const watch of runWatchers) watch(); };
 export const useRuns = () => React.useSyncExternalStore((watch) => { runWatchers.add(watch); return () => { runWatchers.delete(watch); }; }, () => runsVersion);
 
+const runErrorWords = new Map([
+  ['balance', 'canvas.make.noBalance'],
+  ['prompt-too-long', 'canvas.make.promptTooLong'],
+  ['invalid-picture', 'canvas.make.invalidPicture'],
+]);
+
 /** Whether it made one (false: it failed, was stopped, or was being made already). */
 export async function startRun(project: string, folder: string, node: string, request: { verb: string; args: Record<string, string | string[]> }, pick: { via?: string; model?: string }, key: string,
-  say: { nothing: string; balance: string }, board = 'main', recovery?: {scope:string;onResumed?:()=>void}): Promise<boolean> {
+  board = 'main', recovery?: {scope:string;onResumed?:()=>void}): Promise<boolean> {
   const id = `${project}/${node}`;
   if (runs.has(id)) return false;
   const abort = new AbortController();
@@ -323,7 +330,7 @@ export async function startRun(project: string, folder: string, node: string, re
     const asked = pending?.request ?? request;
     const receipt = receiptOf<{ src?: string; images?: Array<{ src?: string }> }>(await api.make(folder, asked.verb, asked.args, { ...pick, yes: true }, abort.signal));
     const path = receipt.src ?? receipt.images?.[0]?.src;
-    if (!path) throw new Error(say.nothing);
+    if (!path) throw new Error(lookup('canvas.make.nothing'));
     /* stopped: it was paid for once it started, so it is kept in the project (and its history), not on the node */
     if (run.left) { pending?.finish(); return false; }
     const made = { path, made: key };
@@ -337,8 +344,10 @@ export async function startRun(project: string, folder: string, node: string, re
     pending?.finish();
     return true;
   } catch (e) {
-    /* what the service's account lacked is said to the person (its dialog says where to top it up), not as told to an agent */
-    if (!abort.signal.aborted && !run.left) runErrors.set(id, (e as { reason?: string })?.reason === 'balance' ? say.balance : e instanceof Error ? e.message : String(e));
+    if (!abort.signal.aborted && !run.left) {
+      const words = runErrorWords.get((e as { reason?: string })?.reason ?? '');
+      runErrors.set(id, words ? lookup(words) : e instanceof Error ? e.message : String(e));
+    }
     return false;
   } finally {
     if (runs.get(id) === run) runs.delete(id);

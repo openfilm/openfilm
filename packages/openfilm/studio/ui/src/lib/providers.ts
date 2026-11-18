@@ -121,7 +121,7 @@ export const SERVICE_VERBS: ProviderVerb[] = ['tts', 'music', 'sfx', 'asr', 'cut
 export const PROVIDER_SITES: Readonly<Record<string, string>> = {
   openfilm: 'openfilm.dev', openai: 'openai.com', google: 'ai.google.dev', azure: 'azure.microsoft.com', elevenlabs: 'elevenlabs.io',
   inworld: 'inworld.ai', cartesia: 'cartesia.ai', openrouter: 'openrouter.ai', fal: 'fal.ai', groq: 'groq.com', mimo: 'platform.xiaomimimo.com',
-  doubao: 'volcengine.com', volcengine: 'volcengine.com', pexels: 'pexels.com', pixabay: 'pixabay.com',
+  doubao: 'volcengine.com', volcengine: 'volcengine.com', zhipu: 'bigmodel.cn', pexels: 'pexels.com', pixabay: 'pixabay.com',
   brave: 'brave.com/search/api', tavily: 'tavily.com', keenable: 'keenable.ai',
 };
 

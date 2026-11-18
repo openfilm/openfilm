@@ -26,6 +26,7 @@ import google from './google.mjs';
 import fal from './fal.mjs';
 import openrouter from './openrouter.mjs';
 import volcengine from './volcengine.mjs';
+import zhipu from './zhipu.mjs';
 import pexels from './pexels.mjs';
 import pixabay from './pixabay.mjs';
 import brave from './brave.mjs';
@@ -46,7 +47,7 @@ import { addedProblems, addedProviders } from './added.mjs';
  */
 
 /** The providers paid with the person's own key, and Local services, which takes none. */
-const BUILT_IN = [elevenlabs, inworld, cartesia, openai, google, fal, openrouter, volcengine, pexels, pixabay, brave, tavily, groq, azure, doubao, mimo, keenable, openfilm, local];
+const BUILT_IN = [elevenlabs, inworld, cartesia, openai, google, fal, openrouter, volcengine, zhipu, pexels, pixabay, brave, tavily, groq, azure, doubao, mimo, keenable, openfilm, local];
 /** Those, then the ones the person added (added.mjs), as last read (changed in place). */
 const OWN = [...BUILT_IN];
 

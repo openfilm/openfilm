@@ -7,6 +7,8 @@ Studio's editor (`studio/ui/dist`) bundles:
 - **React** and **React DOM**: MIT License, © Meta Platforms, Inc. and affiliates.
 - **Lucide** icons (`lucide-react`): ISC License, © Lucide Contributors.
 - **Simple Icons** social brand marks: CC0 1.0 Universal (https://github.com/simple-icons/simple-icons).
+- **GLM-Image** emblem cropped from the official wordmark (https://github.com/zai-org/GLM-Image).
+  The Apache License 2.0 is bundled at `studio/ui/dist/third-party/GLM-Image-LICENSE.txt`.
 - **React Flow** (`@xyflow/react`, `@xyflow/system`), the canvas: MIT License, © webkid GmbH; with **zustand** (MIT License,
   © Paul Henschel), **classcat** (MIT License, © Jorge Bucaran) and the **d3** modules it uses (d3-drag, d3-selection,
   d3-zoom, d3-transition, d3-interpolate, d3-dispatch, d3-color, d3-ease, d3-timer: ISC License, © Mike Bostock; the

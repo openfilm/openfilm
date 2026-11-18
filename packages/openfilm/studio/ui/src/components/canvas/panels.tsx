@@ -25,6 +25,7 @@ import { Popover } from '../Popover';
 import { Tooltip } from '../Tooltip';
 import { keepLastModel, lastModel, useBoard, type Choice, type MakeData } from './board';
 import { ProviderMark } from '../settings/ProviderMark';
+import glmImageMark from '@/assets/glm-image.svg';
 import { useDraft } from './words';
 import { DocSheet } from './doc';
 import { MoveClip, coverOf, stylePicture, useSubjects } from './libraries';
@@ -483,6 +484,14 @@ function Choices({ title, items, columns }: { title: string; columns: number; it
   );
 }
 
+function ModelMark({ choice, size }: { choice: Choice; size: number }) {
+  if (choice.via === 'zhipu' && choice.model === 'glm-image') {
+    return <span aria-hidden="true" className="shrink-0 bg-current text-[var(--text)]"
+      style={{ width: size, height: size, mask: `url("${glmImageMark}") center / contain no-repeat` }} />;
+  }
+  return <ProviderMark id={choice.via} size={size} />;
+}
+
 /**
  * Which model a node makes with: as Settings say, or one of every service's, the person's own first; a service not
  * connected yet is there too, a click away from connecting it.
@@ -499,7 +508,7 @@ function ModelPicker({ choices, picked, fallback, onPick, onConnect }: {
     return (
       <button key={`${c.via}|${c.model ?? ''}`} type="button" onClick={() => (c.connected ? onPick(c) : onConnect())}
         className={`flex w-full min-w-0 items-center gap-2.5 rounded-[8px] px-2 py-1.5 text-left text-[13px] hover:bg-[var(--cv-float-hover)] ${on ? 'bg-[var(--cv-float-hover)]' : ''} ${c.connected ? 'text-[var(--cv-ink)]' : 'text-[var(--cv-ink-3)]'}`}>
-        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-[6px] bg-[var(--cv-chip)]"><ProviderMark id={c.via} size={13} /></span>
+        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-[6px] bg-[var(--cv-chip)]"><ModelMark choice={c} size={13} /></span>
         <span className="min-w-0 flex-1 truncate leading-5">{c.name}</span>
         {on ? <Check size={14} className="shrink-0 text-[var(--cv-label)]" />
           : !c.connected ? <span className="shrink-0 rounded-md border !border-[var(--cv-float-line)] px-1.5 text-[11px] leading-[18px] text-[var(--cv-label)]">{t('canvas.panel.models.connect')}</span> : null}
@@ -986,11 +995,12 @@ export function MakePanel({ id, data }: { id: string; data: MakeData }) {
   const fallback = board.fallback(data.make);
   const picked = choices.find((c) => c.via === data.via && c.model === data.model) ?? null;
   /* what the model it makes with makes: only that is offered */
-  const model = (picked ?? fallback)?.spec;
+  const choice = picked ?? fallback;
+  const model = choice?.spec;
   /* a voice-over's voice: the library's voices of the service its model is at, or one named by its id */
   const library = useLibraryVoices();
   const language = useLanguage();
-  const voices = data.make === 'tts' ? voicesOf(library, serviceOf(picked ?? fallback)) : [];
+  const voices = data.make === 'tts' ? voicesOf(library, serviceOf(choice)) : [];
   const voice = data.make === 'tts' ? (data.opts?.voice ? voices.find((v) => v.id === data.opts?.voice) ?? null : defaultVoice(voices, language)) : null;
   const run = board.run(id);
   const error = board.error(id);
@@ -1313,7 +1323,7 @@ export function MakePanel({ id, data }: { id: string; data: MakeData }) {
             <Popover open={open === 'model'} onOpenChange={(v) => setOpen(v ? 'model' : null)} placement="top"
               trigger={(
                 <button type="button" className={`${PICK} ${choices.length ? '' : 'text-amber-500 hover:text-amber-400'}`} onClick={() => setOpen(open === 'model' ? null : 'model')}>
-                  {picked ?? fallback ? <ProviderMark id={(picked ?? fallback)!.via} size={16} /> : <Sparkles size={15} />}
+                  {choice ? <ModelMark choice={choice} size={16} /> : <Sparkles size={15} />}
                   <span className="max-w-[200px] truncate">{(picked ?? fallback)?.name ?? t('canvas.panel.connect')}</span><ChevronDown size={14} className="shrink-0 text-[var(--cv-ink-2)]" />
                 </button>
               )}>

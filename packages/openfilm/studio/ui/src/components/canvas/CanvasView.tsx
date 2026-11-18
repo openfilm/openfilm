@@ -734,8 +734,7 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
       const picture = inputs.find((i) => 'media' in i && i.media === 'image');
       if (!picture || !('path' in picture)) return fail('canvas.makeNeeds.refs');
       if (!providers?.use.cutout) { setCutoutThen({ run: () => { void makeNow(id); } }); return Promise.resolve(false); }
-      return startRun(projectId, folder, id, { verb: 'cutout', args: { src: picture.path, out: makeName(node as MakingNode) } }, {}, inputsKey(node, inputs),
-        { nothing: t('canvas.make.nothing'), balance: t('canvas.make.noBalance') }, boardId);
+      return startRun(projectId, folder, id, { verb: 'cutout', args: { src: picture.path, out: makeName(node as MakingNode) } }, {}, inputsKey(node, inputs), boardId);
     }
     const choice = choiceOf(providers, node.make, node.via, node.model);
     const spec = choice?.spec;
@@ -755,7 +754,7 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
           const asked = { ...node, prompt: [EXPAND_ASK, node.prompt?.trim()].filter(Boolean).join('\n\n') } as MakingNode;
           const request = makeRequest(asked, [{ from: picture.from, path: held, media: 'image' }], makeName(node as MakingNode), spec);
           const pick = node.via ? { via: node.via, ...(node.model ? { model: node.model } : {}) } : {};
-          const ok = await startRun(projectId, folder, id, request, pick, inputsKey(node, inputs), { nothing: t('canvas.make.nothing'), balance: t('canvas.make.noBalance') }, boardId);
+          const ok = await startRun(projectId, folder, id, request, pick, inputsKey(node, inputs), boardId);
           if (ok) await cropMade(id, plan.crop).catch((e: unknown) => onError(e instanceof Error ? e.message : String(e)));
           /* made again from the picture and the mask each time: the framed picture was only for this run */
           dropWork(held);
@@ -801,7 +800,6 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
     if (!String(request.args.prompt ?? request.args.text).trim()) { runErrors.set(`${projectId}/${id}`, t('canvas.make.noWords')); runsChanged(); return Promise.resolve(false); }
     const pick = choice?.via === 'openfilm' ? {via:choice.via,...(choice.model ? {model:choice.model} : {})}
       : node.via ? { via: node.via, ...(node.model ? { model: node.model } : {}) } : {};
-    const say = { nothing: t('canvas.make.nothing'), balance: t('canvas.make.noBalance') };
     const account = providers?.providers.find(provider=>provider.id==='openfilm');
     let resumed = false;
     const recovery = choice?.via === 'openfilm' ? {scope:JSON.stringify([account?.account ?? '',account?.last4 ?? '']),onResumed:()=>{resumed=true;}} : undefined;
@@ -810,7 +808,7 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
     /* how long it took, kept to measure the progress of the next run with this model */
     const timed = async (run: ReturnType<typeof makeRequest>) => {
       const started = Date.now();
-      const ok = await startRun(projectId, folder, id, run, pick, inputsKey(node, inputs), say, boardId, recovery);
+      const ok = await startRun(projectId, folder, id, run, pick, inputsKey(node, inputs), boardId, recovery);
       if (ok && choice && !resumed) keepModelTime(choice.via, choice.model, (Date.now() - started) / 1000);
       return ok;
     };
