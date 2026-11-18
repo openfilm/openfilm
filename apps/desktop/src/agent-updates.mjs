@@ -1,6 +1,6 @@
 /** Version checks for the exact programs OpenFilm uses. Updating always belongs to their original installer. */
 import { mkdirSync, readFileSync, realpathSync, statSync, writeFileSync, renameSync } from 'node:fs';
-import { dirname, join, win32 } from 'node:path';
+import { join, posix, win32 } from 'node:path';
 import { AGENT_DEFINITIONS, OWN_AGENT_IDS } from './agent-definitions.mjs';
 import { installCommand, laterVersion } from './agent-installation.mjs';
 
@@ -35,7 +35,7 @@ export function programIdentity(file) {
 /** No command or URL from a renderer or remote response is executed. These plans use local paths and fixed vendors. */
 export function agentUpdatePlan(agent, { win = process.platform === 'win32', realpath = realpathSync, read = readFileSync } = {}) {
   const id = agent.id, url = AGENT_DEFINITIONS[id]?.install;
-  const parent = win ? win32.dirname : dirname, child = win ? win32.join : join;
+  const parent = win ? win32.dirname : posix.dirname, child = win ? win32.join : posix.join;
   if (id === 'openfilm' || id === 'byok') return { kind: 'desktop' };
   if (!OWN_AGENT_IDS.includes(id) || !agent.path) return null;
   let real;
