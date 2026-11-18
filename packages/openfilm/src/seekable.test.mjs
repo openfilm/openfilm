@@ -106,7 +106,9 @@ test('a render serves the film\'s slow-seeking videos as their copies', ffmpeg, 
   try {
     clip(join(dir, 'a.mp4'), 120);
     writeFileSync(join(dir, 'film.html'), filmHtml({ stage: { w: 320, h: 180 }, tracks: [{ clips: [{ id: 'v', src: 'a.mp4', at: 0, time: [0, 3] }] }] }));
-    const done = await render([dir], { out: join(dir, 'out.mp4'), workers: 2, silent: true, onProgress() {} });
+    /* drawn in the browser: footage that is the film's whole picture is read straight from its file where it can be,
+       and needs no copy (direct.mjs) */
+    const done = await render([dir], { out: join(dir, 'out.mp4'), workers: 2, silent: true, straight: false, onProgress() {} });
     assert.ok(existsSync(done.out));
     assert.equal(readdirSync(join(dir, '.film/cache/seek')).filter((f) => f.endsWith('.mp4') && !f.includes('.part')).length, 1);
   } finally {

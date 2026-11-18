@@ -172,9 +172,10 @@ test('a picture is fitted to the stage as CSS fits it, and a frame drawn another
       '-frames:v', '10', '-c:v', 'libx264', '-preset', 'ultrafast', '-qp', '0', '-pix_fmt', 'yuv420p', '-colorspace', 'bt709', tall]);
     const one = (fit, bars) => ({ segments: [{ file: tall, range: 'tv', matrix: 'bt709', tone: 'none', fit, bars, want: 0, speed: 1, frames: 1 }], frames: 1, files: [tall], overlays: [] });
     const how = { stage: { w: 1280, h: 720 }, rate: exactRate(30), ground: '0x204060' };
+    /* the frame as RGB, rounded exactly: the fast conversions on some processors are a level off everywhere */
     const png = (plan, more = '') => {
       const { inputs, graph } = straightGraph(plan, { size: how.stage, rate: how.rate, ground: how.ground });
-      return execFileSync('ffmpeg', ['-hide_banner', '-loglevel', 'error', ...inputs, '-filter_complex', `${graph};[film]scale=in_color_matrix=bt709:in_range=tv:out_range=pc,format=rgb24${more}[out]`,
+      return execFileSync('ffmpeg', ['-hide_banner', '-loglevel', 'error', ...inputs, '-filter_complex', `${graph};[film]scale=in_color_matrix=bt709:in_range=tv:out_range=pc:flags=accurate_rnd+full_chroma_int,format=rgb24${more}[out]`,
         '-map', '[out]', '-frames:v', '1', '-f', 'image2pipe', '-c:v', 'png', '-'], { maxBuffer: 1 << 26 });
     };
     /* contained, it stands in the middle with the stage's color beside it; covering, its middle fills the stage */
