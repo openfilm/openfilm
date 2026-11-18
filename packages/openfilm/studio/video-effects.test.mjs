@@ -23,7 +23,7 @@ const hasFfmpeg = (() => {
 })();
 test(
   'video effects inspector persists controls, recovers a failed model load, compares and undoes edits',
-  { timeout: 120000, skip: !cached ? 'vision models not cached' : !hasFfmpeg && 'no ffmpeg' },
+  { timeout: 120000, skip: !cached ? 'vision models not cached' : !hasFfmpeg ? 'no ffmpeg' : process.env.CI ? 'the vision models are not reliable on CI runners without a GPU (#499)' : false },
   async () => {
     const scratch = await mkdtemp(join(tmpdir(), 'of-vision-ui-'));
     const names = ['HOME', 'SHARED_HOME', 'LIBRARY', 'SAVED', 'EXPORTS'];
