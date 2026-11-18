@@ -269,6 +269,29 @@ export function audioChannels(file) {
   return audioStreams.get(key);
 }
 
+/**
+ * audioChannels of each of `files` asked beforehand, all at once and without holding the process (a server answering
+ * other requests meanwhile): audioChannels then answers from what is kept.
+ * @param {string[]} files
+ */
+export async function knowAudioChannels(files) {
+  await Promise.all([...new Set(files)].map(async (file) => {
+    let version = '';
+    try { const s = statSync(file); version = `${s.mtimeMs}:${s.size}`; } catch { return; }
+    const key = `${file}\0${version}`;
+    if (audioStreams.has(key)) return;
+    const said = await new Promise((done) => {
+      const p = spawn('ffprobe', ['-v', 'error', '-select_streams', 'a:0', '-show_entries', 'stream=channels', '-of', 'csv=p=0', file], { windowsHide: true });
+      let out = '';
+      p.stdout.on('data', (d) => { out += d; });
+      p.on('error', () => done(null));
+      p.on('close', (code) => done(code === 0 ? out.trim() : null));
+    });
+    /* not read: audioChannels asks again, and says why */
+    if (said != null) audioStreams.set(key, said ? Number.parseInt(said, 10) || 2 : 0);
+  }));
+}
+
 /** Whether a file has a sound stream (a video clip may be silent). */
 export function hasAudio(file) {
   return audioChannels(file) > 0;

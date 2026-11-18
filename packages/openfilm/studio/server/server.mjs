@@ -1373,6 +1373,16 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
       const { proxies } = readPrefs();
       const { undecoded } = /** @type {{ undecoded?: unknown }} */ (await readJson(req));
       const videos = (await listFiles(project.path)).files.filter((f) => f.kind === 'video').map((f) => f.path);
+      /* the footage most of the film's clips play first: its proxy is made first, the one a scrub needs most */
+      const uses = new Map();
+      for (const track of /** @type {{ clips: { src: string }[] }[]} */ ((await readProjectFilm(project.path).catch(() => null))?.doc?.tracks ?? [])) {
+        for (const clip of track.clips) {
+          let path = String(clip.src).split('#')[0].replace(/^\.\//, '');
+          try { path = decodeURI(path); } catch { /* as written */ }
+          uses.set(path, (uses.get(path) ?? 0) + 1);
+        }
+      }
+      videos.sort((a, b) => (uses.get(b) ?? 0) - (uses.get(a) ?? 0));
       const told = Array.isArray(undecoded) ? undecoded.filter((rel) => typeof rel === 'string' && videos.includes(rel)) : [];
       const states = await ensureProxies(project.path, videos, proxies.height, { on: proxies.on, undecoded: told });
       return json(res, 200, { on: proxies.on, height: proxies.height, states, checks: await playChecks(project.path, videos) });

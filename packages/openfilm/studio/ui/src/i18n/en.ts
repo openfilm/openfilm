@@ -3537,7 +3537,7 @@ export const en = {
     playback: {
       group: "Playback",
       proxies: "Proxies for heavy footage",
-      proxiesHint: "Footage past 1080p (4K, say), or slow to decode (ProRes, HEVC, 10-bit), plays from a lighter copy made in the background. Exports always use the originals.",
+      proxiesHint: "Footage past 1080p (4K, say), slow to decode (ProRes, HEVC, 10-bit), or slow to scrub (key frames far apart), plays from a lighter copy made in the background. Exports always use the originals.",
       proxySize: "Proxy size",
       proxySizeHint: "Smaller plays more smoothly; larger looks sharper in the viewer.",
     },

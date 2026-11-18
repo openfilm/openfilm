@@ -26,13 +26,20 @@ export const madeOfSpeech = (vtt) => vtt.notes.some((n) => n.startsWith(SPEECH_N
  * the film are still Studio's; words changed are the person's. @param {readonly VttCue[]} cues
  */
 function cuesPrint(cues) {
+  /* the same cues read once are asked again each time an editor draws them: printed once */
+  const known = printed.get(cues);
+  if (known) return known;
   let h = 0x811c9dc5;
   for (const c of cues) {
     const line = `${cuePlain(c.text)}\n`;
     for (let i = 0; i < line.length; i += 1) { h ^= line.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
   }
-  return h.toString(16).padStart(8, '0');
+  const print = h.toString(16).padStart(8, '0');
+  printed.set(cues, print);
+  return print;
 }
+/** @type {WeakMap<readonly VttCue[], string>} */
+const printed = new WeakMap();
 /** The note of a file of what is said with these cues: SPEECH_NOTE and their print. @param {readonly VttCue[]} cues */
 export const speechNote = (cues) => `${SPEECH_NOTE} ${cuesPrint(cues)}`;
 /** Whether a file of what is said has its words as Studio wrote them, not changed by hand since. @param {Vtt} vtt */

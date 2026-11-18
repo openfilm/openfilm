@@ -3536,7 +3536,7 @@ export const zhCN: Words = {
     playback: {
       group: "播放",
       proxies: "为大体积素材生成代理",
-      proxiesHint: "超过 1080p（比如 4K）或解码较慢（ProRes、HEVC、10 位）的素材，会在后台生成一份轻量副本用于预览播放。导出始终使用原素材。",
+      proxiesHint: "超过 1080p（比如 4K）或解码较慢（ProRes、HEVC、10 位）的素材，以及关键帧间隔长、拖动时跳转慢的素材，会在后台生成一份轻量副本用于预览播放。导出始终使用原素材。",
       proxySize: "代理分辨率",
       proxySizeHint: "越小播放越流畅，越大预览越清晰。",
     },

@@ -2,7 +2,7 @@
 /**
  * Proxies: light copies of heavy footage for the preview to play. Footage
  * past 1080p, or in a form slow to decode (ProRes, HEVC, 10-bit…), from a NAS most of all, stutters when played and
- * scrubbed; its proxy is an H.264 copy `height` px on its short side, its picture only, with the same frames at the
+ * scrubbed, and footage whose key frames are far apart is slow to scrub (slowToScrub); its proxy is an H.264 copy `height` px on its short side, its picture only, with the same frames at the
  * same times (passthrough: none added or dropped) and a key frame every half second, so a scrub lands at once. Made in
  * the background, one at a time, kept in the project's cache: decoded and written on the graphics chip when it can
  * (src/encoders.mjs), so the processor stays free; by x264 otherwise.
@@ -21,7 +21,7 @@ import { join } from 'node:path';
 import { clipKind } from '../../src/film-doc.mjs';
 import { colorTagsOf, encoders, h264ColorTags, hardwareEncoder, hardwareOptions, onTheChip } from '../../src/encoders.mjs';
 import { decodedAnywhere } from '../../src/seekable.mjs';
-import { probe } from './derived.mjs';
+import { keyGap, probe } from './derived.mjs';
 import { readable } from './files.mjs';
 import { TOOL_DIR } from './projects.mjs';
 
@@ -32,6 +32,28 @@ const LIGHT_CODECS = new Set(['h264', 'vp8', 'vp9', 'av1']);
 const LIGHT_PIXFMTS = new Set(['yuv420p', 'yuvj420p']);
 /** A key frame every half second. */
 const GOP_S = 0.5;
+
+/** Key frames further apart than this (s) make a scrub slow: each seek decodes from the one before it. */
+const SLOW_GOP_S = 0.5;
+/** What a seek may cost before footage is scrubbed from its proxy: the key frames' gap (s) by the picture's pixels, as
+    1280×720 footage with a key frame a second has it. */
+const SLOW_SEEK = 1280 * 720 * 1;
+
+/**
+ * Whether footage is slow to scrub: its key frames far apart (a phone's or a camera's H.264, a screen recording, a
+ * generated clip with one key frame in all), on a picture large enough that decoding from one to the frame sought
+ * takes a while. Its proxy has a key frame every GOP_S on a picture no larger. Played as it is, a scrub through it
+ * showed a few frames a second, and a cut to another clip of it came a moment late.
+ * @param {string} root @param {string} rel @param {{ width?: number, height?: number, codec?: string, pixfmt?: string }} facts
+ */
+export async function slowToScrub(root, rel, facts) {
+  /* H.264 only, which has no alpha: a proxy has none, and a VP9 or AV1 may keep one */
+  if (facts.codec !== 'h264' || !LIGHT_PIXFMTS.has(String(facts.pixfmt))) return false;
+  const pixels = Number(facts.width) * Number(facts.height);
+  if (!(pixels > 0)) return false;
+  const gap = await keyGap(root, rel).catch(() => null);
+  return gap != null && gap > SLOW_GOP_S && gap * pixels > SLOW_SEEK;
+}
 
 /**
  * Whether footage is heavy to play: past 1080p (its long side over 1920 or its short over 1080), or not 8-bit H.264,
@@ -192,7 +214,7 @@ export async function ensureProxies(root, rels, height, { on = true, undecoded: 
     const { abs, out } = file;
     if (told.includes(rel)) undecoded.add(abs);
     const needed = undecoded.has(abs);
-    if (!needed && !(on && heavy(facts))) continue;
+    if (!needed && !(on && (heavy(facts) || await slowToScrub(root, rel, facts)))) continue;
     const mark = needed ? { needed: /** @type {const} */ (true) } : {};
     if (existsSync(out)) { states[rel] = { state: 'ready', ...mark }; continue; }
     /* asked for once; one that failed (footage ffmpeg cannot read) is said, not tried again and again */

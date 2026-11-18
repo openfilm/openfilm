@@ -13,8 +13,8 @@ import { createReadStream, existsSync } from 'node:fs';
 import { mkdir, mkdtemp, readFile, rename, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { audioClips, mix } from '../../src/shared.mjs';
-import { hasAlpha } from '../../src/seekable.mjs';
+import { audioClips, fileOf, knowAudioChannels, mix } from '../../src/shared.mjs';
+import { hasAlpha, keyFrameGap } from '../../src/seekable.mjs';
 import { readable } from './files.mjs';
 import { TOOL_DIR } from './projects.mjs';
 import { writeAtomic } from './atomic.mjs';
@@ -102,6 +102,17 @@ export async function probe(root, rel) {
     }));
   });
   return JSON.parse(bytes.toString());
+}
+
+/**
+ * How far apart a video's key frames are (s; null when it cannot tell): what a seek in it costs (src/seekable.mjs
+ * keyFrameGap). Kept with the file's probe.
+ * @param {string} root @param {string} rel @returns {Promise<number | null>}
+ */
+export async function keyGap(root, rel) {
+  const { abs, key } = await source(root, rel);
+  const bytes = await cached(root, 'probe', `${key}.gop.json`, async () => Buffer.from(JSON.stringify({ gap: await keyFrameGap(abs) })));
+  return JSON.parse(bytes.toString()).gap ?? null;
 }
 
 /**
@@ -195,6 +206,7 @@ const measuringMixes = new Map();
  * @returns {Promise<{ lufs: number | null, peak: number | null }>}
  */
 export async function mixLoudness(root, sounds, duration) {
+  await knowAudioChannels(sounds.map((s) => { try { return fileOf(root, 'film.html', s.src); } catch { return ''; } }).filter(Boolean));
   const clips = audioClips(root, 'film.html', sounds).filter((clip) => clip.at < duration && clip.volume > 0);
   if (!clips.length) return { lufs: null, peak: null };
   const versions = await Promise.all([...new Set(clips.map((clip) => clip.file))].map(async (file) => {

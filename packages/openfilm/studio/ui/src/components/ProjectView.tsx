@@ -923,10 +923,12 @@ export function ProjectView({ projectId, onProject }: {
     setPickedKeys(new Set(pending && pending.clip === motionBlock?.clipId ? pending.ids : []));
     setKeyMenu(null);
   }, [motionBlock?.clipId]);
+  /* the film's clips by id: the timeline asks of each of its blocks as it draws, hundreds of them */
+  const filmClipById = React.useMemo(() => new Map((film.film?.tracks ?? []).flatMap((tr) => tr.clips.map((c) => [c.id, c] as const))), [film.film]);
   const motionOfBlock = React.useCallback((block: TimelineBlock | null): Motion => {
-    const clip = block?.clipId ? film.film?.tracks.flatMap((tr) => tr.clips).find((c) => c.id === block.clipId) : null;
+    const clip = block?.clipId ? filmClipById.get(block.clipId) : null;
     return clip ? readMotion(clip as { id: string; style?: string }, film.film?.keyframes) : {};
-  }, [film.film]);
+  }, [film.film, filmClipById]);
   /* where a clip's keyframes have its picture at the playhead: its frame on the picture is drawn there */
   const poseOf = React.useCallback((clipId: string) => {
     const block = blocksRef.current.find((b) => b.clipId === clipId);
@@ -3720,12 +3722,12 @@ export function ProjectView({ projectId, onProject }: {
   /* a clip that has keyframes shows them on its bar, cutting it or animating it: what moves is in sight */
   const withKeyMarks = React.useCallback((b: TimelineBlock): TimelineBlock => {
     if (!b.clipId || (b.kind !== 'mg' && b.kind !== 'video')) return b;
-    const clip = film.film?.tracks.flatMap((tr) => tr.clips).find((c) => c.id === b.clipId);
+    const clip = filmClipById.get(b.clipId);
     const own = keyTimesMs(motionOfBlock(b), 0, b.endMs - b.startMs);
     const vars = clip ? Object.values(readVarMotion(clip.id, clip.overrides as readonly FilmOverride[] | undefined, film.film?.keyframes)).flatMap((v) => v.keys.map((k) => Math.round(k.t * 1000))) : [];
     const keysMs = [...new Set([...own, ...vars])].filter((ms) => ms >= 0 && ms <= b.endMs - b.startMs).sort((x, y) => x - y);
     return keysMs.length ? { ...b, keysMs } : b;
-  }, [film.film, motionOfBlock]);
+  }, [film.film, filmClipById, motionOfBlock]);
   /* a layer shown twirled open (put on from the panels, or opened from the edit's inspector): its folder opens too */
   React.useEffect(() => {
     const ids = motionReveal?.ids ?? [];

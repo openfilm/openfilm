@@ -3502,7 +3502,7 @@ export const es: Words = {
     playback: {
       group: "Reproducción",
       proxies: "Proxies para el metraje pesado",
-      proxiesHint: "El metraje de más de 1080p (4K, por ejemplo), o lento de decodificar (ProRes, HEVC, 10 bits), se reproduce desde una copia ligera hecha en segundo plano. Las exportaciones siempre usan los originales.",
+      proxiesHint: "El metraje de más de 1080p (4K, por ejemplo), lento de decodificar (ProRes, HEVC, 10 bits) o lento de recorrer (fotogramas clave muy separados), se reproduce desde una copia ligera hecha en segundo plano. Las exportaciones siempre usan los originales.",
       proxySize: "Tamaño del proxy",
       proxySizeHint: "Más pequeño se reproduce con más fluidez; más grande se ve más nítido en el visor.",
     },

@@ -57,6 +57,29 @@ export function hasAlpha(stream) {
 }
 
 /**
+ * How far apart the key frames of `file`'s picture are (s), among the packets of its first 20 s (read, not decoded): a
+ * seek decodes from the key frame before it, so the further apart they are, the slower a seek. Null when it cannot tell.
+ * @param {string} file @returns {Promise<number | null>}
+ */
+export async function keyFrameGap(file) {
+  let keys = 0, span = 0;
+  try {
+    const lines = (await probe(file, ['-select_streams', 'v:0', '-read_intervals', '%+20', '-show_entries', 'packet=pts_time,flags', '-of', 'csv=p=0'])).trim().split('\n');
+    let first = null, last = null;
+    for (const line of lines) {
+      const [pts, flags] = line.split(',');
+      const t = Number(pts);
+      if (!Number.isFinite(t)) continue;
+      first ??= t;
+      last = t;
+      if (flags?.startsWith('K')) keys++;
+    }
+    span = first == null || last == null ? 0 : last - first;
+  } catch { return null; }
+  return keys === 0 || span <= 0 ? null : span / keys;
+}
+
+/**
  * What a copy of `file` would be made from: its first video stream, when it is one worth copying (8-bit 4:2:0, no
  * alpha, not too big or long, key frames far apart). Null when it is better left alone.
  * @param {string} file
@@ -72,23 +95,9 @@ export async function slowSeeking(file) {
   if (!(seconds > 0) || seconds > MAX_SECONDS || stream.width > MAX_SIDE || stream.height > MAX_SIDE) return null;
   const [n, d] = String(stream.avg_frame_rate).split('/').map(Number);
   const fps = n > 0 && d > 0 ? n / d : 30;
-  /* the key frames among the packets of its first 20 s (read, not decoded) */
-  let keys = 0, span = 0;
-  try {
-    const lines = (await probe(file, ['-select_streams', 'v:0', '-read_intervals', '%+20', '-show_entries', 'packet=pts_time,flags', '-of', 'csv=p=0'])).trim().split('\n');
-    let first = null, last = null;
-    for (const line of lines) {
-      const [pts, flags] = line.split(',');
-      const t = Number(pts);
-      if (!Number.isFinite(t)) continue;
-      first ??= t;
-      last = t;
-      if (flags?.startsWith('K')) keys++;
-    }
-    span = first == null || last == null ? 0 : last - first;
-  } catch { return null; }
-  if (keys === 0 || span <= 0) return null;
-  return span / keys > SLOW_GOP_S ? { fps, seconds, w: Number(stream.width), h: Number(stream.height) } : null;
+  const gap = await keyFrameGap(file);
+  if (gap == null) return null;
+  return gap > SLOW_GOP_S ? { fps, seconds, w: Number(stream.width), h: Number(stream.height) } : null;
 }
 
 /** Every Chromium decodes these by itself, with its own decoders, on any machine: no need to ask it. */

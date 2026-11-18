@@ -32,5 +32,7 @@ export declare function ffmpeg(args: string[], opts?: { input?: boolean; timeout
 
 /** Where a path the film asks for (a sound's `src`, resolved from the entry as the browser would) lives on disk; throws for one outside the film's folder, or a link out of it that is not media the person linked (src/media-links.mjs). */
 export declare function fileOf(root: string, entry: string, src: string): string;
+/** audioChannels of each file asked beforehand, all at once, without holding the process. */
+export declare function knowAudioChannels(files: string[]): Promise<void>;
 /** A sound as a film or a page lists it: a path, and numbers where numbers go; throws otherwise. */
 export declare function checkSound<T extends { src: string }>(sound: T): T;

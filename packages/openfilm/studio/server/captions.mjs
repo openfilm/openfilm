@@ -116,6 +116,27 @@ export const wholeLine = (line) => ({
 });
 
 /**
+ * A line cut into subtitles, with its translations cut to follow, worked out once a line: a source cut into hundreds of
+ * clips (a talk trimmed sentence by sentence) asks the same of every line for each of them.
+ * @type {WeakMap<SpokenLine, Map<string, { pieces: ReturnType<typeof segmentLine>, alts: [string, ReturnType<typeof alignTranslation>][] }>>}
+ */
+const cutLines = new WeakMap();
+/** @param {SpokenLine} line @param {{ alt?: AltLines, cut?: boolean }} extra */
+function piecesOf(line, extra) {
+  const alt = extra.alt?.get(line.startMs) ?? {};
+  const key = `${extra.cut ? 1 : 0}\0${JSON.stringify(alt)}`;
+  let byKey = cutLines.get(line);
+  if (!byKey) cutLines.set(line, byKey = new Map());
+  let known = byKey.get(key);
+  if (!known) {
+    const pieces = extra.cut ? [wholeLine(line)] : segmentLine(line);
+    known = { pieces, alts: Object.entries(alt).map(([language, text]) => /** @type {[string, ReturnType<typeof alignTranslation>]} */ ([language, alignTranslation(text, pieces)])) };
+    byKey.set(key, known);
+  }
+  return known;
+}
+
+/**
  * One clip's subtitles. `span` is where it plays: source ms from `fromMs`, on the film from `startMs` for `durMs`, at
  * `speed` source ms per film ms. Each line is cut into subtitles first (segmentLine), its translations to follow
  * (alignTranslation); each cue says which piece of which line of which source it shows (`src`, `line`: the line's
@@ -135,8 +156,7 @@ export function clipCues(lines, span, extra = {}) {
   /** @type {FilmSubtitleCue[]} */
   const out = [];
   for (const line of lines) {
-    const pieces = extra.cut ? [wholeLine(line)] : segmentLine(line);
-    const alts = Object.entries(extra.alt?.get(line.startMs) ?? {}).map(([language, text]) => /** @type {const} */ ([language, alignTranslation(text, pieces)]));
+    const { pieces, alts } = piecesOf(line, extra);
     for (const piece of pieces) {
       const from = Math.max(piece.startMs, span.fromMs);
       const to = Math.min(piece.endMs, until);

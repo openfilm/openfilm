@@ -4,7 +4,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { ensureProxies, heavy, playType, proxySize, readyProxy, undecodable } from './proxies.mjs';
+import { ensureProxies, heavy, playType, proxySize, readyProxy, slowToScrub, undecodable } from './proxies.mjs';
 
 const hasFfmpeg = (() => { try { execFileSync('ffmpeg', ['-version'], { stdio: 'ignore' }); return true; } catch { return false; } })();
 
@@ -88,4 +88,20 @@ test('footage the editor cannot decode gets its proxy first, proxies on or off; 
     states = await ensureProxies(root, all, 540);
   }
   assert.equal(states['assets/long.mp4'].state, 'ready');
+});
+
+test('footage slow to scrub: H.264 whose key frames are far apart on a large picture', { skip: !hasFfmpeg && 'no ffmpeg' }, async () => {
+  const root = mkdtempSync(join(tmpdir(), 'openfilm-scrub-'));
+  mkdirSync(join(root, 'assets'));
+  const make = (name, size, gop, codec = 'libx264') => execFileSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', `testsrc=size=${size}:rate=30:duration=3`,
+    '-c:v', codec, ...(codec === 'libx264' ? ['-preset', 'ultrafast'] : ['-deadline', 'realtime']), '-g', String(gop), '-pix_fmt', 'yuv420p', join(root, 'assets', name)]);
+  make('far.mp4', '1080x1920', 60);
+  make('near.mp4', '1080x1920', 10);
+  make('small.mp4', '320x240', 90);
+  make('far.webm', '1080x1920', 60, 'libvpx-vp9');
+  const facts = (w, h, codec = 'h264') => ({ width: w, height: h, codec, pixfmt: 'yuv420p' });
+  assert.equal(await slowToScrub(root, 'assets/far.mp4', facts(1080, 1920)), true, 'a key frame every 2 s at 1080p');
+  assert.equal(await slowToScrub(root, 'assets/near.mp4', facts(1080, 1920)), false, 'three key frames a second');
+  assert.equal(await slowToScrub(root, 'assets/small.mp4', facts(320, 240)), false, 'small enough to decode from far');
+  assert.equal(await slowToScrub(root, 'assets/far.webm', facts(1080, 1920, 'vp9')), false, 'not H.264: it may have an alpha a proxy would lose');
 });
