@@ -98,12 +98,21 @@ test('editing feedback: nested video sound, overlapping group move, vertical sel
       const source = page.locator('[data-source-drag]');
       await source.waitFor();
       const video = source.locator('video');
-      await video.evaluate((v) => { v.pause(); v.currentTime = 1.2; v.dispatchEvent(new Event('timeupdate')); });
-      await page.waitForTimeout(100);
-      await page.keyboard.press('i');
-      await video.evaluate((v) => { v.currentTime = 3.4; v.dispatchEvent(new Event('timeupdate')); });
-      await page.waitForTimeout(100);
-      await page.keyboard.press('o');
+      const position = source.locator('xpath=..').getByRole('slider', { name: 'Position', exact: true });
+      /* each mark is put once the source has come to its time and shows it: a seek can take a while on a slow machine */
+      const mark = async (sec, key, marks) => {
+        await video.evaluate(async (v, sec) => {
+          v.pause();
+          v.currentTime = sec;
+          if (v.seeking) await new Promise((done) => { v.addEventListener('seeked', done, { once: true }); setTimeout(done, 5000); });
+          v.dispatchEvent(new Event('timeupdate'));
+        }, sec);
+        await position.and(page.locator(`[aria-valuenow="${sec}"]`)).waitFor();
+        await page.keyboard.press(key);
+        await source.locator('xpath=..').locator(`[data-source-marks="${marks}"]`).waitFor({ state: 'attached' });
+      };
+      await mark(1.2, 'i', '1.2-');
+      await mark(3.4, 'o', '1.2-3.4');
       const b = await page.locator('[data-block-kind="video"]').first().boundingBox();
       await page.evaluate(() => document.addEventListener('dragstart', (e) => { window.sourceDragPayload = e.dataTransfer.getData('application/x-openfilm-resource'); }, { once: true }));
       const drop = page.locator('[data-timeline]');
