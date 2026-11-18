@@ -300,7 +300,9 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     const canonical = new URL(origin);
     if (!path.startsWith('/api/') && String(req.headers.host ?? '').toLowerCase() !== canonical.host.toLowerCase() && ownHost(req, Number(canonical.port || 80))) {
       const here = `${path}${url.search}`;
-      const to = sameKey(url.searchParams.get('key')) || sameKey(cookieKey(req)) ? `${origin}${keyed(here)}` : `${origin}${here}`;
+      const cookie = cookieKey(req);
+      const shown = signingIn ?? (sameKey(cookie) || matches(cookie, agentKey) ? cookie : null);
+      const to = shown ? `${origin}${keyed(here, shown)}` : `${origin}${here}`;
       res.writeHead(302, { location: to, 'referrer-policy': 'no-referrer' });
       return res.end();
     }
