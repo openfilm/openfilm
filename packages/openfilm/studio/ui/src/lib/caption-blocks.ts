@@ -12,7 +12,7 @@
  * Plain TypeScript, no React: the editor's tests import it as it is.
  */
 import { applyOps } from '../../../server/ops.mjs';
-import { cuePlain } from '../../../../src/captions.mjs';
+import { cuePlain, regionSettings, withSettings } from '../../../../src/captions.mjs';
 import type { Op } from '../api.ts';
 import { cueRule, keepApart, setCueRule, shifted, splitCue, type Vtt, type VttCue } from './caption-edits.ts';
 import type { TimelineBlock, TimelineTrack } from './timeline-layout.ts';
@@ -65,7 +65,28 @@ type FilmTrack = { clips: { id: string; src: string; at?: number; time?: number[
 type FilmValue = { tracks: FilmTrack[] };
 
 /** What an edit is, once its cues are taken out: what film.html is sent, and the caption files it changes. */
-export type CueEdit = { ops: Op[]; files: { src: string; next: Vtt }[] };
+export type CueEdit = {
+  ops: Op[];
+  files: { src: string; next: Vtt }[];
+  /** The identities of cues moved between files, so the selection can follow the drag. */
+  moved?: { from: string; src: string; id: string }[];
+};
+
+/** A cue's region travels with it. A region of the same name on the destination track keeps its own position. */
+function carryRegion(from: Vtt | null, into: Vtt, settings: string): { vtt: Vtt; settings: string } {
+  const name = /(?:^|\s)region:([^\s]+)/.exec(settings)?.[1];
+  const block = name && from?.regions.find((r) => regionSettings(r).id === name);
+  if (!block) return { vtt: into, settings };
+  const regions = new Map(into.regions.map((r) => [regionSettings(r).id, r]));
+  if (regions.get(name) === block) return { vtt: into, settings };
+  let id = name!;
+  for (let n = 2; regions.has(id); n += 1) {
+    id = `${name}-${n}`;
+    if (regions.get(id) === block.replace(/^id:[^\n]*/m, `id:${id}`)) return { vtt: into, settings: withSettings(settings, { region: id }) };
+  }
+  const copied = block.replace(/^id:[^\n]*/m, `id:${id}`);
+  return { vtt: { ...into, regions: [...into.regions, copied] }, settings: withSettings(settings, { region: id }) };
+}
 
 /**
  * An edit of the timeline's clips, cues among them, as film.html's operations and the caption files' new versions.
@@ -134,6 +155,7 @@ export function cueEditOf(film: FilmValue, ops: readonly Op[], vttOf: (src: stri
   const next = new Map<string, Vtt>();
   for (const src of captions) next.set(src, vttOf(src) ?? { header: 'WEBVTT', notes: [], regions: [], styles: [], cues: [] });
   const placed = new Map<string, { cues: VttCue[]; moved: Set<string>; rules: [string, Record<string, string>][] }>();
+  const moved: NonNullable<CueEdit['moved']> = [];
   for (const src of captions) placed.set(src, { cues: [], moved: new Set(), rules: [] });
   for (const t of after.tracks) {
     if (!t.captions) continue;
@@ -156,7 +178,14 @@ export function cueEditOf(film: FilmValue, ops: readonly Op[], vttOf: (src: stri
       const id = itself && from.src === src ? cue.id : free();
       /* its words move by as much as it did from where it was: a right half was at the cut */
       const was = half && !itself ? half.at : cue.start;
-      into.cues.push({ ...cue, id, start, end, text: shifted(words, r3(start - was)) });
+      let settings = cue.settings;
+      if (from.src !== src) {
+        const carried = carryRegion(vttOf(from.src), next.get(src)!, settings);
+        next.set(src, carried.vtt);
+        settings = carried.settings;
+        if (itself) moved.push({ from: cueClipId(from.src, from.id), src, id });
+      }
+      into.cues.push({ ...cue, id, start, end, settings, text: shifted(words, r3(start - was)) });
       if (id !== cue.id || from.src !== src || Math.abs(start - cue.start) > 1e-6 || Math.abs(end - cue.end) > 1e-6 || words !== cue.text) into.moved.add(id);
       /* its own look goes with it (one kept apart has none in any file now) */
       if (id !== cue.id || from.src !== src || !vttOf(from.src)?.cues.some((x) => x.id === cue.id)) {
@@ -176,9 +205,9 @@ export function cueEditOf(film: FilmValue, ops: readonly Op[], vttOf: (src: stri
     for (const [id, rule] of into.rules) out = setCueRule(out, `::cue(#${id})`, rule);
     const same = out.cues.length === was.cues.length && out.cues.every((c, i) => {
       const w = was.cues[i]!;
-      return c.id === w.id && c.start === w.start && c.end === w.end && c.text === w.text;
+      return c.id === w.id && c.start === w.start && c.end === w.end && c.text === w.text && c.settings === w.settings;
     }) && out.styles.join('\n') === was.styles.join('\n');
     if (!same) files.push({ src, next: out });
   }
-  return { ops: own, files };
+  return { ops: own, files, ...(moved.length ? { moved } : {}) };
 }

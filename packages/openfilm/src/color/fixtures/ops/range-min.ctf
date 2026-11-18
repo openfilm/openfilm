@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ProcessList version="2.5" id="fixture">
+    <Description>OpenFilm color fixture</Description>
+    <Range inBitDepth="32f" outBitDepth="32f" >
+<minInValue>0.05</minInValue><minOutValue>0.05</minOutValue>
+    </Range>
+</ProcessList>

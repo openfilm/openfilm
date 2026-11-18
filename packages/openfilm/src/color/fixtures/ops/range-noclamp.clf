@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ProcessList compCLFversion="3.0" id="fixture">
+    <Range inBitDepth="32f" outBitDepth="32f" style="noClamp">
+<minInValue>0.1</minInValue><maxInValue>0.9</maxInValue><minOutValue>0</minOutValue><maxOutValue>1</maxOutValue>
+    </Range>
+</ProcessList>

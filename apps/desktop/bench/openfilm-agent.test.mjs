@@ -95,6 +95,8 @@ test('OpenFilm follows Claude under Your agents, shares account actions and neve
       const dragLive = async (name, index) => {
         await rows.evaluateAll((items) => Promise.all(items.flatMap((item) => item.getAnimations()).map((animation) => animation.finished.catch(() => {}))));
         const handle = dialog.getByRole('button', { name: zh ? `调整 ${name} 的顺序` : `Reorder ${name}`, exact: true });
+        /* the list scrolls: the row it goes to in view first, then its handle */
+        await rows.nth(index).scrollIntoViewIfNeeded();
         await handle.scrollIntoViewIfNeeded();
         const start = await handle.boundingBox();
         const id = OPENFILM_MODELS.find((m) => m.name === name).id;
@@ -115,14 +117,14 @@ test('OpenFilm follows Claude under Your agents, shares account actions and neve
         await page.mouse.up();
         assert.equal(await rows.nth(index).getAttribute('data-model-id'), id, 'drop keeps the previewed order');
       };
-      await dragLive('Claude Opus 5.5', 1);
+      await dragLive('Claude Opus 5.5', 2);
       await dialog.getByRole('switch', { name: zh ? '在对话中显示 GPT-6 Luna' : 'Show GPT-6 Luna in chat', exact: true }).click();
-      await dragLive('DeepSeek V4.1 Flash', 1);
+      await dragLive('GPT-6.2 Astra', 1);
       await rows.evaluateAll((items) => Promise.all(items.flatMap((item) => item.getAnimations()).map((animation) => animation.finished.catch(() => {}))));
       await page.screenshot({ path: `/tmp/openfilm-models-${locale}.png`, fullPage: true });
       const expectedOrder = await rows.evaluateAll((items) => items.map((item) => item.dataset.modelId));
-      assert.equal(expectedOrder[0], 'anthropic/claude-sonnet-5.5');
-      assert.equal(expectedOrder[1], 'deepseek/deepseek-v4.1-flash-1017');
+      assert.equal(expectedOrder[0], 'anthropic/claude-fable-5.2');
+      assert.equal(expectedOrder[1], 'openai/gpt-6.2-astra');
       await dialog.getByRole('button', { name: zh ? '保存' : 'Save', exact: true }).click();
       await dialog.waitFor({ state: 'hidden' });
       assert.deepEqual(await page.evaluate(() => window.openfilmAgentFixture.saved.at(-1)), { order: expectedOrder, hidden: ['openai/gpt-6-luna'] });
@@ -131,7 +133,7 @@ test('OpenFilm follows Claude under Your agents, shares account actions and neve
       const menu = page.getByRole('button', { name: 'Claude Sonnet 5.5', exact: true }).locator('..');
       await menu.getByRole('button', { name: 'Claude Sonnet 5.5', exact: true }).waitFor();
       assert.deepEqual(await menu.getByRole('button').allTextContents(), expectedOrder.filter((id) => id !== 'openai/gpt-6-luna').map((id) => OPENFILM_MODELS.find((m) => m.id === id).name));
-      assert.doesNotMatch(await page.locator('body').innerText(), /MiMo|Astra|Fable/);
+      assert.doesNotMatch(await page.locator('body').innerText(), /MiMo|GPT-6 Astra|Fable 5\.1/);
       await page.mouse.click(1050, 740);
       await info.click();
       assert.deepEqual(await rows.evaluateAll((items) => items.map((item) => item.dataset.modelId)), expectedOrder, 'reopening keeps the saved order');
@@ -139,20 +141,20 @@ test('OpenFilm follows Claude under Your agents, shares account actions and neve
       assert.deepEqual(await rows.evaluateAll((items) => items.map((item) => item.dataset.modelId)), OPENFILM_MODELS.map((m) => m.id));
       await page.keyboard.press('Escape');
       // A temporarily old cloud catalog must not silently hide enabled models.
-      await page.evaluate(() => window.openfilmAgentFixture.available(['anthropic/claude-opus-5.5', 'anthropic/claude-sonnet-5.5', 'openai/gpt-6.1-sol']));
+      await page.evaluate(() => window.openfilmAgentFixture.available(['anthropic/claude-opus-5.5', 'anthropic/claude-sonnet-5.5', 'openai/gpt-6.2-sol']));
       await page.locator('[data-model-picker] button').first().click();
       await page.getByRole('button', { name: /^(Model|模型) / }).hover();
       const partial = page.getByRole('button', { name: 'Claude Opus 5.5', exact: true }).locator('..');
-      assert.equal(await partial.getByRole('button').count(), 7, 'all enabled models are listed even if the service is older');
-      assert.equal(await partial.locator('button:disabled').count(), 4, 'unavailable models are explicit and cannot send invalid requests');
+      assert.equal(await partial.getByRole('button').count(), OPENFILM_MODELS.length, 'all enabled models are listed even if the service is older');
+      assert.equal(await partial.locator('button:disabled').count(), OPENFILM_MODELS.length - 3, 'unavailable models are explicit and cannot send invalid requests');
       assert.match(await partial.innerText(), zh ? /服务待更新/ : /Awaiting update/);
       assert.doesNotMatch(await partial.innerText(), /暂不可用|Unavailable/);
       await page.mouse.click(1050, 740);
       await info.click();
       await dialog.waitFor();
       assert.match(await dialog.innerText(), zh ? /开关控制模型是否在对话菜单中显示/ : /Switches control which models appear in chat/);
-      assert.equal(await dialog.getByText(zh ? '服务待更新' : 'Awaiting update', { exact: true }).count(), 4);
-      assert.equal(await dialog.locator('[role="switch"][aria-checked="true"]').count(), 7, 'service support does not turn off the visibility switches');
+      assert.equal(await dialog.getByText(zh ? '服务待更新' : 'Awaiting update', { exact: true }).count(), OPENFILM_MODELS.length - 3);
+      assert.equal(await dialog.locator('[role="switch"][aria-checked="true"]').count(), OPENFILM_MODELS.length, 'service support does not turn off the visibility switches');
       await page.screenshot({ path: `/tmp/openfilm-pending-service-${locale}.png`, fullPage: true });
       await page.keyboard.press('Escape');
       await row.getByRole('switch').click();

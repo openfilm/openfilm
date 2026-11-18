@@ -26,12 +26,18 @@ interface AppBridge {
   onStudioBrowser(listener: (state: { state: 'downloading' | 'ready' | 'failed'; message?: string }) => void): () => void;
   onStudioFailed(listener: (message: string) => void): () => void;
   onRefer(listener: (ref: StudioRef) => void): () => void;
+  /** a reference Studio takes out of the message being written again */
+  onUnrefer?(listener: (ref: StudioRef) => void): () => void;
   onFfmpeg(listener: (state: FfmpegState) => void): () => void;
   /** take the person to a reference in Studio */
   showInStudio(ref: StudioRef): void;
+  /** take the person to what a link of the project names (`film.html#<clip>`, `film.html#t=12.5`, a file), in Studio */
+  openInStudio?(link: string): void;
   /** an example's folder on this computer, fetched when needed (a reference to one, as its message is sent) */
   exampleFolder?(id: string): Promise<string>;
   /** the examples over the film (Studio's), to point at one or a part of one, or name a skill */
+  /** a folder of this computer picked in the system's dialog: its path, or null when none was */
+  pickFolder?(options?: { title?: string; button?: string }): Promise<string | null>;
   /** the Community over the film; `open`: on that skill's or example's page */
   showExamples?(open?: CommunityItem): void;
   /** a skill picked in the examples, to be named in the message */
@@ -52,7 +58,6 @@ interface AppBridge {
   /** what the pointer is over in Studio (null: nothing it points at): pills pointing at the same thing light up */
   onStudioHover(listener: (ref: StudioRef | null) => void): () => void;
   /** the skills an empty conversation offers (Studio's, with a cover, not turned off), in their order */
-  starterSkills(): Promise<StarterSkill[]>;
   /** the project's files (Studio's listing), for the @ menu */
   projectFiles(): Promise<{ files: Array<{ path: string; kind: string; size: number }>; pages?: Array<{ path: string; size: number }> }>;
   onSelection(listener: (selection: StudioSelection) => void): () => void;
@@ -64,8 +69,9 @@ interface AppBridge {
   onAssetsOverlay?(listener: (open: boolean) => void): () => void;
   setAssetsOpen(open: boolean): void;
   onAssets(listener: (open: boolean) => void): () => void;
-  /** while the assets are open: the composer's height (all the view keeps), and a menu of ours open (it needs the column) */
-  setComposerHeight(px: number): void;
+  /** while the assets are open: the composer's height (all the view keeps), and the height beside the way back to the
+      chat (over the drawer's middle only); and a menu of ours open (it needs the column) */
+  setComposerHeight(px: number, beside?: number): void;
   setMenuOpen(open: boolean): void;
   /** the project's chat record, in its folder: conversations and finished turns (.film/chat), each turn's log (.film/logs) */
   chat: {
@@ -131,7 +137,6 @@ export interface SkillInfo {
 }
 
 /** A skill offered as a card: its cover's address, and its title by language (none: its name). */
-export interface StarterSkill { name: string; description: string; cover: string; title: Record<string, string> | null }
 
 /** A skill fetched from an address, before it is kept: `replaces`, one of the person's has its name. */
 export interface SkillPreview { name: string; description: string; scripts: string[]; size: number; replaces: boolean }

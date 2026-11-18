@@ -19,6 +19,9 @@ import { animationsOf } from '../../src/clip-motion.mjs';
 /** Where the films of compound clips are kept. */
 export const PARTS = 'parts';
 
+/** Where a film's covers are kept (covers.mjs): films of one frame, opened as a compound clip's are. */
+export const COVERS = 'covers';
+
 /** The editable folder named by a compound clip's source, or null for an ordinary page. */
 export function compoundFolder(/** @type {string | undefined} */ src) {
   return /^(parts\/[^/]+)\/film\.html$/.exec((src ?? '').replace(/#.*$/, ''))?.[1] ?? null;

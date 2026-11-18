@@ -15,6 +15,7 @@ import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { nodeProxyVariables } from './environment.mjs';
 
 const ENTRY = fileURLToPath(new URL('./studio-process.mjs', import.meta.url));
 const QUIT_WAIT_MS = 10_000;
@@ -81,16 +82,18 @@ async function takeOver(home, log) {
 }
 
 /**
- * @param {{ home: string, port: number, env: Record<string, string>, onOpen: (url: string) => void,
+ * `secrets`: Studio's own key and its service keys' vault (studio-secrets.mjs), told to it when it asks, over this
+ * private channel only; none: it keeps keys plain, as `npx openfilm` does.
+ * @param {{ home: string, port: number, env: Record<string, string>, secrets?: { key: string, vault: string } | null, onOpen: (url: string) => void,
  *           onBrowser: (state: { state: string, message?: string }) => void, onAsk?: AskHandler,
  *           onRelease?: (folder: string) => Promise<void> | void, log: (line: string) => void }} options
  * @returns {Promise<{ origin: string, filmOrigin: string, key: string, child: Electron.UtilityProcess, readAccount: (options?: { fresh?: boolean }) => Promise<any> }>}
  */
-function fork({ port, env, onOpen, onBrowser, onAsk, onRelease, log }) {
+function fork({ port, env, secrets = null, onOpen, onBrowser, onAsk, onRelease, log }) {
   return new Promise((resolve, reject) => {
     const child = utilityProcess.fork(ENTRY, [], {
       serviceName: 'OpenFilm Studio',
-      env: { ...env, OPENFILM_STUDIO_PORT: String(port) },
+      env: { ...env, ...nodeProxyVariables(env), OPENFILM_STUDIO_PORT: String(port) },
       stdio: 'pipe',
     });
     child.stdout?.on('data', (d) => log(String(d)));
@@ -106,7 +109,8 @@ function fork({ port, env, onOpen, onBrowser, onAsk, onRelease, log }) {
         settled = true;
         clearTimeout(timer);
         reject(Object.assign(new Error(message.message), { code: message.code }));
-      } else if (message?.type === 'open') onOpen(message.url);
+      } else if (message?.type === 'secrets:read') child.postMessage({ type: 'secrets', ...(secrets ?? {}) });
+      else if (message?.type === 'open') onOpen(message.url);
       else if (message?.type === 'browser' || message?.type === 'ffmpeg') onBrowser(message);
       else if (message?.type === 'ask' || message?.type === 'ask-cancel') onAsk?.(message, (answer) => child.postMessage(answer));
       /* a folder about to be renamed: what the app runs in it stops first (studio-process.mjs release) */
@@ -125,17 +129,18 @@ function fork({ port, env, onOpen, onBrowser, onAsk, onRelease, log }) {
 
 /**
  * A question Studio asks the person's agent (`{ type: 'ask', id, text }`, or `{ type: 'ask-cancel', id }` to stop
- * it), and how its answer goes back: `{ type: 'answer', id, text }` or `{ type: 'answer', id, error, code? }`.
+ * it), and how its answer goes back: `{ type: 'answer', id, text }` or `{ type: 'answer', id, error, code? }`; asked
+ * with `stream`, each piece first as it comes, `{ type: 'answer-part', id, delta }`.
  * @typedef {{ agent: string, options: Record<string, string | number | boolean> }} WritingModel
  * @typedef {{ mimeType: string, data: string }} WritingImage
- * @typedef {(message: { type: 'ask' | 'ask-cancel', id: string, text?: string, model?: WritingModel, images?: WritingImage[] }, reply: (answer: Record<string, unknown>) => void) => void} AskHandler
+ * @typedef {(message: { type: 'ask' | 'ask-cancel', id: string, text?: string, model?: WritingModel, images?: WritingImage[], stream?: boolean }, reply: (answer: Record<string, unknown>) => void) => void} AskHandler
  */
 
 /**
  * Start the window's Studio. `onExit` hears when it stops after it had started (a crash): `restart()` starts it again.
  * `onAsk` answers Studio's questions for the person's agent (studio-process.mjs askAgent). `onRelease` stops what the
  * app runs in a project folder about to be renamed (studio-process.mjs release).
- * @param {{ home: string, port: number, env: Record<string, string>, onOpen: (url: string) => void,
+ * @param {{ home: string, port: number, env: Record<string, string>, secrets?: { key: string, vault: string } | null, onOpen: (url: string) => void,
  *           onBrowser: (state: { state: string, message?: string }) => void, onExit: (code: number) => void,
  *           onAsk?: AskHandler, onRelease?: (folder: string) => Promise<void> | void, log: (line: string) => void }} options
  */

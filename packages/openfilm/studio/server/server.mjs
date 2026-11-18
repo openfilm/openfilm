@@ -1,6 +1,6 @@
 // @ts-check
 /**
- * OpenFilm Studio's server: one process for the whole editor. Two origins, so a web page can never reach the editor:
+ * OpenFilm Studio's server: one process for the whole editor. Three origins, so a web page can never reach the editor:
  *
  *   http://127.0.0.1:<port>      the editor's pages and its API. The API needs the launch key: as a cookie, set by
  *                                any page's address with ?key=… (/open?key=… too), or as `x-studio-key` (the CLI).
@@ -8,45 +8,54 @@
  *                                this machine (another browser, an agent's preview). Writes from a browser must come
  *                                from this origin.
  *   http://localhost:<port + 1>  the film itself: project files, read only, for the preview (see pages.mjs).
+ *   http://localhost:<port + 2>  the plugins people made: their pages, and the project's files for them, written only
+ *                                with the person's leave (see plugin-pages.mjs); any free port when that one is taken.
  *
- * Both answer only requests addressed to 127.0.0.1, localhost or [::1] at their own port (ownHost): another site
+ * Each answers only requests addressed to 127.0.0.1, localhost or [::1] at its own port (ownHost): another site
  * whose name is pointed at this machine (DNS rebinding) gets nothing, not even /api/health.
  */
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { createReadStream, existsSync, mkdirSync, openSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, extname, isAbsolute, join, normalize, relative, resolve, sep } from 'node:path';
+import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { createServer } from 'node:http';
 import { pipeline } from 'node:stream';
-import { mkdir, readFile } from 'node:fs/promises';
+import { mkdir, readFile, symlink } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { EditError, editProjectFilm, pageClipLook, readProjectFilm, settleProjectFilm } from './film.mjs';
 import { compoundOuter, readPartFilm, writePartFilm } from './parts.mjs';
-import { PARTS, compoundFolder, srcInto } from './compound.mjs';
+import { COVERS, PARTS, compoundFolder, srcInto } from './compound.mjs';
+import { CoverFilmError, coverFolder, coverFrame, coverLook, coverLooks, coverPicture, discardCover, drawCovers, listCovers, mainCover, madeCoverPictures, makeCover, restoreCover, setMainCover } from './covers.mjs';
 import { readPage, writePage } from './page-text.mjs';
 import { FileError, bringIn, collect, extractAudio, freezeFrame, importFile, inside, listFiles, makeFolder, moveCheck, moveFile, readable, relink, trashFile } from './files.mjs';
 import { mediaReferences } from '../../src/media-links.mjs';
-import { ExportError, createExports, draftApps, exportCapabilities, exportsRoot, projectSizes } from './exports.mjs';
-import { MediaError, frame, loudness, mixedWaveform, poster, probe, waveform } from './derived.mjs';
+import { ExportError, createExports, draftApps, exportCapabilities, exportsRoot, projectSizes, renderDefaults } from './exports.mjs';
+import { MediaError, frame, loudness, mixLoudness, mixedWaveform, poster, probe, waveform } from './derived.mjs';
 import { HistoryError, checkoutVersion, copyVersion, deleteVersions, discardChanges, keepAside, log, recoverVersions, restoreFilm, saveVersion, status as historyStatus, versionFilesChanged } from './history.mjs';
 import * as personEdits from './person-edits.mjs';
 import { createAutoVersions } from './auto-versions.mjs';
 import { createHistoryPreviews } from './history-previews.mjs';
 import { ownHost, servable, startPages } from './pages.mjs';
+import { transferLibraryEntries } from './library-transfer.mjs';
 import { HttpError, cookie, json, readJson } from './http.mjs';
 import { acceptWebSocket } from './websocket.mjs';
 import {
   ProjectError, createFolder, createProject, deleteFolder, deleteProject, duplicateProject, libraryRoot, listFolders, listProjects, locateProject, markOpened, moveFolder, moveLibrary,
-  moveProjectToFolder, openProject, projectById, renameFolder, renameProject, studioHome, studioKey, TOOL_DIR,
+  agentKeyOf, moveProjectToFolder, openProject, projectById, renameFolder, renameProject, studioHome, studioKey, TOOL_DIR,
 } from './projects.mjs';
 import { FetchError, createFetches, fetchFilm, parseRepoUrl } from './fetch-repo.mjs';
+import { sealKeysWith, sealPlainKeys } from './keys.mjs';
+/* the app's Studio seals the person's keys with it (startStudio `sealer`) */
+export { vaultSealer } from './keys.mjs';
 import { BrowseError, browseFolder, browsePlaces } from './browse.mjs';
-import { exampleFile, exampleFolder, listExamples } from './examples.mjs';
+import { exampleFile, exampleFolder, listExamples, listNews } from './examples.mjs';
 import { pickFiles, pickFolder } from './folder-picker.mjs';
 import { readPrefs, writePrefs } from './prefs.mjs';
 import { ensureProxies, playChecks } from './proxies.mjs';
-import { ensurePreviews, knownLate } from './preview-cache.mjs';
+import { ensurePreviews, knownLate, pausePreviews, cancelPreviews, clearPreviews, retryPreviews } from './preview-cache.mjs';
+import { stopVisionDownloads } from '../../src/vision-assets.mjs';
 import { npmOpenfilm, olderThanThis } from '../client.mjs';
 import { createWatchers } from './watch.mjs';
 import { projectMissing } from './project-presence.mjs';
@@ -54,20 +63,35 @@ import { installedFonts } from './fonts.mjs';
 import { addTextFont, isFontFile, projectFonts, resolveIn } from './project-fonts.mjs';
 import { FILM_PAGE, PageFrameError, closePageFrames, compoundSound, filmPoster, pageFacts, pageFrame, warmFilmPoster } from './pageframes.mjs';
 import { COVER_FRAME_W, CoverError, clearCover, readCover, readCoverBody, setCover, setCoverFromFile } from './cover.mjs';
-import { BUILT_IN, fetchItem, libraryFavorites, libraryFileFetched, libraryIndex, libraryVoices, notHere, refreshCommunity, setLibraryFavorites } from './library.mjs';
-import { SavedError, TEXT_COMPONENT, TEXT_OWN_FONTS, bundlePoster, libraryPath, libraryRel, libraryRoot as savedLibrary, listLibrary, bringClip, saveClip, saveFile, saveGroup, takeSaved } from './saved.mjs';
+import { BUILT_IN, fetchItem, libraryAdded, libraryFavorites, libraryFileFetched, libraryIndex, libraryVoices, notHere, withPairs, refreshCommunity, setLibraryAdded, setLibraryFavorites, streamLibrary } from './library.mjs';
+import { createMediaIndexer, mediaSummary } from './media-index.mjs';
+import { carryMade, madeView } from './media-made.mjs';
+import { pluginOfSkill, pluginStates, pluginsDir, removePlugin, setPluginOn, setWorkbenchOrder, workbenchOrder } from '../../src/plugins.mjs';
+import { createReconnector, missingMedia, reconnect } from './media-reconnect.mjs';
+import { clearProjectCache, storage } from './storage.mjs';
+import { SavedError, TEXT_COMPONENT, TEXT_OWN_FONTS, bundlePoster, copyFromLibrary, libraryPath, savePack, libraryRel, libraryRoot as savedLibrary, bringClip, saveClip, saveFile, saveGroup, takeSaved } from './saved.mjs';
+import { addLibraryAsset, assetCatalog, assetUsage, catalogListing, existingLibraryAsset, moveAssetCatalog, refreshLibraryReferences, registerLibraryLinks, registerLibraryFolder, forgetLibraryPath, savedStarKey, starredListing, starredPaths } from './asset-library.mjs';
+import { defaultPlace, ensureShelf, readHidden, shelfMoved, shelfRemoved, writeShelf } from './library-places.mjs';
 import { FILM_FILE, clipKind, isPage } from '../../src/film-doc.mjs';
 import { listenLocal } from '../../src/host.mjs';
 import { captionTrackRoutes } from './caption-tracks.mjs';
-import { moveToTrash } from './trash.mjs';
-import { coreSkills, keeps, listSkills, offeredSkills, removeSkill, setSkillCover, setSkillOn, skillOrigins, skillsOff, thisPlatform } from '../../src/skills.mjs';
-import { catalogSkills, installSkill, installedStanding, readCatalog, readDiscover, seedCatalog, uninstallSkill } from './skill-catalog.mjs';
+import { binDelete, binList, binRestore, recycle } from './recycle-bin.mjs';
+import { allowProjectSkill, appIconIn, revocationOf, revokedNow, skillFiles, commandsIn, coreSkills, elementIn, keeps, listSkills, offeredSkills, ownSkills, pluginRuns, projectSkillAllowed, pluginWrites, removeSkill, setPluginRuns, setPluginWrites, setSkillCover, setSkillOn, skillOrigins, skillsOff, thisPlatform } from '../../src/skills.mjs';
+import { startPluginPages } from './plugin-pages.mjs';
+import { startPluginPrograms } from './plugin-programs.mjs';
+import { createPluginServers } from './plugin-servers.mjs';
+import { communityStats, countInstall } from './community-stats.mjs';
+import { verifyPublished } from './community-publish.mjs';
+import { publishCheck } from '../../src/publish-cli.mjs';
+import { communitySources, entrySources, setCommunitySources, catalogSkills, installSkill, installedStanding, readCatalog, readDiscover, seedCatalog, uninstallSkill } from './skill-catalog.mjs';
 import { freshProviders, providersRoute } from './providers/index.mjs';
+import { voicesRoute } from './voices.mjs';
 import { localModelsRoute } from './local-models.mjs';
 import { captionRoutes, writeSubtitleStyle } from './captions.mjs';
 import { projectSettingsRoute, readProjectSettings } from './project-settings.mjs';
 import { markersRoute } from './markers.mjs';
 import { CANVAS_FILE, agentCanvasRoute, canvasRoute, canvasWriteRoute, readCanvas } from './canvas.mjs';
+import { clipToolsRoute } from './clip-tools.mjs';
 import { copyBoardInto, projectTemplatesRoute, templatesRoute } from './canvas-templates.mjs';
 import { canvasMadeRoute } from './canvas-history.mjs';
 import { charactersRoute, projectCharactersRoute } from './canvas-characters.mjs';
@@ -108,6 +132,21 @@ export function desktopInstaller(os, arch, base = DESKTOP_FILES) {
 }
 
 /**
+ * Whether a request changes what is the person's own to say, which an agent may not: who makes the media and with
+ * which keys (Settings → Services, the models run here), Studio's preferences, and which plugins and skills are on,
+ * installed or let write. Reading them is anyone's.
+ * @param {string[]} parts the path after /api/ @param {string} method
+ */
+export function personsSay(parts, method) {
+  if (method === 'GET' || method === 'HEAD') return false;
+  const [head] = parts;
+  if (head === 'providers' || head === 'local-models' || head === 'prefs' || head === 'voices') return true;
+  if (head === 'plugins') return parts.length === 2;
+  if (head === 'skills') return !(parts.length === 2 && parts[1] === 'catalog');
+  return false;
+}
+
+/**
  * Start Studio. `port` 0 picks a free one. `advertise`:
  * write where it listens to ~/.openfilm/run.json (removed on close), which is how the CLI finds this machine's Studio,
  * and open with the machine's key (see studioKey); otherwise the key is new each launch.
@@ -116,19 +155,40 @@ export function desktopInstaller(os, arch, base = DESKTOP_FILES) {
  * Studio's editor into a page of its own (its chat beside it) serves that one. `working`: the folders an app's agent
  * is working in right now (an app with a chat), which cannot be renamed or deleted meanwhile. `askAgent`: in an app with
  * a chat, one question answered by the person's agent's own model, for Studio's own work that needs a model
- * (translating subtitles); without it, that goes to a service connected for it. `release`: an app's own processes in
- * a project folder (its agent between turns) let go of it, before the folder is renamed. Resolves once both servers listen.
- * @param {{ port?: number, key?: string, openBrowser?: (url: string) => void, advertise?: boolean, onQuit?: () => void, stays?: boolean, editorDir?: string, working?: () => string[], askAgent?: import('./get.mjs').AskAgent, release?: (path: string) => Promise<void> }} [options]
+ * (translating subtitles); without it, that goes to a service connected for it. `sealer`: the person's service keys
+ * are kept sealed with it (keys.mjs), those found plain sealed now. `keepKey`: Studio's own `key` is the app's, kept in
+ * its memory only: run.json names the agents' key (projects.mjs agentKeyOf, `keyKind: 'agent'`), so no file holds a
+ * key to the person's say. `release`: an app's own processes in a project folder (its agent between turns) let go of
+ * it, before the folder is renamed. Resolves once both servers listen.
+ * @param {{ port?: number, key?: string, openBrowser?: (url: string) => void, advertise?: boolean, onQuit?: () => void, stays?: boolean, editorDir?: string, working?: () => string[], askAgent?: import('./get.mjs').AskAgent, indexMedia?: boolean, sealer?: import('./keys.mjs').Sealer, keepKey?: boolean, release?: (path: string) => Promise<void> }} [options]
  */
-export async function startStudio({ port = 4747, key, openBrowser = systemBrowser, advertise = false, onQuit, stays = false, editorDir = EDITOR_DIR, working = () => [], askAgent, release } = {}) {
+export async function startStudio({ port = 4747, key, openBrowser = systemBrowser, advertise = false, onQuit, stays = false, editorDir = EDITOR_DIR, working = () => [], askAgent, indexMedia = false, sealer, keepKey = false, release } = {}) {
   void refreshCommunity();
   let COOKIE = cookieName(port);
   let FRAMED = framedCookieName(port);
-  /** The key from either session cookie. */
-  const cookieKey = (/** @type {Req} */ req) => (sameKey(cookie(req, COOKIE)) ? cookie(req, COOKIE) : cookie(req, FRAMED));
+  /** The key a browser session holds, Studio's or the agents', from either session cookie (null: none). */
+  const cookieKey = (/** @type {Req} */ req) => [cookie(req, COOKIE), cookie(req, FRAMED)].find((k) => sameKey(k) || matches(k, agentKey)) ?? null;
   key ??= advertise ? studioKey() : randomBytes(24).toString('hex');
+  if (sealer) {
+    sealKeysWith(sealer);
+    await sealPlainKeys().catch((e) => console.warn(`service keys: not sealed yet (${e instanceof Error ? e.message : String(e)})`));
+  }
   /* every change of an open project's folder: a version once it rests, when the person asked for that */
-  const watchers = createWatchers({ onChange: (root, e) => { if (e.type === 'film' || e.type === 'files') autoVersions.changed(root); } });
+  const watchers = createWatchers({ onChange: (root, e) => {
+    if (e.type === 'film' || e.type === 'files') autoVersions.changed(root);
+    if (e.type === 'files') mediaIndex.soon(root);
+  } });
+  /* what is known of the person's media (media-index.mjs): a project's, a moment after its files changed or it was
+     opened; `indexMedia` (the Studio the person runs, not one a test starts): every project's, once Studio is up */
+  const mediaIndex = createMediaIndexer({
+    onError: (root, e) => console.warn(`media index: ${root}: ${e instanceof Error ? e.message : String(e)}`),
+    /* media that went missing is looked for unasked (media-reconnect.mjs): the pages hear how many came back */
+    onProject: createReconnector({ onFound: (root, found) => watchers.emit(root, { type: 'files', reconnected: found.length }) }),
+  });
+  const sweepMedia = indexMedia ? setTimeout(() => { void mediaIndex.sweep().catch(() => {}); }, 20_000) : null;
+  sweepMedia?.unref();
+  /* the routes OpenFilm's own plugins bring (plugin-servers.mjs), each told to the pages of a project as it says */
+  const pluginServers = createPluginServers({ emit: (root, event) => watchers.emit(root, event) });
   /** questions about spending for the person, in the pages showing a project (see get.mjs) */
   const asks = createAsks({ emit: (root, event) => watchers.emit(root, event), roots: watchers.roots });
   /** the editor pages open right now, and whether each is in sight: `/open` switches them to a project */
@@ -167,17 +227,29 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
   /** films fetched from GitHub into the library (fetch-repo.mjs), each opened as a project when it lands */
   const fetches = createFetches({ library: libraryRoot, open: (folder) => openProject(folder) });
 
-  const sameKey = (/** @type {string | null | undefined} */ given) => {
+  const matches = (/** @type {string | null | undefined} */ given, /** @type {string} */ want) => {
     if (typeof given !== 'string') return false;
-    const a = Buffer.from(given), b = Buffer.from(key);
+    const a = Buffer.from(given), b = Buffer.from(want);
     return a.length === b.length && timingSafeEqual(a, b);
   };
+  const sameKey = (/** @type {string | null | undefined} */ given) => matches(given, key);
+  /* the key an agent the app runs comes with (projects.mjs agentKeyOf): Studio's all but the person's own say */
+  const agentKey = agentKeyOf(key);
 
-  /** The caller holds the key; a browser write must also come from the editor's own origin. */
+  /**
+   * The caller holds the key; a browser write must also come from the editor's own origin. Says who it is: the
+   * person (the pages, their CLI), or an agent the app runs (`x-studio-key` its key, or a browser it opened Studio
+   * in with its key).
+   * @returns {'person' | 'agent'}
+   */
   function authorize(/** @type {Req} */ req) {
-    if (sameKey(/** @type {string | undefined} */ (req.headers['x-studio-key']))) return;
-    if (!sameKey(cookieKey(req))) throw new HttpError(401, 'open Studio from the address `openfilm open` prints');
+    const given = /** @type {string | undefined} */ (req.headers['x-studio-key']);
+    if (sameKey(given)) return 'person';
+    if (matches(given, agentKey)) return 'agent';
+    const session = cookieKey(req);
+    if (!session) throw new HttpError(401, 'open Studio from the address `openfilm open` prints');
     if (req.method !== 'GET' && req.method !== 'HEAD' && req.headers.origin !== origin) throw new HttpError(403, 'not from Studio');
+    return sameKey(session) ? 'person' : 'agent';
   }
 
   /*
@@ -212,11 +284,15 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
        without the key, so it says nothing of the machine: its home only as a digest (homeTag), no process id */
     /* `app`: the desktop app's Studio, which updates with the app (`openfilm update` says so instead) */
     if (path === '/api/health') return json(res, 200, { product: 'openfilm-studio', version: VERSION, home: homeTag(), filmOrigin, ...(stays ? { app: true } : {}) });
-    const signIn = [`${COOKIE}=${key}; Path=/; HttpOnly; SameSite=Strict`, `${FRAMED}=${key}; Path=/; HttpOnly; Secure; SameSite=None; Partitioned`];
+    /* a browser signs in with the key it was given: Studio's (the person's), or the agents' (a browser an agent opened
+       Studio in, which has all but the person's say) */
+    const signIn = (/** @type {string} */ k) => [`${COOKIE}=${k}; Path=/; HttpOnly; SameSite=Strict`, `${FRAMED}=${k}; Path=/; HttpOnly; Secure; SameSite=None; Partitioned`];
+    const given = url.searchParams.get('key');
+    const signingIn = sameKey(given) || matches(given, agentKey) ? /** @type {string} */ (given) : null;
     /** A page's address with the key in it (the address bar is what a person copies). */
-    const keyed = (/** @type {string} */ to) => {
+    const keyed = (/** @type {string} */ to, /** @type {string} */ k) => {
       const at = new URL(to, origin);
-      at.searchParams.set('key', String(key));
+      at.searchParams.set('key', k);
       return at.pathname + at.search;
     };
     /* Opened as localhost or [::1] (ownHost lets both in): go to Studio's own address, which its cookie, its writes'
@@ -224,29 +300,36 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     const canonical = new URL(origin);
     if (!path.startsWith('/api/') && String(req.headers.host ?? '').toLowerCase() !== canonical.host.toLowerCase() && ownHost(req, Number(canonical.port || 80))) {
       const here = `${path}${url.search}`;
-      const to = sameKey(url.searchParams.get('key')) || sameKey(cookieKey(req)) ? `${origin}${keyed(here)}` : `${origin}${here}`;
+      const cookie = cookieKey(req);
+      const shown = signingIn ?? (sameKey(cookie) || matches(cookie, agentKey) ? cookie : null);
+      const to = shown ? `${origin}${keyed(here, shown)}` : `${origin}${here}`;
       res.writeHead(302, { location: to, 'referrer-policy': 'no-referrer' });
       return res.end();
     }
     if (path === '/open') {
-      if (!sameKey(url.searchParams.get('key'))) throw new HttpError(403, 'this link is from another Studio launch; use the one `openfilm open` printed');
+      if (!signingIn) throw new HttpError(403, 'this link is from another Studio launch; use the one `openfilm open` printed');
       const to = url.searchParams.get('to') ?? '/';
-      res.writeHead(302, { location: keyed(/^\/(?!\/)[^\s\\]*$/.test(to) ? to : '/'), 'set-cookie': signIn, 'referrer-policy': 'no-referrer' });
+      res.writeHead(302, { location: keyed(/^\/(?!\/)[^\s\\]*$/.test(to) ? to : '/', signingIn), 'set-cookie': signIn(signingIn), 'referrer-policy': 'no-referrer' });
       return res.end();
     }
     if (!path.startsWith('/api/')) {
       if (path.startsWith('/assets/')) return sendEditor(res, editorDir, path);
       /* a page with the key in its address signs this browser in; one signed in without it gets it in its address */
-      if (sameKey(url.searchParams.get('key'))) return sendEditor(res, editorDir, path, { 'set-cookie': signIn });
-      if (sameKey(cookieKey(req))) {
-        res.writeHead(302, { location: keyed(path + url.search), 'referrer-policy': 'no-referrer' });
+      if (signingIn) return sendEditor(res, editorDir, path, { 'set-cookie': signIn(signingIn) });
+      const session = cookieKey(req);
+      if (session) {
+        res.writeHead(302, { location: keyed(path + url.search, session), 'referrer-policy': 'no-referrer' });
         return res.end();
       }
       return sendEditor(res, editorDir, path);
     }
 
-    authorize(req);
+    const caller = authorize(req);
     const parts = path.slice('/api/'.length).split('/').map(decodeURIComponent);
+    /* the person's own say is theirs: an agent uses the services they connected, and does not change them */
+    if (caller === 'agent' && personsSay(parts, req.method ?? 'GET')) {
+      throw new HttpError(403, "only the person changes this, in Studio's Settings: tell them what to change and why");
+    }
 
     /* stop: another app is taking over this machine's Studio, or `openfilm open` starts it afresh (`whenIdle`: not
        while an export runs or media is made — it would be lost). `pages`: how many were open, to come back */
@@ -275,7 +358,9 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
       const last = folder == null ? (await listProjects()).find((p) => !p.missing && existsSync(join(p.path, FILM_FILE))) : null;
       const project = folder != null ? await openProject(folder) : last ? await openProject(last.path) : null;
       const to = project ? `/projects/${encodeURIComponent(project.id)}` : '/';
-      const address = `${origin}/open?key=${key}&to=${encodeURIComponent(to)}`;
+      /* an agent is given an address with its own key; a browser Studio opens itself, Studio's */
+      const addressWith = (/** @type {string} */ k) => `${origin}/open?key=${k}&to=${encodeURIComponent(to)}`;
+      const address = addressWith(String(key));
       for (const end = Date.now() + PAGES_BACK_MS; editorPages.size < before && Date.now() < end;) {
         await new Promise((done) => { pageCame = () => done(undefined); setTimeout(done, end - Date.now()).unref(); });
       }
@@ -287,7 +372,7 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
         if (now) openBrowser(address);
         else if (fallback > 0) setTimeout(() => { if (pagesConnected === before) openBrowser(address); }, fallback * 1000).unref();
       }
-      return json(res, 200, { project, url: address, pages: open });
+      return json(res, 200, { project, url: caller === 'agent' ? addressWith(agentKey) : address, pages: open });
     }
 
     /* this Studio's version, and the latest on npm (Settings → General; `?check=1` asks npm now) */
@@ -342,6 +427,7 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     }
     /* ── own keys and who makes each kind of media (Settings → Services): never a key back; see providers/index.mjs ── */
     if (parts[0] === 'providers') return providersRoute(req, res, parts.slice(1), { openBrowser });
+    if (parts[0] === 'voices') return voicesRoute(req, res, parts.slice(1));
     /* the models that run on this computer (Settings → Services → Local services; local-models.mjs) */
     if (parts[0] === 'local-models') return localModelsRoute(req, res, parts.slice(1));
     /* what the person changed in a project while an agent worked, kept over its writes: the note for the agent named
@@ -362,7 +448,7 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     /* ── `openfilm get`: media from a provider, landed in the project; spending is asked here first (see get.mjs) ── */
     if (parts[0] === 'get') {
       making += req.method === 'POST' ? 1 : 0;
-      try { return await getRoute(req, res, parts.slice(1), asks); } finally { making -= req.method === 'POST' ? 1 : 0; }
+      try { return await getRoute(req, res, parts.slice(1), asks, (root) => watchers.emit(root, { type: 'files', made: true })); } finally { making -= req.method === 'POST' ? 1 : 0; }
     }
 
     /* ── `openfilm canvas`: an agent's steps on a project's canvas, shown on the board at once (canvas.mjs) ── */
@@ -385,41 +471,106 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     }
     /* Saved, the person's own library for every project (saved.mjs): its files and folders as a project's media are
        (files.mjs), by their `saved/` paths; a file's bytes, a bundle's picture, and what Studio works out from a file */
+    /* OpenFilm's recycle bin (recycle-bin.mjs): what is in it, put back (a project is listed again), deleted for good,
+       emptied */
+    if (parts[0] === 'recycle') {
+      if (parts.length === 1 && req.method === 'GET') return json(res, 200, { items: await binList() });
+      const { ids } = /** @type {{ ids?: unknown }} */ (req.method === 'POST' ? await readJson(req) ?? {} : {});
+      if (parts[1] === 'restore' && req.method === 'POST') {
+        const back = await binRestore(ids);
+        for (const item of back) if (item.kind === 'project') await openProject(item.path).catch(() => null);
+        return json(res, 200, { restored: back });
+      }
+      if (parts[1] === 'delete' && req.method === 'POST') { await binDelete(ids); return json(res, 200, {}); }
+      if (parts[1] === 'empty' && req.method === 'POST') { await binDelete(); return json(res, 200, {}); }
+    }
     if (parts[0] === 'saved') {
       const sub = parts.slice(1).join('/');
       const lib = await savedLibrary();
       const rel = (/** @type {unknown} */ path) => { try { return libraryRel(path); } catch (e) { throw new HttpError(400, /** @type {Error} */ (e).message); } };
       const at = url.searchParams.get('path') ?? '';
+      if (sub === 'catalog' && req.method === 'GET') return json(res, 200, await assetCatalog());
+      /* the places at the library's top (folders made here, folders linked from elsewhere) and the person's shelf of
+         them (library-places.mjs); `name`: the person's word for the first place, made the first time */
+      if (sub === 'places' && req.method === 'GET') {
+        const shelf = await ensureShelf(url.searchParams.get('name') ?? undefined, moveAssetCatalog);
+        const top = await catalogListing('saved');
+        const places = top.folders.filter((path) => path.split('/').length === 2).map((path) => ({ path, ...(top.links[path] ? { link: top.links[path] } : {}) }));
+        return json(res, 200, { places, shelf, hidden: readHidden() });
+      }
+      if (sub === 'shelf' && req.method === 'PUT') {
+        const { shelf, hidden } = /** @type {{ shelf?: unknown, hidden?: unknown }} */ (await readJson(req) ?? {});
+        try { return json(res, 200, { shelf: writeShelf(shelf, hidden), hidden: readHidden() }); } catch (e) { throw new HttpError(400, /** @type {Error} */ (e).message); }
+      }
+      /* a thing of OpenFilm's library or a Community pack copied into one of the person's folders (dropped on it in
+         the drawer): a file as itself, a page with what it loads as the folder it is kept in. { path } */
+      if (sub === 'files/from-library' && req.method === 'POST') {
+        const { from, into, name } = /** @type {{ from?: unknown, into?: unknown, name?: unknown }} */ (await readJson(req) ?? {});
+        return json(res, 200, { path: libraryPath(await savedCall(() => copyFromLibrary(from, rel(into), name))) });
+      }
+      /* the person's own files starred: their places (GET); one starred or no longer, { path, on } (PUT), answered with
+         the favorites and those places */
+      if (sub === 'star' && req.method === 'GET') return json(res, 200, { paths: await starredPaths(libraryFavorites()) });
+      if (sub === 'star' && req.method === 'PUT') {
+        const { path: starred, on } = /** @type {{ path?: unknown, on?: unknown }} */ (await readJson(req) ?? {});
+        const key = await savedStarKey(starred);
+        /* the favorites as they are now (after the wait), the star put in or taken out */
+        const now = libraryFavorites();
+        const ids = setLibraryFavorites(on !== false ? [...new Set([...now, key])] : now.filter((id) => id !== key));
+        return json(res, 200, { ids, paths: await starredPaths(ids) });
+      }
+      if (sub === 'usage' && req.method === 'GET') return json(res, 200, await assetUsage(at));
+      if (sub === 'relink' && req.method === 'POST') {
+        const { path: linked, to } = await readJson(req) ?? {};
+        if (typeof to !== 'string') throw new HttpError(400, 'Choose the new source folder.');
+        await relink(lib, rel(linked), to);
+        await registerLibraryLinks([libraryPath(rel(linked))]);
+        await refreshLibraryReferences(libraryPath(rel(linked)));
+        return json(res, 200, {});
+      }
+      if (sub === 'files/transfer' && req.method === 'POST') return json(res, 200, await transferLibraryEntries(await readJson(req)));
       if (sub === 'files') {
         /* `folder`: the library as the film's origin serves it, so a saved page plays in the media pane's viewer as a
            project's does */
-        if (req.method === 'GET') return json(res, 200, { ...await listLibrary(), folder: pages.folderUrl({ id: SAVED_ORIGIN_ID, path: lib }) });
+        /* `view=starred`: the person's own files starred, flat, wherever they are */
+        if (req.method === 'GET' && url.searchParams.get('view') === 'starred') return json(res, 200, { ...await starredListing(libraryFavorites()), folder: pages.folderUrl({ id: SAVED_ORIGIN_ID, path: lib }) });
+        if (req.method === 'GET') return json(res, 200, { ...await catalogListing(url.searchParams.get('at') ?? '', url.searchParams.get('view') ?? '', url.searchParams.get('q') ?? ''), folder: pages.folderUrl({ id: SAVED_ORIGIN_ID, path: lib }) });
         if (req.method === 'PUT') return json(res, 200, { path: libraryPath((await importFile(lib, rel(at), req)).path) });
         if (req.method === 'PATCH') {
           const { from, to } = /** @type {{ from?: unknown, to?: unknown }} */ (await readJson(req) ?? {});
-          return json(res, 200, { path: libraryPath((await moveFile(lib, rel(from), rel(to))).path) });
+          const path = libraryPath((await moveFile(lib, rel(from), rel(to))).path);
+          await moveAssetCatalog(libraryPath(rel(from)), path);
+          shelfMoved(libraryPath(rel(from)), path);
+          return json(res, 200, { path });
         }
-        if (req.method === 'DELETE') { await trashFile(lib, rel(at)); return json(res, 200, {}); }
+        if (req.method === 'DELETE') { if (!rel(at)) throw new HttpError(403, 'The asset-library root cannot be deleted.'); await trashFile(lib, rel(at)); await forgetLibraryPath(libraryPath(rel(at))); shelfRemoved(libraryPath(rel(at))); return json(res, 200, {}); }
       }
       if (sub === 'folders' && req.method === 'POST') {
         const { path: folder } = /** @type {{ path?: unknown }} */ (await readJson(req) ?? {});
-        return json(res, 200, { path: libraryPath(await makeFolder(lib, rel(folder))) });
+        const path = libraryPath(await makeFolder(lib, rel(folder)));
+        await registerLibraryFolder(path);
+        return json(res, 200, { path });
       }
-      /* files or folders of this computer copied in: the paths given, else the person's pick. { landed } */
+      /* files or folders of this computer copied in, or (`mode: link`) linked where they are kept: the paths given,
+         else the person's pick. { landed } */
       if (sub === 'files/bring' && req.method === 'POST') {
-        const { into, paths, folder, title } = /** @type {{ into?: unknown, paths?: unknown, folder?: unknown, title?: unknown }} */ (await readJson(req) ?? {});
+        const { into, paths, folder, title, mode } = /** @type {{ into?: unknown, paths?: unknown, folder?: unknown, title?: unknown, mode?: unknown }} */ (await readJson(req) ?? {});
         const ask = { title: typeof title === 'string' && title.trim() ? title.trim().slice(0, 120) : 'Choose', at: null };
         const picked = Array.isArray(paths) ? paths.map(String)
           : await (folder === true ? pickFolder(ask).then((p) => (p ? [p] : [])) : pickFiles(ask)).catch((e) => { throw new HttpError(501, String(e?.message ?? e)); });
-        return json(res, 200, { landed: (await bringIn(lib, rel(into ?? 'saved'), picked, 'copy', { anywhere: true })).map(libraryPath) });
+        const landed = (await bringIn(lib, rel(into ?? 'saved'), picked, mode === 'link' ? 'link' : mode === 'auto' ? 'auto' : 'copy', { anywhere: true,
+          makeLink: (source, destination, kind) => symlink(source, destination, process.platform === 'win32' && kind === 'dir' ? 'junction' : kind),
+        })).map(libraryPath);
+        await registerLibraryLinks(landed);
+        return json(res, 200, { landed });
       }
       if (sub === 'reveal' && req.method === 'POST') {
-        const { path: shown } = /** @type {{ path?: unknown }} */ (await readJson(req) ?? {});
+        const { path: shown, original } = /** @type {{ path?: unknown, original?: boolean }} */ (await readJson(req) ?? {});
         const where = rel(shown ?? 'saved');
-        if (where) reveal(inside(lib, where)); else openFile(lib);
+        if (where) reveal(original ? realpathSync.native(readable(lib, where)) : inside(lib, where)); else openFile(lib);
         return json(res, 200, {});
       }
-      if (sub === 'file' && req.method === 'GET') return sendMedia(req, res, inside(lib, rel(at)));
+      if (sub === 'file' && req.method === 'GET') return sendMedia(req, res, readable(lib, rel(at)));
       if (sub === 'poster' && req.method === 'GET') return sendMedia(req, res, await savedCall(() => bundlePoster(at)));
       if (sub === 'media' && req.method === 'GET') {
         const what = url.searchParams.get('what');
@@ -441,8 +592,12 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
         await refreshCommunity();
         return json(res, 200, libraryIndex());
       }
-      if (parts[1] === 'voices' && parts.length === 2 && req.method === 'GET') return json(res, 200, libraryVoices());
-      if (parts[1] === 'file' && parts.length === 2 && req.method === 'GET') return sendMedia(req, res, await libraryFileFetched(url.searchParams.get('path')), { check: true });
+      if (parts[1] === 'voices' && parts.length === 2 && req.method === 'GET') return json(res, 200, withPairs(libraryVoices()));
+      if (parts[1] === 'file' && parts.length === 2 && req.method === 'GET') {
+        /* a Community sound or piece of music heard before it is here: passed on as it arrives */
+        if (await streamLibrary(url.searchParams.get('path'), res)) return undefined;
+        return sendMedia(req, res, await libraryFileFetched(url.searchParams.get('path')), { check: true });
+      }
       /* which of these things still need fetching before they go in (a sound, an emoji, a template's music): { ids } */
       if (parts[1] === 'missing' && parts.length === 2 && req.method === 'POST') return json(res, 200, { ids: notHere((/** @type {{ ids?: unknown }} */ (await readJson(req) ?? {})).ids) });
       /* an asset or a template example fetched now: { ok } */
@@ -457,6 +612,19 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
         if (!type) return sendMedia(req, res, file, { check: true });
         res.writeHead(200, { 'content-type': type, 'cache-control': 'private, no-cache' });
         return res.end(readFileSync(file));
+      }
+      /* the community's packs and things the person added to the library (OpenFilm's own are always in it): { ids } */
+      if (parts[1] === 'added' && parts.length === 2) {
+        if (req.method === 'GET') { await refreshCommunity(); return json(res, 200, { ids: libraryAdded() }); }
+        if (req.method === 'PUT') { await refreshCommunity(); return json(res, 200, { ids: setLibraryAdded((/** @type {{ ids?: unknown }} */ (await readJson(req) ?? {})).ids) }); }
+      }
+      /* a pack of the Community's media kept as a folder of the person's own, and it is added: { path } */
+      if (parts[1] === 'packs' && parts[2] === 'save' && parts.length === 3 && req.method === 'POST') {
+        const { pack, lang } = /** @type {{ pack?: unknown, lang?: unknown }} */ (await readJson(req) ?? {});
+        await refreshCommunity();
+        const path = libraryPath(await savedCall(() => savePack(pack, lang)));
+        setLibraryAdded([...libraryAdded(), pack]);
+        return json(res, 200, { path });
       }
       if (parts[1] === 'favorites' && parts.length === 2) {
         if (req.method === 'GET') return json(res, 200, { ids: libraryFavorites() });
@@ -479,6 +647,53 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     /* where new projects go (src/locations.mjs): the folder, its default, and its disk's free space; a POST opens it
        in the system's file manager */
     if (parts[0] === 'locations' && parts.length === 1 && req.method === 'GET') return json(res, 200, locations());
+    /* the room every project takes, and what of it can be cleared (storage.mjs); a POST clears one project's cache
+       (`id`) or every project's, and says how much came back. What a render reads back is left in a project where
+       an export or an agent is at work */
+    if (parts[0] === 'storage' && parts.length === 1 && req.method === 'GET') return json(res, 200, await storage());
+    if (parts[0] === 'storage' && parts[1] === 'clear' && parts.length === 2 && req.method === 'POST') {
+      const { id } = /** @type {{ id?: unknown }} */ (await readJson(req));
+      const listed = (await listProjects()).filter((p) => !p.missing && (id == null || p.id === id));
+      let freed = 0;
+      for (const p of listed) {
+        const busy = agentIn(p.path) || exports.list(p.id).some((job) => job.status === 'waiting' || job.status === 'running');
+        freed += await clearProjectCache(p.path, { busy });
+      }
+      return json(res, 200, { freed, ...await storage({ fresh: true }) });
+    }
+    /* OpenFilm's plugins (src/plugins.mjs): each with whether it is on; one turned on or off (PUT plugins/:id { on }),
+       answered with them all. 409 for one not made yet */
+    if (parts[0] === 'plugins' && parts.length === 1 && req.method === 'GET') return json(res, 200, { plugins: pluginsShown(), order: workbenchOrder() });
+    /* one of OpenFilm's own plugins' app icon (icon.svg, .png or .webp in its folder: src/skills.mjs appIconIn) */
+    if (parts[0] === 'plugin-icon' && parts.length === 2 && req.method === 'GET') {
+      const id = decodeURIComponent(parts[1]);
+      const folder = /^[a-z][a-z0-9-]{0,31}$/.test(id) ? join(pluginsDir(), id) : null;
+      const file = folder ? appIconIn(folder) : undefined;
+      return sendMedia(req, res, folder && file ? join(folder, file) : null, { keep: true });
+    }
+    /* one of OpenFilm's own plugins' recording at work, or its poster: only the files its showcase names (src/plugins.mjs) */
+    if (parts[0] === 'plugin-preview' && parts.length === 3 && req.method === 'GET') {
+      const id = decodeURIComponent(parts[1]), name = decodeURIComponent(parts[2]);
+      const video = /^[a-z][a-z0-9-]{0,31}$/.test(id) ? pluginsShown().find((p) => p.id === id)?.showcase?.video : undefined;
+      return sendMedia(req, res, video && (name === video.src || name === video.poster) ? join(pluginsDir(), id, name) : null, { keep: true });
+    }
+    /* the order the person put the workbenches in (PUT plugin-order { order: ids }), answered with it as kept */
+    if (parts[0] === 'plugin-order' && parts.length === 1 && req.method === 'PUT') {
+      const { order } = /** @type {{ order?: unknown }} */ (await readJson(req) ?? {});
+      try { setWorkbenchOrder(order); } catch (e) { throw new HttpError(400, /** @type {Error} */ (e).message); }
+      return json(res, 200, { order: workbenchOrder() });
+    }
+    /* an own plugin's routes, `plugins/<id>/…`, from its server.mjs, while it is on (plugin-servers.mjs) */
+    if (parts[0] === 'plugins' && parts.length > 2) return pluginServers.route(req, res, parts[1], parts.slice(2), url);
+    if (parts[0] === 'plugins' && parts.length === 2 && req.method === 'PUT') {
+      const { on } = /** @type {{ on?: unknown }} */ (await readJson(req) ?? {});
+      /* on: true or false; null: removed (one that comes with OpenFilm is only turned off) */
+      if (typeof on !== 'boolean' && on !== null) throw new HttpError(400, 'on: true, false or null');
+      try { if (on === null) removePlugin(parts[1]); else setPluginOn(parts[1], on); } catch (e) { throw new HttpError(/there is no plugin/i.test(/** @type {Error} */ (e).message) ? 404 : 409, /** @type {Error} */ (e).message); }
+      return json(res, 200, { plugins: pluginsShown(), order: workbenchOrder() });
+    }
+    /* the person's media in numbers (media-index.mjs): places, files, the room they take and the room copies take */
+    if (parts[0] === 'media-index' && parts.length === 1 && req.method === 'GET') return json(res, 200, { ...await mediaSummary(), scanning: mediaIndex.busy() });
     /* the library moved (projects.mjs moveLibrary): { path } (null: the default), and with `move` its projects go too */
     if (parts[0] === 'locations' && parts[1] === 'projects' && parts.length === 2 && req.method === 'PUT') {
       const { path: asked, move } = /** @type {{ path?: unknown, move?: unknown }} */ (await readJson(req) ?? {});
@@ -513,6 +728,8 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     }
     /* the example films (examples.mjs): none when the index cannot be read */
     if (parts[0] === 'examples' && parts.length === 1 && req.method === 'GET') return json(res, 200, { examples: await listExamples() });
+    /* the Community's news that is now (examples.mjs listNews): the projects window's card */
+    if (parts[0] === 'news' && parts.length === 1 && req.method === 'GET') return json(res, 200, { news: await listNews() });
     /* a poster or preview beside an index read from this computer (examples.mjs exampleFile) */
     if (parts[0] === 'examples' && parts[1] === 'file' && parts.length > 2 && req.method === 'GET') {
       return sendMedia(req, res, exampleFile(parts.slice(2).map(decodeURIComponent).join('/')), { keep: true });
@@ -542,13 +759,29 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
       const skills = listSkills({ project: project?.path ?? null });
       const catalog = readCatalog();
       const standing = installedStanding(catalog);
+      /* listed by another community index the person added, not OpenFilm's: its address (skill-catalog.mjs communitySources) */
+      const fromOther = entrySources(catalog);
       const had = new Set(skills.map((k) => k.uid));
       const offered = catalogSkills(catalog).filter((k) => !had.has(k.uid));
       const origins = skillOrigins();
       const off = new Set(skillsOff());
+      const given = new Set(ownSkills().skills.map((k) => k.name));
       const agentsCall = new Map(offeredSkills({ project: project?.path ?? null }).named.map((k) => [k.uid, k.as]));
-      const media = (/** @type {string} */ uid, /** @type {'cover' | 'preview'} */ which) => `/api/skills/${encodeURIComponent(uid)}/${which}${id ? `?project=${encodeURIComponent(id)}` : ''}`;
-      const all = [...coreSkills().map((k) => ({ ...k, core: true, installed: true })), ...skills.map((k) => ({ ...k, core: false, installed: true })),
+      const media = (/** @type {string} */ uid, /** @type {'cover' | 'preview' | 'icon'} */ which) => `/api/skills/${encodeURIComponent(uid)}/${which}${id ? `?project=${encodeURIComponent(id)}` : ''}`;
+      /* a project's own the person has not allowed in it (src/skills.mjs projectSkillAllowed): listed, waiting, with
+         nothing of it shown or run (no page, element, program, tab or commands) until it is allowed */
+      const waits = (/** @type {typeof skills[number]} */ k) => k.source === 'project' && !projectSkillAllowed(k, project?.path ?? null);
+      /* one OpenFilm withdrew (its index's `revoked`): nothing of it shown or run, its program stopped, and why said */
+      const revoked = revokedNow();
+      const withheld = (/** @type {typeof skills[number]} */ k) => {
+        const withdrawn = revocationOf(k, revoked);
+        if (withdrawn) pluginPrograms.stop(k.uid);
+        return withdrawn || waits(k)
+          ? { ...k, page: undefined, element: undefined, program: undefined, tab: undefined, blocks: undefined, commands: undefined,
+            ...(withdrawn ? { revoked: { reason: withdrawn.reason, ...(withdrawn.note ? { note: withdrawn.note } : {}), ...(withdrawn.advisory ? { advisory: withdrawn.advisory } : {}) } } : { waits: true }) }
+          : k;
+      };
+      const all = [...coreSkills().map((k) => ({ ...k, core: true, installed: true })), ...skills.map((k) => ({ ...withheld(k), core: false, installed: true })),
         ...offered.map((k) => ({ ...k, core: false, installed: false }))];
       return json(res, 200, {
         catalog: catalog ? { read: catalog.read } : null,
@@ -557,16 +790,57 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
           ...(agentsCall.has(k.uid) ? { as: agentsCall.get(k.uid) } : {}),
           ...(k.shown ? { shown: k.shown } : {}), ...(k.version ? { version: k.version } : {}), ...(k.kind ? { kind: k.kind } : {}),
           ...(k.order != null ? { order: k.order } : {}), ...(k.icon ? { icon: k.icon } : {}), ...(k.repository ? { repository: k.repository } : {}),
+          /* how it is listed and rated for people (src/plugins.mjs profileOf) */
+          ...(k.profile ? { profile: k.profile } : {}),
+          ...(k.source === 'official' && fromOther.get(k.uid) ? { from: fromOther.get(k.uid) } : {}),
+          /* the hosts its page may reach (src/skills.mjs networkOf), none but these */
+          ...(k.network ? { network: k.network } : {}),
           /* what it needs beyond OpenFilm, the computers it runs on, and whether this one is not among them */
           ...(k.needs ? { needs: k.needs } : {}), ...(k.platforms ? { platforms: k.platforms, ...(k.platforms.includes(thisPlatform()) ? {} : { elsewhere: true }) } : {}),
           ...(k.cover ? { cover: `${media(k.uid, 'cover')}${id ? '&' : '?'}v=${encodeURIComponent(k.cover)}` } : {}), ...(k.preview ? { preview: media(k.uid, 'preview') } : {}),
+          /* its app icon (src/skills.mjs appIconIn): none, the default for its kind */
+          ...(k.appIcon ? { appIcon: `${media(k.uid, 'icon')}${id ? '&' : '?'}v=${encodeURIComponent(k.appIcon)}` } : {}),
+          /* one with a surface (a page of its own, src/skills.mjs SKILL_PAGE) is a plugin: where its page is, on the
+             plugins' origin (plugin-pages.mjs); listed for a project, where that project's files are for it; and
+             whether the person lets it change them */
+          /* a plugin's surface shown as a tab of the library instead of as a workbench (src/plugins.mjs tabOf) */
+          ...(k.tab && k.installed && !k.core ? { tab: k.tab } : {}),
+          /* the blocks its workbench is laid out in among the page's panels (src/plugin-blocks.mjs) */
+          ...(k.blocks && k.installed && !k.core ? { blocks: k.blocks } : {}),
+          /* the commands it brings (src/skills.mjs commandsIn), by name: `openfilm <its name> <command>` */
+          ...(k.commands && k.installed && !k.core ? { commands: Object.keys(k.commands) } : {}),
+          /* the program it brings (src/skills.mjs programIn) serves its surface itself, once started (`start` below),
+             which the person lets it or not */
+          ...(k.program && k.installed && !k.core ? { program: true, ...(pluginRuns(k, project ?? null) ? { runs: true } : {}) } : {}),
+          /* the element it brings (src/skills.mjs elementIn) is put in the editor's own page: `inApp`, and once the
+             person lets it run, where its module is (`element`, by the version of its file, so a changed one is
+             loaded anew) and where the project's files are for it */
+          ...(k.element && !k.program && k.installed && !k.core ? (() => {
+            const runs = pluginRuns(k, project ?? null);
+            if (!runs) return { inApp: true };
+            const at = pluginPages.surface({ uid: k.uid, source: k.source, folder: k.folder, page: k.element, ...(k.network ? { network: k.network } : {}) }, project ?? null);
+            let version = '';
+            try { const stat = statSync(join(k.folder, k.element)); version = `${stat.size.toString(36)}-${Math.round(stat.mtimeMs).toString(36)}`; } catch { /* gone since it was listed */ }
+            return { inApp: true, runs: true, element: `${at.page}?v=${version}`, ...(at.project ? { files: at.project } : {}) };
+          })() : {}),
+          ...(k.page && !k.program && !k.element && k.installed && !k.core ? (() => {
+            const at = pluginPages.surface({ uid: k.uid, source: k.source, folder: k.folder, page: k.page, ...(k.network ? { network: k.network } : {}) }, project ?? null);
+            return { surface: at.page, ...(at.project ? { files: at.project } : {}), ...(pluginWrites(k, project ?? null) ? { writes: true } : {}) };
+          })() : {}),
+          /* a project's own, not allowed in it yet; one OpenFilm withdrew, and why (`withheld` above) */
+          ...('waits' in k && k.waits ? { waits: true } : {}),
+          ...('revoked' in k && k.revoked ? { revoked: k.revoked } : {}),
           /* the person's own: where it came from (none kept: made where it is) */
           ...(k.source === 'mine' ? { origin: origins[basename(k.folder)] ?? { from: 'made' } } : {}),
           /* in Discover only, installed to be used; the person's own and a project's are theirs already */
           installed: k.installed,
           ...(k.installed && k.source === 'official' && !k.core ? standing.get(k.uid) ?? {} : {}),
           /* turned off: offered to no agent until it is turned on again */
-          ...(k.installed && keeps(off, k) ? { off: true } : {}),
+          ...(k.installed && !k.core && keeps(off, k) ? { off: true } : {}),
+          /* one of OpenFilm's own that goes with a plugin now off (src/plugins.mjs): off with it, and on again with it */
+          /* one of OpenFilm's own that no plugin on brings or requires (src/skills.mjs ownSkills): given to no agent until
+             one does; turning its plugin on (the plugin it goes with, when it has one) gives it again */
+          ...(k.core && !given.has(k.name) ? { off: true, ...(pluginOfSkill(k.name) ? { plugin: pluginOfSkill(k.name) } : {}) } : {}),
         })),
       });
     }
@@ -596,6 +870,8 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
       const uid = decodeURIComponent(parts[1]);
       if (installed) {
         try { await installSkill(uid); } catch (e) { throw new HttpError(/** @type {any} */ (e).status ?? 500, e instanceof Error ? e.message : String(e)); }
+        /* one more counted, for one OpenFilm's community lists (not another index's): its uid alone (community-stats.mjs) */
+        if (!entrySources().has(uid)) countInstall(uid);
       } else if (!(await uninstallSkill(uid))) throw new HttpError(404, 'no such installed skill');
       return json(res, 200, { installed });
     }
@@ -611,8 +887,103 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
       if (!skill) throw new HttpError(404, 'no such skill');
       if (skill.source === 'official') throw new HttpError(400, 'An official skill is uninstalled, not removed.');
       if (skill.source === 'mine') await removeSkill(skill.uid);
-      else await moveToTrash(skill.folder);
+      else await recycle(skill.folder, 'skill');
       return json(res, 200, {});
+    }
+    /* a plugin someone made (a skill with a surface) let change projects, or no longer (PUT { on }); one a project
+       brings is let in that project (`?project=`) */
+    if (parts[0] === 'skills' && parts.length === 3 && parts[2] === 'writes' && req.method === 'PUT') {
+      const on = (await readJson(req))?.on;
+      if (typeof on !== 'boolean') throw new HttpError(400, 'on: true or false');
+      const skill = await skillAt(decodeURIComponent(parts[1]));
+      if (!skill?.page) throw new HttpError(404, 'no such plugin');
+      const id = url.searchParams.get('project');
+      const project = id ? (await listProjects()).find((p) => p.id === id && !p.missing) ?? null : null;
+      try { setPluginWrites(skill, project, on); } catch (e) { throw new HttpError(409, /** @type {Error} */ (e).message); }
+      return json(res, 200, { writes: on });
+    }
+    /* a plugin with a program let run it on this computer, or no longer (PUT { on }), as `writes` is kept; no longer
+       let, what runs of it is stopped */
+    if (parts[0] === 'skills' && parts.length === 3 && parts[2] === 'runs' && req.method === 'PUT') {
+      const on = (await readJson(req))?.on;
+      if (typeof on !== 'boolean') throw new HttpError(400, 'on: true or false');
+      const skill = await skillAt(decodeURIComponent(parts[1]));
+      if (!skill?.program && !skill?.element) throw new HttpError(404, 'no such plugin');
+      const id = url.searchParams.get('project');
+      const project = id ? (await listProjects()).find((p) => p.id === id && !p.missing) ?? null : null;
+      try { setPluginRuns(skill, project, on); } catch (e) { throw new HttpError(409, /** @type {Error} */ (e).message); }
+      if (!on) pluginPrograms.stop(skill.uid);
+      return json(res, 200, { runs: on });
+    }
+    /* a plugin's program for a project (POST, `?project=`): started when it is not running → { url }, what its surface
+       shows. 403 until the person lets it run, 409 while the plugin is off, 502 (saying why) when it does not start */
+    if (parts[0] === 'skills' && parts.length === 3 && parts[2] === 'start' && req.method === 'POST') {
+      const skill = await skillAt(decodeURIComponent(parts[1]));
+      const program = skill?.program;
+      if (!skill || !program) throw new HttpError(404, 'no such plugin');
+      const id = url.searchParams.get('project');
+      const project = id ? (await listProjects()).find((p) => p.id === id && !p.missing) ?? null : null;
+      if (!project) throw new HttpError(404, 'no such project');
+      if (keeps(new Set(skillsOff()), skill)) throw new HttpError(409, 'This plugin is off.');
+      if (revocationOf(skill)) throw new HttpError(409, 'OpenFilm withdrew this plugin: it does not run.');
+      try {
+        return json(res, 200, { url: await pluginPrograms.ensure({ uid: skill.uid, source: skill.source, folder: skill.folder, program }, { id: project.id, path: project.path }) });
+      } catch (e) { throw new HttpError(/** @type {any} */ (e).status ?? 500, e instanceof Error ? e.message : String(e)); }
+    }
+    /* how many use each community item (community-stats.mjs): { stats: { uid: { installs } } }, none when unknown */
+    if (parts[0] === 'community' && parts[1] === 'stats' && parts.length === 2 && req.method === 'GET') {
+      return json(res, 200, { stats: await communityStats() });
+    }
+    /* the other community indexes the person added (GET: { sources }; PUT { sources }): read after OpenFilm's own, the
+       next time Discover is read (skill-catalog.mjs communitySources) */
+    if (parts[0] === 'community' && parts[1] === 'sources' && parts.length === 2 && (req.method === 'GET' || req.method === 'PUT')) {
+      if (req.method === 'PUT') {
+        const sources = (await readJson(req))?.sources;
+        if (!Array.isArray(sources)) throw new HttpError(400, 'sources: a list of index addresses');
+        try { setCommunitySources(sources); } catch (e) { throw new HttpError(400, /** @type {Error} */ (e).message); }
+      }
+      return json(res, 200, { sources: communitySources() });
+    }
+    /* one of the person's own, read as the community's review will (POST: src/publish-cli.mjs publishCheck); and, once it
+       is in a repository of theirs, read there and compared, with its listing (POST `publish/verify` { repo }:
+       community-publish.mjs) */
+    if (parts[0] === 'skills' && (parts.length === 3 || (parts.length === 4 && parts[3] === 'verify')) && parts[2] === 'publish' && req.method === 'POST') {
+      const skill = await skillAt(decodeURIComponent(parts[1]));
+      if (!skill || skill.source !== 'mine') throw new HttpError(404, 'Only one of your own is published.');
+      const check = publishCheck(skill.folder);
+      if (!check) throw new HttpError(404, 'no such skill');
+      if (parts.length === 3) return json(res, 200, check);
+      const repo = (await readJson(req))?.repo;
+      if (typeof repo !== 'string') throw new HttpError(400, 'repo: the address of your repository');
+      try {
+        return json(res, 200, await verifyPublished({ name: skill.name, folder: skill.folder, version: check.version, kind: check.kind }, repo));
+      } catch (e) {
+        /* its code, for the app's own words: the API not listing it is a repository missing or private here */
+        const code = /** @type {any} */ (e).code === 'use-git' ? 'access' : /** @type {any} */ (e).code;
+        throw new HttpError(/** @type {any} */ (e).status ?? 502, e instanceof Error ? e.message : String(e), typeof code === 'string' ? { code } : undefined);
+      }
+    }
+    /* a skill as a person reviews it before letting it in: its SKILL.md whole and its files (GET ?project=) */
+    if (parts[0] === 'skills' && parts.length === 3 && parts[2] === 'text' && req.method === 'GET') {
+      const skill = await skillAt(decodeURIComponent(parts[1]));
+      if (!skill) throw new HttpError(404, 'no such skill');
+      let text = '';
+      try { text = readFileSync(join(skill.folder, 'SKILL.md'), 'utf8').slice(0, 400_000); } catch { /* none */ }
+      return json(res, 200, { text, ...skillFiles(skill.folder) });
+    }
+    /* a project's own skill allowed in that project, as its files are now, or no longer (PUT ?project= { on }):
+       src/skills.mjs allowProjectSkill */
+    if (parts[0] === 'skills' && parts.length === 3 && parts[2] === 'allow' && req.method === 'PUT') {
+      const on = (await readJson(req))?.on;
+      if (typeof on !== 'boolean') throw new HttpError(400, 'on: true or false');
+      const id = url.searchParams.get('project');
+      const project = id ? (await listProjects()).find((p) => p.id === id && !p.missing) ?? null : null;
+      if (!project) throw new HttpError(404, 'no such project');
+      const skill = listSkills({ project: project.path }).find((k) => k.uid === decodeURIComponent(parts[1]));
+      if (!skill || skill.source !== 'project') throw new HttpError(404, 'no skill of this project by that name');
+      allowProjectSkill(skill, project.path, on);
+      if (!on) pluginPrograms.stop(skill.uid);
+      return json(res, 200, { on });
     }
     /* a skill turned on or off, by uid, for every project (PUT { on }) */
     if (parts[0] === 'skills' && parts.length === 3 && parts[2] === 'on' && req.method === 'PUT') {
@@ -620,8 +991,18 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
       if (typeof on !== 'boolean') throw new HttpError(400, 'on: true or false');
       const skill = await skillAt(decodeURIComponent(parts[1]), { core: true });
       if (!skill) throw new HttpError(404, 'no such skill');
-      setSkillOn(skill.uid, on);
-      return json(res, 200, { on });
+      /* one of OpenFilm's own has no switch of its own: it is on while its plugin is (src/plugins.mjs), so turning it
+         turns the plugin; one that goes with no plugin (`film`, `media`) is given while a plugin on requires it */
+      const core = coreSkills().some((k) => k.uid === skill.uid);
+      const plugin = core ? pluginOfSkill(skill.name) : undefined;
+      if (core && !plugin) throw new HttpError(409, 'This skill is given while a plugin that needs it is on: it has no switch of its own.');
+      if (plugin) {
+        try { setPluginOn(plugin, on); } catch (e) { throw new HttpError(409, /** @type {Error} */ (e).message); }
+      } else {
+        setSkillOn(skill.uid, on);
+        if (!on) pluginPrograms.stop(skill.uid);
+      }
+      return json(res, 200, { on, ...(plugin ? { plugin } : {}) });
     }
     /* Only the person's own skill can be changed; a project override must not edit a hidden personal skill. */
     if (parts[0] === 'skills' && parts.length === 3 && parts[2] === 'cover' && (req.method === 'PUT' || req.method === 'DELETE')) {
@@ -634,10 +1015,10 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
         return json(res, 200, { cover: updated?.cover ? `/api/skills/${encodeURIComponent(skill.uid)}/cover?v=${encodeURIComponent(updated.cover)}` : null });
       } catch (e) { throw new HttpError(400, e instanceof Error ? e.message : String(e)); }
     }
-    /* a skill's cover picture or preview video (its openfilm.json's `cover`, `preview`) */
-    if (parts[0] === 'skills' && parts.length === 3 && (parts[2] === 'cover' || parts[2] === 'preview') && req.method === 'GET') {
+    /* a skill's cover picture or preview video (its openfilm.json's `cover`, `preview`), or its app icon */
+    if (parts[0] === 'skills' && parts.length === 3 && (parts[2] === 'cover' || parts[2] === 'preview' || parts[2] === 'icon') && req.method === 'GET') {
       const skill = await skillAt(decodeURIComponent(parts[1]), { core: true });
-      const file = skill?.[parts[2]];
+      const file = skill?.[parts[2] === 'icon' ? 'appIcon' : parts[2]];
       return sendMedia(req, res, skill && file ? join(skill.folder, file) : null, { keep: true });
     }
 
@@ -728,6 +1109,8 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     /* its canvas (canvas.mjs): Studio's own board beside the edit */
     if (await canvasRoute(req, res, project.path, rest)) return;
     if (await canvasWriteRoute(req, res, rest, askAgent, project.path)) return;
+    /* a clip trimmed, its sound or its shots taken out, cropped: on this computer (clip-tools.mjs) */
+    if (await clipToolsRoute(req, res, project.path, rest)) return;
     if (await canvasMadeRoute(req, res, project.path, rest, url)) return;
     if (await projectCharactersRoute(req, res, project.path, rest)) return;
     if (await projectTemplatesRoute(req, res, project.path, rest)) return;
@@ -786,7 +1169,10 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
       }
     }
     /* an editor page shows it: the person opened it, so it is the one `openfilm open` alone comes back to */
-    if (rest === 'opened' && req.method === 'POST') return json(res, 200, { project: await markOpened(project.id) });
+    if (rest === 'opened' && req.method === 'POST') {
+      mediaIndex.soon(project.path);
+      return json(res, 200, { project: await markOpened(project.id) });
+    }
     /* the fonts its pages declare with @font-face, and with `page` (a project path) the families that page can draw with
        and names (project-fonts.mjs): the font menu's "In this project" */
     if (rest === 'fonts' && req.method === 'GET') {
@@ -922,6 +1308,42 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
       try { await readPartFilm(project.path, String(folder ?? '')); } catch (e) { throw new HttpError(404, e instanceof Error ? e.message : String(e)); }
       return json(res, 200, { project: await openProject(join(project.path, String(folder)), { create: false }) });
     }
+    /* the film's covers (covers.mjs): listed (the one the film is shown by among them), made (from a moment of the film,
+       a picture, a color, a look, or another cover), opened to edit as a compound clip's film is, given another
+       picture or look, one made the film's own, and drawn as pictures */
+    if (rest === 'covers' || rest.startsWith('covers/')) {
+      try {
+        if (rest === 'covers' && req.method === 'GET') {
+          const covers = await listCovers(project.path);
+          return json(res, 200, { covers, main: await mainCover(project.path, covers), looks: await coverLooks(), made: await madeCoverPictures(project.path) });
+        }
+        const ask = /** @type {{ folder?: unknown, folders?: unknown, at?: unknown, picture?: unknown, color?: unknown, look?: unknown, name?: unknown, stage?: unknown, from?: unknown, format?: unknown, reveal?: unknown, text?: unknown }} */ (await readJson(req));
+        if (rest === 'covers' && req.method === 'POST') return json(res, 200, { folder: await makeCover(project.path, ask) });
+        if (rest === 'covers/open' && req.method === 'POST') {
+          const { abs } = coverFolder(project.path, ask.folder);
+          return json(res, 200, { project: await openProject(abs, { create: false }) });
+        }
+        if (rest === 'covers/frame' && req.method === 'POST') return json(res, 200, { clip: await coverFrame(project.path, ask.folder, ask.at) });
+        if (rest === 'covers/look' && req.method === 'POST') return json(res, 200, { clip: await coverLook(project.path, ask.folder, ask.look) });
+        if (rest === 'covers/picture' && req.method === 'POST') return json(res, 200, { clip: await coverPicture(project.path, ask.folder, ask) });
+        if (rest === 'covers/main' && req.method === 'POST') return json(res, 200, { main: await setMainCover(project.path, ask.folder) });
+        /* a design cancelled: a cover put back as it was, one made in it taken away */
+        if (rest === 'covers/restore' && req.method === 'POST') { await restoreCover(project.path, ask.folder, ask.text); return json(res, 200, {}); }
+        if (rest === 'covers/discard' && req.method === 'POST') { await discardCover(project.path, ask.folder); return json(res, 200, {}); }
+        if (rest === 'covers/draw' && req.method === 'POST') {
+          const folders = Array.isArray(ask.folders) ? ask.folders : [];
+          /* into the folder a video was exported to with them (`~` the home folder), else the exports folder */
+          const wanted = typeof ask.folder === 'string' ? ask.folder.replace(/^~(?=$|[\\/])/, homedir()) : '';
+          const files = await drawCovers(project.path, folders, wanted && isAbsolute(wanted) ? wanted : exportsRoot(), ask.format === 'png' ? 'png' : 'jpg');
+          /* shown where they were put, as an export is, unless they went with a video (its tray shows that) */
+          if (files[0] && ask.reveal !== false) reveal(files[0]);
+          return json(res, 200, { files });
+        }
+      } catch (e) {
+        if (e instanceof CoverFilmError) throw new HttpError(e.status, e.message);
+        throw e;
+      }
+    }
     if (rest === 'films' && req.method === 'GET') {
       try {
         return json(res, 200, { film: await readPartFilm(project.path, url.searchParams.get('folder') ?? '') });
@@ -938,11 +1360,14 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
        given (the desktop app knows a dropped file's), else the person's pick in the system's dialog. { landed } */
     if (rest === 'files/bring' && req.method === 'POST') {
       const { into, mode, paths, folder, title } = /** @type {{ into?: unknown, mode?: unknown, paths?: unknown, folder?: unknown, title?: unknown }} */ (await readJson(req));
-      const how = mode === 'link' ? 'link' : 'copy';
+      /* `auto`: as it takes least room (files.mjs bringIn); `linked`: what was left where it is kept for that */
+      const how = mode === 'link' ? 'link' : mode === 'auto' ? 'auto' : 'copy';
+      /** @type {string[]} */
+      const linked = [];
       const ask = { title: typeof title === 'string' && title.trim() ? title.trim().slice(0, 120) : 'Choose', at: null };
       const picked = Array.isArray(paths) ? paths.map(String)
         : await (folder === true ? pickFolder(ask).then((p) => (p ? [p] : [])) : pickFiles(ask)).catch((e) => { throw new HttpError(501, String(e?.message ?? e)); });
-      return json(res, 200, { landed: await notifyReferences(() => bringIn(project.path, String(into ?? 'assets'), picked, how)) });
+      return json(res, 200, { landed: await notifyReferences(() => bringIn(project.path, String(into ?? 'assets'), picked, how, { onLinked: (rel) => linked.push(rel) })), linked });
     }
     /* a link pointed somewhere else (files.mjs relink): the path given, else the person's pick. { path } (null: cancelled) */
     if (rest === 'files/relink' && req.method === 'POST') {
@@ -966,15 +1391,41 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     /* renders of the stretches the preview played late (preview-cache.mjs), asked for when not made yet: each one's
        name and state, at the proxies' size */
     if (rest === 'preview-cache' && (req.method === 'POST' || req.method === 'GET')) {
-      /* GET: the stretches known to play late (from an earlier session) and theirs */
-      const { ranges, fps } = /** @type {{ ranges?: unknown, fps?: unknown }} */ (req.method === 'GET'
-        ? { ranges: knownLate(project.path), fps: url.searchParams.get('fps') }
-        : await readJson(req));
+      const body = req.method === 'GET' ? { ranges: knownLate(project.path), fps: url.searchParams.get('fps') } : await readJson(req);
+      const { ranges, fps, action, playing: isPlaying } = /** @type {{ ranges?: unknown, fps?: unknown, action?: unknown, playing?: boolean }} */ (body);
+      if (action === 'retry') { retryPreviews(project.path); return json(res, 200, { retried: true }); }
+      if (action === 'clear') { clearPreviews(project.path); return json(res, 200, { late: [], ranges: [] }); }
+      if (action === 'cancel') { cancelPreviews(project.path); return json(res, 200, { late: [], ranges: [] }); }
+      if (action === 'pause') { pausePreviews(project.path, true); return json(res, 200, { paused: true }); }
       const rate = Number(fps);
-      const list = Array.isArray(ranges) ? ranges.filter((r) => Array.isArray(r) && r.length === 2 && r.every(Number.isFinite) && r[1] > r[0] && r[0] >= 0).slice(0, 50) : [];
+      const list = Array.isArray(ranges) ? ranges.filter((r) => Array.isArray(r) && r.length === 2 && r.every(Number.isFinite) && r[1] > r[0] && r[0] >= 0).slice(0, 1000) : [];
       if (!(rate > 0 && rate <= 240)) throw new HttpError(400, 'fps: a frame rate');
       const { proxies } = readPrefs();
-      return json(res, 200, { late: list, ranges: list.length ? ensurePreviews(project.path, /** @type {[number, number][]} */ (list), rate, proxies.height) : [] });
+      if (req.method === 'POST' && isPlaying) pausePreviews(project.path, true);
+      const result = list.length ? ensurePreviews(project.path, /** @type {[number, number][]} */ (list), rate, proxies.height, undefined, { schedule: req.method === 'POST' && !isPlaying }) : [];
+      if (req.method === 'POST' && !isPlaying) pausePreviews(project.path, false);
+      return json(res, 200, { late: list, ranges: result });
+    }
+    /* what the project is missing (media-reconnect.mjs): links that lead nowhere, files its clips name that are gone */
+    /* how the project's media was made, by path (media-made.mjs): what each was asked with, by whom, from which
+       files, its other versions, and the same asked again */
+    if (rest === 'files/made' && req.method === 'GET') return json(res, 200, { made: await madeView(project.path) });
+    if (rest === 'files/missing' && req.method === 'GET') {
+      /* asked because something looks missing: it is looked for (the pages hear when it is back) */
+      mediaIndex.soon(project.path);
+      return json(res, 200, { missing: (await missingMedia(project.path)).map(({ path, name, folder, linked, was }) => ({ path, name, folder, linked, was })) });
+    }
+    /* what is missing looked for and connected again, in a folder the person points at too: the one given, else
+       their pick (`folder: true`). { found, missing } (`cancelled`: no folder was picked) */
+    if (rest === 'files/reconnect' && req.method === 'POST') {
+      const { folder, title } = /** @type {{ folder?: unknown, title?: unknown }} */ (await readJson(req));
+      const ask = { title: typeof title === 'string' && title.trim() ? title.trim().slice(0, 120) : 'Choose', at: null };
+      const where = typeof folder === 'string' ? folder
+        : folder === true ? await pickFolder(ask).catch((e) => { throw new HttpError(501, String(e?.message ?? e)); }) : undefined;
+      if (folder === true && !where) return json(res, 200, { cancelled: true });
+      const { found, missing } = await reconnect(project.path, { folders: where ? [where] : [] });
+      if (found.length) watchers.emit(project.path, { type: 'files' });
+      return json(res, 200, { found: found.length, missing: missing.map(({ path, name, folder: isFolder, linked, was }) => ({ path, name, folder: isFolder, linked, was })) });
     }
     /* what a link leads to copied into the project in its place (files.mjs collect) */
     if (rest === 'files/collect' && req.method === 'POST') {
@@ -1026,7 +1477,8 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     if (rest === 'saved' && req.method === 'POST') {
       const body = /** @type {{ clips?: unknown, groups?: unknown, files?: unknown, into?: unknown }} */ (await readJson(req) ?? {});
       const asked = (/** @type {unknown} */ list) => (Array.isArray(list) ? list.filter((x) => x && typeof x === 'object').slice(0, 50) : []);
-      const into = typeof body.into === 'string' ? body.into : undefined;
+      /* where it goes: the place asked for, else the first of the person's shelf (library-places.mjs) */
+      const into = typeof body.into === 'string' ? body.into : await defaultPlace(moveAssetCatalog);
       const base = pages.folderUrl(project);
       const paths = await savedCall(async () => {
         const out = [];
@@ -1048,7 +1500,14 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     }
     if (rest === 'saved/take' && req.method === 'POST') {
       const { path: from } = /** @type {{ path?: unknown }} */ (await readJson(req) ?? {});
-      return json(res, 200, await savedCall(() => takeSaved(project.path, from)));
+      const taken = await savedCall(async () => await existingLibraryAsset(project.path, from) ?? await takeSaved(project.path, from));
+      if ('path' in taken) await carryMade(project.path, taken.path);
+      return json(res, 200, taken);
+    }
+    if (rest === 'library/add' && req.method === 'POST') {
+      const { path: source, mode } = await readJson(req) ?? {};
+      const binding = await savedCall(() => addLibraryAsset(project.path, source, mode));
+      return json(res, 200, binding);
     }
     /* a page as text, read and written by what Studio writes into a page (layers pasted, page-text.mjs) */
     if (rest === 'page' && req.method === 'GET') return json(res, 200, await readPage(project.path, url.searchParams.get('path')));
@@ -1063,6 +1522,28 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
       const source = typeof from === 'string' ? await projectById(from).catch(() => null) : null;
       if (!source || source.missing) throw new HttpError(404, 'The project it was copied from is not there any more.');
       return json(res, 200, await savedCall(() => bringClip(project.path, source.path, clip, source.name)));
+    }
+    /* how loud the film's sound is as mixed (derived.mjs mixLoudness): the sounds the preview plays, and how long the
+       film is; what the preview turns its sound by to be heard at the loudness it is delivered at */
+    if (rest === 'mix-loudness' && req.method === 'POST') {
+      const { sounds, duration } = /** @type {{ sounds?: unknown, duration?: unknown }} */ (await readJson(req) ?? {});
+      if (!Array.isArray(sounds) || sounds.length > 5000 || typeof duration !== 'number' || !(duration > 0 && duration <= 24 * 3600)) throw new HttpError(400, 'sounds: a list of the film\'s sounds; duration: seconds');
+      /* the preview names each sound on the address the film is served at: taken back to its path in the project,
+         and only a file the project serves (any other is no sound of this film) */
+      const base = new URL(pages.folderUrl(project));
+      const local = /** @type {import('../../src/host.mjs').FilmSound[]} */ (sounds).flatMap((sound) => {
+        if (!sound || typeof sound.src !== 'string') return [];
+        const source = new URL(sound.src, base);
+        if (source.origin !== base.origin || !source.pathname.startsWith(base.pathname)) return [];
+        const path = decodeURIComponent(source.pathname.slice(base.pathname.length));
+        return path && servable(project.path, path) ? [{ ...sound, src: path.split('/').map(encodeURIComponent).join('/') }] : [];
+      });
+      try {
+        return json(res, 200, await mixLoudness(project.path, local, duration));
+      } catch (e) {
+        if (e instanceof MediaError) throw e;
+        throw new HttpError(422, String(/** @type {Error} */ (e)?.message ?? e));
+      }
     }
     /* what Studio works out from a media file: its length and size, a poster, a frame, a waveform (see derived.mjs) */
     if (rest === 'media' && req.method === 'GET') {
@@ -1129,7 +1610,7 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
        how many subtitle cues the film has (the subtitle choices need some), and how big the project and its parts are */
     if (rest === 'exports') {
       if (req.method === 'GET') {
-        return json(res, 200, { exports: exports.list(project.id), folder: exportsRoot(), can: await exportCapabilities(), drafts: draftApps(), subtitles: await exports.subtitles(project.path), captionTracks: await exports.captionTracks(project.path), project: await projectSizes(project.path) });
+        return json(res, 200, { exports: exports.list(project.id), folder: exportsRoot(), can: await exportCapabilities(), render: renderDefaults(), drafts: draftApps(), subtitles: await exports.subtitles(project.path), captionTracks: await exports.captionTracks(project.path), project: await projectSizes(project.path) });
       }
       if (req.method === 'POST') {
         exportRoots.set(project.id, project.path);
@@ -1250,7 +1731,8 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     if (!ownHost(req, /** @type {import('node:net').AddressInfo} */ (editor.address()).port)) return refuse('403 Forbidden');
     void (async () => {
       const path = new URL(req.url ?? '/', origin).pathname;
-      const keyed = sameKey(/** @type {string | undefined} */ (req.headers['x-studio-key'])) || (sameKey(cookieKey(req)) && req.headers.origin === origin);
+      const given = /** @type {string | undefined} */ (req.headers['x-studio-key']);
+      const keyed = sameKey(given) || matches(given, agentKey) || (cookieKey(req) !== null && req.headers.origin === origin);
       if (!keyed) return refuse('401 Unauthorized');
       const parts = path.split('/').slice(1).map(decodeURIComponent);
       /** @type {() => void} */
@@ -1291,13 +1773,37 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     throw e;
   });
   filmOrigin = pages.origin;
+  /* the plugins' origin, on the port after the film's when that one is free (a page's own storage is kept by its
+     origin), else on any */
+  /* one let run (a program, or an element in the editor's own page) can do all the person's agent can: it writes too */
+  const pluginOptions = { secret: key, editorOrigin: () => origin, mayWrite: (/** @type {{ uid: string, source: string }} */ plugin, /** @type {{ id: string }} */ project) => pluginWrites(plugin, project) || pluginRuns(plugin, project) };
+  const pluginPages = await startPluginPages({ port: port ? address.port + 2 : 0, ...pluginOptions }).catch(() => startPluginPages({ port: 0, ...pluginOptions }));
+  /**
+   * OpenFilm's plugins as the editor is told them: each with whether it is on, where the module of its element is
+   * (its package.json's `browser`, src/skills.mjs elementIn), on the plugins' origin as anyone's is, and the commands it
+   * brings, by name (src/skills.mjs commandsIn). Its own ship with OpenFilm, so they are not asked leave to run.
+   */
+  const pluginsShown = () => pluginStates().map((p) => {
+    const folder = join(pluginsDir(), p.id), module = elementIn(folder), commands = commandsIn(folder, p.id);
+    const icon = appIconIn(folder);
+    /* the icon's address changes with its file, so a new one is not hidden by the copy the page keeps an hour */
+    let drawn = '';
+    if (icon) try { const stat = statSync(join(folder, icon)); drawn = `${stat.size.toString(36)}-${Math.round(stat.mtimeMs).toString(36)}`; } catch { /* gone since it was found */ }
+    return { ...p, ...(module ? { element: pluginPages.surface({ uid: `openfilm/${p.id}`, source: 'own', folder, page: module }).page } : {}),
+      ...(icon ? { appIcon: `/api/plugin-icon/${p.id}?v=${encodeURIComponent(`${icon}-${drawn}`)}` } : {}),
+      ...(commands ? { commands: Object.keys(commands) } : {}) };
+  });
+  /* the programs of plugins that bring one, started as their workbenches are shown */
+  const pluginPrograms = startPluginPrograms({ bin: join(studioHome(), 'plugin-bin'), mayRun: (plugin, project) => pluginRuns(plugin, project) });
   if (advertise) {
     /* Discover read as Studio starts, so its skills are there when it first opens (and on an empty conversation) */
     readDiscover({ fresh: 60_000 }).catch(() => { /* offline: what was read before, said so when Discover opens */ });
     mkdirSync(studioHome(), { recursive: true });
     /* `supervisor`: the process that starts this one again if it ends unexpectedly (main.mjs), stopped with it */
     const supervisor = Number(process.env.OPENFILM_STUDIO_SUPERVISOR) || undefined;
-    writeFileSync(runFile(), `${JSON.stringify({ pid: process.pid, ...(supervisor ? { supervisor } : {}), origin, filmOrigin: pages.origin, key })}\n`, { mode: 0o600 });
+    /* `keepKey`: the agents' key only (anyone of this user reads the file), which the CLI sends as it is */
+    const named = keepKey ? { key: agentKey, keyKind: 'agent' } : { key };
+    writeFileSync(runFile(), `${JSON.stringify({ pid: process.pid, ...(supervisor ? { supervisor } : {}), origin, filmOrigin: pages.origin, ...named })}\n`, { mode: 0o600 });
   }
 
   /** @type {Promise<void> | null} */
@@ -1305,6 +1811,7 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
   const studio = {
     origin,
     filmOrigin: pages.origin,
+    pluginOrigin: pluginPages.origin,
     port: address.port,
     key,
     close() { return closing ??= shutDown(); },
@@ -1314,11 +1821,17 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     if (advertise && advertised()?.pid === process.pid) rmSync(runFile(), { force: true });
     /* a running export stops, and cleans up after itself while the rest closes: its half-made files go before Studio */
     const exporting = exports.stopAll();
+    stopVisionDownloads();
+    for (const project of await listProjects().catch(() => [])) cancelPreviews(project.path);
     fetches.stopAll();
     autoVersions.stop();
+    if (sweepMedia) clearTimeout(sweepMedia);
+    mediaIndex.close();
     await closePageFrames();
     watchers.closeAll();
     await pages.close();
+    await pluginPages.close();
+    pluginPrograms.close();
     editor.closeAllConnections();
     for (const socket of streamSockets) socket.destroy();
     await new Promise((done) => editor.close(() => done(undefined)));
@@ -1332,13 +1845,15 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
 const FROM_SOURCE = existsSync(new URL('../ui/src', import.meta.url));
 
 /**
- * A project's files as a compound clip's film in `folder` names them (`assets/a.mp4` → `../../assets/a.mp4`), the
- * films of compound clips left out.
+ * A project's files as a compound clip's film or a cover in `folder` names them (`assets/a.mp4` → `../../assets/a.mp4`,
+ * its own `look.html`), the films of compound clips and the other covers left out.
  * @param {Awaited<ReturnType<typeof listFiles>>} listing @param {string} folder
  */
 function filesFrom(listing, folder) {
-  const keep = (/** @type {string} */ path) => !path.startsWith(`${PARTS}/`);
-  const named = (/** @type {string} */ path) => srcInto(path, folder);
+  /* a cover's own files (its picture, its look) are beside its film: named from there */
+  const own = (/** @type {string} */ path) => path.startsWith(`${folder}/`);
+  const keep = (/** @type {string} */ path) => own(path) || (!path.startsWith(`${PARTS}/`) && !path.startsWith(`${COVERS}/`));
+  const named = (/** @type {string} */ path) => (own(path) ? path.slice(folder.length + 1) : srcInto(path, folder));
   return {
     ...listing,
     files: listing.files.filter((f) => keep(f.path)).map((f) => ({ ...f, path: named(f.path) })),
@@ -1358,7 +1873,8 @@ async function outerProject(path) {
   if (compoundOuter(path) === resolve(path)) return null;
   const around = dirname(dirname(resolve(path)));
   const found = await openProject(around, { create: false }).catch(() => null);
-  return found ? { id: found.id, name: found.name ?? basename(around), folder: basename(resolve(path)) } : null;
+  const kind = basename(dirname(resolve(path))) === COVERS ? 'cover' : 'part';
+  return found ? { id: found.id, name: found.name ?? basename(around), folder: basename(resolve(path)), kind } : null;
 }
 
 /**

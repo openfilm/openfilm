@@ -122,6 +122,22 @@ test('a click on a title under a full-frame overlay (letterbox, vignette) takes 
   }
 });
 
+test('a title drawn again letter by letter over its see-through line (a copy hidden from reading and the pointer): a click takes the line', { timeout: 60_000 }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'of-stage-copy-'));
+  writeFileSync(join(dir, 'title.html'), `<!doctype html><body style="margin:0">
+<span style="position:absolute;left:20px;top:60px;font:700 24px sans-serif;white-space:pre"><span class="t1" style="-webkit-text-fill-color:transparent">On the road</span><span aria-hidden="true" style="position:absolute;left:0;top:0;pointer-events:none"><span style="display:inline-block">O</span><span style="display:inline-block">n</span></span></span>
+<script>window.film={duration:2,frame(){}}</script></body>`);
+  writeFileSync(join(dir, 'film.html'), filmHtml({ stage: { w: 320, h: 180 }, tracks: [{ clips: [{ id: 'title', src: 'title.html', overrides: [{ at: '.t1', text: 'On the road' }] }] }] }));
+  const stage = await stageOf(dir);
+  try {
+    const title = await stage.ask('hit', { x: 26, y: 72, detail: true });
+    assert.equal(title?.text?.value, 'On the road', 'the line, not a letter of its copy');
+    assert.equal(title?.at, '.t1', 'named as the clip\'s entry for it names it: its changes go into that one entry');
+  } finally {
+    await stage.close();
+  }
+});
+
 test('a page clip drawn larger than it is laid out (scaled about its middle) is found where it is drawn', { timeout: 60_000 }, async () => {
   const dir = mkdtempSync(join(tmpdir(), 'of-stage-scaled-'));
   writeFileSync(join(dir, 'word.html'), `<!doctype html><body style="margin:0">

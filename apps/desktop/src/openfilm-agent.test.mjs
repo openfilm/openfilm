@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { agentOffer, createOpenFilmAgent } from './openfilm-agent.mjs';
 import { createRoster } from './agent-roster.mjs';
-import { OPENFILM_MODELS } from './openfilm-models.mjs';
+import { orderedModels } from './openfilm-models.mjs';
 
 const deepseek = 'deepseek/deepseek-v4.1-flash-1017';
 const catalog = { default: deepseek, data: [
@@ -149,7 +149,7 @@ test('model order and visibility persist, update the harness and default, and ke
   const s = setup();
   s.account.key = 'ofk-account';
   await s.agent.refresh();
-  const defaults = OPENFILM_MODELS.map((m) => m.id);
+  const defaults = orderedModels(catalog.data).map((m) => m.id);
   assert.deepEqual(s.agent.state().openfilm.models.map((m) => m.id), defaults);
   const order = [...defaults].reverse();
   const before = s.calls.length;
@@ -166,4 +166,78 @@ test('model order and visibility persist, update the harness and default, and ke
   assert.deepEqual(restarted.agent.state().openfilm.order, order);
   assert.deepEqual(restarted.agent.state().openfilm.hidden, [deepseek]);
   assert.deepEqual(restarted.agent.saveModels({ hidden: defaults }).ok, false, 'at least one model must remain visible');
+});
+
+test('cloud refresh adds unknown models and current efforts, removes retired models, and retains menu choices', async () => {
+  const s = setup();
+  s.account.key = 'ofk-account';
+  await s.agent.refresh();
+  s.agent.saveModels({ order: [deepseek], hidden: ['anthropic/claude-haiku-5.5'] });
+  s.answer(() => Response.json({ default: 'future/model-2', data: [
+    { id: 'future/model-2', name: 'Future model 2', efforts: ['low', 'high', 'max'], default_effort: 'max' },
+    { id: 'anthropic/claude-haiku-5.5', name: 'Updated Haiku', efforts: ['low', 'high'] },
+  ] }));
+  await s.agent.refresh({ fresh: true });
+  const models = s.agent.state().openfilm.models;
+  assert.equal(models.some((m) => m.id === deepseek), false);
+  assert.equal(models.find((m) => m.id === 'anthropic/claude-haiku-5.5').shown, false);
+  assert.deepEqual(models.find((m) => m.id === 'future/model-2').levels, ['low', 'high', 'max']);
+  assert.equal((await s.agent.harness()).model, 'future/model-2');
+  const restarted = setup(s.dataDir);
+  restarted.account.key = 'ofk-account';
+  restarted.answer(() => Response.json({ data: [{ id: 'future/model-2', name: 'Future model 2' }] }));
+  await restarted.agent.refresh();
+  assert.equal(restarted.agent.state().openfilm.models[0].id, 'future/model-2');
+});
+
+test('temporary cloud failures keep usable metadata, while an authoritative empty catalog retires every model', async () => {
+  const s = setup();
+  s.account.key = 'ofk-account';
+  await s.agent.refresh();
+  s.answer(() => Response.json({ message: 'temporarily offline' }, { status: 503 }));
+  await s.agent.refresh({ fresh: true });
+  assert.equal(s.agent.state().status, 'ready');
+  assert.ok(s.agent.state().openfilm.models.length);
+  s.answer(() => Response.json({ data: [] }));
+  await s.agent.refresh({ fresh: true });
+  assert.equal(s.agent.state().status, 'unavailable');
+  assert.deepEqual(s.agent.state().openfilm.models, []);
+  await assert.rejects(s.agent.harness(), /no agent models/);
+});
+
+test('until the cloud answers it is checking, and while it cannot be reached it is offline, never "not available yet"', async () => {
+  const s = setup();
+  const seen = [];
+  const agent = createOpenFilmAgent({ dataDir: s.dataDir, readAccount: async () => ({ ...s.account }),
+    signIn() {}, cancelSignIn() {}, signOut() {}, closeSessions() {}, onChange: () => seen.push(agent.state().status) });
+  s.account.key = 'ofk-account';
+  s.account.connection = { status: 200, catalog, error: null };
+  await agent.refresh();
+  assert.deepEqual(seen, ['checking', 'ready']);
+  const fresh = createOpenFilmAgent({ dataDir: s.dataDir, readAccount: async () => ({ ...s.account }),
+    signIn() {}, cancelSignIn() {}, signOut() {}, closeSessions() {}, onChange() {} });
+  s.account.connection = { status: 0, catalog: null, error: 'OpenFilm could not be reached. Try connecting again.' };
+  await fresh.refresh();
+  assert.equal(fresh.state().status, 'offline');
+  assert.match(fresh.state().error, /could not be reached/);
+  s.account.connection = { status: 200, catalog, error: null };
+  await fresh.refresh();
+  assert.equal(fresh.state().status, 'ready');
+});
+
+test('an account that cannot be read for a moment keeps the account, its catalog and its sessions', async () => {
+  let failing = false;
+  let closed = 0;
+  const account = { key: 'ofk-account', baseUrl: 'https://openfilm.test/v1/agent', connection: { status: 200, catalog, error: null } };
+  const agent = createOpenFilmAgent({ dataDir: mkdtempSync(join(tmpdir(), 'of-account-agent-')),
+    readAccount: async () => { if (failing) throw new Error('The OpenFilm account could not be read.'); return { ...account }; },
+    signIn() {}, cancelSignIn() {}, signOut() {}, closeSessions: () => { closed++; }, onChange() {} });
+  await agent.refresh();
+  failing = true;
+  await agent.refresh();
+  assert.equal(agent.state().status, 'ready');
+  failing = false;
+  await agent.refresh();
+  assert.equal(agent.state().status, 'ready');
+  assert.equal(closed, 0);
 });

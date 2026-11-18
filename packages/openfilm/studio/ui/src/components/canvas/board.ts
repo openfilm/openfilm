@@ -5,10 +5,12 @@
  */
 import React from 'react';
 import type { Edge, Node } from '@xyflow/react';
-import { api } from '@/api';
-import { AUDIO_W, CARD_H, CUT_W, FILE_W, MAKE_MEDIA, NOTE_H, NOTE_W, cardWidth, makeSize, readCanvasDoc, withVersion, type CanvasDoc, type CanvasNode, type GroupColor, type MakeKind, type MediaOf, type ModelSpec, makeRequest } from '@/lib/canvas';
+import { api, type CanvasCharacter } from '@/api';
+import type { RedrawStart } from './redraw';
+import { AUDIO_W, CARD_H, CUT_W, FILE_W, MAKE_MEDIA, NOTE_H, NOTE_W, cardWidth, makeSize, readCanvasDoc, withVersion, type CanvasDoc, type CanvasNode, type GroupColor, type MakeKind, type MediaOf, type ModelSpec, receiptOf } from '@/lib/canvas';
 import type { ProvidersState } from '@/lib/providers';
 import type { MediaSources, WorkspaceResource } from '@/lib/workspace-resources';
+import { pendingCanvasMedia } from '@/lib/canvas-media-recovery';
 
 export type UploadStatus = { name: string; kind: WorkspaceResource['kind']; progress: number };
 export function fileCardWidth(file?: WorkspaceResource | null) {
@@ -16,7 +18,8 @@ export function fileCardWidth(file?: WorkspaceResource | null) {
 }
 
 export type FileData = { path: string; title?: string; by?: CanvasNode['by']; upload?: UploadStatus };
-export type NoteData = { text: string; by?: CanvasNode['by'] };
+/** `versions`: its earlier words, the ones its agent's writing took the place of (oldest first) */
+export type NoteData = { text: string; title?: string; color?: GroupColor; versions?: string[]; by?: CanvasNode['by'] };
 export type FrameData = { label: string; color: GroupColor };
 export type MakeData = Pick<CanvasNode, 'prompt' | 'via' | 'model' | 'opts' | 'preset' | 'versions' | 'path' | 'made' | 'by' | 'title'> & { make: MakeKind };
 export type CutData = { by?: CanvasNode['by'] };
@@ -26,6 +29,19 @@ export type FrameNode = Node<FrameData, 'frame'>;
 export type MakeNode = Node<MakeData, 'make'>;
 export type CutNode = Node<CutData, 'cut'>;
 export type BoardNode = FileNode | NoteNode | FrameNode | MakeNode | CutNode;
+
+/** what a node's name counts among: texts with texts, pictures with pictures (a making node by what it makes), cuts with cuts */
+const countedAs = (node: Pick<BoardNode, 'type' | 'data'>) => (node.type === 'make' ? `make:${(node.data as MakeData).make}` : node.type ?? '');
+
+/** A node's number among the board's nodes of its kind, from 1, as its name numbers it ("Text 1", "Picture 1"). */
+export function numberOf(nodes: ReadonlyArray<Pick<BoardNode, 'id' | 'type' | 'data'>>, id: string): number {
+  const self = nodes.find((node) => node.id === id);
+  if (!self) return 0;
+  const kind = countedAs(self);
+  let n = 0;
+  for (const node of nodes) { if (countedAs(node) !== kind) continue; n += 1; if (node.id === id) break; }
+  return n;
+}
 export type MakingNode = CanvasNode & { make: MakeKind };
 
 /** The board as React Flow draws it: groups before what is in them, as it needs them. */
@@ -35,7 +51,7 @@ export function toFlow(doc: CanvasDoc): { nodes: BoardNode[]; edges: Edge[] } {
     nodes: ordered.map((n): BoardNode => {
       const base = { id: n.id, position: { x: n.x, y: n.y }, ...(n.parent ? { parentId: n.parent } : {}), ...(n.z ? { zIndex: n.z } : {}) };
       const by = n.by ? { by: n.by } : {};
-      if (n.group != null) return { ...base, type: 'frame', width: n.w ?? 480, height: n.h ?? 320, zIndex: -1, ...GROUP_HELD, data: { label: n.group, color: n.color ?? 'gray' } };
+      if (n.group != null) return { ...base, type: 'frame', width: n.w ?? 480, height: n.h ?? 320, zIndex: n.z ?? -1, ...GROUP_HELD, data: { label: n.group, color: n.color ?? 'gray' } };
       if (n.make) {
         const { id: _id, x: _x, y: _y, w: _w, h: _h, z: _z, parent: _parent, text: _text, group: _group, color: _color, cut: _cut, ...data } = n;
         /* sized as resized; else (and on a board from before cards had a height) as its shape draws it */
@@ -45,7 +61,7 @@ export function toFlow(doc: CanvasDoc): { nodes: BoardNode[]; edges: Edge[] } {
       if (n.cut) return { ...base, type: 'cut', width: n.w ?? CUT_W, height: n.h ?? CARD_H, data: { ...by } };
       /* a file is as its picture draws it until resized */
       if (n.path != null) return { ...base, type: 'file', ...(n.w != null && n.h != null ? { width: n.w, height: n.h } : {}), data: { path: n.path, ...(n.title ? { title: n.title } : {}), ...by } };
-      return { ...base, type: 'note', width: n.w ?? NOTE_W, height: n.h ?? NOTE_H, data: { text: n.text ?? '', ...by } };
+      return { ...base, type: 'note', width: n.w ?? NOTE_W, height: n.h ?? NOTE_H, data: { text: n.text ?? '', ...(n.title ? { title: n.title } : {}), ...(n.color ? { color: n.color } : {}), ...(n.versions?.length ? { versions: n.versions } : {}), ...by } };
     }),
     edges: doc.edges.map((e) => ({ id: e.id, source: e.from, target: e.to, ...(e.order != null ? { data: { order: e.order } } : {}) })),
   };
@@ -62,8 +78,8 @@ export function fromFlow(nodes: readonly BoardNode[], edges: readonly Edge[]): C
       if (n.type === 'file') return { ...box, ...by, ...(n.width != null && n.height != null ? { w, h: h() } : {}), path: n.data.path, ...(n.data.title ? { title: n.data.title } : {}) };
       if (n.type === 'make') return { ...box, w, h: h(), ...n.data };
       if (n.type === 'cut') return { ...box, ...by, w, h: h(), cut: true as const };
-      if (n.type === 'frame') return { id: n.id, x: box.x, y: box.y, w, h: h(), group: n.data.label, color: n.data.color };
-      return { ...box, ...by, w, h: h(), text: n.data.text };
+      if (n.type === 'frame') return { id: n.id, x: box.x, y: box.y, ...(n.zIndex && n.zIndex > 0 ? { z: n.zIndex } : {}), w, h: h(), group: n.data.label, color: n.data.color };
+      return { ...box, ...by, w, h: h(), ...(n.data.title ? { title: n.data.title } : {}), text: n.data.text, ...(n.data.color ? { color: n.data.color } : {}), ...(n.data.versions?.length ? { versions: n.data.versions } : {}) };
     }),
     edges: edges.map((e) => ({ id: e.id, from: e.source, to: e.target, ...(typeof e.data?.order === 'number' ? { order: e.data.order } : {}) })),
   };
@@ -74,14 +90,26 @@ export function nextCardLayer(nodes: readonly BoardNode[]) {
   return Math.max(0, ...nodes.map((node) => node.zIndex ?? 0)) + 1;
 }
 
+/**
+ * The board's stack after `moved` were let go: what was moved goes on top, the rest keep their order. A group is an
+ * object like a card: it moves on top with everything in it, which stays above it.
+ */
 export function raiseCards(nodes: BoardNode[], moved: readonly BoardNode[]) {
-  const ids = new Set(moved.filter((node) => node.type !== 'frame').map((node) => node.id));
+  const ids = new Set(moved.map((node) => node.id));
   if (!ids.size) return nodes;
   const defaultLayer = nextCardLayer(nodes);
-  const ordered = nodes.filter((node) => node.type !== 'frame').sort((a, b) =>
-    Number(ids.has(a.id)) - Number(ids.has(b.id)) || (a.zIndex ?? defaultLayer) - (b.zIndex ?? defaultLayer));
-  const layers = new Map(ordered.map((node, index) => [node.id, index + 1]));
-  return nodes.map((node) => node.type === 'frame' ? node : { ...node, zIndex: layers.get(node.id) });
+  /* a group's layer when it has none: under the cards, as groups always were */
+  const layerOf = (node: BoardNode) => node.zIndex ?? (node.type === 'frame' ? 0 : defaultLayer);
+  const frames = new Set(nodes.filter((node) => node.type === 'frame').map((node) => node.id));
+  const inside = (node: BoardNode) => Boolean(node.parentId && frames.has(node.parentId));
+  /* the stack's units: each group with what is in it, and each card on its own */
+  const units = nodes.filter((node) => !inside(node)).map((head) => ({
+    head, members: head.type === 'frame' ? nodes.filter((node) => node.parentId === head.id).sort((a, b) => layerOf(a) - layerOf(b)) : [],
+  }));
+  const raised = (unit: (typeof units)[number]) => Number(ids.has(unit.head.id) || unit.members.some((m) => ids.has(m.id)));
+  units.sort((a, b) => raised(a) - raised(b) || layerOf(a.head) - layerOf(b.head));
+  const layers = new Map(units.flatMap((unit) => [unit.head, ...unit.members]).map((node, index) => [node.id, index + 1]));
+  return nodes.map((node) => ({ ...node, zIndex: layers.get(node.id) ?? node.zIndex }));
 }
 
 /** A node's box on the board, whatever group it is in, as it is drawn. */
@@ -197,6 +225,10 @@ export function tidyGroup(list: BoardNode[], group: string): BoardNode[] {
  * a service and model a node can make its kind with (via, model: as `get` names them), whether the person has
  * connected that service, and what the model makes
  */
+/** a picture's own tools, each in a window over the board */
+export type PictureTool = 'expand' | 'crop' | 'adjust' | 'light';
+export type AssistKind = 'prompt' | 'ideas' | 'shots' | 'text';
+
 export interface Choice { via: string; model?: string; name: string; provider: string; connected: boolean; spec?: ModelSpec; kind?: MakeKind }
 
 /** Every service that makes a kind, each model of each: the connected ones first, then the others to connect. */
@@ -229,34 +261,42 @@ export function defaultChoice(state: ProvidersState | null, kind: MakeKind): Cho
 
 /* ── what is being made ── */
 
-export interface Run { started: number; abort: AbortController }
+/** a run: when it started; `left` once the person stopped waiting for it (what it makes still lands in the project) */
+export interface Run { started: number; abort: AbortController; left?: boolean }
 type Made = { path: string; made: string };
 /** by `project/node` */
 export const runs = new Map<string, Run>();
 export const runErrors = new Map<string, string>();
 /** the board shown for each project, to take what was made */
 /**
- * How long a model takes, as this person's own runs with it took (the middle of the last few that made something):
- * kept in this browser, shown by the model in the panel's list. None run yet: nothing said.
+ * How long a model takes, as this person's own runs with it took (the middle of the last few that made something),
+ * kept in this browser: what the progress on a card making with it is measured against. None run yet: none shown.
  */
 const TIMES_KEY = 'openfilm.canvas.times';
-const TIMES_KEPT = 5;
-const readTimes = (): Record<string, number[]> => { try { return JSON.parse(localStorage.getItem(TIMES_KEY) ?? '{}') as Record<string, number[]>; } catch { return {}; } };
+const readKept = <T>(key: string): Record<string, T> => { try { return JSON.parse(localStorage.getItem(key) ?? '{}') as Record<string, T>; } catch { return {}; } };
 export function modelTime(via: string, model?: string): number | null {
-  const list = readTimes()[`${via}|${model ?? ''}`];
+  const list = readKept<number[]>(TIMES_KEY)[`${via}|${model ?? ''}`];
   if (!Array.isArray(list) || !list.length) return null;
-  const sorted = [...list].sort((a, b) => a - b);
-  return sorted[Math.floor(sorted.length / 2)]!;
+  return [...list].sort((a, b) => a - b)[Math.floor(list.length / 2)]!;
 }
 export function keepModelTime(via: string, model: string | undefined, seconds: number) {
-  const all = readTimes();
+  const all = readKept<number[]>(TIMES_KEY);
   const key = `${via}|${model ?? ''}`;
-  all[key] = [...(all[key] ?? []), Math.round(seconds)].slice(-TIMES_KEPT);
+  all[key] = [...(all[key] ?? []), Math.round(seconds)].slice(-5);
   try { localStorage.setItem(TIMES_KEY, JSON.stringify(all)); } catch { /* not kept */ }
 }
-/** "15s", "2min" */
-export function timeLabel(seconds: number): string {
-  return seconds < 90 ? `${Math.max(1, Math.round(seconds))}s` : `${Math.round(seconds / 60)}min`;
+
+/** The model last picked for each kind, kept in this browser: a new node of that kind makes with it. */
+const LAST_KEY = 'openfilm.canvas.lastModel';
+export function lastModel(kind: MakeKind): { via: string; model?: string } | null {
+  const kept = readKept<{ via?: unknown; model?: unknown }>(LAST_KEY)[kind];
+  return kept && typeof kept.via === 'string' ? { via: kept.via, ...(typeof kept.model === 'string' ? { model: kept.model } : {}) } : null;
+}
+export function keepLastModel(kind: MakeKind, choice: { via: string; model?: string } | null) {
+  const all = readKept<unknown>(LAST_KEY);
+  if (choice) all[kind] = { via: choice.via, ...(choice.model ? { model: choice.model } : {}) };
+  else delete all[kind];
+  try { localStorage.setItem(LAST_KEY, JSON.stringify(all)); } catch { /* not kept */ }
 }
 
 /** each project's board shown now (which of its boards, and how what is made comes onto it) */
@@ -267,19 +307,25 @@ export const runsChanged = () => { runsVersion += 1; for (const watch of runWatc
 export const useRuns = () => React.useSyncExternalStore((watch) => { runWatchers.add(watch); return () => { runWatchers.delete(watch); }; }, () => runsVersion);
 
 /** Whether it made one (false: it failed, was stopped, or was being made already). */
-export async function startRun(project: string, folder: string, node: string, request: ReturnType<typeof makeRequest>, pick: { via?: string; model?: string }, key: string,
-  say: { nothing: string; balance: string }, board = 'main'): Promise<boolean> {
+export async function startRun(project: string, folder: string, node: string, request: { verb: string; args: Record<string, string | string[]> }, pick: { via?: string; model?: string }, key: string,
+  say: { nothing: string; balance: string }, board = 'main', recovery?: {scope:string;onResumed?:()=>void}): Promise<boolean> {
   const id = `${project}/${node}`;
   if (runs.has(id)) return false;
   const abort = new AbortController();
-  runs.set(id, { started: Date.now(), abort });
+  const run: Run = { started: Date.now(), abort };
+  runs.set(id, run);
   runErrors.delete(id);
   runsChanged();
   try {
+    const pending = recovery ? await pendingCanvasMedia([folder,board,node,recovery.scope],request,pick) : null;
+    if (pending?.resumed) recovery?.onResumed?.();
     /* the person pressed Make on it: what it costs is not asked again, as an agent's would be */
-    const receipt = JSON.parse(await api.make(folder, request.verb, request.args, { ...pick, yes: true }, abort.signal)) as { src?: string; images?: Array<{ src?: string }> };
+    const asked = pending?.request ?? request;
+    const receipt = receiptOf<{ src?: string; images?: Array<{ src?: string }> }>(await api.make(folder, asked.verb, asked.args, { ...pick, yes: true }, abort.signal));
     const path = receipt.src ?? receipt.images?.[0]?.src;
     if (!path) throw new Error(say.nothing);
+    /* stopped: it was paid for once it started, so it is kept in the project (and its history), not on the node */
+    if (run.left) { pending?.finish(); return false; }
     const made = { path, made: key };
     const shown = shownBoards.get(project);
     if (shown?.board === board) shown.take(node, made);
@@ -288,15 +334,30 @@ export async function startRun(project: string, folder: string, node: string, re
       const doc = readCanvasDoc(await api.canvas(project, board));
       await api.putCanvas(project, { ...doc, nodes: doc.nodes.map((n) => (n.id === node ? withVersion(n, made) : n)) }, board);
     }
+    pending?.finish();
     return true;
   } catch (e) {
     /* what the service's account lacked is said to the person (its dialog says where to top it up), not as told to an agent */
-    if (!abort.signal.aborted) runErrors.set(id, (e as { reason?: string })?.reason === 'balance' ? say.balance : e instanceof Error ? e.message : String(e));
+    if (!abort.signal.aborted && !run.left) runErrors.set(id, (e as { reason?: string })?.reason === 'balance' ? say.balance : e instanceof Error ? e.message : String(e));
     return false;
   } finally {
-    runs.delete(id);
+    if (runs.get(id) === run) runs.delete(id);
     runsChanged();
   }
+}
+
+/**
+ * Stop waiting for a run. What is being made is not called off: a service charges once it starts, and most cannot
+ * stop then, so it is let finish and land in the project (and its history) rather than be paid for and lost; the node
+ * is free at once to make again.
+ */
+export function leaveRun(project: string, node: string) {
+  const id = `${project}/${node}`;
+  const run = runs.get(id);
+  if (!run) return;
+  run.left = true;
+  runs.delete(id);
+  runsChanged();
 }
 
 /* ── what the nodes need of the board around them ── */
@@ -333,7 +394,18 @@ export interface Board {
   /** a node's card drawn this big */
   resize: (id: string, size: { w: number; h: number }) => void;
   /** a node of a kind made from this one: beside it on the right, wired from it (with what it starts with) */
-  spawn: (id: string, kind: SpawnKind, data?: Partial<MakeData>) => void;
+  /** a node made from this one, wired from it: its id */
+  spawn: (id: string, kind: SpawnKind, data?: Partial<MakeData>) => string;
+  /** a picture's own tool opened over the board: widen, crop and turn, color, light */
+  openTool: (id: string, path: string, tool: PictureTool) => void;
+  /** a picture made again at each of these shapes, in a group beside it, made at once */
+  sizes: (id: string, ratios: string[]) => void;
+  /** a product's set of pictures (each a preset: main shot, detail, in use, ad, features), in a group beside it, made at once */
+  productSet: (id: string, presets: string[]) => void;
+  /** a picture parted into its subject (cut out) and the background without it */
+  layers: (id: string, path: string) => void;
+  /** the agent reading a picture into words, on a text node beside it: its prompt, ideas, a shot list, its text to edit */
+  assist: (id: string, path: string, kind: AssistKind) => void;
   /** files made from a node on this computer (its picture's cells, a frame of its clip): into the project, beside it */
   bring: (id: string, files: File[]) => void;
   uploading?: (id: string) => UploadStatus | undefined;
@@ -342,6 +414,16 @@ export interface Board {
   reportError?: (error: string) => void;
   /** a picture's background taken out by the person's service: a new picture beside it */
   cutout: (id: string, path: string) => void;
+  /** a clip worked on this computer: a part of it (asks where), its sound, cropped to a shape; beside it, wired from it */
+  clipTool: (id: string, path: string, op: 'trim' | 'audio' | 'crop', ratio?: string) => void;
+  /** a clip tool done by a model opened for a clip: what it asks, then the clip made beside it */
+  clipAI: (id: string, path: string, tool: import('@/lib/canvas-clip').ClipToolKey) => void;
+  /** a clip's shots, a still where each begins, in a group beside it */
+  shots: (id: string, path: string) => void;
+  /** the agent reading a clip (its shots) into words beside it: a shot list, or a prompt to make it again */
+  clipAssist: (id: string, path: string, kind: 'shots' | 'prompt') => void;
+  /** a picture of panels cut into them (`rows`×`cols`, or 0×0: as its gutters say), laid out in a group beside it */
+  split: (id: string, path: string, rows: number, cols: number) => void;
   remove: (ids: string[]) => void;
   /** the board as it is now kept to go back to: called before a change made in a node (a resize, words written) */
   willChange: () => void;
@@ -365,6 +447,10 @@ export interface Board {
   stop: (id: string) => void;
   /** what is wired into a node, in order; a wire taken out */
   inputs: (id: string) => InputView[];
+  /** a node's name as its name row shows it ("Picture 1", "Picture 1_Expand") */
+  nameOf: (id: string) => string;
+  /** what goes into a node put in this order (its wires, by id): the first is the first reference */
+  reorderInputs: (id: string, edges: readonly string[]) => void;
   unwire: (edge: string) => void;
   /** the side ⊕ of a node pressed: what to add there, joined to it */
   sideMenu: (id: string, side: Side, screen: { x: number; y: number }) => void;
@@ -388,14 +474,25 @@ export interface Board {
   keepTemplate: (group: string) => void;
   /** a group's pictures, or a picture, kept as a character; a library opened (for a node: what is picked goes into it) */
   keepCharacter: (id: string) => void;
+  /** a subject wired into a node: its main picture, named as it is (what @its name in the node's words means) */
+  useSubject: (id: string, subject: CanvasCharacter) => void;
   openLibrary: (which: 'characters' | 'styles' | 'effects', node?: string) => void;
+  /** what a node is shot with, picked: words wired into it */
+  openCamera: (node: string) => void;
   openSettings: () => void;
   /** what is in a group laid out again in rows, clear of each other */
   tidy: (group: string) => void;
   /** a picture changed in part (brushed or drawn on, then said what to): the editor opened on it */
-  redraw: (id: string, path: string) => void;
+  redraw: (id: string, path: string, start?: RedrawStart) => void;
   /** a text node's words written by the person's agent from what they ask and what is wired in (in the app with a chat); why not, if not */
   write?: (id: string, ask: string, attachments: string[]) => Promise<string | null>;
+  /** whether a text node is being written by the agent now (since when), and its writing stopped */
+  writing?: (id: string) => number | undefined;
+  stopWriting?: (id: string) => void;
+  /** a node brought into view and flashed, as what something is made from is found */
+  locate?: (id: string) => void;
+  /** a node made a reference in the chat's message (in the app with a chat), for the agent to change or make from */
+  refer?: (id: string) => void;
   uploadWritingFiles?: (files: File[], onProgress?: (index: number, progress: number, path?: string) => void) => Promise<string[]>;
   /** a board only looked at (an example's): nothing on it is changed, made or wired */
   readOnly?: boolean;

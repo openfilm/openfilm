@@ -11,6 +11,7 @@
  *   → { type: 'open', url }                          Studio wants something shown in the person's browser
  *   → { type: 'ask', id, text }                      a question for the person's agent's own model (askAgent)
  *   → { type: 'ask-cancel', id }                     that question no longer wanted
+ *   ← { type: 'answer-part', id, delta }             a piece of it as it comes (asked with `stream`)
  *   ← { type: 'answer', id, text | error, code? }    its answer
  *   ← { type: 'quit' }                               stop (history is written first)
  *   ← { type: 'working', folders }                   the folders the chat's agents are working in now (not deletable)
@@ -18,17 +19,29 @@
  *   ← { type: 'released', id }                       they have
  *   ← { type: 'account:read', id }                   read the Services account for the built-in agent
  *   → { type: 'account', id, account | error }       credentials, only on this private process channel
+ *   → { type: 'secrets:read' }                       as it starts: Studio's own key and its keys' vault
+ *   ← { type: 'secrets', key?, vault? }              (studio-secrets.mjs), on this channel only; none: keys plain
+ *
+ * With them, Studio's key lives in memory only (run.json names the agents' key: `keepKey`) and the person's service
+ * keys are sealed in providers.json with the vault (the `openfilm` package's keys.mjs).
  */
 import { spawn, spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
-import { startStudio } from 'openfilm/studio';
+import { startStudio, vaultSealer } from 'openfilm/studio';
 import { desktopAccount } from 'openfilm/desktop-account';
 import { launch } from 'openfilm/host';
 
 const parent = process.parentPort;
 const send = (message) => parent.postMessage(message);
+
+/** Studio's own key and its keys' vault, from the main process (none: the keychain is not there, or did not open) */
+const secrets = new Promise((resolve) => {
+  const take = ({ data }) => { if (data?.type === 'secrets') { parent.off('message', take); resolve(data); } };
+  parent.on('message', take);
+  send({ type: 'secrets:read' });
+});
 
 let studio = null;
 let stopping = false;
@@ -40,17 +53,19 @@ async function stop() {
 }
 /** the folders the chat's agents are working in, as the main process last told */
 let working = [];
-/** the questions asked of the person's agent, waiting for their answers, by id */
+/** the questions asked of the person's agent, waiting for their answers, by id; and those asked to hear each piece */
 const asking = new Map();
+const hearing = new Map();
 /** the folders being let go of before a rename, by id */
 const releasing = new Map();
 parent.on('message', ({ data }) => {
   if (data?.type === 'quit') void stop();
   if (data?.type === 'working' && Array.isArray(data.folders)) working = data.folders.filter((f) => typeof f === 'string');
+  if (data?.type === 'answer-part' && typeof data.delta === 'string') hearing.get(data.id)?.(data.delta);
   if (data?.type === 'answer') asking.get(data.id)?.(data);
   if (data?.type === 'released') releasing.get(data.id)?.();
   if (data?.type === 'account:read') {
-    void desktopAccount({ fresh: data.fresh === true }).then(
+    void desktopAccount({ fresh: data.fresh === true, strict: true }).then(
       (account) => send({ type: 'account', id: data.id, account }),
       () => send({ type: 'account', id: data.id, error: 'The OpenFilm account could not be read.' }),
     );
@@ -61,20 +76,23 @@ parent.on('message', ({ data }) => {
  * One question answered by the person's agent's own model (the main process picks the agent and asks it, with no
  * chat): Studio's own work that needs a model, such as translating subtitles.
  * @param {string} text @param {AbortSignal} [signal] @param {import('./studio.mjs').WritingModel} [model]
- * @param {import('./studio.mjs').WritingImage[]} [images] @returns {Promise<string>}
+ * @param {import('./studio.mjs').WritingImage[]} [images] @param {(piece: string) => void} [onText] each piece as it comes
+ * @returns {Promise<string>}
  */
-function askAgent(text, signal, model, images) {
+function askAgent(text, signal, model, images, onText) {
   const id = randomUUID();
   return new Promise((resolve, reject) => {
-    const cancel = () => { asking.delete(id); send({ type: 'ask-cancel', id }); reject(signal?.reason ?? new Error('stopped')); };
+    const cancel = () => { asking.delete(id); hearing.delete(id); send({ type: 'ask-cancel', id }); reject(signal?.reason ?? new Error('stopped')); };
+    if (onText) hearing.set(id, onText);
     asking.set(id, (answer) => {
       asking.delete(id);
+      hearing.delete(id);
       signal?.removeEventListener('abort', cancel);
       if (typeof answer.text === 'string') resolve(answer.text);
       else reject(Object.assign(new Error(String(answer.error ?? 'The agent did not answer.')), answer.code ? { code: answer.code } : {}));
     });
     signal?.addEventListener('abort', cancel, { once: true });
-    send({ type: 'ask', id, text, model, images });
+    send({ type: 'ask', id, text, model, images, ...(onText ? { stream: true } : {}) });
   });
 }
 
@@ -96,7 +114,9 @@ const RELEASE_WAIT_MS = 5000;
 
 const port = Number(process.env.OPENFILM_STUDIO_PORT);
 try {
+  const { key, vault } = await secrets;
   studio = await startStudio({
+    ...(key && vault ? { key, keepKey: true, sealer: vaultSealer(Buffer.from(vault, 'hex')) } : {}),
     port: Number.isInteger(port) ? port : 0,
     advertise: true,
     openBrowser: (url) => send({ type: 'open', url }),
@@ -104,6 +124,8 @@ try {
     stays: true,
     working: () => working,
     askAgent,
+    /* the person's own Studio: it keeps the record of their media up to date (media-index.mjs) */
+    indexMedia: true,
     release,
     /* the window's page, Studio's editor with the chat beside it (shell/), in place of the editor alone */
     ...(process.env.OPENFILM_EDITOR_DIR ? { editorDir: process.env.OPENFILM_EDITOR_DIR } : {}),

@@ -1,0 +1,8 @@
+{
+  "name": "openfilm-canvas",
+  "private": true,
+  "browser": "ui.js",
+  "bin": {
+    "canvas": "canvas.mjs"
+  }
+}

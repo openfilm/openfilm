@@ -17,6 +17,7 @@ import { changeSettings, cleanKey, envKey, kindOf, modelFor, providerKey, readSe
 import { shownService, withService } from '../custom-services.mjs';
 import { cancelSignIn, signInState, signOut, startSignIn } from '../sign-in.mjs';
 import { desktopAccount } from '../account.mjs';
+import { accountProfile } from '../account-profile.mjs';
 import elevenlabs from './elevenlabs.mjs';
 import inworld from './inworld.mjs';
 import cartesia from './cartesia.mjs';
@@ -24,6 +25,7 @@ import openai from './openai.mjs';
 import google from './google.mjs';
 import fal from './fal.mjs';
 import openrouter from './openrouter.mjs';
+import volcengine from './volcengine.mjs';
 import pexels from './pexels.mjs';
 import pixabay from './pixabay.mjs';
 import brave from './brave.mjs';
@@ -44,7 +46,7 @@ import { addedProblems, addedProviders } from './added.mjs';
  */
 
 /** The providers paid with the person's own key, and Local services, which takes none. */
-const BUILT_IN = [elevenlabs, inworld, cartesia, openai, google, fal, openrouter, pexels, pixabay, brave, tavily, groq, azure, doubao, mimo, keenable, openfilm, local];
+const BUILT_IN = [elevenlabs, inworld, cartesia, openai, google, fal, openrouter, volcengine, pexels, pixabay, brave, tavily, groq, azure, doubao, mimo, keenable, openfilm, local];
 /** Those, then the ones the person added (added.mjs), as last read (changed in place). */
 const OWN = [...BUILT_IN];
 
@@ -161,6 +163,10 @@ async function state() {
   await freshProviders();
   const settings = await readSettings();
   const account = await desktopAccount();
+  /* the signed-in account's name and picture (account-profile.mjs) */
+  const own = OWN.find((p) => p.id === 'openfilm');
+  const signed = own ? providerKey(own, settings) : null;
+  const profile = signed?.source === 'file' && account.connection?.status !== 401 ? await accountProfile(signed.key) : null;
   return {
     providers: OWN.map((p) => {
       const key = providerKey(p, settings);
@@ -170,10 +176,13 @@ async function state() {
       return {
         id: p.id, name: p.name, verbs: p.verbs, models: p.models ?? {}, keysUrl: p.keysUrl, pricingUrl: p.pricingUrl, env: key?.env ?? inEnv?.env ?? p.env, envKey: Boolean(inEnv),
         /* `keyless`: it connects without a key; connected so, it has no last four */
-        ...(p.keyless ? { keyless: true } : {}), source: invalid ? null : key?.source ?? null, last4: key?.key ? key.key.slice(-4) : null,
+        ...(p.keyless ? { keyless: true } : {}),
+        /* `noKey`: it takes no key at all (a local service): connected and disconnected with one click */
+        ...(p.ready ? { noKey: true } : {}), source: invalid ? null : key?.source ?? null, last4: key?.key ? key.key.slice(-4) : null,
         ...(invalid ? { connectionError: 'This OpenFilm connection is no longer valid. Connect again.' } : {}),
         /* connected by signing in (sign-in.mjs), and as whom */
         signIn: Boolean(p.signIn), account: key?.source === 'file' ? settings.accounts[p.id] ?? null : null,
+        ...(p.id === 'openfilm' && profile ? { profile } : {}),
         /* one the person added (added.mjs), not built in */
         ...(p.added ? { added: true } : {}),
       };
@@ -191,7 +200,7 @@ async function state() {
 /**
  * Studio's `/api/providers/*` (the editor page, with the launch key like the rest of the API). Each answers the state:
  *   GET    /api/providers           → { providers: [{ id, name, verbs, models: { verb: [{ id, name }] }, keysUrl, pricingUrl, env,
- *                                       keyless?, source: 'file' | 'env' | null, last4 }],
+ *                                       keyless?, noKey?, source: 'file' | 'env' | null, last4, account, profile? (OpenFilm: { name, avatar }) }],
  *                                       use: { verb: provider id | null },
  *                                       model: { verb: model id | null },
  *                                       librarySearch: 'openfilm' | null }
@@ -276,9 +285,10 @@ export async function providersRoute(req, res, parts, { openBrowser }) {
         return json(res, 200, await state());
       }
       let key;
-      try { key = provider.keyless && body.key === '' ? '' : cleanKey(body.key); if (key) provider.checkKey?.(key); } catch (e) { throw new HttpError(400, /** @type {Error} */ (e).message); }
+      try { key = (provider.keyless || provider.ready) && body.key === '' ? '' : cleanKey(body.key); if (key) provider.checkKey?.(key); } catch (e) { throw new HttpError(400, /** @type {Error} */ (e).message); }
       await provider.refresh?.();
-      await changeSettings((s) => { s.keys[provider.id] = key; on(s); fill(s); });
+      /* one that takes no key at all (`ready`) is connected again by being on, with nothing kept */
+      await changeSettings((s) => { if (!provider.ready) s.keys[provider.id] = key; on(s); fill(s); });
       return json(res, 200, await state());
     }
     if (req.method === 'DELETE') {
@@ -287,7 +297,8 @@ export async function providersRoute(req, res, parts, { openBrowser }) {
       await changeSettings((s) => {
         delete s.keys[provider.id];
         delete s.accounts[provider.id];
-        if (envKey(provider) && !s.off.includes(provider.id)) s.off.push(provider.id);
+        /* one connected without a kept key (the environment's, or none at all) stays off until connected again */
+        if ((envKey(provider) || provider.ready) && !s.off.includes(provider.id)) s.off.push(provider.id);
         /* what a provider that can no longer be used made goes to what else makes it */
         if (!providerKey(provider, s)) for (const [verb, id] of Object.entries(s.use)) if (id === provider.id) delete s.use[verb];
         fill(s);

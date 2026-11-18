@@ -1,0 +1,26 @@
+{
+  "repository": "https://github.com/openfilm/openfilm/tree/main/packages/openfilm/manual/film",
+  "order": 1,
+  "icon": "scissors",
+  "title": {
+    "en": "Film",
+    "zh-CN": "影片",
+    "ja": "映像",
+    "ko": "영상",
+    "es": "Película"
+  },
+  "summary": {
+    "en": "How a film is made: the project, film.html, its pages and captions, and how to look at it.",
+    "zh-CN": "怎么做一部片子：项目、film.html、页面和字幕，以及怎么检查画面。",
+    "ja": "映画の作り方：プロジェクト、film.html、ページと字幕、そして画面の確かめ方。",
+    "ko": "영상을 만드는 법: 프로젝트, film.html, 페이지와 자막, 그리고 화면을 확인하는 법.",
+    "es": "Cómo se hace un vídeo: el proyecto, film.html, sus páginas y subtítulos, y cómo revisarlo."
+  },
+  "details": {
+    "zh-CN": "什么时候用：智能体做新片子、改已有的片子、检查画面之前，都会先读它。\n它教什么：项目文件夹怎么放；film.html 怎么把页面、视频、图片和声音剪在一起；页面怎么写，字幕怎么做；做完用 openfilm look 截下画面检查。\n谁会用到：剪辑、放映、动效这些要改片子的插件开着时，智能体就会拿到它；只用画布时用不到，也就不给。",
+    "en": "When it is used: before the agent makes a new film, changes one, or looks at its picture.\nWhat it teaches: how the project folder is laid out; how film.html cuts pages, video, pictures and sound together; how pages and captions are written; and checking the picture with openfilm look afterwards.\nWho needs it: the agent gets it while a plugin that changes the film is on (the edit, Screening, Motion); with only the canvas, it is not needed and not given.",
+    "ja": "使う場面：エージェントが新しい映像を作る前、既存の映像を直す前、画面を確かめる前に必ず読みます。\n教えること：プロジェクトフォルダの構成、film.html でページ・動画・画像・音をつなぐ方法、ページと字幕の書き方、仕上げに openfilm look で画面を確かめること。\n使われるとき：編集・試写・モーションなど映像を直すプラグインがオンのとき、エージェントに渡されます。キャンバスだけなら不要なので渡されません。",
+    "ko": "언제 쓰나요: 에이전트가 새 영상을 만들거나, 영상을 고치거나, 화면을 확인하기 전에 먼저 읽습니다.\n무엇을 알려 주나요: 프로젝트 폴더 구성, film.html로 페이지·영상·이미지·소리를 잇는 법, 페이지와 자막 쓰는 법, 끝나면 openfilm look으로 화면을 확인하는 것.\n누가 쓰나요: 편집·시사·모션처럼 영상을 고치는 플러그인이 켜져 있으면 에이전트가 받습니다. 캔버스만 쓰면 필요 없어 주지 않습니다.",
+    "es": "Cuándo se usa: antes de que el agente haga una película, cambie una o mire su imagen.\nQué enseña: cómo se organiza la carpeta del proyecto; cómo film.html une páginas, vídeo, imágenes y sonido; cómo se escriben páginas y subtítulos; y revisar la imagen con openfilm look al terminar.\nQuién lo necesita: el agente lo recibe mientras hay activo un plugin que cambia la película (la edición, Proyección, Movimiento); solo con el lienzo no hace falta y no se da."
+  }
+}

@@ -1,12 +1,18 @@
 ---
 name: media
-description: Media for an OpenFilm film. Read it before you add music, a sound effect, a transition, an effect, a filter, a sticker, a text animation or a template, and before you make voice-over, pictures, video or transcripts, or search the web.
+description: Media for an OpenFilm film. Read it before you add music, a sound effect or a sticker, and before you make voice-over, pictures, video or transcripts, or search the web.
 ---
 
 # Media
 
-`openfilm get`: media for the film. First OpenFilm's own library, free, offline and CC0: `get music-search`, `get sfx-search`, `get transition`, `get effect`, `get filter`, `get sticker`, `get text` and `get template`, each `--prompt "<what>"` in any words and language; each match says what of your prompt it has and lacks, and `--take <id>` copies the one you choose into the project and prints what to put in film.html. Look there before writing a transition, an effect, a text or a template yourself. The rest is made by a service the person connected in Studio (Settings → Services): voice-over, music and sound effects to your prompt and length (`get music`, `get sfx`, at a cost), transcripts, images, image search, video and web search. Make music or a sound when the person asks for something original, when it must fit the picture exactly, or when the matches lack what was asked; when the person says which they want, do that. `get` alone lists what works now; for a kind not connected, tell the person which services make it and where they connect one. A video clip costs a lot: the person confirms it in Studio first. Its `--help` lists the verbs and their options.
+`openfilm get` brings media into the project, under `assets/`. Alone it lists what works now; `openfilm get <what> --help` says what one takes. Look in this order:
 
-Media can come from `get` (OpenFilm's library, or a service that makes it), any service the person uses (with its API docs and their key), or your own code. Save it under `assets/`.
+1. The person's own: `get my-media --prompt "<words>"` searches what they keep for every film and what they linked in from this computer (`--kind video|image|audio`; without words, the newest). What they shot or already paid for comes before anything new.
+2. OpenFilm's library, free, offline and CC0: `get music-search`, `get sfx-search` and `get sticker`, each with `--prompt "<what>"` in any words and language. Each match says what of the prompt it has and lacks.
+3. A service the person connected in Studio: voice-over, music and sound effects made to your prompt and length (`get music`, `get sfx`), transcripts, images, image and video search, video, and web search. Make music or a sound when the person asks for something original, when it must fit the picture exactly, or when the library lacks it. A video costs a lot: the person confirms it in Studio first. For a kind nothing makes yet, `get` names the services that do: tell the person.
 
-When the person wants a service that is not built in to make pictures, clips or sounds (on the canvas too), add it as a provider: `openfilm get` ends by naming its folder, the contract it follows and a built-in one to read. Write it from the service's API docs, then try it with `get <verb> --via <id>` once the person has added its key in Settings → Services.
+`--take <id>` brings the match you chose into the project and says how to use it. Media can also come from any service the person has a key for (with its API docs), or from your own code. A service not built in can be added as a provider: `openfilm get` ends by saying how.
+
+The services and models are the person's choice: `get` uses the one they chose for each kind. Name another with `--via` or `--model` only when they ask, or when theirs cannot do the job (a picture changed in part needs a model that redraws where a mask says), and say which you used and why. Services, their keys, and which plugins and skills are on are theirs to change in Studio: tell them what to change.
+
+A paid run that timed out or did not download is recovered by running the exact same command again (the same output, prompt, model and files), never by making another: `--fresh` makes and pays for a new one, only when the person wants that.

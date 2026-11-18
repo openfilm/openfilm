@@ -14,6 +14,7 @@ import {
   planCloseGap,
   planCloseMainGaps,
   planCloseTrackGaps,
+  planFillGaps,
   planCutRange,
   planDetachAudio,
   planEdges,
@@ -169,6 +170,21 @@ test('all the gaps on a track closed at once, on that track', () => {
   const out = after(m, planCloseTrackGaps(m, 0));
   assert.deepEqual(out, [[['t1', 0, 1], ['t2', 1, 2]], [['a', 0, 3], ['b', 3, 6]], [['vo', 4.5, 5]]]);
   assert.deepEqual(planCloseTrackGaps(m, 1).ops, [], 'no gap on the picture track');
+});
+
+test('the gaps after picked clips filled: each runs on to the next one\'s start, nothing moves', () => {
+  const m = model(
+    [['c1', 0, 1, { still: true }], ['c2', 1.5, 2, { still: true }], ['c3', 2, 3, { still: true }], ['c4', 5, 6, { still: true }], ['c5', 8, 9, { still: true }]],
+    [['a', 0, 2], ['b', 4, 6]],
+    { locked: true, clips: [['l1', 0, 1], ['l2', 3, 4]] },
+  );
+  const out = after(m, planFillGaps(m, ['c1', 'c2', 'c3', 'c4', 'a', 'l1']));
+  assert.deepEqual(out[0], [['c1', 0, 1.5], ['c2', 1.5, 2], ['c3', 2, 5], ['c4', 5, 8], ['c5', 8, 9]], 'touching stays, the last picked runs to the next one');
+  assert.deepEqual(out[1], [['a', 0, 4], ['b', 4, 6]], 'footage runs on while its file has more');
+  assert.deepEqual(out[2], [['l1', 0, 1], ['l2', 3, 4]], 'a locked track stays');
+  const short = model([['v', 0, 2, { sourceMs: 3000 }], ['w', 5, 6]]);
+  assert.deepEqual(after(short, planFillGaps(short, ['v']))[0], [['v', 0, 3], ['w', 5, 6]], 'footage goes as far as its file');
+  assert.deepEqual(planFillGaps(m, ['c5']).ops, [], 'the last on its track has no gap after it');
 });
 
 test('how much source a clip can still show at each edge', () => {
@@ -575,6 +591,30 @@ test('with the magnet a delete on the main track closes up; with linkage the pic
     [['bed', 0, 12]],
     [['sfx', 5, 6]],
   ]);
+});
+
+test('a caption track below footage never becomes the magnetic main track, locked or unlocked', () => {
+  const m = model(
+    { role: 'video', clips: [['shot', 1, 5]] },
+    { role: 'mg', clips: [['cue', 1, 2, { cue: true, still: true }]] },
+  ).map((t, i) => i === 1 ? { ...t, captions: true } : t);
+  assert.equal(mainTrackOf(m), 0);
+  assert.equal(mainTrackOf([{ ...m[1]!, index: 0 }]), null, 'a captions-only film has no magnetic main track');
+  assert.deepEqual(after(m, planMove(m, { ids: ['cue'], deltaMs: 2000, pointerMs: 3500, mode: 'place', ...ON })!), [[['shot', 1, 5]], [['cue', 3, 4]]]);
+  assert.equal(mainTrackOf([m[0]!, { ...m[1]!, locked: true }]), 0);
+});
+
+test('a mixed selection of captions and media keeps one horizontal offset with the main-track magnet on', () => {
+  const m = model(
+    { role: 'mg', clips: [['cue', 1, 2, { cue: true, still: true }]] },
+    { role: 'video', clips: [['a', 1, 5], ['b', 5, 8]] },
+    { role: 'audio', clips: [['voice', 1, 4]] },
+  ).map((t, i) => i === 0 ? { ...t, captions: true } : t);
+  for (const ids of [['a', 'b', 'cue', 'voice'], ['cue', 'a', 'b', 'voice']]) {
+    const plan = planMove(m, { ids, deltaMs: 2000, pointerMs: 3500, mode: 'place', ...ON });
+    assert.ok(plan);
+    assert.deepEqual(after(m, plan), [[['cue', 3, 4]], [['a', 3, 7], ['b', 7, 10]], [['voice', 3, 6]]]);
+  }
 });
 
 test('a caption track\'s cues are clips: they ride on the main track, go with their shot, never leave caption tracks', () => {

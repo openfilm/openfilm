@@ -2,7 +2,7 @@
 import { join } from 'node:path';
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { contextLength, effortLevels } from './pi-config.mjs';
-import { OPENFILM_MODELS, modelPreferences, orderedModels } from './openfilm-models.mjs';
+import { modelPreferences, orderedModels } from './openfilm-models.mjs';
 
 const FRESH_MS = 5 * 60_000;
 const RETRY_MS = 30_000;
@@ -33,6 +33,8 @@ export function createOpenFilmAgent({ dataDir, readAccount, signIn, cancelSignIn
   let askAfter = 0;
   let error = null;
   let needsSignIn = false;
+  /** the cloud answered with an error other than 401: it does not offer the agent now */
+  let refused = false;
   let revision = 0;
   let pending = null;
   let published = '';
@@ -43,20 +45,21 @@ export function createOpenFilmAgent({ dataDir, readAccount, signIn, cancelSignIn
   const visibleModels = () => orderedModels(offer?.models ?? [], preferences);
   const firstModel = () => visibleModels().some((m) => m.id === offer?.model) ? offer.model : visibleModels()[0]?.id;
   const modelState = () => ({
-    ...preferences,
-    defaultOrder: OPENFILM_MODELS.map((m) => m.id),
+    order: orderedModels(offer?.models ?? [], { ...preferences, hidden: [] }).map((m) => m.id),
+    hidden: preferences.hidden,
+    defaultOrder: orderedModels(offer?.models ?? []).map((m) => m.id),
     model: firstModel(),
-    models: preferences.order.map((id) => {
-      const metadata = OPENFILM_MODELS.find((m) => m.id === id);
-      const available = offer?.models.find((m) => m.id === id);
-      return { ...metadata, shown: !preferences.hidden.includes(id), available: Boolean(available),
-        ...(available ? { levels: available.levels, effort: available.effort } : {}) };
+    models: orderedModels(offer?.models ?? [], { ...preferences, hidden: [] }).map((m) => {
+      return { id: m.id, name: m.name, shown: !preferences.hidden.includes(m.id), available: true, levels: m.levels, effort: m.effort };
     }),
   });
 
+  /* 'unavailable' only once the cloud answered that it offers no model; until it answers 'checking', and while it
+     cannot be reached 'offline' (it is asked again) */
   const state = () => {
-    const status = account?.signingIn ? 'waiting' : !account ? error ? 'unavailable' : 'checking'
-      : !account.key || needsSignIn ? 'sign-in' : !visibleModels().length ? 'unavailable' : 'ready';
+    const status = account?.signingIn ? 'waiting' : !account ? 'checking'
+      : !account.key || needsSignIn ? 'sign-in' : visibleModels().length ? 'ready'
+        : offer || refused ? 'unavailable' : error ? 'offline' : 'checking';
     const message = account?.error || (status === 'sign-in' || status === 'waiting' ? null : error);
     return {
       status,
@@ -82,6 +85,7 @@ export function createOpenFilmAgent({ dataDir, readAccount, signIn, cancelSignIn
           offer = null;
           askAfter = 0;
           needsSignIn = false;
+          refused = false;
           error = null;
           revision++;
         }
@@ -100,19 +104,21 @@ export function createOpenFilmAgent({ dataDir, readAccount, signIn, cancelSignIn
         const body = await response.json().catch(() => ({}));
         if (!response.ok) {
           needsSignIn = response.status === 401;
-          offer = null;
-          if (needsSignIn) { error = null; return; }
+          if (needsSignIn) { offer = null; error = null; return; }
+          /* status 0: Studio could not reach it */
+          if (response.status) refused = true;
           throw new Error(body?.error?.message || body?.message || `OpenFilm answered ${response.status}.`);
         }
+        if (!Array.isArray(body?.data)) throw new Error('OpenFilm did not return its model catalog.');
         const got = agentOffer(body, account.baseUrl);
-        if (!got.models.length) throw new Error('OpenFilm has no agent models available right now.');
         if (JSON.stringify(got) !== JSON.stringify(offer)) {
           if (offer) refreshSessions();
           revision++;
         }
         offer = got;
         needsSignIn = false;
-        error = null;
+        refused = false;
+        error = got.models.length ? null : 'OpenFilm has no agent models available right now.';
         askAfter = Date.now() + FRESH_MS;
       } catch (e) {
         error = e instanceof Error ? e.message : String(e);
@@ -130,7 +136,7 @@ export function createOpenFilmAgent({ dataDir, readAccount, signIn, cancelSignIn
     state, refresh,
     saveModels(config) {
       const hidden = new Set(Array.isArray(config?.hidden) ? config.hidden : []);
-      if (OPENFILM_MODELS.every((m) => hidden.has(m.id))) return { ok: false, error: 'Keep at least one model visible.' };
+      if (!offer?.models.some((m) => !hidden.has(m.id))) return { ok: false, error: 'Keep at least one model visible.' };
       const next = modelPreferences(config);
       try {
         mkdirSync(dataDir, { recursive: true });

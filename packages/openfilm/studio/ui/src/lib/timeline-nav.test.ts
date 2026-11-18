@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { applyOps } from '../../../server/ops.mjs';
 import type { Film, Op } from '../api.ts';
 import { inverse } from '../editor/undo.ts';
-import { cutPoints, nextCut, planNudge, planOverwriteDown, sideTargets, splitAllTargets, splitTargets } from './timeline-nav.ts';
+import { cutPoints, nextCut, planNudge, planOverwriteDown, planOverwriteTrack, sideTargets, splitAllTargets, splitTargets } from './timeline-nav.ts';
 import type { EditTrack } from './timeline-edit.ts';
 import type { TimelineBlock, TimelineTrack } from './timeline-layout';
 
@@ -67,6 +67,50 @@ const clip = (id: string, s: number, e: number) => ({ id, startMs: s * 1000, end
 const filmOf = (m: EditTrack[]) => ({ tracks: m.map((t) => ({ ...(t.locked ? { locked: true } : {}), clips: t.clips.map((c) => ({ id: c.id, src: `${c.id}.mp4`, ...(c.startMs ? { at: c.startMs / 1000 } : {}), time: [c.inMs / 1000, (c.inMs + c.endMs - c.startMs) / 1000] })) })) });
 const starts = (m: EditTrack[], ops: Op[]) => (applyOps(filmOf(m) as never, ops as never) as { tracks: { clips: { id: string; at?: number }[] }[] }).tracks
   .map((t) => t.clips.map((c) => [c.id, Math.round((c.at ?? 0) * 1000)]));
+
+test('Alt up/down moves a whole audio selection at its original times and undo restores overwritten clips', () => {
+  for (const dir of [-1, 1] as const) for (const ids of [['a', 'b', 'c'], ['c', 'a', 'b'], ['b', 'c', 'a']]) {
+    const model: EditTrack[] = [
+      { index: 0, role: 'audio', clips: [clip('above', 0, 8)] },
+      { index: 1, role: 'audio', clips: [clip('a', 1, 2), clip('b', 3, 4), clip('c', 5, 6)] },
+      { index: 2, role: 'audio', clips: [clip('below', 0, 8)] },
+    ];
+    const rows = model.map((t) => row(t.index, [], { role: 'audio', kind: 'audio' }));
+    const before = filmOf(model) as Film;
+    const plan = planOverwriteTrack(model, rows, ids, dir)!;
+    assert.ok(plan);
+    const after = applyOps(structuredClone(before) as never, plan.ops as never) as Film;
+    const destination = after.tracks.find((t) => t.clips.some((c) => c.id === 'a'))!;
+    assert.deepEqual(destination.clips.filter((c) => ['a', 'b', 'c'].includes(c.id)).map((c) => [c.id, c.at, c.time]), [
+      ['a', 1, [0, 1]], ['b', 3, [0, 1]], ['c', 5, [0, 1]],
+    ]);
+    assert.equal(destination.clips.filter((c) => !['a', 'b', 'c'].includes(c.id)).length, 4, 'both sides and gaps in the covered audio survive');
+    assert.deepEqual(applyOps(structuredClone(after) as never, inverse(before, after, plan.ops) as never), before);
+  }
+});
+
+test('vertical group moves are atomic across tracks and reject locked, incompatible and out-of-bounds destinations', () => {
+  const model: EditTrack[] = [0, 1, 2].map((index) => ({ index, role: 'audio', clips: index < 2 ? [clip(String(index), 1, 2)] : [] }));
+  const rows = model.map((t) => row(t.index, [], { role: 'audio', kind: 'audio' }));
+  const plan = planOverwriteTrack(model, rows, ['0', '1'], 1)!;
+  assert.ok(plan);
+  assert.deepEqual(starts(model, plan.ops).filter((t) => t.length), [[['0', 1000]], [['1', 1000]]], 'selected clips never overwrite one another during the move');
+  assert.equal(planOverwriteTrack(model, [rows[0]!, rows[1]!, { ...rows[2]!, locked: true }], ['0', '1'], 1), null);
+  assert.equal(planOverwriteTrack(model, [rows[0]!, { ...rows[1]!, role: 'video' }, rows[2]!], ['0'], 1), null);
+  assert.equal(planOverwriteTrack(model, rows, ['0', '1'], -1), null);
+  assert.equal(planOverwriteTrack(model, rows, ['missing'], 1), null);
+  assert.equal(planOverwriteTrack(model, rows, [], 1), null);
+});
+
+test('overlapping selected clips retain the background tail when a later overwrite removes an earlier left half', () => {
+  const model: EditTrack[] = [{ index: 0, clips: [clip('base', 0, 8)] }, { index: 1, clips: [clip('b', 0, 3), clip('a', 1, 2)] }];
+  const rows = [row(0, [['base', 0, 8]]), row(1, [['a', 1, 2], ['b', 0, 3]])];
+  const before = filmOf(model) as Film;
+  const plan = planOverwriteTrack(model, rows, ['a', 'b'], -1)!;
+  const after = applyOps(structuredClone(before) as never, plan.ops as never) as Film;
+  assert.deepEqual(after.tracks[0]!.clips.find((c) => c.id === 'base'), { id: 'base', src: 'base.mp4', at: 3, time: [3, 8] });
+  assert.deepEqual(applyOps(structuredClone(after) as never, inverse(before, after, plan.ops) as never), before);
+});
 
 test('⌥↓ moves a clip onto the main track without shifting its time and keeps both sides of the covered clip', () => {
   const model = [{ index: 0, clips: [clip('top', 1, 2)] }, { index: 1, clips: [clip('base', 0, 4)] }];

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ProcessList version="2" id="openfilm:in-sony-slog3">
+    <Description>OpenFilm input: Sony S-Log3, S-Gamut3.Cine footage (a video-range file) into ACEScct</Description>
+    <Matrix inBitDepth="32f" outBitDepth="32f">
+        <Array dim="3 4">
+  0.856304985337243                   0                   0  0.0625610948191593
+                  0   0.856304985337243                   0  0.0625610948191593
+                  0                   0   0.856304985337243  0.0625610948191593
+        </Array>
+    </Matrix>
+    <Log inBitDepth="32f" outBitDepth="32f" style="cameraLogToLin">
+        <LogParams base="10" linSideSlope="5.26315789473684" linSideOffset="0.0526315789473684" logSideSlope="0.255620723362659" logSideOffset="0.410557184750733" linSideBreak="0.01125" linearSlope="6.62194371177582" />
+    </Log>
+    <Matrix inBitDepth="32f" outBitDepth="32f">
+        <Array dim="3 3">
+  0.934517052283644   0.143641682764272 -0.0781587350479163
+-0.0505266597655394    1.26160921172566  -0.211082551960125
+-0.0245030192118016  -0.030671048051191    1.05517406726299
+        </Array>
+    </Matrix>
+    <Log inBitDepth="32f" outBitDepth="32f" style="cameraLinToLog">
+        <LogParams base="2" linSideSlope="1" linSideOffset="0" logSideSlope="0.0570776255707763" logSideOffset="0.554794520547945" linSideBreak="0.0078125" />
+    </Log>
+</ProcessList>

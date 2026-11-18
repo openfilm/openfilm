@@ -48,10 +48,8 @@ function Light({ tab }: { tab: HostTab }) {
 /** What the card says about the project in front. */
 export interface ProjectFacts {
   project: Project;
-  durationMs: number;
-  stage: { w: number; h: number };
-  fps: number;
-  clips: number;
+  /** what the workbench shown knows of the film (none shown: the project alone is said) */
+  film?: { durationMs: number; stage: { w: number; h: number }; fps: number; clips: number };
 }
 
 export interface ProjectActions {
@@ -83,7 +81,10 @@ export function ProjectCard({ name, facts, actions = {}, onAll, trigger, disable
     const timer = setTimeout(() => setCoverAttempt({ url: tried.url, n: tried.n + 1, failed: false }), again);
     return () => clearTimeout(timer);
   }, [popup.open, again, tried.url, tried.n]);
-  const hasCover = facts && (facts.project.cover != null || (facts.clips > 0 && facts.durationMs > 0));
+  const film = facts?.film;
+  const hasCover = facts && (facts.project.cover != null || Boolean(film && film.clips > 0 && film.durationMs > 0));
+  /* the cover's box, in the film's shape (not known: wide) */
+  const shape = film?.stage ?? { w: 16, h: 9 };
   const [projects, setProjects] = React.useState<Project[] | null>(null);
   React.useEffect(() => {
     if (!popup.open) return;
@@ -124,7 +125,7 @@ export function ProjectCard({ name, facts, actions = {}, onAll, trigger, disable
         {facts ? (
           <>
             <div className={menu.summary}>
-              <div className={menu.thumbnail} style={{ width: Math.min(72, 64 * facts.stage.w / facts.stage.h), height: Math.min(64, 72 * facts.stage.h / facts.stage.w) }}>
+              <div className={menu.thumbnail} style={{ width: Math.min(72, 64 * shape.w / shape.h), height: Math.min(64, 72 * shape.h / shape.w) }}>
                 {hasCover && (!tried.failed || again != null) ? <img
                   src={posterTry(tried.url, tried.n)} alt="" draggable={false}
                   style={tried.failed ? { display: 'none' } : undefined}
@@ -135,12 +136,12 @@ export function ProjectCard({ name, facts, actions = {}, onAll, trigger, disable
               </div>
               <div className={menu.summaryText}>
                 <div className={menu.title} title={facts.project.name}>{facts.project.name || t('project.untitled')}</div>
-                <div className={menu.metadata}>
-                  <span>{formatDuration(facts.durationMs)}</span><span aria-hidden className={menu.separator}>·</span>
-                  <span>{facts.stage.w} × {facts.stage.h}</span><span aria-hidden className={menu.separator}>·</span>
-                  <span>{Math.round(facts.fps * 100) / 100} fps</span><span aria-hidden className={menu.separator}>·</span>
-                  <span>{facts.clips === 1 ? t('switcher.oneClip') : t('switcher.clips').replace('{n}', String(facts.clips))}</span>
-                </div>
+                {film ? <div className={menu.metadata}>
+                  <span>{formatDuration(film.durationMs)}</span><span aria-hidden className={menu.separator}>·</span>
+                  <span>{film.stage.w} × {film.stage.h}</span><span aria-hidden className={menu.separator}>·</span>
+                  <span>{Math.round(film.fps * 100) / 100} fps</span><span aria-hidden className={menu.separator}>·</span>
+                  <span>{film.clips === 1 ? t('switcher.oneClip') : t('switcher.clips').replace('{n}', String(film.clips))}</span>
+                </div> : null}
                 <div className={menu.path} title={facts.project.path}><bdi dir="ltr">{facts.project.path}</bdi></div>
               </div>
             </div>

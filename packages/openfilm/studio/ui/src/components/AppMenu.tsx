@@ -1,10 +1,16 @@
-/** The app menu opens on click; its community flyout opens on hover, like the model menu. */
+/**
+ * The app menu opens on click: Settings; the Community window, in Studio in a browser only (the app opens it from the
+ * chat's button); where people talk (OpenFilm's groups and its maker's accounts), a flyout that opens on hover like the model menu;
+ * feedback; a star.
+ */
 import React from 'react';
 import { ChevronRight, MessageSquare, Settings2, Star, Users } from 'lucide-react';
+import { COMMUNITY_ICON as Community } from './feature-kinds';
 import { useLanguage, useT } from '@/i18n';
 import { useClickOpen } from '@/lib/click-open';
 import { studioHost } from '@/lib/host';
 import { menuStep } from '@/lib/menu-position';
+import { openPlugins } from '@/lib/plugins-window';
 import { communityChannels, CREATOR_CHANNELS, CREATOR_HANDLE, PRODUCT_LINKS } from '@/lib/product-links';
 import { BrandLogo } from './BrandLogo';
 import { Popover } from './Popover';
@@ -152,6 +158,12 @@ export function AppMenu({ onSettings }: { onSettings: (section: SettingsSection)
       <button type="button" role="menuitem" tabIndex={-1} className={styles.row} onMouseEnter={hideCommunitySoon} onFocus={() => closeCommunity()} onClick={() => { dismiss(true); onSettings('general'); }}>
         <Settings2 size={15} className={styles.icon} aria-hidden /><span className={styles.label}>{t('settings.title')}</span>
       </button>
+      {/* in the app the Community opens from the chat's Add menu (+); Studio in a browser has no chat: here */}
+      {studioHost ? null : (
+        <button type="button" role="menuitem" tabIndex={-1} className={styles.row} onMouseEnter={hideCommunitySoon} onFocus={() => closeCommunity()} onClick={() => { dismiss(true); openPlugins(); }}>
+          <Community size={15} className={styles.icon} aria-hidden /><span className={styles.label}>{t('assetDrawer.pluginsWindow')}</span>
+        </button>
+      )}
       <button ref={communityTrigger} type="button" role="menuitem" tabIndex={-1} aria-haspopup="menu" aria-expanded={community} aria-controls={community ? `${id}-community` : undefined}
         className={`${styles.row} ${community ? styles.active : ''}`}
         onMouseEnter={() => openCommunity()} onMouseLeave={hideCommunitySoon}

@@ -47,3 +47,24 @@ test('previous video and social settings migrate without discarding the chosen e
   );
   assert.equal(legacySocialVideo('douyin', 'high', 'auto', 60).preset, 'douyin');
 });
+
+test('a film is delivered at -14 LUFS until the person picks another loudness, "as mixed" included', () => {
+  assert.equal(DEFAULT_VIDEO_EXPORT.loudness, -14);
+  /* kept null before -14 was the default: not a choice */
+  const before = readVideoExport({ loudness: null });
+  assert.deepEqual([before.loudness, before.preset], [-14, 'default']);
+  assert.equal(readVideoExport({ loudness: null, loudnessChosen: true }).loudness, null);
+  assert.equal(readVideoExport({ loudness: -23 }).loudness, -23);
+  const picked = patchVideoExport(DEFAULT_VIDEO_EXPORT, { loudness: null, loudnessChosen: true });
+  assert.equal(readVideoExport(picked).loudness, null);
+});
+
+test('a target is a setting of its own: off by default, kept from an older save without one, and a preset picked clears it', () => {
+  assert.equal(DEFAULT_VIDEO_EXPORT.target, null);
+  const old = readVideoExport({ preset: 'custom', quality: 'master' });
+  assert.deepEqual([old.quality, old.target, old.targetMbps, old.targetMB], ['master', null, 8, 50]);
+  const sized = patchVideoExport(DEFAULT_VIDEO_EXPORT, { target: 'size', targetMB: 25 });
+  assert.deepEqual([sized.preset, sized.target, sized.targetMB], ['custom', 'size', 25]);
+  assert.equal(readVideoExport(sized).target, 'size');
+  assert.equal(videoExportPreset('douyin', 30).target, null);
+});

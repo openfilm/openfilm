@@ -10,6 +10,7 @@
  * (`ffmpeg`) and the headless browser it draws pages in (`env`, PLAYWRIGHT_BROWSERS_PATH). The agent's own commands run
  * with the person's ffmpeg and their own browsers, as in their terminal.
  */
+import { createHash } from 'node:crypto';
 import { chmodSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
@@ -42,8 +43,10 @@ export function commandScriptWindows(node, cli, { ffmpeg = null, env = {} } = {}
 
 /**
  * The command in `bin` as an agent's shell types it: its whole path, quoted. Some agents' shells read the person's
- * shell profile again (Codex, Cursor, CodeBuddy), and a PATH set there can put another `openfilm` before the app's: an
- * older one installed globally, on the person's own Studio. Null on Windows, where the name on the PATH is kept.
+ * shell profile again (Codex, Cursor, CodeBuddy, Claude Code), and a PATH set there can put another `openfilm` before
+ * the app's: an older one installed globally, on the person's own Studio. Told to an agent whose PATH the app cannot
+ * keep (agents.mjs PATH_KEPT), which the CLI then prints it as (OPENFILM_RUN, set by the agent's session). Null on
+ * Windows, where the name on the PATH is kept.
  */
 export function openfilmCommand(bin, platform = process.platform) {
   return platform === 'win32' ? null : sq(`${bin}/openfilm`);
@@ -52,7 +55,7 @@ export function openfilmCommand(bin, platform = process.platform) {
 /**
  * Write the command into `<dir>/bin` and answer that folder, for PATH. `ffmpeg`: the app's ffmpeg folder, first on the
  * command's PATH; `env`: what else it runs with. It names itself by its whole path (OPENFILM_RUN, openfilmCommand) in
- * all it prints, the manual too.
+ * all it prints, the system prompt too.
  */
 export function installOpenfilmCommand(dir, { node = nodeBinary(), platform = process.platform, ffmpeg = null, env = {} } = {}) {
   const bin = join(dir, 'bin');
@@ -62,7 +65,20 @@ export function installOpenfilmCommand(dir, { node = nodeBinary(), platform = pr
     return bin;
   }
   const file = join(bin, 'openfilm');
-  writeFileSync(file, commandScript(node, openfilmCli(), { ffmpeg, env: { ...env, OPENFILM_RUN: openfilmCommand(bin, platform) } }));
+  writeFileSync(file, commandScript(node, openfilmCli(), { ffmpeg, env }));
   chmodSync(file, 0o755);
   return bin;
+}
+
+/**
+ * Claude Code's CLAUDE_ENV_FILE for an agent session: a script it runs before each of its commands, after the person's
+ * shell profile, putting the app's `openfilm` (in `bin`) first on the PATH, so the agent types it by its name. The
+ * person's own file (`theirs`, their shell's CLAUDE_ENV_FILE) runs first. Written beside `bin`; null on Windows.
+ * @param {string} bin @param {string} [theirs] @param {string} [platform]
+ */
+export function claudeEnvFile(bin, theirs, platform = process.platform) {
+  if (platform === 'win32') return null;
+  const file = join(dirname(bin), theirs ? `claude-env-${createHash('sha256').update(theirs).digest('hex').slice(0, 8)}.sh` : 'claude-env.sh');
+  writeFileSync(file, `# OpenFilm's: the app's openfilm first (written by the app; changes are lost)\n${theirs ? `[ -f ${sq(theirs)} ] && . ${sq(theirs)}\n` : ''}export PATH=${sq(bin)}:"$PATH"\n`);
+  return file;
 }

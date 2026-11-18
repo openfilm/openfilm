@@ -4,7 +4,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readdirSync, statSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { MediaError, frame, loudness, loudnessOf, peakCounter, poster, probe, soundOf, waveform } from './derived.mjs';
+import { MediaError, frame, loudness, loudnessOf, mixLoudness, peakCounter, poster, probe, soundOf, waveform } from './derived.mjs';
 
 let root;
 const hasFfmpeg = (() => { try { execFileSync('ffmpeg', ['-version'], { stdio: 'ignore' }); return true; } catch { return false; } })();
@@ -65,12 +65,14 @@ test('waveform: loud where the tone is, silent after', { skip: !hasFfmpeg && 'no
   assert.ok(peaks[10] > 0.05 && peaks[70] < 0.001, `${peaks[10]} ${peaks[70]}`);
 });
 
-test('waveform of a recording longer than an hour and a quarter: its samples are counted as they come, never held whole', { skip: !hasFfmpeg && 'no ffmpeg' }, async () => {
-  /* 75 min: 72 MB of samples at the waveform's rate, past the 64 MB a tool's output may fill */
-  execFileSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'anullsrc=r=8000:cl=mono', '-t', '4500', '-c:a', 'flac', join(root, 'assets', 'long.flac')]);
+test('waveform: a recording longer than an hour (more samples than one read could hold) has its whole wave', { skip: !hasFfmpeg && 'no ffmpeg' }, async () => {
+  /* 75 minutes: a tone for the first minute and the last, silence between */
+  execFileSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'sine=frequency=300:duration=60:sample_rate=8000', '-f', 'lavfi', '-i', 'anullsrc=r=8000:cl=mono:d=4380',
+    '-f', 'lavfi', '-i', 'sine=frequency=300:duration=60:sample_rate=8000', '-filter_complex', '[0][1][2]concat=n=3:v=0:a=1', '-c:a', 'flac', join(root, 'assets', 'long.flac')]);
   const { duration, peaks } = await waveform(root, 'assets/long.flac');
-  assert.ok(Math.abs(duration - 4500) < 0.5, String(duration));
-  assert.ok(Math.abs(peaks.length - 4500 * 40) <= 1, String(peaks.length));
+  assert.ok(Math.abs(duration - 4500) < 1, String(duration));
+  assert.ok(Math.abs(peaks.length - 4500 * 40) <= 2, String(peaks.length));
+  assert.ok(peaks[40 * 30] > 0.05 && peaks[40 * 2000] < 0.001 && peaks[40 * 4470] > 0.05, 'loud at the ends, silent between');
 });
 
 test('peaks counted a piece at a time are those of the whole, a piece ending inside a sample included', () => {
@@ -102,6 +104,20 @@ test('loudness: the part of the file asked for, in LUFS; 6 dB quieter reads 6 LU
   assert.equal((await loudness(root, 'assets/half.wav', 3.05, 4)).lufs, null);
   assert.equal((await loudness(root, 'assets/half.wav', 3.05, 4)).lufs, null, 'the cache answers the same');
   await assert.rejects(loudness(root, 'assets/tone.wav', 2, 1), (e) => e instanceof MediaError && e.status === 400);
+});
+
+test('the mix\'s loudness: the sounds added as a render adds them, before any limiter; none for silence', { skip: !hasFfmpeg && 'no ffmpeg' }, async () => {
+  /* stereo: a mono sound is put on both sides in the mix (as a browser plays it), 3 LU over the file measured alone */
+  execFileSync('ffmpeg', ['-v', 'error', '-y', '-f', 'lavfi', '-i', 'sine=frequency=1000:duration=2', '-ac', '2', join(root, 'assets', 'mixone.wav')]);
+  const one = await loudness(root, 'assets/mixone.wav', 0, 2);
+  const sound = { src: 'assets/mixone.wav', at: 0, from: 0, to: 2, volume: 1, speed: 1 };
+  const alone = await mixLoudness(root, [sound], 2);
+  assert.ok(alone.lufs != null && one.lufs != null && Math.abs(alone.lufs - one.lufs) < 0.3, `${alone.lufs} ${one.lufs}`);
+  /* the same sound twice, in phase: twice as loud (6 dB), measured as it is, not caught by a limiter */
+  const twice = await mixLoudness(root, [sound, { ...sound }], 2);
+  assert.ok(twice.lufs != null && Math.abs(twice.lufs - alone.lufs - 6) < 0.3, `${twice.lufs} ${alone.lufs}`);
+  assert.deepEqual(await mixLoudness(root, [{ ...sound, volume: 0 }], 2), { lufs: null, peak: null });
+  assert.deepEqual(await mixLoudness(root, [], 2), { lufs: null, peak: null });
 });
 
 test('loudness is read from ebur128\'s summary, not its running lines', () => {

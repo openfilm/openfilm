@@ -1,7 +1,8 @@
 // @ts-check
 import { installedFontFile } from './fonts.mjs';
+import { cueLayout } from '../../src/captions.mjs';
 
-/** @typedef {{ css: Record<string, string>, align?: string }} CaptionLook */
+/** @typedef {{ css: Record<string, string>, align?: string, settings?: string, render?: boolean }} CaptionLook */
 /** @typedef {{ name: string, path: string }} DraftFont */
 
 const length = /^(-?(?:\d+(?:\.\d+)?|\.\d+))(cqmin|cqh|cqw|px|em)$/i;
@@ -34,6 +35,31 @@ export async function jianyingCaptionFonts(cues) {
 
 const clamp = (/** @type {number} */ v) => Math.max(0, Math.min(1, v));
 const round = (/** @type {number} */ v) => Number(v.toFixed(4));
+
+/* Styles the native text representation can retain. Other CSS stays in a separate transparent picture layer. */
+const NATIVE_CSS = new Set(['font', 'font-family', 'font-size', 'font-weight', 'font-style', 'color', 'text-align', 'letter-spacing',
+  '-webkit-text-stroke', '-webkit-text-stroke-width', '-webkit-text-stroke-color', '--font', '--size', '--weight', '--italic', '--color', '--spacing', '--stroke', '--stroke-color']);
+/** @param {CaptionLook | undefined} look @param {ReadonlyMap<string, DraftFont>} fonts */
+export function captionNeedsRendering(look, fonts) {
+  const family = captionFont(look?.css ?? {}).family;
+  return Boolean(look?.render || (look?.settings && /(?:^|\s)(?:line|position|size|region|vertical):/.test(look.settings))
+    || (family && !fonts.has(family) && !/^(?:sans-serif|serif|monospace|system-ui)$/i.test(family))
+    || Object.keys(look?.css ?? {}).some((key) => !NATIVE_CSS.has(key)));
+}
+
+/** An editable backup keeps the cue's anchor even when its complete appearance needs a rendered layer.
+ * @param {CaptionLook | undefined} look @param {{ width: number, height: number }} stage */
+export function captionPosition(look, stage) {
+  if (!look?.settings || !/(?:^|\s)(?:line|position|size):/.test(look.settings)) return { x: 0, y: -0.8 };
+  const box = cueLayout(look.settings);
+  const font = captionFont(look.css);
+  const m = length.exec(font.size);
+  const px = m ? Number(m[1]) * (m[2] === 'px' ? 1 : m[2] === 'cqw' ? stage.width / 100
+    : m[2] === 'cqmin' ? Math.min(stage.width, stage.height) / 100 : stage.height / 100) : stage.height * 0.05;
+  const halfLine = px * 1.25 / stage.height * 50;
+  const y = box.top != null ? box.top + (box.shift === -50 ? 0 : halfLine) : 100 - (box.bottom ?? 4) - halfLine;
+  return { x: round((box.left + box.width / 2) / 50 - 1), y: round(1 - y / 50) };
+}
 
 /** Solid CSS colors written by the inspector and the built-in caption looks. @param {string | undefined} value */
 function colorOf(value) {

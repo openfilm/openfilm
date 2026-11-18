@@ -1,12 +1,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { fileURLToPath } from 'node:url';
-import { look, watchLines } from './look.mjs';
+import { WORDS_AFTER_S, look, watchLines, wordsLine } from './look.mjs';
 import { watch } from './watch.mjs';
 import { filmHtml } from './film-doc.mjs';
 import { chromium } from 'playwright-core';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 
@@ -40,7 +40,7 @@ const encode = (file, input, ...out) => {
   return file;
 };
 
-test('high-bit-depth media sheets embed thumbnails; single frames keep their full resolution', { timeout: 60_000 }, async (t) => {
+test('high-bit-depth media sheets embed thumbnails; a single frame is a JPEG of its size', { timeout: 60_000 }, async (t) => {
   const dir = mkdtempSync(join(tmpdir(), 'of-look-media-'));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   const file = encode(join(dir, 'camera.mkv'), 'testsrc2=s=640x480:r=12:d=1', '-pix_fmt', 'yuv420p10le', '-c:v', 'ffv1');
@@ -53,10 +53,40 @@ test('high-bit-depth media sheets embed thumbnails; single frames keep their ful
   assert.equal(cells.length, 16);
   for (const cell of cells) assert.deepEqual(cell, { width: 480, height: 360, depth: 8, alpha: false });
   const single = await look([file, '0']);
-  const png = readFileSync(single.files[0]);
-  assert.equal(png.readUInt32BE(16), 640);
-  assert.equal(png.readUInt32BE(20), 480);
-  assert.equal(png[24], 16);
+  assert.match(single.files[0], /camera-0s\.jpg$/);
+  assert.deepEqual(jpegSize(readFileSync(single.files[0])), { width: 640, height: 480 });
+});
+
+/** A JPEG's width and height, from its first start-of-frame marker. */
+function jpegSize(jpg) {
+  assert.equal(jpg.readUInt16BE(0), 0xffd8, 'a JPEG');
+  for (let i = 2; i < jpg.length;) {
+    const marker = jpg.readUInt16BE(i);
+    if (marker >= 0xffc0 && marker <= 0xffc3) return { width: jpg.readUInt16BE(i + 7), height: jpg.readUInt16BE(i + 5) };
+    i += 2 + jpg.readUInt16BE(i + 2);
+  }
+  throw new Error('no frame size in this JPEG');
+}
+
+test("a single frame of a large stage is a JPEG at most 1568 px long, light enough to keep several in a conversation; one with alpha stays a PNG", { timeout: 90_000 }, async (t) => {
+  const { writeFileSync } = await import('node:fs');
+  const dir = mkdtempSync(join(tmpdir(), 'of-look-frame-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  writeFileSync(join(dir, 'a.html'), '<!doctype html><body style="margin:0;background:#123"><script>window.film = { duration: 2, width: 3840, height: 2160, frame(t) { document.body.style.opacity = String(0.5 + t / 4); } };</script>');
+  writeFileSync(join(dir, 'film.html'), filmHtml({ stage: { w: 3840, h: 2160 }, tracks: [{ clips: [{ src: 'a.html' }] }] }));
+  const r = await look([dir, '1'], {});
+  assert.notEqual(r.ok, false, r.lines.join('\n'));
+  assert.match(r.files[0], /1s\.jpg$/);
+  const jpg = readFileSync(r.files[0]);
+  assert.deepEqual(jpegSize(jpg), { width: 1568, height: 882 });
+  assert.ok(jpg.length < 1_000_000, `${jpg.length} bytes`);
+  /* a layer that lets the ground through: its alpha kept */
+  writeFileSync(join(dir, 'b.html'), '<!doctype html><body style="margin:0"><div style="width:200px;height:100px;background:red"></div><script>window.film = { duration: 2, width: 640, height: 360, frame() {} };</script>');
+  const layer = await look([join(dir, 'b.html'), '1'], {});
+  assert.notEqual(layer.ok, false, layer.lines.join('\n'));
+  assert.match(layer.files[0], /\.png$/);
+  const png = readFileSync(layer.files[0]);
+  assert.deepEqual([png.readUInt32BE(16), png.readUInt32BE(20), png[25]], [640, 360, 6]);
 });
 
 test('a transparent clip keeps its alpha in a media sheet, so its cells show the checkerboard behind it', { timeout: 60_000 }, async (t) => {
@@ -92,6 +122,21 @@ test("a film's sheet embeds its frames at cell size: a large stage's full frames
   assert.notEqual(r.ok, false, r.lines.join('\n'));
   assert.equal(cells.length, 2);
   for (const cell of cells) assert.deepEqual({ width: cell.width, height: cell.height }, { width: 480, height: 270 });
+});
+
+test("several moments of a film are one sheet, drawn twice in one opening of the film: each cut checked at once", { timeout: 90_000 }, async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'of-look-film-moments-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  writeFileSync(join(dir, 'a.html'), '<!doctype html><body style="margin:0;background:#123"><script>window.film = { duration: 6, frame(t) { document.body.style.opacity = String(0.4 + t / 10); } };</script>');
+  writeFileSync(join(dir, 'film.html'), filmHtml({ stage: { w: 640, h: 360 }, tracks: [{ clips: [{ src: 'a.html' }] }] }));
+  const cells = sheetCells(t);
+  const r = await look([dir, '1-2', '4', '9'], {});
+  assert.notEqual(r.ok, false, r.lines.join('\n'));
+  assert.equal(r.files.length, 1, 'one sheet');
+  assert.match(basename(r.files[0]), /-5-moments\.png$/);
+  assert.equal(cells.length, 5, '1, 1.5, 2, 4, and the last frame for 9');
+  assert.match(r.lines.join('\n'), /5 frames drawn twice/);
+  assert.match(r.lines.join('\n'), /9s is past the film's end/);
 });
 
 /* the pages under test/: each one a mistake an agent makes (or one that only looks like one), and what look says */
@@ -320,4 +365,34 @@ test('look --loudness says how far the mix is from the target, and what brings i
   assert.ok(r.lines.some((l) => /^♪ target {2}[\d.]+ LU below -14 LUFS: render --loudness=-14 \(or the export's loudness\) brings it there$/.test(l)), r.lines.join('\n'));
   const plain = await look([dir], { count: 2 });
   assert.ok(!plain.lines.some((l) => l.startsWith('♪ target')), 'without a target, nothing is said of one');
+});
+
+test('several moments of a video are one sheet, in one look: a time is a frame, a range three across it', { timeout: 60_000 }, async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'of-look-moments-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const file = encode(join(dir, 'take.mp4'), 'testsrc2=s=320x240:r=12:d=6', '-pix_fmt', 'yuv420p');
+  const cells = sheetCells(t);
+  const r = await look([file, '1-2', '4.5', '0.5'], {});
+  assert.equal(r.ok, true);
+  assert.equal(r.files.length, 1, 'one sheet');
+  assert.match(basename(r.files[0]), /^take-0\.5-4\.5s-5-moments\.png$/);
+  assert.equal(cells.length, 5, '1, 1.5, 2, then 4.5 and 0.5');
+  const counted = await look([file, '1-2', '4.5'], { count: 2 });
+  assert.match(basename(counted.files[0]), /-3-moments\.png$/, '--count frames across each range');
+});
+
+test("a long video with sound and no transcript beside it is pointed at its words, in one command; one with a transcript names it", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'of-look-words-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const file = join(dir, 'talk.mp4');
+  const facts = { video: true, audio: true, dur: WORDS_AFTER_S + 1 };
+  const [line] = wordsLine(file, facts);
+  assert.match(line, /openfilm get asr --src \S*talk\.mp4`/);
+  assert.match(line, /talk\.vtt/);
+  assert.deepEqual(wordsLine(file, { ...facts, audio: false }), [], 'no sound, no words');
+  assert.deepEqual(wordsLine(file, { ...facts, dur: WORDS_AFTER_S - 1 }), [], 'a short clip is looked at');
+  assert.deepEqual(wordsLine(file, { ...facts, video: false }), [], 'a sound alone is heard, not looked at');
+  assert.match(wordsLine(join(dir, 'my take.mp4'), facts)[0], /--src "[^"]*my take\.mp4"/, 'a path with a space is quoted');
+  writeFileSync(join(dir, 'talk.vtt'), 'WEBVTT\n');
+  assert.match(wordsLine(file, facts)[0], /its words: \S*talk\.vtt$/);
 });

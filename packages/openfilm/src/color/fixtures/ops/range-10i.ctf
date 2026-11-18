@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ProcessList version="2.5" id="fixture">
+    <Description>OpenFilm color fixture</Description>
+    <Range inBitDepth="10i" outBitDepth="32f" >
+<minInValue>64</minInValue><maxInValue>940</maxInValue><minOutValue>0</minOutValue><maxOutValue>1</maxOutValue>
+    </Range>
+</ProcessList>

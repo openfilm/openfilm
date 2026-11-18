@@ -1,10 +1,11 @@
 // @ts-check
 /**
  * A page of a project read and written as text, for what Studio writes into a page (layers pasted, the editor's
- * lib/layer-paste). Each read says the page's `rev`; a write names the rev it was made from and is refused when the
- * page changed since (the agent wrote it meanwhile), so nothing written by someone else is written over. A page
- * written where there was none (`expect: null`) is a new one; `text: null` takes a page away (to the trash). A page is
- * written back in the encoding it has.
+ * lib/layer-paste), and a color file the same way (a clip's grade set in the inspector, lib/clip-color). Each read
+ * says the page's `rev`; a write names the rev it was made from and is refused when the page changed since (the agent
+ * wrote it meanwhile), so nothing written by someone else is written over. A page written where there was none
+ * (`expect: null`) is a new one; `text: null` takes a page away (to the trash). A page is written back in the encoding
+ * it has.
  */
 import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
@@ -13,7 +14,8 @@ import { dirname } from 'node:path';
 import { FileError, inside, trashFile } from './files.mjs';
 import { filesWritten } from './person-edits.mjs';
 
-const PAGE = /\.html?$/i;
+/* a page, and a color transform file (src/color): what Studio writes as text into a project */
+const PAGE = /\.(html?|ctf|clf|cube)$/i;
 
 /** A page's rev: what a write names to say which page it was made from (its bytes, whatever they say). */
 export const revOf = (/** @type {string | Buffer} */ bytes) => createHash('sha1').update(bytes).digest('hex');
@@ -40,7 +42,7 @@ function encode(text, bytewise, rel) {
 
 /** @param {string} root @param {unknown} rel */
 function pagePath(root, rel) {
-  if (typeof rel !== 'string' || !PAGE.test(rel)) throw new FileError('a page of the project (.html), please');
+  if (typeof rel !== 'string' || !PAGE.test(rel)) throw new FileError('a page (.html) or a color file (.ctf, .clf, .cube) of the project, please');
   return inside(root, rel);
 }
 

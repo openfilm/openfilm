@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ProcessList version="2.5" id="fixture">
+    <Description>OpenFilm color fixture</Description>
+    <Log inBitDepth="32f" outBitDepth="32f" style="cameraLogToLin">
+<LogParams base="10" logSideSlope="0.255620723362659" logSideOffset="0.410557184750733" linSideSlope="5.26315789473684" linSideOffset="0.0526315789473684" linSideBreak="0.01125"/>
+    </Log>
+</ProcessList>

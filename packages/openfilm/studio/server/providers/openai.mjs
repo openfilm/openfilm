@@ -15,7 +15,6 @@ const NAME = 'OpenAI';
  * Transcription is whisper-1's alone: the only one that times each word.
  */
 const MODELS = {
-  tts: [{ id: 'gpt-4o-mini-tts', name: 'GPT-4o mini TTS' }],
   image: [
     { id: 'gpt-image-2.6-flare', name: 'GPT Image 2.6 Flare' },
     { id: 'gpt-image-2.6-sunburst', name: 'GPT Image 2.6 Sunburst' },
@@ -25,8 +24,8 @@ const MODELS = {
   asr: [{ id: 'whisper-1', name: 'Whisper' }],
   translate: [
     { id: 'gpt-6-luna', name: 'GPT-6 Luna' },
-    { id: 'gpt-6.1-sol', name: 'GPT-6.1 Sol' },
-    { id: 'gpt-6-astra', name: 'GPT-6 Astra' },
+    { id: 'gpt-6.2-sol', name: 'GPT-6.2 Sol' },
+    { id: 'gpt-6.2-astra', name: 'GPT-6.2 Astra' },
   ],
 };
 /** The qualities each picture model has, the finest last. */
@@ -51,8 +50,6 @@ for (const model of MODELS.image) {
   Object.assign(model, { spec: { ratios: Object.keys(RATIO_SIZE), refs: MAX_REFS, qualities: QUALITIES[model.id] ?? ['low', 'high'], sizes: ['1k', '2k', '4k'], transparent: true,
     mask: true, markup: true, ...(FORMATS.includes(model.id) ? { formats: ['png', 'gif', 'svg'] } : {}) } });
 }
-/** the voices its speech models have (they speak every language) */
-const VOICES = ['marin', 'cedar', 'alloy', 'ash', 'ballad', 'coral', 'echo', 'fable', 'nova', 'onyx', 'sage', 'shimmer', 'verse'];
 /** the largest file its transcription takes */
 const MAX_UPLOAD = 25 * 1024 * 1024;
 
@@ -64,7 +61,7 @@ export default {
   keysUrl: 'https://platform.openai.com/api-keys',
   billingUrl: 'https://platform.openai.com/settings/organization/billing',
   pricingUrl: 'https://developers.openai.com/api/docs/pricing',
-  verbs: ['voice', 'tts', 'image', 'asr', 'translate'],
+  verbs: ['image', 'asr', 'translate'],
   models: MODELS,
   async run(verb, args, ctx) {
     const base = serviceUrl('OPENAI', 'https://api.openai.com');
@@ -73,29 +70,6 @@ export default {
     const post = (/** @type {string} */ path, /** @type {unknown} */ body) =>
       send(path, { headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
 
-    if (verb === 'voice') {
-      const ignored = ['language', 'gender', 'prompt'].filter((f) => text(args[f])).map((f) => `--${f} does not narrow OpenAI's voices: they all speak every language`);
-      const limit = clamp(Math.round(number(args.limit) ?? VOICES.length), 1, VOICES.length);
-      return {
-        files: [],
-        index: [],
-        receipt: { provider: 'openai', voices: VOICES.slice(0, limit).map((id) => ({ voiceId: id, name: id[0].toUpperCase() + id.slice(1), language: null, gender: null, description: null })), ...notes(ignored) },
-      };
-    }
-    if (verb === 'tts') {
-      const voice = needed(args, 'voice');
-      const said = needed(args, 'text');
-      const path = landing('audio/vo', args.out, 'wav');
-      const model = modelOf(MODELS, 'tts', ctx);
-      const bytes = new Uint8Array(await (await post('/v1/audio/speech', { model, input: said, voice, response_format: 'wav' })).arrayBuffer());
-      const dur = wavSeconds(bytes);
-      return {
-        files: [{ path, bytes }],
-        index: [{ src: path, kind: 'audio', ...(dur !== null ? { dur } : {}), text: said, voice, from: { mode: 'synth', text: said, voice, provider: 'openai', model } }],
-        receipt: { provider: 'openai', model, src: path, dur, voice, notes: ['OpenAI gives no word timings: subtitles spread the text over the line'] },
-        cost: billedBy(NAME),
-      };
-    }
     if (verb === 'image') {
       const prompt = needed(args, 'prompt');
       const ratio = text(args.ratio) || '3:2';

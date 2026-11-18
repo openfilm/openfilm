@@ -4,7 +4,7 @@ import { copyFileSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { COMMAND_ROOM, audioChannels, audioClips, checkSound, fadeFilter, ffmpeg, fileOf, mix, mixGraph } from './shared.mjs';
+import { COMMAND_ROOM, UsageError, audioChannels, audioClips, checkSound, fadeFilter, ffmpeg, fileOf, mix, mixGraph, parseTarget } from './shared.mjs';
 import { addLinkedPlaces } from './media-links.mjs';
 
 test('an ffmpeg that does not end is stopped, and says what did not finish', { timeout: 20_000 }, async () => {
@@ -219,4 +219,11 @@ test('a file made again at the same path is asked again for its sound: one that 
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test('every time and range given is kept in its order; at and range are the last of each, as before', () => {
+  assert.deepEqual(parseTarget(['8.4-8.8', 'assets/a.mp4', '26.5', '35.9-36.3']),
+    { film: 'assets/a.mp4', at: 26.5, range: [35.9, 36.3], moments: [[8.4, 8.8], 26.5, [35.9, 36.3]] });
+  assert.deepEqual(parseTarget([]), { film: '.', at: null, range: null, moments: [] });
+  assert.throws(() => parseTarget(['9-8']), UsageError);
 });

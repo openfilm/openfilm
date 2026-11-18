@@ -1,13 +1,16 @@
 /**
  * What the person points at in Studio, in the chat. In the composer it is a pill (a clip by its kind, a layer, a
- * region of the picture, a moment, a range, a track, a file, a subtitle line or words in it, a voice of the library), with the picture Studio gave it; in the message the agent
- * reads it is a number in the sentence ("[1: title]") and a line of a <studio_references> block after the message,
- * saying what that number is by film.html id, time, box and file, and where its picture was put.
+ * region of the picture, a moment, a range, a track, a file, a subtitle line or words in it, a voice of the library),
+ * with the picture Studio gave it; in the message the agent reads it is a numbered link in the sentence
+ * ("[1: title](film.html#t=12.5)", the project's own links: lib/links in Studio) and a line of a <studio_references>
+ * block after the message, the same link first, saying what is there by film.html id, time, box and file, and where
+ * its picture was put. The agent points back with the same links.
  *
  * Pure: no React, no bridge, so `node --test` runs it (src/studio-refs.test.mjs).
  */
 import type { PromptPillCard, PromptReference, PromptReferenceKind } from '@/components/prompt-editor';
 import type { StudioRef, StudioRefImage, StudioSelection } from './app-bridge';
+import { linkOfCommand } from 'openfilm/studio-ui/lib/links.ts';
 
 const CLIP_KIND: Record<string, PromptReferenceKind> = {
   mg: 'clipMg', video: 'clipVideo', voice: 'clipVoice', sfx: 'clipSfx', music: 'clipMusic', caption: 'clipCaption',
@@ -45,6 +48,29 @@ const idOf = (ref: StudioRef): string => {
     case 'voice': return `studio:voice:${ref.provider}/${ref.id}`;
   }
 };
+
+/**
+ * Where a reference is, as a link to it in the project (lib/links): a clip by its id, a moment, a stretch, a part of
+ * the picture then (`t=` and `xywh=`, as W3C Media Fragments write them), a file, a node of the canvas; written as a
+ * Markdown link takes it (a space or a bracket in a path escaped). Null for what is not a place in the project (a
+ * track, an example, a voice).
+ */
+export function linkOfRef(ref: StudioRef): string | null {
+  const link = (() => {
+    switch (ref.kind) {
+      case 'clip': return linkOfCommand({ type: 'select-clip', id: ref.id, loc: ref.loc, seek: true });
+      case 'layer': return ref.box && typeof ref.time === 'number' ? linkOfCommand({ type: 'show-box', time: ref.time, box: ref.box })
+        : ref.clipId ? linkOfCommand({ type: 'select-clip', id: ref.clipId, seek: true }) : null;
+      case 'region': return linkOfCommand({ type: 'show-box', time: ref.time, box: ref.box });
+      case 'time': return linkOfCommand({ type: 'seek', time: ref.time });
+      case 'range': case 'subtitle': return linkOfCommand({ type: 'show-range', start: ref.start, end: ref.end });
+      case 'file': return linkOfCommand({ type: 'show-file', path: ref.path });
+      case 'node': return linkOfCommand({ type: 'show-node', id: ref.id });
+      default: return null;
+    }
+  })();
+  return link ? link.replace(/[ ()<>]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`) : null;
+}
 
 /** What a pill keeps of its reference to go back to it later (sent messages keep it): all of it but its picture. */
 const targetOf = (ref: StudioRef): Record<string, unknown> => {
@@ -224,12 +250,14 @@ export function pillCard(pill: { id: string; label: string; target?: Record<stri
       row('kind', ref.fileKind);
       if (ref.w && ref.h) row('size', `${ref.w}×${ref.h}`);
       if (ref.duration) row('length', `${ref.duration.toFixed(1)} s`);
+      row('words', ref.made?.prompt ? `“${words(ref.made.prompt, 120)}”` : null);
       break;
     case 'node':
       row('node', `${ref.id} · ${ref.nodeKind}`);
       row('words', ref.text ? `“${words(ref.text, 120)}”` : ref.prompt ? `“${words(ref.prompt, 120)}”` : null);
       row('path', ref.path);
       row('versions', ref.versions);
+      row('model', ref.maker ? [ref.maker.via, ref.maker.model].filter(Boolean).join(' · ') : null);
       break;
     case 'subtitle':
       row('words', ref.text ? `“${ref.text}”` : null);
@@ -272,9 +300,9 @@ function refLine(ref: StudioRef): string {
       ref.source ? `source ${ref.source}` : null,
       ref.loc,
     ].filter(Boolean).join(' · ');
+    /* its box is its link's `xywh=` */
     case 'region': return [
       `region of the picture at ${sec(ref.time)}`,
-      boxText(ref.box),
       ref.clipIds.length ? `clips ${ref.clipIds.join(', ')}` : null,
       ref.texts.length ? `words: ${ref.texts.map((text) => quote(text, 200)).join(', ')}` : null,
     ].filter(Boolean).join(' · ');
@@ -289,7 +317,13 @@ function refLine(ref: StudioRef): string {
     ].filter(Boolean).join(' · ');
     case 'file': {
       const facts = [ref.fileKind, ref.w && ref.h ? `${ref.w}×${ref.h}` : null, ref.duration ? sec(ref.duration) : null].filter(Boolean);
-      return `file ${ref.path}${facts.length ? ` (${facts.join(', ')})` : ''}`;
+      /* one a service made: how, so the agent can ask for more like it (`openfilm get`) */
+      const by = ref.made ? [ref.made.by, ref.made.model].filter(Boolean).join(' ') : '';
+      return [
+        `file ${ref.path}${facts.length ? ` (${facts.join(', ')})` : ''}`,
+        by ? `made by ${by}` : null,
+        ref.made?.prompt ? `prompt ${quote(ref.made.prompt, 600)}` : null,
+      ].filter(Boolean).join(' · ');
     }
     /* not in the film: the canvas beside it, changed with `openfilm canvas apply` */
     case 'node': return [
@@ -299,6 +333,8 @@ function refLine(ref: StudioRef): string {
       ref.nodeKind === 'group' ? `name ${quote(ref.label, 80)}` : null,
       ref.path ? `${ref.nodeKind === 'file' ? 'file' : 'shows'} ${ref.path}` : null,
       ref.versions ? `${ref.versions} version${ref.versions === 1 ? '' : 's'}` : null,
+      /* what it makes with: an agent making it anew makes it the same way unless asked otherwise */
+      ref.maker ? `makes with --via ${ref.maker.via}${ref.maker.model ? ` --model ${ref.maker.model}` : ''}${ref.maker.opts && Object.keys(ref.maker.opts).length ? ` (opts ${Object.entries(ref.maker.opts).map(([k, v]) => `${k} ${String(v)}`).join(', ')})` : ''}` : null,
     ].filter(Boolean).join(' · ');
     case 'subtitle': return [
       `subtitle ${ref.start.toFixed(3)}–${ref.end.toFixed(3)} s ${quote(ref.text, 300)}${ref.lang ? ` (${ref.lang})` : ''}`,
@@ -318,7 +354,9 @@ function refLine(ref: StudioRef): string {
       const how = ref.via
         ? `speak in it with \`openfilm get tts --via ${ref.via}${model ? ` --model ${model}` : ''} --voice ${ref.id}\`${ref.models.length > 1 ? ` (models: ${ref.models.join(', ')})` : ''}`
         : `not connected: the person connects ${ref.service} or OpenFilm in Studio's Settings › Services first`;
-      return [`voice ${quote(ref.name, 80)} of ${ref.service} for voice-over, id \`${ref.id}\``, ref.language ? `speaks ${ref.language}` : null, how].filter(Boolean).join(' · ');
+      /* a pair ("a+b") speaks a dialogue: the same command, a turn a line */
+      const pair = ref.id.includes('+') ? 'two voices speaking a dialogue: each line of --text is one turn, taking turns from the first, or start a line with 1: or 2: for whose' : null;
+      return [`voice ${quote(ref.name, 80)} of ${ref.service} for voice-over, id \`${ref.id}\``, ref.language ? `speaks ${ref.language}` : null, pair, how].filter(Boolean).join(' · ');
     }
   }
 }
@@ -336,7 +374,8 @@ export function studioReferencesText(
   const size = stage ?? refs.find((ref) => ref.image?.stage)?.image?.stage;
   const lines = refs.map((ref, i) => {
     const picture = pictures[i];
-    return `[${i + 1}] ${refLine(ref)}${picture ? ` · picture: ${picture}` : ''}`;
+    const link = linkOfRef(ref);
+    return `[${i + 1}]${link ? `(${link})` : ''} ${refLine(ref)}${picture ? ` · picture: ${picture}` : ''}`;
   });
   const attrs = `film="film.html"${size ? ` stage="${Math.round(size.w)}x${Math.round(size.h)}"` : ''}`;
   return `\n\n<studio_references ${attrs}>\n${lines.join('\n')}\n</studio_references>`;

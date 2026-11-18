@@ -132,15 +132,6 @@ test('an SVG: made from the prompt alone, written by a text model, the cost of b
   await assert.rejects(openai.run('image', { prompt: 'x', format: 'svg', ref: ['a.png'] }, ctx({ 'a.png': png(8, 8) })), /from the prompt alone/);
 });
 
-test('voice-over: a WAV whose length is known, no word timings (Studio spreads the text)', async () => {
-  reply = () => [200, wav(new Uint8Array(24000), 24000)];
-  const result = await openai.run('tts', { out: 'line', text: 'Hello.', voice: 'marin' }, ctx());
-  assert.deepEqual(JSON.parse(seen.at(-1).body), { model: 'gpt-4o-mini-tts', input: 'Hello.', voice: 'marin', response_format: 'wav' });
-  assert.equal(result.index[0].src, 'assets/audio/vo/line.wav');
-  assert.equal(result.index[0].dur, 0.5);
-  assert.equal(result.index[0].words, undefined);
-});
-
 test('transcription: whisper-1 with word timestamps; too big a file is refused before it is sent', async () => {
   reply = () => [200, { text: 'Hi there', language: 'english', duration: 1.25, words: [{ word: 'Hi', start: 0, end: 0.2 }, { word: 'there', start: 0.25, end: 0.6 }] }];
   const mp3 = new Uint8Array(Buffer.concat([Buffer.from('ID3'), Buffer.alloc(100)]));
@@ -173,8 +164,3 @@ test('translation: one request with a strict JSON schema, one line back per line
   await assert.rejects(openai.run('translate', { lines: ['Hello.', 'Goodbye.'], language: 'es' }, ctx()), /1 lines for 2/);
 });
 
-test('voices: its built-in ones, the filters it cannot apply said', async () => {
-  const result = await openai.run('voice', { gender: 'f', limit: 3 }, ctx());
-  assert.deepEqual(result.receipt.voices.map((v) => v.voiceId), ['marin', 'cedar', 'alloy']);
-  assert.match(result.receipt.notes[0], /--gender/);
-});

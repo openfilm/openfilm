@@ -8,13 +8,13 @@
  *   GET    /api/local-models                every model, with where it stands (shown)
  *   POST   /api/local-models/<id>/install   fetched now, in a process of its own; GET says how far it is
  *   PUT    /api/local-models/<id>           { on }: used or not
- *   DELETE /api/local-models/<id>           its files thrown away, and off
+ *   DELETE /api/local-models/<id>           its download stopped, its files thrown away, and off (cancel, uninstall)
  *
  * They are what Local services runs (providers/local.mjs): transcripts and pictures' backgrounds; one coming, going
  * or turned on or off moves what Settings → Services chose for its kind (providers/index.mjs localModelsChanged).
  */
 import { HttpError, json, readJson } from './http.mjs';
-import { modelBuiltIn, modelBytesHere, modelEntries, modelEntry, modelFailed, modelFetching, modelOn, modelReady, removeModel, setModelOn } from '../../src/local-models.mjs';
+import { modelBuiltIn, modelBytesHere, modelEntries, modelEntry, modelError, modelFailed, modelFetching, modelOn, modelReady, removeModel, setModelOn } from '../../src/local-models.mjs';
 import { localModelsChanged } from './providers/index.mjs';
 
 /**
@@ -44,7 +44,7 @@ export function localModels() {
       builtIn: ready && modelBuiltIn(m),
       ...(coming ? { installing: { bytes: modelBytesHere(m) } } : {}),
       /* its last download failed (offline, or a file that did not check) */
-      ...(!ready && !coming && modelFailed(m) ? { failed: true } : {}),
+      ...(!ready && !coming && modelFailed(m) ? { failed: true, error: modelError(m) } : {}),
     };
   });
 }

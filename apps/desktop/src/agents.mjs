@@ -32,7 +32,7 @@ import { randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { arch, homedir, release, tmpdir } from 'node:os';
 import { createRequire } from 'node:module';
-import { dirname, isAbsolute, join, win32 } from 'node:path';
+import { dirname, isAbsolute, join, posix, win32 } from 'node:path';
 import { Readable, Writable } from 'node:stream';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import * as acp from '@agentclientprotocol/sdk';
@@ -42,9 +42,10 @@ import { logSwitches } from './agent-logs.mjs';
 import { afterFirstReading, firstWindowsApps, refreshWindowsApps } from './windows-apps.mjs';
 import { mergeConfig, sessionSkills } from './agent-skills.mjs';
 import { nodeBinary } from './node-runtime.mjs';
-import { openfilmCommand } from './openfilm-command.mjs';
+import { claudeEnvFile, openfilmCommand } from './openfilm-command.mjs';
 import { outOfBalance } from './pi-config.mjs';
 import { AGENT_DEFINITIONS } from './agent-definitions.mjs';
+import { systemPrompt } from 'openfilm/system-prompt';
 
 const require = createRequire(import.meta.url);
 
@@ -125,6 +126,20 @@ export function withToolKind(update, toolKinds) {
   return kind ? { ...update, kind } : update;
 }
 
+/**
+ * A connector's tool call as the chat names it: Claude Code's `mcp__notion__search`, Codex's `mcp.notion.search` (and
+ * the like) as "Notion · search", by the connectors the session was given (`connectors`: their names and titles).
+ */
+export function withConnectorTitle(update, connectors) {
+  if (!connectors?.length || (update?.sessionUpdate !== 'tool_call' && update?.sessionUpdate !== 'tool_call_update') || typeof update.title !== 'string') return update;
+  for (const c of connectors) {
+    const hit = new RegExp(`^(?:mcp__${c.name}__|mcp\\.${c.name}\\.|${c.name}[.:/])(.+)$`).exec(update.title)
+      ?? (update.title.startsWith(`${c.name}_`) ? [null, update.title.slice(c.name.length + 1)] : null);
+    if (hit) return { ...update, title: `${c.title ?? c.name} · ${hit[1]}` };
+  }
+  return update;
+}
+
 export const isAgentId = (id) => typeof id === 'string' && Object.hasOwn(AGENTS, id);
 
 /** The variables an agent is started with (`defaults`) that the person's shell does not set itself. */
@@ -136,49 +151,60 @@ export function agentDefaults(id, shell = {}) {
 export const HARNESS_AGENTS = Object.freeze(['openfilm', 'byok']);
 export const isChatAgent = (id) => isAgentId(id) || HARNESS_AGENTS.includes(id);
 
-/** How the person points at things in Studio, and how the agent points back: told to every agent, the app's own too. */
-export const STUDIO_REFERENCES = `The person may name a clip, a page or a moment (in seconds) of Studio: find it in film.html and the project's
-files.
-
-In your replies, [[clip:ID]] (by its id in film.html), [[t:SECONDS]], [[range:START-END]] (in seconds), [[track:N]]
-(0 is the first) and [[file:PATH]] (a file of the project) show as links that open it in Studio.`;
+/** The pipe the app's own agent is given its models' keys on (JSON, by variable), in place of its environment. */
+export const KEYS_FD = 3;
 
 /**
- * What the agent is told about where it is, on top of its own instructions. `command`: the app's `openfilm` by its
- * whole path (openfilmCommand), named in place of the one on the PATH, which the agent's shell may not find first.
+ * Claude Code's rules against reading Studio's key files in `homes` (its `permissions.deny`): the person's service keys
+ * (providers.json) and Studio's keys (key, run.json). Sealed in the app, they hold nothing an agent may not have; the
+ * rules keep its own Read tool off them too. Its rules bind its tools, not every command it runs. Codex's deny rules
+ * hold only inside its sandbox, which the chat's mode turns off (full access), and its profiles cannot be set beside
+ * the mode the adapter sets, so it has none here.
+ * @param {string[]} homes @param {string} [platform]
+ */
+export function keyFileRules(homes, platform = process.platform) {
+  /* an absolute path is `//` and the path (`//c/Users/…` on Windows) */
+  const absolute = (path) => `/${platform === 'win32' ? path.replace(/\\/g, '/').replace(/^([A-Za-z]):/, (_, d) => `/${d.toLowerCase()}`) : path}`;
+  return [...new Set(homes.filter(Boolean))].flatMap((home) => ['providers.json', 'key', 'run.json'].map((name) => `Read(${absolute((platform === 'win32' ? win32 : posix).join(home, name))})`));
+}
+
+/**
+ * What an agent of someone else's is told, on top of its own instructions: to run `openfilm`, which prints OpenFilm's
+ * system prompt (openfilm/src/system-prompt.mjs) and the skills of the plugins on. Nothing of how any work is done, nor
+ * how Studio is pointed at: the system prompt and those skills say it. `command`: the app's `openfilm` by its whole
+ * path (openfilmCommand), for an agent whose shell may find another `openfilm` first (PATH_KEPT says which do not);
+ * null: the one on the PATH, which is the app's.
  */
 export function agentInstructions(command = null) {
-  const run = command ?? 'openfilm';
   const which = command
-    ? `That is this app's own \`openfilm\` command, on the Studio beside you: run it by
-that path every time, as its manual does, not as \`openfilm\` (your shell may find another one first) and not as
-\`npx openfilm\`, whatever a skill says.`
-    : `Use the \`openfilm\` command on your PATH (this app's own, on the Studio beside you), not
-\`npx openfilm\`, whatever a skill says.`;
-  return `You are working inside OpenFilm, a desktop app for making videos. Beside this chat the person sees OpenFilm Studio,
-the video editor, showing the project in your working directory; it updates live as you save files.
-
-The project is an OpenFilm film: pages with window.film, cut together by film.html. Before you change anything, run
-\`${run}\` with no arguments and read the manual it prints; follow it. ${which} Studio is already open on this
-project: you never need \`${run} open\` and never open Studio in a browser, and the person exports the film from it.
-Run \`${run} look\` after each change to see what you made. Reply in the language the person writes in.
-
-${STUDIO_REFERENCES}`;
+    ? `That path is this app's own \`openfilm\`: run every OpenFilm command by it, also where a skill says \`openfilm\`,
+as your shell may find another one first.`
+    : 'The `openfilm` on your PATH is this app\'s own.';
+  return `You are working inside OpenFilm, a desktop app for making videos, with Studio open beside this chat on the
+project in your working directory. Before you do anything, run \`${command ?? 'openfilm'}\` with no arguments and follow
+what it prints: how to work here, and the skills that say how each kind of work is done. ${which}`;
 }
 
 export const INSTRUCTIONS = agentInstructions();
 
 /**
- * The app's own agent's whole system prompt, in place of Pi's (a coding assistant's, with Pi's own docs): who it is,
- * where it is and how it talks with the person (agent-prompt.md: written for it, so not INSTRUCTIONS, which tell
- * another agent to go and read the manual), and how the person points at Studio (STUDIO_REFERENCES). How a film is
- * made is OpenFilm's skills' (openfilm/skills coreSkills), which Pi lists after it and the agent reads when a task
- * needs one. `edit` false: the person turned OpenFilm's `edit` off, so the prompt does not send the agent to it.
+ * The agents whose every command runs with the app's `openfilm` first on its PATH, so they are told it by its name:
+ * the app's own (Pi runs commands with the session's PATH), Claude Code (its shell reads the person's profile again,
+ * then CLAUDE_ENV_FILE, which puts the app's first: claudeEnvFile) and Codex (its config keeps the session's PATH:
+ * codexSessionConfig). Any other is told it by its whole path.
  */
-export function ownAgentPrompt({ edit = true } = {}) {
-  const read = readFileSync(new URL('./agent-prompt.md', import.meta.url), 'utf8').trim();
-  const prompt = edit ? read : read.replace(/: read `edit` before you make or change a film\./, '.');
-  return `${prompt}\n\n## Pointing at Studio\n\n${STUDIO_REFERENCES}`;
+export const PATH_KEPT = Object.freeze(['openfilm', 'byok', 'claude', 'codex']);
+
+/**
+ * The app's own agent's whole system prompt, in place of Pi's (a coding assistant's, with Pi's own docs): OpenFilm's
+ * system prompt as an agent in the app has it (openfilm/src/system-prompt.mjs: where it is, how it talks with the
+ * person and points back at Studio; not INSTRUCTIONS, which tell another agent to go and read it). How each kind of
+ * work is done is OpenFilm's skills' (openfilm/skills ownSkills), which Pi lists after it and the agent reads when a
+ * task needs one; `buildsOn` says which build on which (openfilm/skills buildsOnLine) and which plugins are off
+ * (pluginsOffLine), as `openfilm` says it to other agents.
+ */
+export function ownAgentPrompt(buildsOn = '') {
+  return `${systemPrompt('app').trim()}${buildsOn ? `\n\n${buildsOn}` : ''}\n`;
 }
 
 /**
@@ -498,7 +524,7 @@ export function acpSignedIn(id, { fresh = false } = {}) {
   // A sign-in just completed in Terminal: bypass a cached negative result, but share an in-flight probe.
   if (kept && (kept.pending || ((!fresh || kept.signedIn) && Date.now() - kept.at < (kept.signedIn ? SIGNED_IN_FOR_MS : ASKED_FOR_MS)))) return kept.answer;
   const answer = (async () => {
-    const session = new AgentSession({ agent: id, cwd: probeFolder() });
+    const session = new AgentSession({ agent: id, cwd: probeFolder(), forget: true });
     try {
       let timeout;
       try { await Promise.race([session.start(), new Promise((_, fail) => { timeout = setTimeout(() => fail(new Error('timed out')), 30_000); })]); }
@@ -725,6 +751,43 @@ export async function openAgentInstaller(id) {
   }
   const r = await run('/usr/bin/osascript', ['-e', terminalScript(command)], 15_000);
   return r.ok ? { ok: true } : { ok: false, error: r.out.trim() || 'Terminal did not open.' };
+}
+
+/** An internally selected official update command, visible in the same terminal as installation/sign-in. */
+export async function openAgentUpdate(id, command) {
+  if (!AGENTS[id] || typeof command !== 'string' || !command) return { ok: false, error: 'No update command for this agent.' };
+  const dir = SIGN_IN_DIR(); mkdirSync(dir, { recursive: true });
+  const receipt = join(dir, `${randomUUID()}-update-exit`);
+  let finished = null;
+  const readCompletion = () => {
+    if (finished) return finished;
+    try {
+      const code = readFileSync(receipt, 'utf8').trim();
+      if (/^-?\d{1,10}$/.test(code)) { finished = { code: Number(code) }; unlinkSync(receipt); }
+    } catch { /* not finished */ }
+    return finished;
+  };
+  if (windows) {
+    try {
+      const child = await powerShellWindow(`${id}-update.ps1`, powerShellLine(`${AGENTS[id].label} update`, updateWithReceipt(command, receipt, { win: true })), childEnvironment({ shell: await loginShellVariables() }));
+      return { ok: true, completion: async () => readCompletion() ?? (child.exitCode !== null ? { code: null } : null) };
+    } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
+  }
+  const r = await run('/usr/bin/osascript', ['-e', terminalScript(updateWithReceipt(command, receipt), { track: true })], 15_000);
+  if (!r.ok) return { ok: false, error: r.out.trim() || 'Terminal did not open.' };
+  const tty = r.stdout.trim();
+  return { ok: true, completion: async () => {
+    const done = readCompletion(); if (done) return done;
+    if (!/^\/dev\/tty[\w]+$/.test(tty)) return null;
+    const checked = await run('/usr/bin/osascript', ['-e', terminalTabOpenScript(tty)], 5000);
+    return checked.ok && checked.stdout.trim() === 'closed' ? { code: null } : null;
+  } };
+}
+
+/** Only an exit status is written, never terminal output or credentials. The visible window stays open. */
+export function updateWithReceipt(command, receipt, { win = false } = {}) {
+  if (!win) return `(\n${command}\n)\nprintf '%s' "$?" > ${shq(receipt)}`;
+  return `$openfilmUpdateExitCode = 0\r\ntry {\r\n${command}\r\n$openfilmUpdateSucceeded = $?\r\nif ($null -ne $LASTEXITCODE) { $openfilmUpdateExitCode = $LASTEXITCODE } elseif (-not $openfilmUpdateSucceeded) { $openfilmUpdateExitCode = 1 }\r\n} catch {\r\nWrite-Host $_\r\n$openfilmUpdateExitCode = 1\r\n} finally {\r\n[System.IO.File]::WriteAllText(${psq(receipt)}, [string]$openfilmUpdateExitCode)\r\n}`;
 }
 
 /**
@@ -1013,14 +1076,15 @@ export function codexServiceError(update) {
 }
 
 /**
- * The turn's error for a refusal. A model "not supported when using Codex" is one this Codex is too old for (Codex
- * lists models it cannot use yet): updating it, or another model, is the fix.
+ * The turn's error for a refusal. Codex's model catalog may include a model the service refuses for this session.
+ * Name the selected CLI separately from the service's reason.
  * @param {{ message: string }} refused @param {string | undefined} path @param {(file: string) => string | null} [versionOf]
  */
 export function codexRefusal(refused, path, versionOf = codexVersion) {
   if (!/not supported when using Codex/i.test(refused.message)) return new Error(refused.message);
   const version = path ? versionOf(path) : null;
-  return Object.assign(new Error(`${refused.message} Update Codex${version ? ` (this one is ${version})` : ''}, or choose another model.`), { code: 'outdated' });
+  const selected = version ? ` Selected Codex CLI: ${version}.` : '';
+  return Object.assign(new Error(`${refused.message}${selected} Choose another model or check for a Codex update.`), { code: 'unsupported-model' });
 }
 
 /**
@@ -1170,7 +1234,7 @@ export class AgentSession {
    *           onUpdate?: (update: any) => void, onPermission?: (params: any) => Promise<string | null>,
    *           onQuestion?: (ask: { message: string, toolCallId: string | null, questions: any[] }) => Promise<Record<string, { label?: string, text?: string }> | null>,
    *           onExit?: (info: { code: number | null, stderr: string }) => void,
-   *           onSend?: (sent: { prompt: any[], _meta?: any }) => void, stallMs?: number, answerOnly?: boolean }} opts
+   *           onSend?: (sent: { prompt: any[], _meta?: any }) => void, stallMs?: number, answerOnly?: boolean, forget?: boolean }} opts
    * `onSend` hears each message as it goes to the agent, whole (the app's words before the first one's, for an agent
    * told them there); `opened`, once started, says what it was started and opened with.
    * `skills`: the session has its maker's skills and MCP servers, OpenFilm's skills, and of the person's own only those
@@ -1178,6 +1242,9 @@ export class AgentSession {
    * `stallMs`: how long the agent may wait on its model with nothing coming (MODEL_STALL_MS) before the turn is stopped.
  * `answerOnly`: it may only answer (Studio's own questions): every permission it asks is refused, even what the app
  * lets every agent do.
+   * `forget`: a session only for the app's own use (a check, Studio's question), never the person's conversation: it
+   * leaves nothing in the agent's own history, where its app lists it beside the person's own (Claude Code keeps none;
+   * an agent that can delete a session deletes it as it closes, Codex archiving it).
    * `logDir` (Developer mode): an agent whose own record lacks what its model got is started with its own logging
    * switch, writing under this folder (agent-logs.mjs); `opened.log` says where.
    */
@@ -1249,17 +1316,17 @@ export class AgentSession {
     }
     const node = nodeRuntime();
     const path = [this.opts.binDir, shell.PATH, this.opts.fallbackDir].filter(Boolean).join(PATH_SEP);
-    const instructions = agentInstructions(this.opts.binDir ? openfilmCommand(this.opts.binDir) : null);
+    /* the app's `openfilm` as this agent types it (PATH_KEPT): its name, or its whole path; the CLI prints it so too */
+    const run = this.opts.binDir && !PATH_KEPT.includes(this.opts.agent) ? openfilmCommand(this.opts.binDir) : null;
+    const instructions = agentInstructions(run);
     /* the app's own agent: what Pi runs with (its whole system prompt is ours), and the web search of `openfilm get`
-       (OPENFILM_GET_WEB lists it) */
-    const own = !harness ? {} : {
-      ...harness.env,
-      OPENFILM_GET_WEB: '1',
-    };
+       (OPENFILM_GET_WEB lists it). Its models' keys (`harness.env`) are not in its environment, which every command it
+       runs inherits and other programs of this user can read (`ps`): they go over a pipe of their own (KEYS_FD) */
+    const own = !harness ? {} : { OPENFILM_GET_WEB: '1' };
     /* its skills and MCP servers: its maker's, OpenFilm's skills, and the person's own only those let in (agent-skills.mjs) */
     const skills = this.opts.skills
       ? await sessionSkills(this.opts.agent, { cwd: this.opts.cwd, env: shell, ...this.opts.skills }).catch(() => null) : null;
-    if (harness) own.OPENFILM_PI = JSON.stringify({ agentDir: harness.home, models: harness.models, model: harness.model, systemPrompt: ownAgentPrompt({ edit: skills?.piSkills?.names.includes('edit') ?? true }), skills: skills?.piSkills ?? null });
+    if (harness) own.OPENFILM_PI = JSON.stringify({ agentDir: harness.home, models: harness.models, model: harness.model, systemPrompt: ownAgentPrompt(skills?.buildsOn ?? ''), skills: skills?.piSkills ?? null });
     /* Developer mode: the agent's own logging switch, so the turn log has what its model got; none when the person
        set its telemetry themselves (agent-logs.mjs) */
     this.logging = this.opts.logDir && cli && !this.spec.adapter
@@ -1268,9 +1335,12 @@ export class AgentSession {
     const native = cli && !this.spec.adapter ? starting(cli.path, [...this.spec.args, ...(this.logging?.args ?? []), ...(skills?.args ?? [])]) : null;
     /* what a failure names: the agent's program and its own words, as the person would run it (not our logging or skills) */
     this.command = native ? [cli.path, ...this.spec.args] : null;
-    /* who it is, as `openfilm canvas` marks what it puts on the board (OPENFILM_AGENT) */
+    /* OPENFILM_AGENT stays as the chat set it (`app:<conversation>`: where the CLI says the agent is, and whom Studio
+       gives its notes); its name, as `openfilm canvas` marks what it puts on the board, is OPENFILM_AGENT_NAME */
     const extra = { ...agentDefaults(this.opts.agent, shell), ...this.opts.env, ...(native ? native.env : node.env), ...(cli && this.spec.env ? this.spec.env(cli.path) : {}), ...own, ...skills?.env, ...this.logging?.env,
-      OPENFILM_AGENT: this.spec.label };
+      OPENFILM_AGENT_NAME: this.spec.label,
+      ...(this.opts.binDir ? { OPENFILM_RUN: run ?? 'openfilm' } : {}),
+      ...(() => { const file = this.opts.binDir && this.spec.adapter === AGENTS.claude.adapter ? claudeEnvFile(this.opts.binDir, shell.CLAUDE_ENV_FILE) : null; return file ? { CLAUDE_ENV_FILE: file } : {}; })() };
     /* OpenCode's inline configuration carries both its skills and, in Developer mode, its logging */
     if (skills?.env?.OPENCODE_CONFIG_CONTENT && this.logging?.env?.OPENCODE_CONFIG_CONTENT) {
       extra.OPENCODE_CONFIG_CONTENT = JSON.stringify(mergeConfig(JSON.parse(skills.env.OPENCODE_CONFIG_CONTENT), JSON.parse(this.logging.env.OPENCODE_CONFIG_CONTENT)));
@@ -1288,7 +1358,8 @@ export class AgentSession {
     const script = harness ? fileURLToPath(new URL('./pi-agent.mjs', import.meta.url)) : native ? null : adapterScript(this.spec.adapter);
     this.child = native
       ? spawn(native.cmd, native.args, { ...native.options, ...OWN_GROUP, cwd: this.opts.cwd, env, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true })
-      : spawn(node.command, node.env.ELECTRON_RUN_AS_NODE ? asNode(script) : [script], { ...OWN_GROUP, cwd: this.opts.cwd, env, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
+      : spawn(node.command, node.env.ELECTRON_RUN_AS_NODE ? asNode(script) : [script], { ...OWN_GROUP, cwd: this.opts.cwd, env, stdio: ['pipe', 'pipe', 'pipe', ...(harness ? ['pipe'] : [])], windowsHide: true });
+    if (harness) this.child.stdio[KEYS_FD]?.end(JSON.stringify(harness.env ?? {}));
     this.child.stderr.on('data', (d) => { this.stderr = (this.stderr + String(d)).slice(-16_000); });
     LIVE.add(this);
     this.child.once('exit', (code) => { LIVE.delete(this); this.exited = { code }; this.opts.onExit?.({ code, stderr: this.stderr }); });
@@ -1309,7 +1380,7 @@ export class AgentSession {
         return answers ? { action: 'accept', content: formContent(questions, answers) } : { action: 'decline' };
       })
       .onNotification(acp.methods.client.session.update, (ctx) => {
-        const update = withToolKind(ctx.params.update, this.spec.toolKinds);
+        const update = withConnectorTitle(withToolKind(ctx.params.update, this.spec.toolKinds), this.connectors);
         if (SPOKE.has(update?.sessionUpdate)) this.spoke = true;
         this.heard = Date.now();
         const phase = agentPhase(update);
@@ -1338,9 +1409,13 @@ export class AgentSession {
 
     const params = {
       cwd: this.opts.cwd,
-      mcpServers: [],
+      mcpServers: acpServers((this.connectors = skills?.connectors ?? []), init.agentCapabilities?.mcpCapabilities),
       ...(skills?.additionalDirectories ? { additionalDirectories: skills.additionalDirectories } : {}),
-      ...(claude ? { _meta: { systemPrompt: { append: instructions }, ...(skills?.claude ? { claudeCode: { options: skills.claude } } : {}) } } : {}),
+      ...(claude ? { _meta: { systemPrompt: { append: instructions }, claudeCode: { options: {
+        ...skills?.claude,
+        ...(this.opts.forget ? { persistSession: false } : {}),
+        settings: { ...skills?.claude?.settings, permissions: { deny: keyFileRules([this.opts.env?.OPENFILM_HOME, this.opts.env?.OPENFILM_SHARED_HOME, join(homedir(), '.openfilm')]) } },
+      } } } } : {}),
     };
     /* the program's own sign-in, taken up (Cursor asks for this before any session) */
     if (this.spec.authenticate && (init.authMethods ?? []).some((m) => m.id === this.spec.authenticate)) {
@@ -1362,6 +1437,8 @@ export class AgentSession {
     const resumed = Boolean(session);
     session ??= await this.conn.agent.request(acp.methods.agent.session.new, params).catch((e) => { throw signInError(this.spec.label, e, { own: this.spec.login === null }); });
     this.sessionId = session.sessionId;
+    /* a session to forget (`forget`), deleted as it closes where the agent can */
+    this.deletable = Boolean(caps.sessionCapabilities?.delete);
     /* an agent on the protocol's older model and mode lists: the same choices, as config options */
     this.legacy = !session.configOptions && Boolean(session.models || session.modes);
     if (resumed) this.instructions = null;
@@ -1380,13 +1457,12 @@ export class AgentSession {
     this.noteModel(this.info.configOptions);
     /* what the agent was started and opened with, for the turn log: every word the app adds to its own, and the
        variables the app set (a key's value never: it reads "(hidden)") */
-    const secret = new Set(Object.keys(harness?.env ?? {}));
     this.opened = {
       program: harness ? 'pi' : cli.path,
       /* the command line the agent's process was started with: its own program, or the app's Node running its adapter (or Pi) */
       command: native ? [native.cmd, ...native.args] : [node.command, ...(node.env.ELECTRON_RUN_AS_NODE ? asNode(script) : [script])],
       adapter: this.spec.adapter ?? null,
-      env: Object.fromEntries(Object.entries(extra).map(([k, v]) => [k, secret.has(k) || /KEY|TOKEN|SECRET|PASSWORD/i.test(k) ? '(hidden)' : k === 'OPENFILM_PI' ? JSON.parse(v) : v])),
+      env: Object.fromEntries(Object.entries(extra).map(([k, v]) => [k, /KEY|TOKEN|SECRET|PASSWORD/i.test(k) ? '(hidden)' : k === 'OPENFILM_PI' ? JSON.parse(v) : v])),
       ...(env.CODEX_CONFIG ? { codexConfig: JSON.parse(env.CODEX_CONFIG) } : {}),
       path: { first: this.opts.binDir ?? null, last: this.opts.fallbackDir ?? null },
       fromShell: this.spec.fromShell ? Object.keys(shell).sort() : 'all',
@@ -1498,13 +1574,27 @@ export class AgentSession {
     return new Promise((done) => { child.once('exit', () => done(undefined)); setTimeout(done, ms).unref?.(); });
   }
 
-  close() {
-    LIVE.delete(this);
-    try { this.conn?.close(); } catch { /* gone already */ }
-    stopTree(this.child);
-    this.logging?.close();
+  /**
+   * End it: its process and all it started. A session to forget (`forget`) is first deleted from the agent's history,
+   * a few seconds at most, unless `now` (the app is quitting).
+   */
+  close({ now = false } = {}) {
+    const end = () => {
+      LIVE.delete(this);
+      try { this.conn?.close(); } catch { /* gone already */ }
+      stopTree(this.child);
+      this.logging?.close();
+    };
+    const id = this.opts.forget && this.deletable && !this.exited ? this.sessionId : null;
+    if (!id || now) return end();
+    this.sessionId = null;
+    const waited = new Promise((done) => { setTimeout(done, FORGET_MS).unref?.(); });
+    void Promise.race([this.conn.agent.request(acp.methods.agent.session.delete, { sessionId: id }).catch(() => {}), waited]).finally(end);
   }
 }
+
+/** How long a session to forget is given to be deleted as it closes. */
+const FORGET_MS = 5000;
 
 /**
  * An agent's process and what it starts (the program under its adapter, its MCP servers, a command it runs) as one:
@@ -1538,7 +1628,21 @@ const LIVE = new Set();
  * app is quitting, and one left would outlive it.
  */
 export function closeEverySession() {
-  for (const session of [...LIVE]) session.close();
+  for (const session of [...LIVE]) session.close({ now: true });
 }
 /* and as the process ends without quitting the usual way: none outlives it */
 process.once('exit', closeEverySession);
+
+/**
+ * The connectors' MCP servers (agent-skills.mjs sessionSkills), as ACP's session/new takes them: a program for every
+ * agent; a remote one only for an agent that says it takes them (`mcpCapabilities.http`), else left out (the session
+ * goes on without it).
+ * @param {({ name: string } & ({ type: 'http', url: string, headers?: Record<string, string> } | { type: 'stdio', command: string, args?: string[], env?: Record<string, string> }))[]} servers
+ * @param {{ http?: boolean } | undefined} caps
+ */
+export function acpServers(servers, caps) {
+  const pairs = (/** @type {Record<string, string> | undefined} */ o) => Object.entries(o ?? {}).map(([name, value]) => ({ name, value }));
+  return servers.flatMap((s) => (s.type === 'http'
+    ? (caps?.http ? [{ type: 'http', name: s.name, url: s.url, headers: pairs(s.headers) }] : [])
+    : [{ name: s.name, command: s.command, args: s.args ?? [], env: pairs(s.env) }]));
+}

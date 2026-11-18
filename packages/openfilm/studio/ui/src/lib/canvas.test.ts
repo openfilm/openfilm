@@ -1,8 +1,37 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  canvasId, canvasKey, copyOf, emptyHistory, inputsChanged, inputsKey, inputsOf, isStale, makeName, makeRequest, modesFor, nextOrder, readCanvasDoc, redo, remember, reorder, undo, withVersion,
+  canvasId, canvasKey, copyOf, emptyHistory, inputsChanged, inputsKey, inputsOf, isStale, makeName, makeRequest, modesFor, nextOrder, readCanvasDoc, receiptOf, redo, remember, reorder, undo, withVersion,
 } from './canvas.ts';
+
+test('a first-frame model with mixed references can send a lone reference video from canvas', () => {
+  const spec = { frames: 'first' as const, refs: 9, clip: true, voice: true, seconds: [5, 30] as [number, number], referenceMaxSeconds: 15 };
+  const node = { id: 'v', make: 'video' as const, x: 0, y: 0, prompt: 'Keep the camera move', opts: { sec: 22 } };
+  const clip = { from: 'v1', media: 'video' as const, path: 'assets/source video.mp4' };
+  assert.deepEqual(modesFor(spec), ['text', 'omni', 'first', 'refs']);
+  assert.deepEqual(makeRequest(node, [clip], 'edit', spec), {
+    verb: 'video', unused: 0,
+    args: { out: 'edit', prompt: 'Keep the camera move', duration: '15', video: 'assets/source video.mp4' },
+  });
+  assert.equal(makeRequest(node, [], 'edit', spec).args.duration, '22');
+});
+
+test('a saved mixed-reference node submits every supported wired reference in its own media order', () => {
+  const spec = { refs: 10, clip: 5, voice: 5, frames: true };
+  const node = { id: 'make', make: 'video' as const, x: 0, y: 0, prompt: 'Use the references', opts: { mode: 'omni' as const } };
+  const inputs = [
+    { from: 'photo', media: 'image', path: 'assets/character.jpg' },
+    { from: 'a', media: 'video', path: 'assets/a.mp4' },
+    { from: 'voice', media: 'audio', path: 'assets/voice.wav' },
+    { from: 'b', media: 'video', path: 'assets/b.mp4' },
+  ] as const;
+  const result = makeRequest(node, inputs, 'scene', spec);
+  assert.equal(result.unused, 0);
+  assert.equal(result.args['first-frame'], undefined);
+  assert.deepEqual(result.args.video, ['assets/a.mp4', 'assets/b.mp4']);
+  assert.deepEqual(result.args['input-reference'], ['assets/character.jpg']);
+  assert.equal(result.args.voice, 'assets/voice.wav');
+});
 
 test('a board as sent is read node by node: notes and files, and edges between nodes it has', () => {
   assert.deepEqual(readCanvasDoc({
@@ -19,6 +48,21 @@ test('a board as sent is read node by node: notes and files, and edges between n
     edges: [{ id: 'e1', from: 'a', to: 'b' }],
   });
   assert.deepEqual(readCanvasDoc(null), { nodes: [], edges: [] });
+});
+
+test('a note is read with its color, and with none for gray or one there is not', () => {
+  assert.deepEqual(readCanvasDoc({
+    nodes: [
+      { id: 'a', x: 0, y: 0, text: 'tinted', color: 'green' },
+      { id: 'b', x: 0, y: 0, text: 'plain', color: 'gray' },
+      { id: 'c', x: 0, y: 0, text: 'odd', color: 'teal' },
+    ],
+    edges: [],
+  }).nodes, [
+    { id: 'a', x: 0, y: 0, text: 'tinted', color: 'green' },
+    { id: 'b', x: 0, y: 0, text: 'plain' },
+    { id: 'c', x: 0, y: 0, text: 'odd' },
+  ]);
 });
 
 test('two boards that say the same have one key; ids are new each time', () => {
@@ -170,4 +214,14 @@ test('a new edge goes after the others into its node; one can be put first', () 
 test('what a node made is its newest version, shown', () => {
   assert.deepEqual(withVersion({ versions: ['a', 'b'], path: 'a', made: 'k1' }, { path: 'c', made: 'k2' }), { versions: ['a', 'b', 'c'], path: 'c', made: 'k2' });
   assert.deepEqual(withVersion({}, { path: 'a', made: 'k' }), { versions: ['a'], path: 'a', made: 'k' });
+});
+
+test('a receipt is read past the lines a service says while it works', () => {
+  assert.deepEqual(receiptOf('Taking the background out on this computer with BiRefNet Lite…\n{\n "src": "assets/a-cutout.png"\n}'), { src: 'assets/a-cutout.png' });
+  assert.deepEqual(receiptOf('{"src":"assets/b.png"}'), { src: 'assets/b.png' });
+});
+
+test('a node read back keeps the style, the camera move and the camera picked for it', () => {
+  const doc = readCanvasDoc({ nodes: [{ id: 'a', x: 0, y: 0, make: 'image', prompt: '', opts: { ratio: '1:1', style: 'anime', effect: 'orbit', camera: 'film35|auto|18|2_8' } }], edges: [] });
+  assert.deepEqual(doc.nodes[0]!.opts, { ratio: '1:1', style: 'anime', effect: 'orbit', camera: 'film35|auto|18|2_8' });
 });

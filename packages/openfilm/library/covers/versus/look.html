@@ -1,0 +1,32 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Versus</title>
+<style>
+:root { --font: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; --left: #ff3b30; --right: #0a84ff; --ink: #ffffff; }
+html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+* { box-sizing: border-box; }
+.l, .r { position: fixed; top: 0; bottom: 0; width: 50%; }
+.l { left: 0; background: linear-gradient(90deg, color-mix(in srgb, var(--left) 55%, transparent), transparent 80%); }
+.r { right: 0; background: linear-gradient(270deg, color-mix(in srgb, var(--right) 55%, transparent), transparent 80%); }
+.cut { position: fixed; left: 50%; top: -10%; bottom: -10%; width: .8vmin; background: #fff; transform: translateX(-50%) rotate(8deg); box-shadow: 0 0 3vmin rgba(0,0,0,.4); }
+.vs { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 20vmin; height: 20vmin; border-radius: 50%; background: #111; color: #fff; display: flex; align-items: center; justify-content: center; font: italic 900 9vmin/1 var(--font); border: .8vmin solid #fff; }
+.t1, .t2 { position: fixed; bottom: 9vh; font-family: var(--font); font-size: 5vmax; font-weight: 900; color: var(--ink); text-shadow: 0 .06em .2em rgba(0,0,0,.55); }
+.t1 { left: 5vw; } .t2 { right: 5vw; }
+.t3 { position: fixed; left: 0; right: 0; top: 6vh; text-align: center; font-family: var(--font); font-size: 3.4vmax; font-weight: 900; color: #fff; text-shadow: 0 .06em .2em rgba(0,0,0,.55); }
+@media (max-aspect-ratio: 1/1) { .t1, .t2 { font-size: 4.2vmax; } }
+/* a full-screen feed: words kept clear of its caption, its buttons and its top bar */
+@media (max-aspect-ratio: 10/16) { .t1, .t2 { bottom: 24vh; } .t2 { right: 18vw; } .t3 { top: 10vh; } }
+</style>
+</head>
+<body>
+<div class="l"></div><div class="r"></div><div class="cut"></div><div class="vs">VS</div><span class="t3">谁更值得买？</span><span class="t1">手机</span><span class="t2">相机</span>
+<script>
+/*
+ * Two sides in two colors with a VS between them: a comparison cover. A page of OpenFilm's library (CC0): a still, the same at every t.
+ */
+window.film = { frame() {} };
+</script>
+</body>
+</html>

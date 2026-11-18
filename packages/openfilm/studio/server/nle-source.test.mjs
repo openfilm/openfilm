@@ -71,6 +71,43 @@ test('original mode keeps picture effects, retaining complete footage and its se
   }
 });
 
+test('draft plans embed the original sound in rendered footage with the rendered source clock', () => {
+  for (const footage of ['auto', 'source', 'render']) {
+    const plan = sourcePlan({ embeddedAudio: true, editable: true, footage }, { ...picture, styled: true });
+    const shot = plan.video[0].clips[0];
+    const file = plan.files.find((f) => f.id === shot.fileId);
+    const audio = plan.audio[0].clips[0];
+    assert.ok(file.audio, 'the rendered video has its own sound');
+    assert.equal(audio.fileId, shot.fileId);
+    assert.equal(audio.linkGroup, shot.linkGroup);
+    assert.deepEqual([audio.start, audio.end, audio.in, audio.out, audio.speed], [shot.start, shot.end, shot.in, shot.out, shot.speed]);
+    assert.deepEqual(file.job.audio, footage === 'render'
+      ? { path: picture.path, from: 0, to: 12, speed: 1 }
+      : { path: picture.path, from: 2, to: 8, speed: 2 });
+    const { info } = jianyingDraft(plan, { name: 'Source', folder: '/out', root: '/' });
+    assert.equal(info.tracks.filter((t) => t.type === 'audio').length, 0);
+    assert.equal(info.tracks[0].segments[0].volume, 0.4);
+  }
+});
+
+test('draft embedding preserves explicitly detached audio, stems and silent footage', () => {
+  const p = { ...picture, styled: true };
+  const film = { stage: { w: 160, h: 90 }, duration: 4, pictures: [p], sounds: [{ ...sound, picture: undefined }] };
+  const options = { title: 'Source', fps: 30, audio: 'clips', media: 'link', mediaDir: '/out/media', embeddedAudio: true, editable: true, footage: 'auto' };
+  const detached = planNleTimeline(film, options);
+  const draft = jianyingDraft(detached, { name: 'Detached', folder: '/out', root: '/' }).info;
+  assert.equal(draft.tracks[0].segments[0].volume, 0);
+  assert.equal(draft.tracks.find((t) => t.type === 'audio').segments[0].volume, 0.4);
+  assert.equal(detached.files.find((f) => f.job.kind === 'render').job.audio, undefined);
+
+  const stems = sourcePlan({ ...options, audio: 'stems', stems: ['footage'] }, p);
+  assert.equal(stems.files.find((f) => f.job.kind === 'render').job.audio, undefined);
+  assert.equal(stems.audio[0].clips[0].linkGroup, undefined);
+  const silent = planNleTimeline({ ...film, sounds: [] }, options);
+  assert.equal(silent.files.find((f) => f.job.kind === 'render').audio, undefined);
+  assert.equal(silent.audio.length, 0);
+});
+
 test('reused originals stay one full file, and disabled clips and fractional speeds remain editable', () => {
   const plan = planNleTimeline({ stage: { w: 160, h: 90 }, duration: 9, sounds: [], pictures: [
     picture, { ...picture, id: 'again', at: 5, end: 9, from: 1, speed: 0.5, hidden: true },

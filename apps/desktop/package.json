@@ -20,6 +20,7 @@
     "@agentclientprotocol/sdk": "1.5.0",
     "@earendil-works/pi-codemode": "1.1.0",
     "@earendil-works/pi-coding-agent": "1.1.0",
+    "@earendil-works/pi-mcp": "1.1.0",
     "diff": "9.0.0",
     "electron-updater": "6.8.9",
     "openfilm": "workspace:*",

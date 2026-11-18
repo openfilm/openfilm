@@ -16,11 +16,11 @@ export function isTypingTarget(target: EventTarget | null): boolean {
   return inHostPanel(target) || isTextField(target);
 }
 
-/** Whether `target` is a field that takes typing (a text field, a select, editable text): not a slider or a button. */
+/** Whether `target` is a text field, selection menu or editable text; ordinary buttons and sliders keep film shortcuts. */
 export function isTextField(target: EventTarget | null): boolean {
   const el = elementOf(target);
   if (!el) return false;
-  const field = typeof el.closest === 'function' ? el.closest('input, textarea, select') : null;
+  const field = typeof el.closest === 'function' ? el.closest('input, textarea, select, [aria-haspopup="listbox"], [role="listbox"]') : null;
   if (field) {
     /* A focused slider, color swatch or checkbox is not typing: after dragging a volume or
        picking a color in the inspector, focus stays on that control. Treating it as typing would

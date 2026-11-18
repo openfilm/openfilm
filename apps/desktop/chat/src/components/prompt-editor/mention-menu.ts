@@ -1,5 +1,6 @@
 /**
- * The `@` menu: when typing counts as an `@`, which items show, and in what order.
+ * The `@` and `/` menus: when typing counts as one, which items show, and in what order. `@` points at things (this
+ * moment, the project's files), `/` names a skill: each provider says which character opens it.
  *
  * Pure logic; the Lexical half is in MentionMenuPlugin. Kept apart so these rules can be
  * tested on plain strings: an email address opening the menu, or the best match ranked
@@ -50,8 +51,12 @@ export interface MentionProvider {
   groupLabel: string;
   /** The most rows it shows (MENTION_MENU_LIMIT); Infinity for a group a person scrolls through whole. */
   limit?: number;
+  /** The character typed to open it: `@` (the default) or `/`. */
+  trigger?: MentionTriggerChar;
   items: MentionItem[];
 }
+
+export type MentionTriggerChar = '@' | '/';
 
 /** One menu row: the item, its group, and whether the group title goes above it. */
 export interface MentionEntry {
@@ -71,6 +76,8 @@ const MAX_QUERY_CHARS = 32;
 const EMAIL_LOCAL_CHAR = /[A-Za-z0-9._%+-]/;
 
 export interface MentionTrigger {
+  /** Which character opened it. */
+  char: MentionTriggerChar;
   /** The index of `@` in the text; the popup anchors there and replacement starts there. */
   leadOffset: number;
   /** What has been typed after `@`, used to filter. */
@@ -79,21 +86,29 @@ export interface MentionTrigger {
   replaceableString: string;
 }
 
+/* After an ASCII letter, digit or one of these, `/` is part of a path, a URL or a fraction (a/b, http://, 1/2), not
+   the skills' menu. After a space, the start, or a CJK character it opens the menu. */
+const PATH_CHAR = /[A-Za-z0-9._%+\-/:~]/;
+
 /**
- * Whether the text before the caret ends in an `@` being typed.
+ * Whether the text before the caret ends in an `@` (or `/`) being typed: of the two, the one nearer the caret.
  *
- * Only the last `@` counts: earlier ones are already pills or ordinary characters.
+ * Only the last one counts: earlier ones are already pills or ordinary characters.
  */
-export function matchMentionTrigger(textBeforeCursor: string): MentionTrigger | null {
-  const at = textBeforeCursor.lastIndexOf('@');
-  if (at < 0) return null;
+export function matchMentionTrigger(textBeforeCursor: string, chars: readonly MentionTriggerChar[] = ['@']): MentionTrigger | null {
+  const found = chars
+    .map((char) => ({ char, at: textBeforeCursor.lastIndexOf(char) }))
+    .filter(({ at }) => at >= 0)
+    .sort((a, b) => b.at - a.at)[0];
+  if (!found) return null;
+  const { char, at } = found;
   const before = at > 0 ? textBeforeCursor[at - 1]! : '';
-  if (before && EMAIL_LOCAL_CHAR.test(before)) return null;
+  if (before && (char === '@' ? EMAIL_LOCAL_CHAR : PATH_CHAR).test(before)) return null;
   const query = textBeforeCursor.slice(at + 1);
   /* Whitespace ends the mention: file names can have spaces, but what follows a space is
      usually the next word, and a lingering menu would cover it. */
   if (query.length > MAX_QUERY_CHARS || /\s/.test(query)) return null;
-  return { leadOffset: at, query, replaceableString: textBeforeCursor.slice(at) };
+  return { char, leadOffset: at, query, replaceableString: textBeforeCursor.slice(at) };
 }
 
 /* Ranking: prefix < word start < substring < subsequence (other characters in between).
@@ -161,9 +176,9 @@ export const MENTION_MENU_LIMIT = 20;
  * Groups stay together, each one kind of thing; sorting happens only within a group. Each
  * group is cut on its own, so a long one (files) never pushes a later one out of the menu.
  */
-export function buildMentionMenu(providers: MentionProvider[], query: string): MentionEntry[] {
+export function buildMentionMenu(providers: MentionProvider[], query: string, char: MentionTriggerChar = '@'): MentionEntry[] {
   const entries: MentionEntry[] = [];
-  for (const provider of providers) {
+  for (const provider of providers.filter((p) => (p.trigger ?? '@') === char)) {
     provider.items
       .map((item, order) => ({ item, order, score: scoreMentionItem(item, query) }))
       .filter((row): row is { item: MentionItem; order: number; score: number } => row.score != null)

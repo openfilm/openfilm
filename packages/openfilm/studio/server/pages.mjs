@@ -29,7 +29,7 @@ import { readableLink, referenceSource } from '../../src/media-links.mjs';
 import { clipKind } from '../../src/film-doc.mjs';
 import { readPrefs } from './prefs.mjs';
 import { readyProxy, undecodable } from './proxies.mjs';
-import { madeCopy } from '../../src/seekable.mjs';
+import { gradedCopy, gradeSoon, madeCopy } from '../../src/seekable.mjs';
 import { isPreviewKey, previewDir } from './preview-cache.mjs';
 import { probe, soundOf } from './derived.mjs';
 import { compoundOuter } from './parts.mjs';
@@ -140,13 +140,18 @@ export async function startPages({ port, editorOrigin, secret, projects }) {
     headers: policy(),
     /* heavy footage is played from its proxy once it is made, while proxies are on, and footage the editor's browser
        does not decode whether they are or not (proxies.mjs); else from a copy made for footage a render's browser does
-       not decode, or that seeks slowly (src/seekable.mjs), when there is one */
-    swap: (file) => {
+       not decode, or that seeks slowly (src/seekable.mjs), when there is one. A video graded by LUTs is played from
+       its graded copy, the one an export draws, asked for by its key (`?of-grade`), proxies on or off */
+    swap: (file, query) => {
       if (clipKind(file) !== 'video') return null;
+      const graded = gradedCopy(root, query?.get('of-grade') ?? '');
+      if (graded) return graded;
       const { proxies } = readPrefs();
       const rel = relative(root, file).split(sep).join('/');
       return (proxies.on || undecodable(root, rel) ? readyProxy(root, rel, proxies.height) : null) ?? madeCopy(referenceSource(root, file) ?? file, root);
     },
+    /* a video graded by LUTs: its graded copy begun in the project's cache, the preview playing it as it is meanwhile */
+    grade: (/** @type {string} */ file, /** @type {string[]} */ luts, /** @type {[number, number] | null} */ time) => gradeSoon(file, luts, root, time),
   });
 
   /** a project's playable copies (UNPLAYABLE), served as its files are */

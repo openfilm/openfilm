@@ -7,6 +7,7 @@
  *   film.html, its pages and code, assets/   the work
  *   .film/id, .film/subtitles.json           its id (a copy gets its own) and the subtitles' style (captions.mjs)
  *   .film/settings.json                      the editor's settings: its frame rate, its tracks' names (project-settings.mjs)
+ *   .film/media.json                         what is known of each media file: its fingerprint, to find it again (media-index.mjs)
  *   .film/history/                           its versions (history.mjs)
  *   .film/chat/                              an app's conversations about it, with its agent's sessions
  *   .film/logs/                              an app's full record of every turn, for debugging
@@ -15,7 +16,8 @@
  * Each part is a folder of its own, so the project's export (exports.mjs, kind 'project') takes or leaves it.
  */
 import { moveToTrash } from './trash.mjs';
-import { randomBytes } from 'node:crypto';
+import { recycle } from './recycle-bin.mjs';
+import { createHmac, randomBytes } from 'node:crypto';
 import { constants, existsSync, mkdirSync, readFileSync, realpathSync, statSync, writeFileSync } from 'node:fs';
 import { cp, mkdir, mkdtemp, readFile, readdir, readlink, rename, rm, stat, symlink, unlink, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
@@ -24,7 +26,7 @@ import { EMPTY_FILM } from './film.mjs';
 import { FILM_FILE, filmHtml } from '../../src/film-doc.mjs';
 import { writeAtomic } from './atomic.mjs';
 import { coverAt } from './cover.mjs';
-import { libraryProjects, libraryRoot } from '../../src/locations.mjs';
+import { libraryProjects, libraryRoot, savedRoot } from '../../src/locations.mjs';
 import { projectMissing } from './project-presence.mjs';
 import { compoundOuter } from './parts.mjs';
 
@@ -60,6 +62,14 @@ export function studioKey() {
   writeFileSync(file, key, { mode: 0o600 });
   return key;
 }
+
+/**
+ * The key an agent the app runs reaches Studio with (`openfilm` sends it when OPENFILM_AGENT says an agent ran it),
+ * made from Studio's own: it opens all Studio's key does but the person's own say (their services and keys, Settings,
+ * plugins and skills turned on or let write), which only the person changes, in Studio.
+ * @param {string} key
+ */
+export const agentKeyOf = (key) => createHmac('sha256', key).update('openfilm-agent').digest('hex').slice(0, 48);
 
 /** Where new projects go: the folder chosen in Settings, else ~/Movies/OpenFilm/Projects on macOS, ~/Videos/OpenFilm/Projects elsewhere (src/locations.mjs). */
 export { libraryRoot };
@@ -539,13 +549,15 @@ export async function renameProject(id, name, { release, win = process.platform 
 }
 
 /**
- * Delete a project: its folder goes to the system's Trash (where the person can still take it back), and it leaves the
+ * Delete a project: its folder goes to the recycle bin (recycle-bin.mjs, where the person can still take it back), and it leaves the
  * list. An unavailable project just leaves the list; any remaining files are kept.
  */
 export async function deleteProject(/** @type {string} */ id) {
   const found = (await readState()).recent.find((r) => r.id === id);
   if (!found) throw new ProjectError('no such project', 404);
-  if (!projectMissing(found.path)) await moveToTrash(found.path);
+  const canonical = (/** @type {string} */ path) => { try { return realpathSync(path); } catch { return resolve(path); } };
+  if ([libraryRoot(), savedRoot()].some(path => canonical(path) === canonical(found.path))) throw new ProjectError('Library roots cannot be deleted.', 403);
+  if (!projectMissing(found.path)) await recycle(found.path, 'project');
   await forgetProject(id);
 }
 

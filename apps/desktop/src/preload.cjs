@@ -54,10 +54,14 @@ contextBridge.exposeInMainWorld('openfilmNative', {
     usage: (id, fresh) => ipcRenderer.invoke('desktop:agents:usage', { id, fresh: fresh === true }),
     setShown: (id, shown) => ipcRenderer.invoke('desktop:agents:shown', { id, shown: shown === true }),
     saveOpenFilmModels: (config) => ipcRenderer.invoke('desktop:agents:openfilm-models', { config }),
+    saveAgentModels: (id, config) => ipcRenderer.invoke('desktop:agents:model-menu', { id, config }),
+    refreshModels: (id, options) => ipcRenderer.invoke('desktop:agents:model-refresh', { id, ...options }),
     locate: (id, words) => ipcRenderer.invoke('desktop:agents:locate', { id, words }),
     useAutomatic: (id) => ipcRenderer.invoke('desktop:agents:automatic', { id }),
     install: (id) => ipcRenderer.invoke('desktop:agents:install', { id }),
     diagnose: (id) => ipcRenderer.invoke('desktop:agents:diagnose', { id }),
+    checkUpdates: (id) => ipcRenderer.invoke('desktop:agents:update-check', { id }),
+    update: (id) => ipcRenderer.invoke('desktop:agents:update', { id }),
     openSetup: (id) => ipcRenderer.invoke('desktop:agents:setup', { id }),
     report: () => ipcRenderer.invoke('desktop:agents:report'),
     /* the whole diagnostic report on the clipboard (main.mjs): the chat's, by a turn that failed */
@@ -71,6 +75,14 @@ contextBridge.exposeInMainWorld('openfilmNative', {
     allowSkill: (id, name, allowed) => ipcRenderer.invoke('desktop:skills:allow', { agent: id, name, allowed: allowed === true }),
     allowMcp: (id, name, allowed) => ipcRenderer.invoke('desktop:agents:mcp-allow', { id, name, allowed: allowed === true }),
     onChange: on('desktop:agents'),
+  },
+  /* the connectors: signed in here once for every agent (connectors.mjs) */
+  connectors: {
+    list: () => ipcRenderer.invoke('desktop:connectors:list'),
+    connect: (id) => ipcRenderer.invoke('desktop:connectors:connect', { id }),
+    cancel: (id) => ipcRenderer.invoke('desktop:connectors:cancel', { id }),
+    disconnect: (id) => ipcRenderer.invoke('desktop:connectors:disconnect', { id }),
+    onChange: on('desktop:connectors'),
   },
   /* the agents' turns (local-agents-ipc.mjs) */
   localAgents: {
@@ -138,6 +150,9 @@ contextBridge.exposeInMainWorld('openfilmNative', {
   onToggleChat: on('desktop:toggle-chat'),
   /* Native Settings menu and Cmd/Ctrl+,; no renderer can invoke a privileged action here. */
   onOpenSettings: on('desktop:open-settings'),
+  /* an openfilm:// link (deep-links.mjs): the one that opened the app, taken once; those that come while it runs */
+  takeLink: () => ipcRenderer.invoke('desktop:take-link'),
+  onOpenLink: on('desktop:open-link'),
   onStudioBrowser: on('desktop:studio-browser'),
   onFfmpeg: on('desktop:ffmpeg'),
   onUpdate: on('desktop:update'),

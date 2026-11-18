@@ -10,6 +10,8 @@
  *   GET  /api/skills?project=<id>   → { skills } (the project's, the person's own, the official ones)
  *   POST /api/projects/:id/locate { path } → { project }
  */
+import { refreshPlugins, type PluginTab, type Profile } from './plugins.ts';
+import type { BlockDecl } from '../../../../src/plugin-blocks.mjs';
 
 export type BrowseFolder = { name: string; path: string; film: boolean };
 export type BrowseListing = {
@@ -45,6 +47,19 @@ export const makerOf = (skill: { uid: string; repository?: string }) => /^https:
 /** One of Discover's, installed or not, made by someone other than OpenFilm: the community's, under its owner's name. */
 export const communityOf = (skill: { uid: string; source: string; core?: true }) => skill.source === 'official' && !skill.core && ownerOf(skill) !== 'openfilm';
 
+/** One of the person's own read as the community's review will (src/publish-cli.mjs publishCheck). */
+export type PublishCheck = {
+  name: string; kind: 'skill' | 'workbench'; version: string | null; network: string[]; scripts: number; program: boolean; element: boolean;
+  missing: Array<'description' | 'title' | 'version' | 'license'>;
+  findings: Array<{ severity: 'high' | 'medium' | 'low'; rule: string; file: string; line?: number; quote: string }>;
+  ready: boolean;
+};
+/** It read in the person's repository and compared with theirs here, and its listing (studio/server/community-publish.mjs). */
+export type PublishVerify = {
+  owner: string; repo: string; commit: string; ageDays: number | null; same: boolean; differ: string[]; onlyHere: string[]; onlyThere: string[];
+  registryPath: string; proposeUrl: string;
+};
+
 /** a skill a project can be made with (openfilm/src/skills.mjs): the project's own, the person's, or official */
 export type SkillEntry = {
   /** whose it is and its name, `owner/name` (openfilm/src/skills.mjs SKILL_UID): how it is told apart, shared and searched */
@@ -60,8 +75,25 @@ export type SkillEntry = {
   version?: string;
   /** a way of working (a kind of job) or a look; its place among its kind; its mark */
   kind?: 'workflow' | 'style'; order?: number; icon?: string;
+  /** how it is listed and rated for people: its category, difficulty, ease, audience and cost (src/plugins.mjs profileOf) */
+  profile?: Profile;
   /** addresses of its cover picture and preview video, when it has them */
   cover?: string; preview?: string;
+  /** the address of its app icon (components/AppIcon), when its folder brings one */
+  appIcon?: string;
+  /** it has a surface (a page of its own), which makes it a plugin (lib/project-plugins): the page's address; listed
+   *  for a project, where that project's files are for the page; and whether the person lets it change them */
+  surface?: string; files?: string; writes?: true;
+  /** the commands it brings (`openfilm <its name> <command>`), which make it a plugin too */
+  commands?: string[];
+  /** it brings a program that serves its surface (started by `startPlugin`); `runs`: the person lets it run */
+  program?: true; runs?: true;
+  /** it brings an element put in the editor's own page (`inApp`); `element`: where its module is, once the person lets it run */
+  inApp?: true; element?: string;
+  /** its surface is a tab of the library instead of a workbench: its name and mark, its own where left out */
+  tab?: PluginTab;
+  /** the blocks its workbench is laid out in among the page's panels (lib/blocks), as its openfilm.json declares them */
+  blocks?: string | readonly (BlockDecl | string)[];
   /** where its source can be read (a repository's address) */
   repository?: string;
   /** what it needs beyond OpenFilm, by language; the computers it runs on (none: every one), and whether this one is not among them */
@@ -71,15 +103,33 @@ export type SkillEntry = {
   /** one of Discover's: installed to be used (the person's own and a project's are installed already) */
   installed?: boolean;
   /** an installed one of Discover's: a newer version there, or no longer there at all (it still works here) */
-  update?: { version: string; commit: string }; retired?: true;
+  update?: { version: string; commit: string; adds?: { scripts?: number; network?: string[]; page?: true; program?: true; element?: true } }; retired?: true;
   /** turned off: offered to no agent until it is turned on again */
   off?: true;
+  /** the hosts its page may reach (openfilm.json `permissions.network`), and why; none: it reaches none */
+  network?: { domains: string[]; why?: Record<string, string> };
+  /** OpenFilm withdrew it (its index's `revoked`): given to no agent, nothing of it runs; why, and where to read more */
+  revoked?: { reason: 'malware' | 'impersonation' | 'rights' | 'broken' | 'policy'; note?: string; advisory?: string };
+  /** listed by another community index the person added, not OpenFilm's (its address): not reviewed by OpenFilm */
+  from?: string;
+  /** a project's own the person has not allowed in it yet: offered to no agent, nothing of it shown or run (src/skills.mjs projectSkillAllowed) */
+  waits?: true;
+  /** one of OpenFilm's own, off because the plugin it goes with is off (lib/plugins): turned on, its plugin is too */
+  plugin?: string;
 };
 /** an example film's part, as its index names it (`S2-Hook`), from and to in seconds */
 export type ExampleSegment = { title: string; from: number; to: number };
 export type Example = {
   id: string; title: string; description: string; poster: string | null; video: string | null; duration: number | null; url: string;
   category: string | null; segments: ExampleSegment[];
+  /** its publisher in the Community (`openfilm`: OpenFilm's own) */
+  owner?: string;
+};
+/** The Community's news (studio/server/examples.mjs readNews): its words by language, English always there. */
+export type News = {
+  id: string; title: Record<string, string>; text: Record<string, string>; image: string | null;
+  /** an https address, or `openfilm://community/<line>` */
+  link: string | null; from: string; until: string | null;
 };
 
 export class SourceError extends Error {
@@ -106,11 +156,15 @@ async function call<T>(path: string, method = 'GET', json?: unknown, timeout?: n
 /* what the galleries read last: shown at once when one opens, and asked for again behind it */
 const seen: { examples: Example[] | null; skills: Map<string, SkillEntry[]>; catalog: string | null } = { examples: null, skills: new Map(), catalog: null };
 const skillReads = new Map<string, number>();
+/* the read of each list started last: one overtaken by a later read answers with that one's, never with what was seen before */
+const skillReading = new Map<string, Promise<SkillEntry[]>>();
 /** The examples read last, or null. */
 export const seenExamples = (): Example[] | null => seen.examples;
 /** When Discover's index was last read (ISO time), as the skills read last say; null: never. */
 export const seenCatalog = (): string | null => seen.catalog;
 /** The skills read last for a project (else for no project: the official ones and the person's own), or null. */
+/** What was last seen of the skills is let go: a plugin turned on or off changes which are on. */
+export const forgetSeenSkills = (): void => { seen.skills.clear(); };
 export const seenSkills = (projectId?: string | null): SkillEntry[] | null => seen.skills.get(projectId ?? '') ?? seen.skills.get('') ?? null;
 
 /** The desktop's add dialog and Studio's gallery share the window. */
@@ -135,6 +189,7 @@ export const sourcesApi = {
   startFetch: (url: string) => call<{ job: FetchJob }>('projects/fetch', 'POST', { url }).then((r) => r.job),
   fetchJob: (id: string) => call<{ job: FetchJob }>(`projects/fetch/${encodeURIComponent(id)}`).then((r) => r.job),
   cancelFetch: (id: string) => call<object>(`projects/fetch/${encodeURIComponent(id)}`, 'DELETE'),
+  news: () => call<{ news: News[] }>('news').then((r) => r.news, () => [] as News[]),
   examples: () => call<{ examples: Example[] }>('examples').then((r) => (seen.examples = r.examples), () => seen.examples ?? []),
   /** an example's folder on this computer, fetched when needed (for an agent to read how it is made) */
   exampleFolder: (id: string) => call<{ folder: string }>(`examples/${encodeURIComponent(id)}/folder`, 'POST').then((r) => r.folder),
@@ -143,13 +198,15 @@ export const sourcesApi = {
   skills: (projectId?: string | null) => {
     const key = projectId ?? '', revision = (skillReads.get(key) ?? 0) + 1;
     skillReads.set(key, revision);
-    return call<{ skills: SkillEntry[]; catalog?: { read: string } | null }>(`skills${projectId ? `?project=${encodeURIComponent(projectId)}` : ''}`, 'GET', undefined, 10_000)
+    const read: Promise<SkillEntry[]> = call<{ skills: SkillEntry[]; catalog?: { read: string } | null }>(`skills${projectId ? `?project=${encodeURIComponent(projectId)}` : ''}`, 'GET', undefined, 10_000)
       .then((r) => {
         if (r.catalog?.read && Number.isFinite(Date.parse(r.catalog.read)) && (!seen.catalog || Date.parse(r.catalog.read) >= Date.parse(seen.catalog))) seen.catalog = r.catalog.read;
-        if (revision !== skillReads.get(key)) return seenSkills(projectId) ?? r.skills;
+        if (revision !== skillReads.get(key)) return skillReading.get(key) ?? r.skills;
         seen.skills.set(key, r.skills);
         return r.skills;
       }, () => seenSkills(projectId) ?? []);
+    skillReading.set(key, read);
+    return read;
   },
   /** Discover's index read again from GitHub, unless read less than `fresh` ms ago (the skills it names fetched): → when,
    *  or throws when it cannot be read */
@@ -173,15 +230,48 @@ export const sourcesApi = {
   },
   /** a skill turned on or off for every project; whoever lists skills (the gallery, the desktop's chat) reads them again */
   setSkillOn: async (uid: string, on: boolean): Promise<void> => {
-    await call<{ on: boolean }>(`skills/${encodeURIComponent(uid)}/on`, 'PUT', { on });
+    const said = await call<{ on: boolean; plugin?: string }>(`skills/${encodeURIComponent(uid)}/on`, 'PUT', { on });
+    /* its plugin was off and is on with it now: the workbench shows */
+    if (said.plugin) refreshPlugins();
     for (const [key, skills] of seen.skills) seen.skills.set(key, skills.map((skill) => {
       if (skill.uid !== uid) return skill;
-      const { off: _was, ...rest } = skill;
+      const { off: _was, plugin: _plugin, ...rest } = skill;
       return on ? rest : { ...rest, off: true as const };
     }));
     window.dispatchEvent(new Event(SKILLS_CHANGED));
   },
+  /** a plugin someone made let change projects' files, or no longer (one a project brings: in that project); whoever lists skills reads them again */
+  setPluginWrites: async (uid: string, on: boolean, projectId?: string | null): Promise<void> => {
+    await call<{ writes: boolean }>(`skills/${encodeURIComponent(uid)}/writes${projectId ? `?project=${encodeURIComponent(projectId)}` : ''}`, 'PUT', { on });
+    window.dispatchEvent(new Event(SKILLS_CHANGED));
+  },
+  /** a plugin with a program let run it on this computer, or no longer (kept as `writes` is); whoever lists skills reads them again */
+  setPluginRuns: async (uid: string, on: boolean, projectId?: string | null): Promise<void> => {
+    await call<{ runs: boolean }>(`skills/${encodeURIComponent(uid)}/runs${projectId ? `?project=${encodeURIComponent(projectId)}` : ''}`, 'PUT', { on });
+    window.dispatchEvent(new Event(SKILLS_CHANGED));
+  },
+  /** a plugin's program for a project, started when it is not running: the address its surface shows. A SourceError with status 403 until the person lets it run. */
+  startPlugin: async (uid: string, projectId: string): Promise<string> =>
+    (await call<{ url: string }>(`skills/${encodeURIComponent(uid)}/start?project=${encodeURIComponent(projectId)}`, 'POST')).url,
   /** one of Discover's installed (downloaded, at the version it shows) or uninstalled; whoever lists skills reads them again */
+  /** the other community indexes the person added, read after OpenFilm's own (Discover is read again after a change) */
+  communitySources: () => call<{ sources: string[] }>('community/sources').then((r) => r.sources),
+  setCommunitySources: (sources: string[]) => call<{ sources: string[] }>('community/sources', 'PUT', { sources }).then((r) => r.sources),
+  /** how many use each community item, by uid (none when unknown) */
+  communityStats: () => call<{ stats: Record<string, { installs: number }> }>('community/stats').then((r) => r.stats, () => ({} as Record<string, { installs: number }>)),
+  /** one of the person's own read as the community's review will */
+  publishCheck: (uid: string) => call<PublishCheck>(`skills/${encodeURIComponent(uid)}/publish`, 'POST', {}),
+  /** it read in their repository, compared with theirs here, and its listing made */
+  publishVerify: (uid: string, repo: string) => call<PublishVerify>(`skills/${encodeURIComponent(uid)}/publish/verify`, 'POST', { repo }),
+  /** a skill as a person reviews it before letting it in: its SKILL.md whole and its files */
+  skillText: (uid: string, projectId?: string | null) =>
+    call<{ text: string; files: Array<{ path: string; size: number }>; more: number }>(`skills/${encodeURIComponent(uid)}/text${projectId ? `?project=${encodeURIComponent(projectId)}` : ''}`),
+  /** a project's own skill allowed in that project, as its files are now, or no longer (src/skills.mjs allowProjectSkill) */
+  allowProjectSkill: async (uid: string, projectId: string, on: boolean): Promise<void> => {
+    await call<{ on: boolean }>(`skills/${encodeURIComponent(uid)}/allow?project=${encodeURIComponent(projectId)}`, 'PUT', { on });
+    seen.skills.delete(projectId);
+    window.dispatchEvent(new Event(SKILLS_CHANGED));
+  },
   setSkillInstalled: async (uid: string, installed: boolean): Promise<void> => {
     await call<{ installed: boolean }>(`skills/${encodeURIComponent(uid)}/installed`, 'PUT', { installed });
     window.dispatchEvent(new Event(SKILLS_CHANGED));

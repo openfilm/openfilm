@@ -82,15 +82,62 @@ where, and CSS that says how each looks. A page draws a shot.
     look (`opacity`, `filter`, `clip-path`…), never what places it. On every picture a host sets `--clip-length`, how
     long the clip is on the film (`4.2s`), so a way out can be timed from its end:
     `animation: out .6s ease-in calc(var(--clip-length) - .6s) both`. A `transition`, whose progress is history, is an
-    error.
+    error. A host registers the effects' custom properties, so a `filter` that reads them eases each by keyframes of
+    its own: `--fx-blur` and `--fx-glow` (lengths), `--fx-brightness`, `--fx-contrast`, `--fx-saturate`,
+    `--fx-grayscale` and `--fx-invert` (percentages), `--fx-hue` (an angle), as in `filter: blur(var(--fx-blur, 0px))`; and
+    `--fx-trim` (a number, 0–100: how much of a stroke is drawn, for its `stroke-dashoffset`). A picture that sets or
+    animates `--fx-z` (a length toward the viewer), `--fx-rx` or `--fx-ry` (its turn about its X and Y axes) is in 3D:
+    the host places it so about its center, under the film's camera (a perspective of 1.389 times the stage's width,
+    looking at its middle), which the film has once any picture of it is in 3D. `--fx-ax` and `--fx-ay` (lengths) are
+    its anchor point, stage px from its box's middle: its animation's `rotate` and `scale`, and its turns in 3D, are
+    about there.
+  - A video clip is graded by `--of-lut`: one or more color transform files of the project, applied in order to its
+    decoded picture at the file's own bit depth, before any other CSS:
+    `style="--of-lut: url(looks/in-sony-slog3.ctf) url(looks/beach.ctf) url(looks/out-rec709.ctf)"`. Each is an
+    OpenColorIO Common Transform Format file (`.ctf`), an Academy/ASC Common LUT Format file (`.clf`), or a `.cube` LUT.
+    The first takes the file's R′G′B′ code values (full range, 0–1); the last gives what the screen shows (BT.709
+    primaries). Clips that name the same file are graded by it together. A page or a still clip is graded by
+    `--of-lut` too, its picture being what the screen shows (sRGB): an input (`in-*.ctf`) or an output (`out-*.ctf`)
+    is not applied, the files between work on it in ACEScct (reached by the sRGB curve and ACEScct's, the primaries
+    as they are) and back, and a file after the output on the picture as shown. What changes each channel by itself,
+    a saturation and a mix of the channels are applied; any other operation (hue curves, a 3D LUT) is left out.
+  - Video clips use local person effects through ordinary CSS custom properties. `--of-cutout: 1` enables
+    background removal. `--of-cutout-mode` chooses fast portrait (0), bundled portrait detail (1, default), optional
+    detailed subject extraction (2), chroma key (3), or optional person edge refinement (4). `--of-cutout-edge` is spatial, image-guided edge softness
+    (0–1, default .25); `--of-cutout-shrink` contracts positive / expands negative (-1–1, default 0);
+    `--of-cutout-despill` reduces foreground edge color contamination (0–1, default .35). Chroma key uses
+    `--of-cutout-color` (a hex color, default #00ff00), `--of-cutout-key-tolerance` and `--of-cutout-key-softness`.
+    Face retouching uses the `--of-beauty-` properties `smooth`, `light`, `warm`, `rosy`, `detail`, `even`,
+    `dark-circles`, `eye-bright`, `teeth`, `slim`, `jaw`, `chin`, `eyes`, `nose`, `lip`, `blush`, `shadow`, `blemish`, and `highlights`.
+    Strengths default to 0 and range 0–1; `warm` and `chin` also accept negative values down to -1. Pigment colors
+    are `--of-beauty-lip-color`, `--of-beauty-blush-color`, and `--of-beauty-shadow-color` (hex colors).
+    `--of-beauty-quality` chooses landmark regions (0, default) or optional semantic face regions (1).
+    `--of-beauty-texture` retains fine residual texture (0–1, default .6); `--of-beauty-protect-glasses`
+    attenuates eye/nose reshaping around semantically detected spectacles (0–1, default 1). Neither option alone
+    activates beauty processing. Face shaping is aligned to the eye axis with aspect correction.
+    `--of-vision-bypass: 1` shows the original. These affect only the picture, keeping timing, placement and sound.
+    The host processes decoded source frames before applying clip CSS. Preview may use a smaller analysis/output
+    resolution; paused frames, reverse seeks and exports analyze their corresponding frames. Only explicit fast
+    mode can reuse a mask, for at most 1/30 second during continuous forward playback. Analysis caches are bounded
+    and distinguish source, timestamp, model, beauty, dimensions and preview quality. Quality modes never reuse an
+    older mask for a different source time. Full-quality subject extraction may be substantially slower than playback.
+    The reference host bundles small portrait/face models and ONNX/MediaPipe runtimes. The larger subject, refinement and semantic face models are
+    optional, version-pinned, checksum-verified downloads, cached atomically on disk. No frames are sent to a service.
+    Model sources, licenses and sizes are in `src/vision-models.mjs`; bundled licenses are in `models/vision/licenses`.
+    All AI paths analyze frames independently, so reverse seeks and parallel exports do not rely on prior state.
   - `overrides` are the person's changes made in Studio, as JSON, a list of entries. An entry with `at` (a CSS
     selector), on a page clip only, tweaks an element of the page, applied by the host after each frame: optional `n`
     (which match, from 1), `t` (translate px), `s` (scale), `r` (rotate degrees) as the independent CSS transform
     properties so they compose with the page's own animation, `style` (CSS properties, camelCase or custom
-    `--name`, applied with priority), `text`
+    `--name`, applied with priority; an `animation` there plays the film's own `@keyframes`, which the host puts in
+    the page, on the page's time like the page's own animations), `text`
     (replaces the element's own text: all of it when it has no child elements or only `<br>`s, a line break in `text`
     being a `<br>`; with other inline children, its first run of text, the children kept), `lock` (`true`: an editor keeps the element from being selected or moved; it changes
-    nothing in the picture). An entry without `at`, at most one, on any clip, is the clip's own: `fade: [in, out]`,
+    nothing in the picture), `split` (its words animated part by part: `{ "by": "char" | "word" | "line",
+    "animation": "rise .5s ease-out both", "stagger": 0.04, "start": 0, "order": "forward" | "reverse" | "center" |
+    "random" }`, each character, word or line wrapped by the host and given `animation`, the film's own `@keyframes`,
+    starting `start` plus its turn in `order` times `stagger` seconds into the page). An entry without `at`, at most
+    one, on any clip, is the clip's own: `fade: [in, out]`,
     seconds (0 or more, to the millisecond, together no longer than the clip): its picture's opacity and its sound's
     gain ramp linearly from 0 to 1 over its first `in` seconds and from 1 to 0 over its last `out` seconds, times its
     own opacity and volume (as its animation has its opacity at that moment).

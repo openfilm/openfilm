@@ -1,0 +1,316 @@
+{
+  "order": 1,
+  "icon": "scissors",
+  "title": {
+    "en": "Edit",
+    "zh-CN": "剪辑",
+    "ja": "編集",
+    "ko": "편집",
+    "es": "Edición"
+  },
+  "summary": {
+    "en": "Making and cutting the film: the picture, the timeline and export.",
+    "zh-CN": "做片子、剪片子：画面、时间线和导出。",
+    "ja": "映像を作って切る：画面、タイムライン、書き出し。",
+    "ko": "영상을 만들고 자르기: 화면, 타임라인, 내보내기.",
+    "es": "Crear y cortar el vídeo: la imagen, la línea de tiempo y la exportación."
+  },
+  "details": {
+    "en": "When to use it: in every film: placing material, trimming, ordering, adding captions and sound, exporting.\nWhat your agent does: say what you want and it changes the timeline; you can also drag, cut and adjust by hand.\nTurned off: no timeline, only the conversation and the other editors on; films made still play and export.",
+    "zh-CN": "什么时候用：做任何片子都会用到：放素材、剪长短、排顺序、加字幕和声音、导出。\n智能体能做什么：你说要什么，它直接改时间线；你也可以自己拖、剪、调。\n关掉后：看不到时间线，只剩对话和其他打开的编辑器；做好的片子照样播放和导出。",
+    "ja": "使うとき：どの映像でも：素材を置く、長さを切る、順番を並べる、字幕と音を入れる、書き出す。\nエージェントにできること：欲しいことを言えばタイムラインを直します。自分でドラッグ、カット、調整もできます。\nオフにすると：タイムラインが見えず、会話と他のエディターだけになります。作った映像は再生と書き出しができます。",
+    "ko": "언제 쓰나요: 모든 영상에서: 소스 배치, 길이 자르기, 순서 정하기, 자막과 소리 넣기, 내보내기.\n에이전트가 하는 일: 원하는 것을 말하면 타임라인을 바로 고칩니다. 직접 끌고 자르고 조정할 수도 있습니다.\n끄면: 타임라인이 보이지 않고 대화와 다른 에디터만 남습니다. 만든 영상은 그대로 재생하고 내보낼 수 있습니다.",
+    "es": "Cuándo usarlo: en todo vídeo: colocar material, recortar, ordenar, añadir subtítulos y sonido, exportar.\nQué hace tu agente: dile lo que quieres y cambia la línea de tiempo; también puedes arrastrar, cortar y ajustar a mano.\nSi se desactiva: no hay línea de tiempo, solo la conversación y las otras mesas activas; los vídeos hechos se siguen reproduciendo y exportando."
+  },
+  "examples": {
+    "zh-CN": [
+      {
+        "say": "把开头没内容的地方剪掉，节奏快一点",
+        "does": "找出没有内容的片段剪掉，缩短镜头之间的停顿，改动直接出现在时间线上。"
+      },
+      {
+        "say": "给整部片子加上中文字幕",
+        "does": "把所有人声转成文字，生成一条字幕轨，你可以逐句改。"
+      },
+      {
+        "say": "配一段轻快的背景音乐，到片尾结束",
+        "does": "从素材库挑合适的音乐放上音乐轨，剪到和片尾一起结束。"
+      }
+    ],
+    "en": [
+      {
+        "say": "Cut the empty start and tighten the pace",
+        "does": "Finds the stretches with nothing in them, cuts them and shortens the pauses between shots, right on the timeline."
+      },
+      {
+        "say": "Add English captions to the whole film",
+        "does": "Transcribes every voice into a caption track you can edit line by line."
+      },
+      {
+        "say": "Add light, upbeat music that ends with the film",
+        "does": "Picks fitting music from the library, puts it on a music track and cuts it to end with the film."
+      }
+    ],
+    "ja": [
+      {
+        "say": "冒頭の空白を切って、テンポを上げて",
+        "does": "中身のない部分を見つけて切り、ショット間の間を詰めます。変更はタイムラインに直接反映。"
+      },
+      {
+        "say": "映画全体に日本語字幕を付けて",
+        "does": "すべての話し声を文字にして字幕トラックを作ります。一行ずつ直せます。"
+      },
+      {
+        "say": "軽快な BGM を付けて、最後で終わるように",
+        "does": "ライブラリから合う曲を選んで音楽トラックに置き、終わりに合わせて切ります。"
+      }
+    ],
+    "ko": [
+      {
+        "say": "앞부분 빈 곳을 자르고 템포를 빠르게 해 줘",
+        "does": "내용 없는 구간을 찾아 자르고 샷 사이의 쉼을 줄입니다. 바뀐 내용은 타임라인에 바로 보여요."
+      },
+      {
+        "say": "영상 전체에 한국어 자막을 넣어 줘",
+        "does": "모든 말소리를 글로 옮겨 자막 트랙을 만듭니다. 한 줄씩 고칠 수 있어요."
+      },
+      {
+        "say": "경쾌한 배경음악을 넣고 끝에서 끝나게 해 줘",
+        "does": "라이브러리에서 어울리는 음악을 골라 음악 트랙에 놓고 끝에 맞춰 자릅니다."
+      }
+    ],
+    "es": [
+      {
+        "say": "Quita el inicio vacío y acelera el ritmo",
+        "does": "Encuentra los tramos vacíos, los corta y acorta las pausas entre planos, en la misma línea de tiempo."
+      },
+      {
+        "say": "Pon subtítulos en español a toda la película",
+        "does": "Transcribe todas las voces en una pista de subtítulos que puedes editar frase a frase."
+      },
+      {
+        "say": "Pon música alegre de fondo que termine con la película",
+        "does": "Elige música adecuada de la biblioteca, la pone en una pista de música y la corta para que termine con la película."
+      }
+    ]
+  },
+  "showcase": {
+    "highlights": {
+      "zh-CN": [
+        {
+          "icon": "scissors",
+          "title": "剪得快",
+          "text": "切开、修剪、挪动片段，时间线自动吸附对齐。"
+        },
+        {
+          "icon": "layers",
+          "title": "多轨叠画",
+          "text": "画面、文字、贴纸和音乐分轨摆放，在图层面板里调前后。"
+        },
+        {
+          "icon": "captions",
+          "title": "字幕和配音",
+          "text": "从人声生成字幕，逐句改字；选一个音色配旁白。"
+        },
+        {
+          "icon": "upload",
+          "title": "导出成片",
+          "text": "导出 MP4，按平台选尺寸和画质，封面一起带上。"
+        }
+      ],
+      "en": [
+        {
+          "icon": "scissors",
+          "title": "Fast cutting",
+          "text": "Split, trim and move clips; the timeline snaps them into place."
+        },
+        {
+          "icon": "layers",
+          "title": "Layers on tracks",
+          "text": "Picture, text, stickers and music on tracks of their own; reorder them in Layers."
+        },
+        {
+          "icon": "captions",
+          "title": "Captions and voice-over",
+          "text": "Captions from what is said, edited line by line; pick a voice for a voice-over."
+        },
+        {
+          "icon": "upload",
+          "title": "Export the film",
+          "text": "Export an MP4 at the size and quality each platform wants, with its cover."
+        }
+      ],
+      "ja": [
+        {
+          "icon": "scissors",
+          "title": "すばやく編集",
+          "text": "クリップを分割・トリム・移動。タイムラインが自動で吸着します。"
+        },
+        {
+          "icon": "layers",
+          "title": "トラックで重ねる",
+          "text": "映像・文字・ステッカー・音楽をトラックごとに配置し、レイヤーで前後を入れ替え。"
+        },
+        {
+          "icon": "captions",
+          "title": "字幕とナレーション",
+          "text": "話し声から字幕を作り、一行ずつ直せます。声を選んでナレーションも。"
+        },
+        {
+          "icon": "upload",
+          "title": "書き出し",
+          "text": "各プラットフォームに合うサイズと画質で MP4 を書き出し、カバーも一緒に。"
+        }
+      ],
+      "ko": [
+        {
+          "icon": "scissors",
+          "title": "빠른 편집",
+          "text": "클립을 자르고 다듬고 옮기면 타임라인이 알아서 맞춰 붙입니다."
+        },
+        {
+          "icon": "layers",
+          "title": "트랙으로 겹치기",
+          "text": "영상·텍스트·스티커·음악을 트랙별로 놓고 레이어에서 앞뒤를 바꿉니다."
+        },
+        {
+          "icon": "captions",
+          "title": "자막과 내레이션",
+          "text": "말소리로 자막을 만들고 한 줄씩 고칩니다. 목소리를 골라 내레이션도."
+        },
+        {
+          "icon": "upload",
+          "title": "내보내기",
+          "text": "플랫폼에 맞는 크기와 화질의 MP4로, 표지와 함께 내보냅니다."
+        }
+      ],
+      "es": [
+        {
+          "icon": "scissors",
+          "title": "Cortes rápidos",
+          "text": "Divide, recorta y mueve clips; la línea de tiempo los encaja sola."
+        },
+        {
+          "icon": "layers",
+          "title": "Capas en pistas",
+          "text": "Imagen, texto, stickers y música en sus pistas; cambia el orden en Capas."
+        },
+        {
+          "icon": "captions",
+          "title": "Subtítulos y voz",
+          "text": "Subtítulos a partir de lo hablado, editables frase a frase; elige una voz para narrar."
+        },
+        {
+          "icon": "upload",
+          "title": "Exportar",
+          "text": "Exporta un MP4 al tamaño y calidad de cada plataforma, con su portada."
+        }
+      ]
+    },
+    "keys": [
+      "play-pause",
+      "split",
+      "ripple-delete",
+      "undo",
+      "mark-in",
+      "loop",
+      "preview-fullscreen"
+    ]
+  },
+  "about": "the film itself and its timeline: making and cutting the film",
+  "category": "edit",
+  "difficulty": 2,
+  "ease": 4,
+  "cost": "free",
+  "audience": {
+    "en": "Everyone who makes films",
+    "zh-CN": "所有做片子的人",
+    "ja": "映像を作るすべての人",
+    "ko": "영상을 만드는 모든 사람",
+    "es": "Todo el que hace vídeos"
+  },
+  "workbench": "edit",
+  "blocks": [
+    {
+      "id": "layers",
+      "title": {
+        "en": "Layers",
+        "zh-CN": "图层",
+        "ja": "レイヤー",
+        "ko": "레이어",
+        "es": "Capas"
+      },
+      "edge": "left",
+      "size": 240,
+      "open": false,
+      "min": [
+        160,
+        120
+      ],
+      "range": [
+        180,
+        600
+      ]
+    },
+    {
+      "id": "viewer",
+      "title": {
+        "en": "Viewer",
+        "zh-CN": "预览",
+        "ja": "プレビュー",
+        "ko": "미리보기",
+        "es": "Visor"
+      },
+      "edge": "center",
+      "min": [
+        240,
+        220
+      ]
+    },
+    {
+      "id": "inspector",
+      "title": {
+        "en": "Inspector",
+        "zh-CN": "检查器",
+        "ja": "インスペクター",
+        "ko": "인스펙터",
+        "es": "Inspector"
+      },
+      "edge": "right",
+      "size": 360,
+      "min": [
+        240,
+        180
+      ],
+      "range": [
+        280,
+        800
+      ]
+    },
+    {
+      "id": "timeline",
+      "title": {
+        "en": "Timeline",
+        "zh-CN": "时间轴",
+        "ja": "タイムライン",
+        "ko": "타임라인",
+        "es": "Línea de tiempo"
+      },
+      "edge": "bottom",
+      "min": [
+        240,
+        104
+      ],
+      "range": [
+        104,
+        1600
+      ]
+    }
+  ],
+  "on": true,
+  "skills": [],
+  "requires": [
+    "film",
+    "media"
+  ]
+}

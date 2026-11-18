@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+<defs>
+<linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ff7a6b"/><stop offset="1" stop-color="#ff2d55"/></linearGradient>
+<radialGradient id="sheen" cx=".3" cy="0" r="1"><stop offset="0" stop-color="#fff" stop-opacity=".28"/><stop offset=".6" stop-color="#fff" stop-opacity="0"/></radialGradient>
+<linearGradient id="ink" gradientUnits="userSpaceOnUse" x1="0" y1="2" x2="0" y2="22"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#ffffff" stop-opacity=".86"/></linearGradient>
+<filter id="lift" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="14" stdDeviation="18" flood-color="#000" flood-opacity=".22"/></filter>
+</defs>
+<rect width="1024" height="1024" fill="url(#bg)"/>
+<rect width="1024" height="1024" fill="url(#sheen)"/>
+<g transform="translate(116.0 116.0) scale(33.0)" filter="url(#lift)"><g fill="url(#ink)"><path d="M10.4 7.9v5.2a.6.6 0 0 0 .9.5l4.3-2.6a.6.6 0 0 0 0-1l-4.3-2.6a.6.6 0 0 0-.9.5Z"/></g><g fill="none" stroke="url(#ink)" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4.5" width="18" height="12" rx="2.6"/><path d="M8.5 20h7"/></g></g>
+</svg>

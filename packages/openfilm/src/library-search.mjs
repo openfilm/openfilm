@@ -1,9 +1,10 @@
 // @ts-check
 /**
- * The library's verbs of `openfilm get` (LIBRARY_VERBS: music-search, sfx-search, transition, effect, filter, sticker,
- * text, template): OpenFilm's own library (studio/server/library.mjs) searched, so a film uses a sound, a music bed, a
- * transition, an effect, a filter, a sticker, a text or a template that is already there, free, where it fits; and the
- * one chosen taken into the project, as Studio's assets drawer takes it.
+ * The library's verbs of `openfilm get` (LIBRARY_VERBS: music-search, sfx-search, sticker): OpenFilm's own library
+ * (studio/server/library.mjs) searched, so a film uses a music bed, a sound or a sticker that is already there, free,
+ * where it fits; and the one chosen taken into the project, as Studio's assets drawer takes it. The library's other
+ * kinds (transitions, effects, filters, texts, templates) are the person's to pick in Studio, not an agent's: an
+ * agent writes those in the film itself (manual/film).
  *
  * The keyword search runs here, offline: what was asked is read for the library's tags (src/library-words.mjs) and
  * its other words, and each thing of the kind asked is scored by what it shares with it — a tag its names say counts
@@ -325,18 +326,8 @@ export const LIBRARY_VERBS = {
     help: 'Free and offline: OpenFilm\'s own music (CC0), searched in any words and language. Returns the best matches: id, name, length, tempo, energy 1–5, whether it loops, what of the prompt it has and lacks, a file to hear it; --sec puts what is at least that long first. --take <id> copies one into assets/. Music of the film\'s own, made to the prompt and length: `get music`.' },
   'sfx-search': { kind: 'sound', makes: 'sfx', options: { prompt: PROMPT, sec: SEC, limit: LIMIT, take: TAKE },
     help: 'Free and offline: OpenFilm\'s own sound effects (CC0), about 5,400, searched in any words and language. Returns the best matches: id, name, length, what of the prompt it has and lacks, a file to hear it; --sec puts those near that long first. --take <id> copies one into assets/. A sound of the film\'s own, made to the prompt and length: `get sfx`.' },
-  transition: { kind: 'transition', options: { prompt: PROMPT, limit: LIMIT, take: TAKE },
-    help: 'Free and offline: OpenFilm\'s transitions over a cut (light, glitch, shapes, film, ink, wipes, camera moves). Search them before writing one. --take <id> copies it into the project and says where it goes in film.html.' },
-  effect: { kind: 'effect', options: { prompt: PROMPT, limit: LIMIT, take: TAKE },
-    help: 'Free and offline: OpenFilm\'s effects over a clip (grain, light leaks, snow, confetti, frames) and motions in and out. Search them before writing one. --take <id> copies it into the project and says how to use it.' },
-  filter: { kind: 'filter', options: { prompt: PROMPT, limit: LIMIT, take: TAKE },
-    help: 'Free and offline: OpenFilm\'s color grades (film, cinema, portrait, vintage, black and white…). The person puts one on a clip in Studio.' },
   sticker: { kind: 'sticker', options: { prompt: PROMPT, limit: LIMIT, take: TAKE },
     help: 'Free and offline: OpenFilm\'s stickers: 1,587 emoji, and arrows, marks, buttons and badges that move. --take <id> copies one into the project.' },
-  text: { kind: 'text', options: { prompt: PROMPT, limit: LIMIT, take: TAKE },
-    help: 'Free and offline: OpenFilm\'s text templates (titles, name cards, callouts, chapters, endings) and text looks and motions. --take <id> copies a template into the project.' },
-  template: { kind: 'template', options: { prompt: PROMPT, limit: LIMIT, take: TAKE },
-    help: 'Free and offline: OpenFilm\'s templates, short films with places for the film\'s own videos and photos, titles, effects and music on them. --take <id> copies one into the project.' },
 };
 
 /** The library's verbs as `openfilm get` lists them (`only`: that one). @param {string} [only] */
@@ -383,11 +374,10 @@ export async function libraryGet(verb, flags) {
   found.forEach(({ item, tags }, i) => {
     const name = lang === 'en' || !item.name[lang] ? item.name.en : `${item.name[lang]} (${item.name.en})`;
     const facts = [
-      item.durationMs && item.kind !== 'look' ? clock(item.durationMs) : null,
+      item.durationMs ? clock(item.durationMs) : null,
       item.bpm ? `${item.bpm} bpm` : null,
       item.energy ? `energy ${item.energy}/5` : null,
       item.loop ? 'loops' : null,
-      item.place === 'cut' ? 'over a cut' : null,
     ].filter(Boolean).join(' · ');
     lines.push(`${String(i + 1).padStart(2)}. ${name}${facts ? `   ${facts}` : ''}`);
     lines.push(`    ${BUILT_IN}/${item.id}`);
@@ -407,14 +397,13 @@ export async function libraryGet(verb, flags) {
 
 /* what each verb's --prompt might say */
 const EXAMPLES = /** @type {Record<string, string>} */ ({
-  'music-search': 'calm piano for a morning scene', 'sfx-search': 'whoosh for a fast cut', transition: 'glitch', effect: 'snow falling',
-  filter: 'warm vintage film', sticker: 'heart', text: 'title for a product launch', template: 'travel diary',
+  'music-search': 'calm piano for a morning scene', 'sfx-search': 'whoosh for a fast cut', sticker: 'heart',
 });
 
 /**
  * A thing of the library taken into the project around the current folder, as Studio's assets drawer takes it
- * (saved.mjs takeSaved): a sound into assets/, a page's files to saved/openfilm/<its id>/; and what to write in
- * film.html to use it. A motion preset is CSS, printed; a filter, a fade and a text style are put on a clip in Studio.
+ * (saved.mjs takeSaved): a sound into assets/, a sticker's page and files to saved/openfilm/<its id>/; and what to
+ * write in film.html to use it.
  * @param {string} verb @param {string} asked its id, with `openfilm/` or without
  * @returns {Promise<{ code: number, lines: string[] }>}
  */
@@ -424,24 +413,8 @@ async function takeOne(verb, asked) {
   if (!item || item.cat !== KINDS[LIBRARY_VERBS[verb].kind]) {
     return { code: 2, lines: [`openfilm get ${verb}: no ${asked} here; \`openfilm get ${verb} --prompt <what>\` says what there is`] };
   }
-  if (item.kind === 'look' || item.kind === 'textstyle' || item.kind === 'textmotion' || item.kind === 'fade') {
-    const where = item.kind === 'look' ? 'Filters' : item.kind === 'fade' ? 'Transitions' : 'Text';
-    return { code: 0, lines: [`${item.name.en} is put on a clip in Studio: the person drops it from the library's ${where} onto the clip.`,
-      item.kind === 'fade' ? 'To write a fade yourself, overlap the two clips and fade the upper one in: `openfilm get effect --prompt "fade in"` has the motion for it.' : 'Tell the person which one, and on which clip.'] };
-  }
   const root = projectAround('.');
   if (!root) return { code: 2, lines: [`openfilm get: ${resolve('.')} is not in a project; \`openfilm open\` makes one`] };
-  if (item.kind === 'motion') {
-    const { withPreset } = await import('./clip-motion.mjs');
-    const slots = /** @type {[import('./clip-motion.mjs').PresetSlot, import('./clip-motion.mjs').Preset][]} */ (Object.entries(/** @type {object} */ (item.motion ?? {})));
-    const lines = ['In film.html\'s <style>:'];
-    for (const [, p] of slots) lines.push(`  @keyframes ${p.name} { ${p.body} }`);
-    for (const [slot, p] of slots) {
-      const on = item.place === 'cut' ? (slot === 'out' ? 'the clip before the cut' : 'the clip after it, overlapping the one before') : 'the clip';
-      lines.push(`In the style of ${on}: ${withPreset('', slot, p)}`);
-    }
-    return { code: 0, lines };
-  }
   if (item.kind === 'sound' && !(await fetchLibrary(item.id))) {
     const make = LIBRARY_VERBS[verb].makes;
     return { code: 1, lines: [`openfilm get ${verb}: ${item.name.en}'s file could not be fetched (the library's sounds and music come over the network the first time they are used). Try again online, or make one with \`openfilm get ${make}\`.`] };
@@ -449,20 +422,11 @@ async function takeOne(verb, asked) {
   const { takeSaved } = await import('../studio/server/saved.mjs');
   const { clipTag } = await import('./film-doc.mjs');
   const taken = await takeSaved(root, `${BUILT_IN}/${item.id}`);
-  const secs = (item.durationMs ?? 0) / 1000;
   if ('path' in taken) {
     return { code: 0, lines: [`${taken.path}  ${clock(item.durationMs ?? 0)}`,
       `In film.html, on a sound track: ${clipTag(/** @type {any} */ ({ src: taken.path }))}${item.cat === 'music' ? '   (a bed under a voice: volume="0.3")' : ''}`] };
   }
-  if ('clips' in taken) {
-    const lines = [`In film.html, on ${new Set(taken.clips.map((c) => c.track)).size} tracks of their own, top first, from the second it starts (add it to each \`at\`):`];
-    for (const c of taken.clips) lines.push(`  track ${c.track + 1}: ${clipTag(/** @type {any} */ ({ ...c.clip, at: c.at }))}`);
-    for (const [name, body] of Object.entries(taken.keyframes ?? {})) lines.push(`In film.html's <style>: @keyframes ${name} { ${body} }`);
-    if (item.slots) lines.push(`Its ${item.slots} clips with data-slot are places for pictures, each its example: put the film's own there.`);
-    return { code: 0, lines };
-  }
-  const where = item.place === 'cut'
-    ? `on a track above the two clips it goes between, its middle on the cut (at = the cut − ${Number((secs / 2).toFixed(2))})`
-    : 'on a track above what it goes over';
-  return { code: 0, lines: [`In film.html, ${where}:`, `  ${clipTag(/** @type {any} */ (taken.clip))}`] };
+  /* a sticker is one page; a group of clips (a template) is never a verb's here */
+  if (!('clip' in taken)) return { code: 1, lines: [`openfilm get ${verb}: ${item.name.en} is not one clip to put in film.html`] };
+  return { code: 0, lines: ['In film.html, on a track above what it goes over:', `  ${clipTag(/** @type {any} */ (taken.clip))}`] };
 }

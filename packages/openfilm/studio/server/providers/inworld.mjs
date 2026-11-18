@@ -6,7 +6,7 @@
  * parts cut at its sentences: their MP3s (constant 128 kbps) join as they are and their words move along by the
  * length of the parts before them. The language is the text's own (Inworld finds it).
  */
-import { billedBy, call, clamp, landing, modelOf, mp3Seconds, needed, notes, number, round, serviceUrl, text, wordsFromTokens } from './common.mjs';
+import { billedBy, call, clamp, landing, modelOf, mp3Seconds, needed, notes, number, round, sampleVoice, serviceUrl, text, wavFirst, wordsFromTokens } from './common.mjs';
 
 /** @typedef {import('./contract.mjs').Provider} Provider */
 
@@ -41,6 +41,36 @@ export function parts(said, max = MAX_TEXT) {
   return out;
 }
 
+/** A request to Inworld's API with the run's key, its answer as JSON. @param {import('./contract.mjs').RunContext} ctx */
+const inworld = async (/** @type {string} */ path, ctx, /** @type {RequestInit} */ init = {}) =>
+  /** @type {any} */ (await (await call(NAME, `${serviceUrl('INWORLD', 'https://api.inworld.ai')}${path}`, { redirect: 'error', ...init, headers: { authorization: `Basic ${ctx.key}`, ...init.headers } }, ctx)).json());
+
+/**
+ * Instant voice cloning (https://docs.inworld.ai/tts/instant-voice-cloning): a voice from up to 30 s of speech (the
+ * rest is cut), free; the workspace keeps it until it is deleted, counted among its plan's custom voices.
+ * @type {import('./common.mjs').VoiceClones}
+ */
+export const clones = {
+  async make(ctx, voice) {
+    const body = await inworld('/voices/v1/voices:clone', ctx, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ displayName: voice.name, ...(voice.description ? { description: voice.description } : {}),
+        voiceSamples: [{ audioData: Buffer.from(wavFirst(voice.wav, 30)).toString('base64') }], audioProcessingConfig: { removeBackgroundNoise: true } }),
+    });
+    const id = text(body?.voice?.voiceId);
+    if (!id) throw new Error(`${NAME} returned no voice ID.`);
+    return id;
+  },
+  async remove(ctx, voiceId) {
+    await inworld(`/voices/v1/voices/${encodeURIComponent(voiceId)}`, ctx, { method: 'DELETE' });
+  },
+  async list(ctx) {
+    const body = await inworld(`/voices/v1/voices?pageSize=2000&filter=${encodeURIComponent('owned = "true"')}`, ctx);
+    return (Array.isArray(body?.voices) ? body.voices : []).filter((/** @type {any} */ v) => text(v.source) === 'IVC' && text(v.voiceId))
+      .map((/** @type {any} */ v) => ({ voiceId: text(v.voiceId), name: text(v.displayName), description: text(v.description), language: text(v.languageCode) || null }));
+  },
+};
+
 /** @type {Provider} */
 export default {
   id: 'inworld',
@@ -51,6 +81,7 @@ export default {
   billingUrl: 'https://platform.inworld.ai/billing',
   verbs: ['voice', 'tts'],
   models: MODELS,
+  clones,
   async run(verb, args, ctx) {
     const base = serviceUrl('INWORLD', 'https://api.inworld.ai');
     const send = async (/** @type {string} */ path, /** @type {RequestInit} */ init = {}) =>
@@ -58,7 +89,9 @@ export default {
 
     if (verb === 'voice') return voices(args, send);
     if (verb === 'tts') {
-      const voice = needed(args, 'voice');
+      /* a recording's voice (`--voice-sample`) is cloned for it: `--voice` then only names it in what the run says */
+      const voice = text(args['voice-sample']) ? await sampleVoice(args, ctx, NAME, clones) : needed(args, 'voice');
+      const named = text(args['voice-sample']) ? text(args.voice) || 'sample' : voice;
       const said = needed(args, 'text');
       const path = landing('audio/vo', args.out, 'mp3');
       const model = modelOf(MODELS, 'tts', ctx);
@@ -89,8 +122,8 @@ export default {
       const dur = mp3Seconds(bytes);
       return {
         files: [{ path, bytes }],
-        index: [{ src: path, kind: 'audio', dur, text: said, voice, ...(words.length ? { words } : {}), from: { mode: 'synth', text: said, voice, provider: 'inworld', model } }],
-        receipt: { provider: 'inworld', model, src: path, dur, voice, words: words.length },
+        index: [{ src: path, kind: 'audio', dur, text: said, voice: named, ...(words.length ? { words } : {}), from: { mode: 'synth', text: said, voice: named, provider: 'inworld', model } }],
+        receipt: { provider: 'inworld', model, src: path, dur, voice: named, words: words.length },
         cost: billedBy(NAME),
       };
     }

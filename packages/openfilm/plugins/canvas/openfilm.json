@@ -1,0 +1,248 @@
+{
+  "order": 2,
+  "icon": "workflow",
+  "title": {
+    "en": "Canvas",
+    "zh-CN": "画布",
+    "ja": "キャンバス",
+    "ko": "캔버스",
+    "es": "Lienzo"
+  },
+  "summary": {
+    "en": "Making material: ideas, references and shots laid out and generated on a board.",
+    "zh-CN": "做素材：在画布上摆开想法、参考和镜头，并生成。",
+    "ja": "素材を作る：アイデア、参考、ショットをボードに並べて生成します。",
+    "ko": "소재 만들기: 아이디어, 참고 자료, 장면을 보드에 펼치고 생성합니다.",
+    "es": "Crear material: ideas, referencias y planos dispuestos y generados en un tablero."
+  },
+  "details": {
+    "en": "When to use it: before the edit, to lay out ideas, references and the shots you need on one board, and generate pictures, video and sound.\nWhat your agent does: lays out a storyboard and characters from what you describe; you pick what you like and send it to the timeline.\nCost: generating pictures, video and sound is charged by the service; laying things out and writing notes costs nothing.",
+    "zh-CN": "什么时候用：正式剪辑前，把想法、参考图和要拍的镜头摆在一块画板上，并生成图片、视频和声音。\n智能体能做什么：按你的描述摆好分镜和角色，生成后你挑满意的放上时间线。\n费用：生成图片、视频和声音按服务计费；摆东西、写笔记不花钱。",
+    "ja": "使うとき：編集の前に、アイデア、参考、必要なショットを一枚のボードに並べ、画像・動画・音を生成するとき。\nエージェントにできること：説明からストーリーボードとキャラクターを並べます。気に入ったものを選んでタイムラインへ。\n費用：画像・動画・音の生成はサービスごとに課金。並べることやメモは無料です。",
+    "ko": "언제 쓰나요: 편집 전에 아이디어, 참고 자료, 필요한 장면을 한 보드에 펼치고 이미지·영상·소리를 생성할 때.\n에이전트가 하는 일: 설명대로 스토리보드와 캐릭터를 배치합니다. 마음에 드는 것을 골라 타임라인에 올립니다.\n비용: 이미지·영상·소리 생성은 서비스별로 과금됩니다. 배치와 메모는 무료입니다.",
+    "es": "Cuándo usarlo: antes de editar, para disponer ideas, referencias y los planos que necesitas en un tablero, y generar imágenes, vídeo y sonido.\nQué hace tu agente: dispone un guion gráfico y personajes según lo que describes; eliges lo que te gusta y lo llevas a la línea de tiempo.\nCoste: generar imágenes, vídeo y sonido lo cobra el servicio; disponer cosas y escribir notas es gratis."
+  },
+  "examples": {
+    "zh-CN": [
+      {
+        "say": "把这段剧本拆成 6 个镜头的分镜",
+        "does": "在画板上摆出 6 张镜头卡，每张写好画面、景别和运镜。"
+      },
+      {
+        "say": "照这张参考图的风格，生成主角的三视图",
+        "does": "从参考图出发生成三张图，连在参考图后面，你挑一张用。"
+      },
+      {
+        "say": "把第 2 个镜头做成 5 秒的视频",
+        "does": "用那张图生成视频；生成要花钱，它会先告诉你要花多少。"
+      }
+    ],
+    "en": [
+      {
+        "say": "Break this script into a 6-shot storyboard",
+        "does": "Lays out 6 shot cards on the board, each with its picture, framing and camera move."
+      },
+      {
+        "say": "Make the lead's turnaround in this reference's style",
+        "does": "Makes three pictures from the reference, linked after it, for you to pick one."
+      },
+      {
+        "say": "Turn shot 2 into a 5-second video",
+        "does": "Makes a video from that picture; generating costs money, so it tells you how much first."
+      }
+    ],
+    "ja": [
+      {
+        "say": "この台本を6カットの絵コンテにして",
+        "does": "ボードに6枚のカットを並べ、絵・サイズ・カメラワークを書きます。"
+      },
+      {
+        "say": "この参考画像の雰囲気で主人公の三面図を作って",
+        "does": "参考画像から3枚を生成して後ろにつなぎます。1枚選んでください。"
+      },
+      {
+        "say": "2カット目を5秒の動画にして",
+        "does": "その画像から動画を作ります。生成は有料なので、先に費用を伝えます。"
+      }
+    ],
+    "ko": [
+      {
+        "say": "이 대본을 6컷 콘티로 나눠 줘",
+        "does": "보드에 컷 카드 6장을 놓고 장면·구도·카메라 움직임을 적습니다."
+      },
+      {
+        "say": "이 참고 이미지 스타일로 주인공 삼면도를 만들어 줘",
+        "does": "참고 이미지에서 3장을 만들어 뒤에 잇습니다. 하나를 고르세요."
+      },
+      {
+        "say": "2번째 샷을 5초 영상으로 만들어 줘",
+        "does": "그 이미지로 영상을 만듭니다. 생성은 비용이 들어서 먼저 얼마인지 알려 줍니다."
+      }
+    ],
+    "es": [
+      {
+        "say": "Divide este guion en un storyboard de 6 planos",
+        "does": "Coloca 6 tarjetas de plano en el tablero, cada una con su imagen, encuadre y movimiento."
+      },
+      {
+        "say": "Haz las tres vistas del protagonista con el estilo de esta referencia",
+        "does": "Crea tres imágenes desde la referencia, enlazadas tras ella, para que elijas una."
+      },
+      {
+        "say": "Convierte el plano 2 en un vídeo de 5 segundos",
+        "does": "Crea un vídeo desde esa imagen; generar cuesta dinero, así que primero te dice cuánto."
+      }
+    ]
+  },
+  "showcase": {
+    "highlights": {
+      "zh-CN": [
+        {
+          "icon": "workflow",
+          "title": "一块画板摆开",
+          "text": "想法、参考图、角色和分镜摆在一起，连线表示先后。"
+        },
+        {
+          "icon": "image",
+          "title": "生成图片和视频",
+          "text": "选模型、写描述，从参考图出发，生成几版对比着挑。"
+        },
+        {
+          "icon": "pen",
+          "title": "文字和笔记",
+          "text": "写剧本片段和备注，智能体也读得懂、接着做。"
+        },
+        {
+          "icon": "film",
+          "title": "送上时间线",
+          "text": "满意的镜头放进剪辑，接着剪成片。"
+        }
+      ],
+      "en": [
+        {
+          "icon": "workflow",
+          "title": "Everything on one board",
+          "text": "Ideas, references, characters and shots side by side, linked in order."
+        },
+        {
+          "icon": "image",
+          "title": "Make pictures and video",
+          "text": "Pick a model, describe it, start from a reference and compare versions."
+        },
+        {
+          "icon": "pen",
+          "title": "Text and notes",
+          "text": "Write script and notes your agent reads and works from."
+        },
+        {
+          "icon": "film",
+          "title": "Onto the timeline",
+          "text": "Put the shots you like into the edit and cut the film."
+        }
+      ],
+      "ja": [
+        {
+          "icon": "workflow",
+          "title": "ひとつのボードに",
+          "text": "アイデア・参考画像・キャラクター・カットを並べ、線でつなぎます。"
+        },
+        {
+          "icon": "image",
+          "title": "画像と動画を生成",
+          "text": "モデルを選び、説明を書き、参考画像から生成して見比べます。"
+        },
+        {
+          "icon": "pen",
+          "title": "テキストとメモ",
+          "text": "台本やメモを書けば、エージェントも読んで続きを作ります。"
+        },
+        {
+          "icon": "film",
+          "title": "タイムラインへ",
+          "text": "気に入ったカットを編集へ送り、そのまま仕上げます。"
+        }
+      ],
+      "ko": [
+        {
+          "icon": "workflow",
+          "title": "보드 하나에 펼치기",
+          "text": "아이디어·참고 이미지·캐릭터·콘티를 나란히 놓고 선으로 잇습니다."
+        },
+        {
+          "icon": "image",
+          "title": "이미지와 영상 만들기",
+          "text": "모델을 고르고 설명을 써서 참고 이미지에서 출발해 여러 버전을 비교합니다."
+        },
+        {
+          "icon": "pen",
+          "title": "텍스트와 메모",
+          "text": "대본과 메모를 쓰면 에이전트도 읽고 이어서 만듭니다."
+        },
+        {
+          "icon": "film",
+          "title": "타임라인으로",
+          "text": "마음에 드는 샷을 편집으로 보내 영상으로 엮습니다."
+        }
+      ],
+      "es": [
+        {
+          "icon": "workflow",
+          "title": "Todo en un tablero",
+          "text": "Ideas, referencias, personajes y planos juntos, enlazados en orden."
+        },
+        {
+          "icon": "image",
+          "title": "Crea imágenes y vídeo",
+          "text": "Elige un modelo, descríbelo, parte de una referencia y compara versiones."
+        },
+        {
+          "icon": "pen",
+          "title": "Texto y notas",
+          "text": "Escribe guion y notas que tu agente lee y continúa."
+        },
+        {
+          "icon": "film",
+          "title": "A la línea de tiempo",
+          "text": "Lleva los planos que te gusten a la edición y monta la película."
+        }
+      ]
+    }
+  },
+  "about": "the board beside the edit, where material is made and laid out",
+  "category": "material",
+  "difficulty": 2,
+  "ease": 4,
+  "cost": "generation",
+  "audience": {
+    "en": "People who generate pictures, shots and characters",
+    "zh-CN": "要生成画面、镜头和角色的人",
+    "ja": "画像、ショット、キャラクターを生成する人",
+    "ko": "이미지, 장면, 캐릭터를 생성하는 사람",
+    "es": "Quien genera imágenes, planos y personajes"
+  },
+  "workbench": "canvas",
+  "blocks": [
+    {
+      "id": "canvas",
+      "title": {
+        "en": "Canvas",
+        "zh-CN": "画布",
+        "ja": "キャンバス",
+        "ko": "캔버스",
+        "es": "Lienzo"
+      },
+      "edge": "center",
+      "min": [
+        240,
+        220
+      ]
+    }
+  ],
+  "on": true,
+  "skills": [
+    "canvas"
+  ],
+  "requires": [
+    "media"
+  ]
+}

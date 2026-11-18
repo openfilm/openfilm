@@ -15,5 +15,11 @@ const NOT_PICTURE = /\.(md|markdown|txt|log|py|sh|bash|zsh|rb|go|rs|java|c|cc|cp
  */
 export function changesPicture(paths: readonly string[] | undefined, used: ReadonlySet<string | undefined>): boolean {
   if (!paths) return true;
-  return paths.some((path) => (path.startsWith('assets/') ? used.has(path) : !NOT_PICTURE.test(path)));
+  return paths.some((path) => !COLOR.test(path) && (path.startsWith('assets/') ? used.has(path) : !NOT_PICTURE.test(path)));
 }
+
+/** color transform files (SPEC.md `--of-lut`): the clips they grade are drawn through them again, the rest as it is */
+const COLOR = /\.(ctf|clf|cube)$/i;
+
+/** The color files among `paths` that changed (`--of-lut`'s), for the picture to grade again without drawing it all again. */
+export const colorFiles = (paths: readonly string[] | undefined): string[] => (paths ?? []).filter((p) => COLOR.test(p));

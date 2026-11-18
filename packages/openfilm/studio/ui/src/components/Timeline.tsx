@@ -51,14 +51,17 @@ import {
   BetweenHorizontalStart,
   ArrowLeftToLine,
   ArrowRightToLine,
+  ArrowRightFromLine,
   TriangleAlert,
   Blend,
+  Waypoints,
   Plus,
 } from 'lucide-react';
 import { useLanguage, useT } from '@/i18n';
 import { CcMark } from './CcMark';
+import type { ActionId } from '@/lib/keymap';
 import { keyAction, useKeyHint } from '@/lib/keymap-store';
-import { ownTrackHeight } from '@/lib/track-heights';
+import { MAIN_TRACK_MIN_H, ownTrackHeight } from '@/lib/track-heights';
 import type { Op } from '@/api';
 import type { ClipEdit } from '@/lib/film-clip-edits';
 import { laneOfBlock, pasteLane, trackByLane } from '@/lib/timeline-clipboard';
@@ -102,6 +105,7 @@ import {
   planCloseGap,
   planCloseMainGaps,
   planCloseTrackGaps,
+  planFillGaps,
   planLink,
   planRemove,
   planRippleTrimTo,
@@ -118,7 +122,7 @@ import { STUDIO_REF_TYPE, type StudioRef } from '@/lib/host';
 import { orderedRange, rangeLabel, type FilmRange } from '@/lib/studio-refs';
 import { draftNumbersOf, sameClip, type ChatPoint, type DraftMarks } from '@/lib/chat-marks';
 import { formatRulerLabel, formatTimecode, frameAt, frameMs, secondFrames, snapToFrame, stepFrames, useTimecodeFps } from '@/lib/timecode';
-import { planNudge, planOverwriteDown, sideTargets, splitAllTargets, splitTargets } from '@/lib/timeline-nav';
+import { planNudge, planOverwriteTrack, sideTargets, splitAllTargets, splitTargets } from '@/lib/timeline-nav';
 import {
   VIEW_SPAN_EMPTY_MS,
   VIEW_SPAN_MIN_MS,
@@ -157,12 +161,13 @@ import { OperationHistory, trackFlagStep, type SessionTimeline } from './Operati
 import { BlockThumbs } from './BlockThumbs';
 import { BlockWaveform } from './BlockWaveform';
 import { ContextMenu, type ContextMenuEntry } from './ContextMenu';
+import { CoverTile } from './cover/CoverChrome';
+import { MotionLaneHeads, MotionLaneRows, lanesHeight, type MotionLanes } from './MotionLanes';
 import { toggleClipEdits } from '@/lib/film-clip-edits';
 import type { PlaybackClock } from './LiveTime';
 import { inHostPanel, isTypingTarget } from './typing-target';
 import { Popover } from './Popover';
 import { MarkerGlyph } from './TimelineMarkers';
-import { RecordButton, type RecordButtonProps } from './RecordButton';
 import { SoloButton, TrackResizeHandle } from './timeline-head-extras';
 import { clipAtPoint, markReplaceTarget } from './replace-drop';
 import { Tooltip } from './Tooltip';
@@ -177,6 +182,10 @@ import { cutNear, transitionSpan, type CutRef, type FilmTransition, type Transit
 
 /** Track head column: kind badge + lock + hide + original sound. */
 const HEAD_W = 108;
+/** The column between the heads and the clips where the cover's tile stands, by the main track (components/cover CoverTile). */
+const COVER_COL_W = 84;
+/** The cover's tile (a square): one size always, as tall as the main track at its lowest (MAIN_TRACK_MIN_H). */
+const COVER_TILE = MAIN_TRACK_MIN_H;
 /** A row at least this tall shows its track's name under the badge (a lower one says it on hover). */
 /** The room solo's S takes in a head. */
 const HEAD_SOLO_W = 24;
@@ -305,7 +314,7 @@ function LaneMark({ track }: { track: TimelineTrack }) {
 }
 
 /** The entries of a clip's menu a caption's cues keep. */
-const CUE_MENU = new Set(['split', 'duplicate', 'remove', 'ripple', 'ripple-start', 'ripple-end']);
+const CUE_MENU = new Set(['split', 'fill-gaps', 'duplicate', 'remove', 'ripple', 'ripple-start', 'ripple-end']);
 
 /** A caption track's row, and a row of the library's text: narrow, each cue or clip a line of words. */
 const CAPTION_ROW_H = 26;
@@ -318,10 +327,15 @@ function stickerShot(strip: ReadonlyMap<number, string> | undefined, poster: str
 }
 
 /** A row's height: the person's for its track (lib/track-heights), else the timeline's own (the main track taller). */
-function rowH(track: Pick<TimelineTrack, 'kind' | 'height' | 'main'> & { captions?: unknown; text?: boolean; folded?: boolean }): number {
-  /* the heads of transitions on one track: folded away, their marks on the track below */
+function rowH(track: Pick<TimelineTrack, 'kind' | 'height' | 'main' | 'extra'> & { captions?: unknown; text?: boolean; folded?: boolean }): number {
   if (track.folded) return 0;
-  return track.height ?? (track.captions || track.text ? CAPTION_ROW_H : ownTrackHeight(track));
+  return baseRowH(track) + (track.extra ?? 0);
+}
+/** The row's own height, without the moving properties under it. */
+function baseRowH(track: Pick<TimelineTrack, 'kind' | 'height' | 'main'> & { captions?: unknown; text?: boolean }): number {
+  const h = track.height ?? (track.captions || track.text ? CAPTION_ROW_H : ownTrackHeight(track));
+  /* the main track keeps room for its cover, however low the person dragged it */
+  return track.main ? Math.max(MAIN_TRACK_MIN_H, h) : h;
 }
 
 /**
@@ -518,24 +532,14 @@ function sameAssetHint(a: AssetHint | null, b: AssetHint | null): boolean {
     && a.editMode === b.editMode;
 }
 
-/** The cuts on a row: the clips that touch, end to start, in order. */
-function cutsOf(blocks: readonly TimelineBlock[]): [TimelineBlock, TimelineBlock][] {
-  const sorted = [...blocks].sort((a, b) => a.startMs - b.startMs);
-  const out: [TimelineBlock, TimelineBlock][] = [];
-  for (let i = 1; i < sorted.length; i += 1) {
-    if (Math.abs(sorted[i]!.startMs - sorted[i - 1]!.endMs) <= TOUCH_MS) out.push([sorted[i - 1]!, sorted[i]!]);
-  }
-  return out;
-}
-
 /** A trim handle's grab width on a clip this wide: SELECT_HIT at most, and never more than a quarter of the clip. */
 function trimHit(width: number): number {
   return Math.min(SELECT_HIT, Math.max(2, Math.floor(width / 4)));
 }
 
-/** Whether a press is on a clip or one of its edges (not the empty track space). */
-function overClip(e: React.PointerEvent): boolean {
-  return Boolean((e.target as Element | null)?.closest?.('[data-block-id]'));
+/** Whether the pointer is on a clip, keyframe, or curve handle. */
+function overTimelineItem(e: React.PointerEvent): boolean {
+  return Boolean((e.target as Element | null)?.closest?.('[data-block-id], [data-keyframe], [data-graph-key], [data-curve-handle]'));
 }
 
 function trackKindHeight(kind: string): number {
@@ -628,6 +632,8 @@ export interface TimelineProps {
   onScrubPreview: (ms: number) => void;
   /** On release, once: settle. */
   onScrubCommit: (ms: number) => void;
+  /** Silently preview a hovered frame without moving the playhead; null restores its picture. */
+  onSkimPreview?: (ms: number | null) => void;
   /** A single seek: the keyboard. */
   onSeek: (ms: number) => void;
   /** Delete a clip from film.html. Null = done. */
@@ -665,6 +671,8 @@ export interface TimelineProps {
   onEnterCompound?: (block: TimelineBlock) => void;
   /** Editing a compound clip's film: the way back to the film it is in, said on the toolbar. */
   crumb?: { outer: string; name: string; onBack: () => void } | null;
+  /** The film's cover, at the head of the main track: its picture (null: none yet), what a click and the menu do (components/cover). */
+  cover?: { thumb: string | null; open: () => void; menu: () => ContextMenuEntry[] };
   /**
    * Thumbnails: key (`mtime:clipId@intoMs#v`, see thumb-frame) → image address. Shot outside; keyed by the
    * clip's own millisecond, not film time, so moving a clip does not change its pictures.
@@ -721,8 +729,6 @@ export interface TimelineProps {
   markerLane?: { shown: boolean; render: (lane: MarkerLaneView) => React.ReactNode };
   /** The toolbar's Add marker (left of split); M does the same. */
   onAddMarker?: () => void;
-  /** The toolbar's record button (components/RecordButton): sound from the microphone, put on at the playhead. */
-  recorder?: Pick<RecordButtonProps, 'now' | 'onSave'>;
   /** The ruler's own right-click menu, at a moment (film ms): adding a marker there. */
   rulerMenu?: (atMs: number) => ContextMenuEntry[];
   /** Drawn on each row, over its clips (the clips' markers). */
@@ -741,6 +747,28 @@ export interface TimelineProps {
    * onEditOps). Nothing else is drawn for them: where the handle sits says how long they are.
    */
   fades?: ReadonlyMap<string, FadeMs>;
+  /** The picked clip's moving properties: rows under its track with their keyframes (components/MotionLanes). */
+  motionLanes?: MotionLanes | null;
+  /**
+   * Motion's layers (components/MotionLayers): each row a layer, its head Motion's own (wider, a layer's switches), and,
+   * twirled open, its properties in the row's `extra` under it: their names and values under its head, their keyframes
+   * under its clip. The toolbar, ruler, clips, drags and trims are the edit's own.
+   */
+  layers?: {
+    headWidth: number;
+    head: (track: TimelineTrack) => React.ReactNode;
+    extraHead: (track: TimelineTrack) => React.ReactNode;
+    extraBody: (track: TimelineTrack, pxPerMs: number) => React.ReactNode;
+    /** Motion's tools on the toolbar, in the place of the edit's cutting ones (modes, split, magnet, linkage). */
+    tools?: readonly { id: string; label: string; hint?: string; icon: React.ReactNode; active?: boolean; disabled?: boolean; onClick: () => void }[];
+    /** A layer's clip double-clicked: what it is made of opened (a page's elements, as layers); false: none to open. */
+    open?: (block: TimelineBlock) => boolean;
+  } | null;
+  /**
+   * How the film's timeline is shown, first on its toolbar: cutting it (its tracks of clips) or animating it (the same
+   * tracks, twirled open to layers, their properties and keyframes). None: one way only.
+   */
+  timelineView?: { now: 'edit' | 'motion'; onView: (view: 'edit' | 'motion') => void } | null;
   /** The transitions the fades make (lib/transitions findTransitions): a mark over each, picked, resized, deleted. */
   transitions?: readonly FilmTransition[];
   /** A transition put on a cut (the cut's menu, a clip's menu), resized or deleted. Null = done. */
@@ -767,6 +795,9 @@ export interface TimelineCommands {
   toggleMagnet: () => void;
   toggleSnap: () => void;
   toggleLinkage: () => void;
+  toggleSkimming: () => void;
+  /** Consume the mouse preview position when starting playback. */
+  takeSkim: () => number | null;
   /**
    * ⌘B: split the selected clips at the playhead; with nothing selected, the clip under it on the main track, else on
    * the targeted track (the one last pressed), else on the topmost track seen. The clips linked to them go too.
@@ -778,7 +809,7 @@ export interface TimelineCommands {
   cut: () => void;
   /** ⌥← / ⌥→: move the selected clips `frames` frames, stopping against a clip in the way. */
   nudge: (frames: number) => void;
-  overwriteTrackDown: () => void;
+  overwriteTrack: (dir: -1 | 1) => void;
   /** ⇧Z: the whole film in view. */
   zoomFit: () => void;
   /** The targeted track (film.html index): the one last pressed; null when none is. */
@@ -843,7 +874,7 @@ function TrimHandle({
   onDown,
 }: {
   edge: 'start' | 'end';
-  /** Picked and with no clip right against this edge: the grab reaches outside the clip too. */
+  /** Picked: the grab reaches outside the clip too, including at a shared cut. */
   picked: boolean;
   /** Grab width; narrower on narrow clips so the handles do not cover the whole clip. */
   hit?: number;
@@ -860,9 +891,8 @@ function TrimHandle({
       data-speed-handle={speed ? edge : undefined}
       title={title}
       className="absolute inset-y-0 z-[2] cursor-ew-resize"
-      /* picked, the grab straddles the edge (the selection frame outside, the clip's own edge inside): a person reaches
-         for the clip's edge, and grabbing just inside it moved the whole clip instead (UI test, 2026-10-03). Not where
-         another clip touches it: outside is that clip's own edge, which trims that clip (a press there never rolls) */
+      /* The selected clip owns the grab around its edge, even where its neighbor touches it. This lets a person
+         reach for the selection frame without accidentally trimming the neighbor. */
       style={{
         width: picked ? hit * 2 : hit,
         ...(edge === 'start'
@@ -961,7 +991,7 @@ function TimelineRangeBar({
  * `timeMs` changes every tick and gets through; the rows inside are memoized too so only the playhead moves.
  */
 export const Timeline = React.memo(function Timeline({
-  tracks,
+  tracks: tracksIn,
   blockMenuExtra,
   trackMenuExtra,
   onOrganizeTracks,
@@ -983,6 +1013,7 @@ export const Timeline = React.memo(function Timeline({
   playing,
   onScrubPreview,
   onScrubCommit,
+  onSkimPreview,
   onSeek,
   onRemove,
   onRemoveMany,
@@ -997,6 +1028,7 @@ export const Timeline = React.memo(function Timeline({
   onUncompound,
   onEnterCompound,
   crumb,
+  cover,
   onCopy,
   onPaste,
   onExportBlock,
@@ -1017,7 +1049,6 @@ export const Timeline = React.memo(function Timeline({
   solo,
   markerLane,
   onAddMarker,
-  recorder,
   rulerMenu,
   trackOverlay,
   snapPointsMs,
@@ -1025,11 +1056,24 @@ export const Timeline = React.memo(function Timeline({
   onReplaceDrop,
   dropInto,
   fades,
+  motionLanes,
+  layers = null,
+  timelineView = null,
   transitions,
   onTransition,
   pickedTransition = null,
   onPickTransition,
 }: TimelineProps) {
+  /* the picked clip's moving properties: rows under its track (an animation editor's property rows), the track taller */
+  const tracks = React.useMemo(() => {
+    if (!motionLanes?.rows.length) return tracksIn;
+    let done = false;
+    return tracksIn.map((tr) => {
+      if (done || !tr.blocks.some((b) => b.clipId === motionLanes.clipId)) return tr;
+      done = true;
+      return { ...tr, extra: lanesHeight(motionLanes) };
+    });
+  }, [tracksIn, motionLanes]);
   /* the project's frame rate: the ruler's labels, the frame grid and the arrow keys' steps */
   const fps = useTimecodeFps();
   /* "now" for event handlers is read from a ref: as a dependency it would rebuild callbacks twenty times a second
@@ -1234,9 +1278,8 @@ export const Timeline = React.memo(function Timeline({
   const tracksH = hasLanes
     ? tracks.reduce((h, tr) => h + rowH(tr) + GAP, 0)
     : 0;
-  /* clear of the markers' row floating over the top even when the rows overflow (whether or not there are markers, so
-     one added never moves them), counted in padTop so every hit test uses the same number */
-  const padTop = Math.max(MARKER_ROW_H + 2, Math.floor((view.height - tracksH) / 2));
+  /* Motion layers stack from the top; edit rows stay clear of the marker row. */
+  const padTop = layers ? MARKER_ROW_H + 2 : Math.max(MARKER_ROW_H + 2, Math.floor((view.height - tracksH) / 2));
   padTopRef.current = padTop;
   const viewHeightRef = React.useRef(view.height);
   viewHeightRef.current = view.height;
@@ -1656,6 +1699,72 @@ export const Timeline = React.memo(function Timeline({
     return Math.min(extentMs, frameMs(frameAt(ms, fps), fps));
   }, [pxPerMs, extentMs, fps]);
 
+  const [skimming, setSkimming] = React.useState(() => {
+    try { return localStorage.getItem('openfilm.timeline.skimming') === '1'; } catch { return false; }
+  });
+  const skimMs = React.useRef<number | null>(null);
+  const skimRaf = React.useRef(0);
+  const skimLine = React.useRef<HTMLDivElement>(null);
+  const skimLabel = React.useRef<HTMLSpanElement>(null);
+  const clearSkim = React.useCallback(() => {
+    if (skimRaf.current) cancelAnimationFrame(skimRaf.current);
+    skimRaf.current = 0;
+    const was = skimMs.current;
+    skimMs.current = null;
+    if (skimLine.current) skimLine.current.style.display = 'none';
+    if (was != null) onSkimPreview?.(null);
+  }, [onSkimPreview]);
+  const toggleSkimming = React.useCallback(() => {
+    clearSkim();
+    setSkimming((was) => {
+      try { localStorage.setItem('openfilm.timeline.skimming', was ? '0' : '1'); } catch { /* this page only */ }
+      return !was;
+    });
+  }, [clearSkim]);
+  const takeSkim = React.useCallback(() => {
+    const at = skimming && !playing && !rootRef.current?.closest('[inert]')
+      && scrollRef.current?.checkVisibility?.({ visibilityProperty: true }) ? skimMs.current : null;
+    clearSkim();
+    return at;
+  }, [skimming, playing, clearSkim]);
+  const skimPointer = React.useCallback((e: React.PointerEvent) => {
+    if (!onSkimPreview || !skimming || !playable || playing || mode !== 'select' || e.pointerType !== 'mouse'
+      || e.buttons || e.altKey || e.metaKey || e.ctrlKey || e.shiftKey || inHandRef.current
+      || (e.target as Element).closest('[data-trim], [data-fade-handle], [data-volume-line], [data-marker], [data-keyframe]')
+      || document.querySelector('[role="dialog"], [role="menu"], [data-popover-panel]')) {
+      clearSkim();
+      return;
+    }
+    const at = Math.min(totalMs, msAtClientX(e.clientX));
+    if (at === skimMs.current) return;
+    skimMs.current = at;
+    /* The pointer can send hundreds of moves a second. Draw just one frame, without re-rendering the clip rows. */
+    if (skimRaf.current) return;
+    skimRaf.current = requestAnimationFrame(() => {
+      skimRaf.current = 0;
+      const ms = skimMs.current;
+      if (ms == null) return;
+      if (skimLine.current) {
+        skimLine.current.style.display = '';
+        skimLine.current.style.transform = `translate3d(${ms * pxPerMs - (scrollRef.current?.scrollLeft ?? 0)}px,0,0)`;
+        skimLine.current.dataset.ms = String(ms);
+      }
+      if (skimLabel.current) skimLabel.current.textContent = formatTimecode(ms);
+      onSkimPreview(ms);
+    });
+  }, [onSkimPreview, skimming, playable, playing, mode, totalMs, msAtClientX, pxPerMs, clearSkim]);
+  React.useEffect(() => { clearSkim(); }, [clearSkim, playing, timeMs, skimming, mode, pxPerMs, view.left, totalMs]);
+  React.useEffect(() => {
+    window.addEventListener('blur', clearSkim);
+    return () => { window.removeEventListener('blur', clearSkim); clearSkim(); };
+  }, [clearSkim]);
+  const withSkimming = React.useCallback((entries: ContextMenuEntry[]): ContextMenuEntry[] => onSkimPreview ? [
+    ...entries,
+    ...(entries.length ? [{ id: 'skim-sep', separator: true } as const] : []),
+    { id: 'skimming', label: t('settings.shortcuts.actions.toggle-skimming'), checked: skimming,
+      shortcut: keyHint('toggle-skimming'), onSelect: toggleSkimming },
+  ] : entries, [onSkimPreview, t, skimming, keyHint, toggleSkimming]);
+
   /**
    * How many pixels the pointer is from the line at `ms`. In pixels, not time: time is clamped twice (to the canvas
    * and to the film), and past the end of the film every point would clamp to "on the playhead".
@@ -1818,7 +1927,7 @@ export const Timeline = React.memo(function Timeline({
     if (targetLane && !tracks.some((tr) => tr.lane === targetLane)) setTargetLane(null);
   }, [tracks, targetLane]);
   /** The track whose name is being typed in its head (film.html index). */
-  const headW = HEAD_W + (solo ? HEAD_SOLO_W : 0);
+  const headW = layers ? layers.headWidth : HEAD_W + (solo ? HEAD_SOLO_W : 0) + (cover ? COVER_COL_W : 0);
   /* picking clips lets the gap go; so does an edit that fills or moves it */
   React.useEffect(() => { if (selected.length) setGap(null); }, [selected.length]);
   React.useEffect(() => {
@@ -1934,7 +2043,8 @@ export const Timeline = React.memo(function Timeline({
       selectOne(null);
       const docIndex = tracks[fromLane]?.docIndex;
       const exactMs = Math.max(0, (e.clientX - (scrollRef.current?.getBoundingClientRect().left ?? 0) + (scrollRef.current?.scrollLeft ?? 0)) / pxPerMs);
-      const found = docIndex != null && onEditOps && !tracks[fromLane]?.locked ? gapAt(modelRef.current, docIndex, exactMs) : null;
+      /* Motion's rows are layers: the space between them is no gap to close */
+      const found = !layers && docIndex != null && onEditOps && !tracks[fromLane]?.locked ? gapAt(modelRef.current, docIndex, exactMs) : null;
       setGap(found ? { track: docIndex!, ...found } : null);
       onScrubCommit(fromMs);
       warmPlayheadAt(ev.clientX, ev.clientY, fromMs);
@@ -1965,7 +2075,7 @@ export const Timeline = React.memo(function Timeline({
     if (range && onRangeChange) {
       marked.push({ id: 'clear-range', label: t('timeline.menuClearRange'), icon: <X size={14} />, shortcut: keyHint('clear-range'), onSelect: () => onRangeChange(null) });
     }
-    const own = rulerMenu?.(atMs) ?? [];
+    const own = withSkimming(rulerMenu?.(atMs) ?? []);
     return marked.length && own.length ? [...marked, { id: 'range-sep', separator: true }, ...own] : [...marked, ...own];
   };
   const hoverRuler = React.useCallback((e: React.PointerEvent) => {
@@ -2036,12 +2146,11 @@ export const Timeline = React.memo(function Timeline({
   }, [msAtClientX, onReferRuler, playable, totalMs]);
 
   /**
-   * A press within ±4 px of the playhead line in the empty track space grabs the playhead. Not over a clip: a clip a
-   * few pixels wide under the line could not be selected, dragged or trimmed (the ruler and the knob drag the
-   * playhead anywhere). Computed in the capture phase instead of a permanent transparent strip, for the same reason.
+   * A press within ±4 px of the playhead line in the empty track space grabs the playhead. Clips and keyframes keep
+   * their own hit targets. The ruler and the knob can also drag the playhead.
    */
   const grabPlayhead = React.useCallback((e: React.PointerEvent) => {
-    if (e.button !== 0 || !playable || !hasLanes || overClip(e)) return;
+    if (e.button !== 0 || !playable || !hasLanes || overTimelineItem(e)) return;
     if (playheadGapPx(e.clientX, timeMsRef.current) > PLAYHEAD_GRAB_PX) return;
     e.stopPropagation();
     startScrub(e);
@@ -2054,7 +2163,7 @@ export const Timeline = React.memo(function Timeline({
   const hotPlayhead = React.useCallback((e: React.PointerEvent) => {
     const el = scrollRef.current;
     if (!el) return;
-    const hot = playable && hasLanes && !overClip(e)
+    const hot = playable && hasLanes && !overTimelineItem(e)
       && playheadGapPx(e.clientX, timeMsRef.current) <= PLAYHEAD_GRAB_PX;
     el.classList.toggle('tl-playhead-hot', hot);
   }, [playable, hasLanes, playheadGapPx]);
@@ -2179,7 +2288,8 @@ export const Timeline = React.memo(function Timeline({
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
       if (scrollRef.current?.closest('[inert]')) return;
-      if (isTypingTarget(e.target)) return;
+      /* A popover can unmount during capture. Its consumed Escape still belongs to it after its DOM is gone. */
+      if (e.defaultPrevented || isTypingTarget(e.target)) return;
       if ((e.target as Element | null)?.closest?.('[role="dialog"]')) return;
       const picked = tracks.flatMap((tr) => tr.blocks).filter((b) => selected.includes(b.id) && b.loc);
       if (e.key === 'Escape' && (selected.length || gap || pickedTransition || range) && !e.metaKey && !e.ctrlKey && !e.altKey
@@ -2219,8 +2329,14 @@ export const Timeline = React.memo(function Timeline({
         void (action === 'ripple-delete' ? rippleRemove(picked) : magnetRemove(picked));
         return;
       }
-      /* ⌘= / ⌘- / ⌘0 zoom the timeline (only when it is visible) */
+      /* Plain + / = / - zoom in the timeline; modified shortcuts also work elsewhere in Studio. */
       if (action === 'zoom-in' || action === 'zoom-out' || action === 'zoom-reset') {
+        if (e.defaultPrevented || e.isComposing) return;
+        if (!e.metaKey && !e.ctrlKey && !e.altKey) {
+          const inside = e.target instanceof Node && rootRef.current?.contains(e.target);
+          if (!inside && !(activeRef.current && e.target === document.body)) return;
+          if (document.querySelector('[role="menu"], [role="listbox"], [data-popover-panel]')) return;
+        }
         if (!playable || !scrollRef.current?.checkVisibility?.({ visibilityProperty: true })) return;
         e.preventDefault();
         if (action === 'zoom-reset') zoomToStable(ZOOM_DEFAULT);
@@ -2728,8 +2844,12 @@ export const Timeline = React.memo(function Timeline({
     tracks, t, onEditBlocks, startLaneReorder, toggleTrack, openHeadMenu, solo, onResizeTrack,
   ]);
   /** The head column (outside the scroller, so drawn apart from the rows). */
+  /* a head with the picked clip's moving properties under it: their names and navigators */
+  const withLaneHeads = (track: TimelineTrack, node: React.ReactElement) => (track.extra && motionLanes
+    ? <div key={track.lane}>{node}<div style={{ height: track.extra, background: laneTone(track, false) }} className="rounded-l-[3px]"><MotionLaneHeads lanes={motionLanes} /></div></div>
+    : node);
   const heads = React.useMemo(() => tracks.map((track, laneIndex) => {
-    const h = rowH(track);
+    const h = baseRowH(track);
     const liftingHead = laneOrder?.fromLane === laneIndex;
     const canReorder = Boolean(onEditBlocks && track.docIndex != null);
     const canToggle = Boolean(onEditBlocks && (track.docIndex != null || track.blocks.some((b) => b.loc)));
@@ -2737,15 +2857,27 @@ export const Timeline = React.memo(function Timeline({
     const targeted = targetLane === track.lane;
     /* far from the view, only its place (the one being dragged keeps all of it) */
     if (((laneIndex < nearFirst || laneIndex > nearLast) && !liftingHead) || track.folded) {
-      return <div key={track.lane} style={{ marginTop: GAP, height: h, background: laneTone(track, lit) }} />;
+      return <div key={track.lane} style={{ marginTop: GAP, height: rowH(track), background: laneTone(track, lit) }} />;
     }
     /* the main track is marked by its look (its band) and its hover title, not by a name or a badge that reads as a switch */
     const mainHead = Boolean(track.main) && track.index === 1;
     /* the track a pill hovered in the app's chat points at */
     const chatLit = chatTrack != null && track.docIndex === chatTrack;
-    const pose = `${liftingHead}:${lit}:${targeted}:${chatLit}`;
+    /* a layer's head is Motion's (its values change with the playhead: never kept) */
+    if (layers) {
+      const head = (
+        <div key={track.lane} className="relative flex w-full min-w-0 items-center rounded-l-[3px]" data-layer-head={track.lane}
+          style={{ marginTop: GAP, height: h, background: laneTone(track, lit), boxShadow: chatLit ? CHAT_RING : undefined }}>
+          {layers.head(track)}
+        </div>
+      );
+      return track.extra
+        ? <div key={track.lane}>{head}<div style={{ height: track.extra, background: laneTone(track, false) }} className="rounded-l-[3px]">{layers.extraHead(track)}</div></div>
+        : head;
+    }
+    const pose = `${liftingHead}:${lit}:${targeted}:${chatLit}:${mainHead && cover ? `cover:${cover.thumb ?? ''}` : ''}`;
     const cached = headElements.get(track.lane);
-    if (cached?.pose === pose) return cached.node;
+    if (cached?.pose === pose) return withLaneHeads(track, cached.node);
     const node = (
       /* each head is its own block with gaps between, matching its row one to one */
       <div
@@ -2768,6 +2900,7 @@ export const Timeline = React.memo(function Timeline({
           height: h,
           /* what the row holds on the left, a label; its switches after it, each in its own column */
           gridTemplateColumns: `24px 4px repeat(${solo ? 4 : 3}, minmax(0, 1fr))`,
+          /* the main track's head keeps room on its right for the cover's tile */
           background: laneTone(track, lit),
           boxShadow: chatLit ? CHAT_RING : undefined,
           opacity: liftingHead ? 0.45 : 1,
@@ -2815,11 +2948,13 @@ export const Timeline = React.memo(function Timeline({
           <SoloButton on={solo.tracks.has(track.docIndex)} onToggle={(only) => solo.onToggle(track.docIndex!, only)} />
         )) : null}
         {onResizeTrack && track.docIndex != null ? <TrackResizeHandle height={h} onResize={(height, done) => onResizeTrack(track, height, done)} /> : null}
+        {/* the cover, in the column beside the heads, by the main track */}
+        {mainHead && cover ? <CoverTile thumb={cover.thumb} size={COVER_TILE} gutter={COVER_COL_W} onOpen={cover.open} menu={cover.menu} /> : null}
       </div>
     );
     headElements.set(track.lane, { pose, node });
-    return node;
-  }), [tracks, t, laneOrder, onEditBlocks, startLaneReorder, toggleTrack, selectedLanes, openHeadMenu, chatTrack, targetLane, solo, onResizeTrack, nearFirst, nearLast, headElements]);
+    return withLaneHeads(track, node);
+  }), [tracks, t, laneOrder, onEditBlocks, startLaneReorder, toggleTrack, selectedLanes, openHeadMenu, chatTrack, targetLane, solo, onResizeTrack, nearFirst, nearLast, headElements, motionLanes, layers, cover]);
 
   /* row backgrounds are fixed to the view and only follow vertical scroll; the clips move horizontally above them */
   const laneSkins = React.useMemo(() => tracks.map((track) => (
@@ -3033,13 +3168,11 @@ export const Timeline = React.memo(function Timeline({
       ? new Set([drag.preview.id, ...drag.preview.moves.map((m) => m.id)])
       : null;
     return tracks.map((track, laneIndex) => {
-    const h = rowH(track);
+    const h = baseRowH(track);
     if (track.folded) return <div key={track.lane} aria-hidden style={{ marginTop: GAP, height: 0 }} />;
     const liftingHere = Boolean(liftingIds && track.blocks.some((b) => liftingIds.has(b.id)));
     /* a row far from the view keeps its place and its clips in hand, moving or selected (see rowsNear) */
     const near = laneIndex >= nearFirst && laneIndex <= nearLast;
-    /* the edges another clip touches (`<id>:start` / `<id>:end`): their handles stay inside the clip */
-    const touching = new Set(cutsOf(track.blocks).flatMap(([a, b]) => [`${a.id}:end`, `${b.id}:start`]));
     return (
       <div
         key={track.lane}
@@ -3047,7 +3180,7 @@ export const Timeline = React.memo(function Timeline({
         style={{
           marginTop: GAP,
           width: '100%',
-          height: h,
+          height: rowH(track),
           /* no background here: it would scroll with the content (see laneSkins) */
           filter: track.hidden ? 'grayscale(1)' : undefined,
           /* the row with a lifted clip goes on top, or the rows below would cover the floating clip */
@@ -3056,6 +3189,8 @@ export const Timeline = React.memo(function Timeline({
         /* right-click on empty space: the track menu at this time (clips stop their own right-clicks) */
         onContextMenu={(e) => openLaneMenu(e, track.lane)}
       >
+          {track.extra && layers ? <div className="absolute inset-x-0" style={{ top: h, height: track.extra }}>{layers.extraBody(track, pxPerMs)}</div>
+            : track.extra && motionLanes ? <MotionLaneRows lanes={motionLanes} top={h} pxPerMs={pxPerMs} /> : null}
           {track.blocks.map((block) => {
             /* while dragging, drawn where the preview says (film.html only updates after the write); a clip the edit
                takes out is drawn faint where it is */
@@ -3113,7 +3248,7 @@ export const Timeline = React.memo(function Timeline({
                pictures (a filter's page is see-through, an effect's says nothing at a glance) */
             const laid = textRow || sticker ? null : isFilterLayer(block.src) ? 'filter' as const : isLibraryEffect(block.src) ? 'effect' as const : null;
             const color = textRow ? 'var(--clip-text)' : sticker ? 'var(--clip-sticker)' : laid ? `var(--clip-${laid})`
-              : block.kind === 'video' && block.src && filmSrcIsStill(block.src) ? 'var(--clip-image)' : KIND_COLOR[block.kind];
+              : block.kind === 'video' && block.src && filmSrcIsStill(block.src) ? 'var(--clip-image)' : block.color ?? KIND_COLOR[block.kind];
             const able = drag.can(block);
             const strip = clipThumbs.get(clipThumbId(block));
             const poster = block.src ? posters?.[block.src] : undefined;
@@ -3124,7 +3259,11 @@ export const Timeline = React.memo(function Timeline({
             const speedLive = live && (drag.preview?.mode === 'speed-start' || drag.preview?.mode === 'speed-end')
               && Math.abs(endMs - startMs - (block.endMs - block.startMs)) >= 0.5;
             const thumbSpeed = speedLive ? ((block.endMs - block.startMs) * ownSpeed) / Math.max(1, endMs - startMs) : ownSpeed;
-            const intoOrigin = speedLive ? trimFromMs : thumbIntoOrigin({
+            /* A magnetic head trim closes up on release: its in point still follows the amount trimmed, even though
+               its start has returned to the cut while the write is landing. */
+            const headTrimMs = live && drag.preview?.mode === 'trim-start'
+              ? (block.endMs - block.startMs) - (endMs - startMs) : null;
+            const intoOrigin = speedLive ? trimFromMs : headTrimMs != null ? trimFromMs + headTrimMs * thumbSpeed : thumbIntoOrigin({
               committedStart: block.startMs,
               committedEnd: block.endMs,
               visualStart: startMs,
@@ -3133,12 +3272,13 @@ export const Timeline = React.memo(function Timeline({
               speed: thumbSpeed,
             });
             /* the source under the clip as drawn, for its waveform: a left trim moves the in point, a speed does not */
-            const waveInMs = trimFromMs + (!speedLive && endMs === block.endMs ? (startMs - block.startMs) * ownSpeed : 0);
+            const waveInMs = trimFromMs + (headTrimMs != null ? headTrimMs * ownSpeed : !speedLive && endMs === block.endMs ? (startMs - block.startMs) * ownSpeed : 0);
             const waveDurMs = (endMs - startMs) * thumbSpeed;
             const compound = Boolean(compoundFolder(block.src));
             const visual = block.kind === 'mg' || block.kind === 'video';
             const soundBand = compound ? Boolean(block.ownAudio) : block.kind === 'video' && !(block.src && filmSrcIsStill(block.src));
-            const bandAudio = visual && !!block.ownAudio && !block.silent;
+            /* Turned down is still a sound: keep its band and volume handle so silence can be turned up again. */
+            const bandAudio = visual && !!block.ownAudio;
             /* The sound grows with its track, but a small track keeps the band it had before. */
             const audioBandH = Math.max(AUDIO_BAND_H, Math.round((h - INFO_H) * 0.3));
             const previewH = Math.max(6, h - INFO_H - (soundBand ? audioBandH : 0));
@@ -3148,10 +3288,11 @@ export const Timeline = React.memo(function Timeline({
             /* the fade handles: on the bottom of the picture (a video's, where its audio band starts; a page's or a
                still's, just inside the clip's bottom), or on the top of a sound's waveform */
             const fadeY = soundBand ? soundTop : visual ? h - FADE_DOT_INSET : INFO_H;
-            /* the volume line: on the clip under the pointer, when it is heard, with nothing else on its edges */
+            /* the volume line: on the clip under the pointer, including silence, with nothing else on its edges */
             const volumeLine = pointed && !floating && !speeding && mode === 'select' && !track.locked && width > 18
               && Boolean(onEditBlocks && block.loc) && hasVolume(block) && (!visual || bandAudio);
-            const lineY = soundTop + volumeLineY(volume, h - soundTop);
+            /* At silence/full scale the hit area must stay inside the clipped block, so the line can be grabbed. */
+            const lineY = Math.max(soundTop + 4, Math.min(h - 4, soundTop + volumeLineY(volume, h - soundTop)));
             /* the labels of a drag go over the picture on a video, and down over the waveform on a sound */
             const tipUp = soundTop > h / 2;
             const fadeTipUp = fadeY > h / 2;
@@ -3168,12 +3309,13 @@ export const Timeline = React.memo(function Timeline({
                 data-media-trouble={trouble}
                 data-chat-lit={chatLit ? '' : undefined}
                 /* overflow is clipped on the inner box: the selection frame is drawn outside */
-                className={`group/block absolute inset-y-0 ${
+                className={`group/block absolute top-0 ${
                   lifting ? 'z-[12]' : picked || chatLit ? 'z-10' : live ? 'z-10' : ''
                 }`}
                 style={{
                   left,
                   width,
+                  height: h,
                   opacity: gone ? 0.25 : block.off ? 0.4 : floating ? 0.72 : 1,
                   /* follows the pointer up and down: a lifted clip really leaves its row */
                   transform: floating
@@ -3185,10 +3327,15 @@ export const Timeline = React.memo(function Timeline({
                 }}
                 title={trouble ? `${blockTitleOf(block)}\n${t(trouble === 'length' ? 'timeline.noLengthHint' : trouble === 'missing' ? 'timeline.mediaMissingHint' : trouble === 'waiting' ? 'timeline.mediaWaitingHint' : trouble === 'decode' ? 'timeline.mediaCannotPlay' : 'timeline.mediaReconnecting')}` : compound && onEnterCompound ? `${blockTitleOf(block)}\n${t('timeline.compoundOpenHint')}` : blockTitleOf(block)}
                 onDoubleClick={(e) => {
+                  if (mode === 'split') return;
                   /* a compound clip opens: its own film, edited as any (a breadcrumb leads back) */
-                  if (!onEnterCompound || mode === 'split' || !compound) return;
-                  e.stopPropagation();
-                  onEnterCompound(block);
+                  if (onEnterCompound && compound) {
+                    e.stopPropagation();
+                    onEnterCompound(block);
+                    return;
+                  }
+                  /* a layer (Motion) opens what it is made of, as its name double-clicked does */
+                  if (layers?.open?.(block)) e.stopPropagation();
                 }}
                 onPointerDown={(e) => {
                   /* a click selects and does not move the playhead (only empty space seeks); stop it reaching the
@@ -3258,6 +3405,16 @@ export const Timeline = React.memo(function Timeline({
                           : undefined,
                   }}
                 >
+                {/* a layer's keyframes, marked along its bar under its name */}
+                {block.keysMs?.length ? (
+                  <div className="pointer-events-none absolute inset-x-0 bottom-[3px]" style={{ top: INFO_H }} data-block-keys={block.keysMs.length}>
+                    {block.keysMs.map((ms) => (
+                      <svg key={ms} width="7" height="7" viewBox="0 0 12 12" className="absolute top-1/2" style={{ left: Math.round((ms - (startMs - block.startMs)) * pxPerMs) - 3.5, marginTop: -3.5 }} aria-hidden>
+                        <path d="M6 1 11 6 6 11 1 6Z" fill="rgb(255 255 255 / 0.9)" stroke="rgb(0 0 0 / 0.4)" strokeWidth="1" />
+                      </svg>
+                    ))}
+                  </div>
+                ) : null}
                 {/* info strip: name and length side by side (one statement), not at opposite ends of a wide clip */}
                 <div
                   className="pointer-events-none absolute inset-x-0 top-0 flex items-center overflow-hidden px-1.5"
@@ -3345,12 +3502,18 @@ export const Timeline = React.memo(function Timeline({
                   <span
                     aria-hidden={!bandAudio}
                     data-audio-band={bandAudio ? 'on' : 'off'}
+                    data-audio-muted={bandAudio && block.silent ? '1' : undefined}
                     className="absolute inset-x-0 bottom-0"
                     style={{
                       height: audioBandH,
                       background: 'rgba(0,0,0,0.22)',
                     }}
                   >
+                    {bandAudio && block.silent && width > 24 ? (
+                      <span className="pointer-events-none absolute left-1 top-0 z-[1]" title={t('timeline.menuMute')}>
+                        <VolumeX size={10} />
+                      </span>
+                    ) : null}
                     {bandAudio && waveUrl && block.src && width > 8 ? (
                       <BlockWaveform
                         url={waveUrl(block.src)}
@@ -3409,7 +3572,7 @@ export const Timeline = React.memo(function Timeline({
                     {able.move ? (
                       <TrimHandle
                         edge="start"
-                        picked={picked && !touching.has(`${block.id}:start`)}
+                        picked={picked}
                         hit={trimHit(width)}
                         speed={speeding}
                         title={speeding ? t('timeline.speedHandle') : undefined}
@@ -3418,7 +3581,7 @@ export const Timeline = React.memo(function Timeline({
                     ) : null}
                     <TrimHandle
                       edge="end"
-                      picked={picked && !touching.has(`${block.id}:end`)}
+                      picked={picked}
                       hit={trimHit(width)}
                       speed={speeding}
                       title={speeding ? t('timeline.speedHandle') : undefined}
@@ -3561,7 +3724,7 @@ export const Timeline = React.memo(function Timeline({
     openBlockMenu, openLaneMenu, onEditBlocks, collapseIfClick, selectOne, setSelected, clipElements, thumbWindow, view.width,
     chatClip, chatDraft, placedOf, pickForTrim, gap, withLinked, runSplit, trackOverlay,
     fadeOfBlock, fadeDrag, startFade, volumeDrag, startVolume, transitions, transitionDrag, pickedTransition, onPickTransition, onTransition, startTransitionResize,
-    nearFirst, nearLast, speedOn, hoveredBlock, onEnterCompound, snap, allBlocks, onSeek, totalMs, transcribed, captionPick,
+    nearFirst, nearLast, speedOn, hoveredBlock, motionLanes, layers, onEnterCompound, snap, allBlocks, onSeek, totalMs, transcribed, captionPick,
   ]);
 
   const tickMarks = React.useMemo(() => ticks.map(({ ms, label }) => {
@@ -3722,6 +3885,8 @@ export const Timeline = React.memo(function Timeline({
       toggleMagnet: () => togglePref('magnet'),
       toggleSnap: () => togglePref('snap'),
       toggleLinkage: () => togglePref('linkage'),
+      toggleSkimming,
+      takeSkim,
       split: () => {
         const atMs = timeMsRef.current;
         const found = splitTargets(tracks, selectedRef.current, atMs, targetLaneRef.current);
@@ -3742,20 +3907,20 @@ export const Timeline = React.memo(function Timeline({
         const plan = planNudge(modelRef.current, ids, frames, switchesOf(prefsRef.current));
         if (plan) void runPlan(plan, 'history.stepMove');
       },
-      overwriteTrackDown: () => {
+      overwriteTrack: (dir) => {
         if (inHandRef.current) return;
         const clips = picked();
-        if (clips.length !== 1) { setNotice(t('timeline.overwriteDownPickOne')); return; }
-        const clip = clips[0]!;
-        const plan = clip.loc && clip.clipId && !clip.noLength ? planOverwriteDown(modelRef.current, tracks, clip.clipId) : null;
-        if (plan) void runPlan(plan, 'settings.shortcuts.actions.overwrite-track-down');
-        else setNotice(t('timeline.overwriteDownUnavailable'));
+        if (!clips.length) return;
+        const ids = clips.flatMap((clip) => clip.loc && clip.clipId && !clip.noLength ? [clip.clipId] : []);
+        const plan = ids.length === clips.length ? planOverwriteTrack(modelRef.current, tracks, ids, dir) : null;
+        if (plan) void runPlan(plan, dir < 0 ? 'settings.shortcuts.actions.overwrite-track-up' : 'settings.shortcuts.actions.overwrite-track-down');
+        else setNotice(t(dir < 0 ? 'timeline.overwriteUpUnavailable' : 'timeline.overwriteDownUnavailable'));
       },
       zoomFit: () => zoomToStable(ZOOM_DEFAULT, { scroll: 0 }),
       target: () => tracks.find((tr) => tr.lane === targetLaneRef.current)?.docIndex ?? null,
     };
     return () => { commandsRef.current = null; };
-  }, [commandsRef, tracks, rippleTrimToPlayhead, closeGap, linkBlocks, unlinkBlocks, togglePref, withLinked, runSplit, onCopy, magnetRemove, runPlan, zoomToStable, t]);
+  }, [commandsRef, tracks, rippleTrimToPlayhead, closeGap, linkBlocks, unlinkBlocks, togglePref, toggleSkimming, takeSkim, withLinked, runSplit, onCopy, magnetRemove, runPlan, zoomToStable, t]);
 
   /** A fade's entry for a clip's edge: put there at its default length, in one step. */
   const transitionEntries = React.useCallback((cut: CutRef, kinds: readonly TransitionKind[]): ContextMenuEntry[] => kinds.map((kind) => ({
@@ -3795,7 +3960,7 @@ export const Timeline = React.memo(function Timeline({
       if (captionRow && onAddCaption) {
         const at = menu.atMs;
         entries.push({ id: 'add-caption', label: t('captionTrack.addHere'), icon: <Plus size={14} />, disabled: laneLocked, onSelect: () => { void onAddCaption(captionRow.src, at).then((err) => { if (err) setDropError(err); }); } });
-        return withTrackOrganizer(entries);
+        return withSkimming(withTrackOrganizer(entries));
       }
       if (onPaste && menu.lane) {
         entries.push({
@@ -3829,7 +3994,7 @@ export const Timeline = React.memo(function Timeline({
           onSelect: () => { void runPlan(planCloseTrackGaps(modelRef.current, doc, switchesOf(prefsRef.current)), 'history.stepGapsClosed'); },
         });
       }
-      return withTrackOrganizer(entries);
+      return withSkimming(withTrackOrganizer(entries));
     }
 
     const pickedLocked = picked.some((b) => (
@@ -3873,6 +4038,14 @@ export const Timeline = React.memo(function Timeline({
         disabled: !under,
         hint: pickedLocked ? t('timeline.trackLocked') : t('timeline.menuSplitOutside'),
         onSelect: () => { rippleTrimToPlayhead('end', [one]); },
+      });
+    }
+    /* the gaps after the picked clips filled, each running on to the next one (captions read through a pause) */
+    const fill = onEditOps && picked.length ? planFillGaps(modelRef.current, picked.flatMap((b) => (b.clipId ? [b.clipId] : []))) : null;
+    if (fill?.ops.length) {
+      out.push({
+        id: 'fill-gaps', label: t('timeline.menuFillGaps'), icon: <ArrowRightFromLine size={14} />,
+        onSelect: () => { void runPlan(fill, 'history.stepGapsFilled'); },
       });
     }
     /* its speed by its edges (lib/clip-speed): on, the edge handles change the speed instead of trimming */
@@ -4052,7 +4225,7 @@ export const Timeline = React.memo(function Timeline({
     menu, t, keyHint, onSplit, onDetachAudio, onRemove, onRemoveMany, onCopy, onPaste, onExportBlock, mediaTrouble, relinkCandidates,
     onRelink, hasClipboard, runSplit, removeMany, rippleRemove, magnetRemove, onEditOps, onAddCaption, tracks, blockMenuExtra, headEntries, withLinked,
     runPlan, closeGapOn, rippleTrimToPlayhead, linkBlocks, unlinkBlocks, transitions, onTransition, onPickTransition, transitionEntries,
-    speedOn, selectedKey, onEditBlocks, onDuplicate, onCompound, onUncompound, withTrackOrganizer,
+    speedOn, selectedKey, onEditBlocks, onDuplicate, onCompound, onUncompound, withTrackOrganizer, withSkimming,
   ]);
 
   inHandRef.current = Boolean(drag.preview || assetHint || marquee || rangeDraft || referDraft || scrubbing || laneOrder || fadeDrag || volumeDrag || transitionDrag);
@@ -4062,6 +4235,7 @@ export const Timeline = React.memo(function Timeline({
     <div
       ref={rootRef}
       data-timeline=""
+      data-timeline-skimming={skimming ? '1' : '0'}
       /* Speed on: the picture's Esc leaves it to the timeline (FilmStageSelect) */
       data-speed-mode={speedOn ? '' : undefined}
       className="relative isolate overflow-hidden flex min-h-0 min-w-0 flex-1 flex-col"
@@ -4074,13 +4248,17 @@ export const Timeline = React.memo(function Timeline({
         }
       }}
     >
-      {/* ── Toolbar: mode (select / split) · undo / redo / history · split · status · the switches · zoom · subtitles ── */}
+      {/* ── Toolbar: cut or animate · mode (select / split) · undo / redo / history · split · status · the switches · zoom · subtitles ── */}
       <div
         ref={toolbarRef}
         className="@container relative flex h-[34px] shrink-0 items-center gap-1.5 border-b px-2"
         style={{ background: TL.head, borderColor: TL.line }}
       >
-        {onSplit ? <>
+        {timelineView ? <>
+          <ViewPicker now={timelineView.now} onView={timelineView.onView} />
+          <span className="mx-0.5 h-4 w-px" style={{ background: TL.line }} />
+        </> : null}
+        {onSplit && !layers ? <>
           <ModePicker mode={mode} onPick={setMode} />
           <span className="mx-0.5 h-4 w-px" style={{ background: TL.line }} />
         </> : null}
@@ -4116,7 +4294,18 @@ export const Timeline = React.memo(function Timeline({
           </ToolButton>
         ) : null}
 
-        {onSplit ? (
+        {layers?.tools?.length ? <>
+          <span className="mx-0.5 h-4 w-px" style={{ background: TL.line }} />
+          {layers.tools.map((tool) => (
+            <span key={tool.id} data-motion-tool={tool.id}>
+              <ToolButton onClick={tool.onClick} active={Boolean(tool.active)} disabled={Boolean(tool.disabled)} label={tool.label} {...(tool.hint ? { hint: tool.hint } : {})}>
+                {tool.icon}
+              </ToolButton>
+            </span>
+          ))}
+        </> : null}
+
+        {onSplit && !layers ? (
           <ToolButton
             onClick={() => { void runSplit(selectedBlocks.filter((b) => drag.can(b).resize)); }}
             /* lit only with a selection: a disabled button already says "this acts on the selection" */
@@ -4166,28 +4355,31 @@ export const Timeline = React.memo(function Timeline({
           ) : null}
         </div>
 
-        {/* the right side: recording first, then the switches (lib/timeline-prefs), in this order: snapping, the
-            main-track magnet and linkage */}
-        {recorder ? <>
-          <RecordButton now={recorder.now} onSave={recorder.onSave} onProblem={setNotice} />
-          <span className="mx-0.5 h-4 w-px" style={{ background: TL.line }} />
-        </> : null}
-        {onEditOps ? <>
+        {/* the right side: the switches (lib/timeline-prefs), in this order: snapping, the main-track magnet and linkage */}
+        {onEditOps && layers ? (
           <span data-timeline-snap={snap ? '1' : '0'}>
             <ToolButton onClick={() => togglePref('snap')} active={snap} label={t('timeline.snap')}
-              hint={snap ? t('timeline.snapOn') : t('timeline.snapOff')}>
+              action="toggle-snap" note={snap ? t('timeline.snapOn') : t('timeline.snapOff')}>
+              <SeparatorVertical size={15} />
+            </ToolButton>
+          </span>
+        ) : null}
+        {onEditOps && !layers ? <>
+          <span data-timeline-snap={snap ? '1' : '0'}>
+            <ToolButton onClick={() => togglePref('snap')} active={snap} label={t('timeline.snap')}
+              action="toggle-snap" note={snap ? t('timeline.snapOn') : t('timeline.snapOff')}>
               <SeparatorVertical size={15} />
             </ToolButton>
           </span>
           <span data-timeline-magnet={prefs.magnet ? '1' : '0'}>
             <ToolButton onClick={() => togglePref('magnet')} active={prefs.magnet} label={t('timeline.magnet')}
-              hint={prefs.magnet ? t('timeline.magnetOn') : t('timeline.magnetOff')}>
+              action="toggle-magnet" note={prefs.magnet ? t('timeline.magnetOn') : t('timeline.magnetOff')}>
               <Magnet size={15} />
             </ToolButton>
           </span>
           <span data-timeline-linkage={prefs.linkage ? '1' : '0'}>
             <ToolButton onClick={() => togglePref('linkage')} active={prefs.linkage} label={t('timeline.linkage')}
-              hint={prefs.linkage ? t('timeline.linkageOn') : t('timeline.linkageOff')}>
+              action="toggle-linkage" note={prefs.linkage ? t('timeline.linkageOn') : t('timeline.linkageOff')}>
               <Paperclip size={15} />
             </ToolButton>
           </span>
@@ -4245,11 +4437,12 @@ export const Timeline = React.memo(function Timeline({
           <div
             className="relative overflow-hidden"
             /* the ground the heads lie on, seen in the gaps between them as between the rows */
-            style={{ height: `calc(100% - ${RULER_H}px - ${H_SCROLL_H}px)`, background: 'var(--tl-gap)' }}
+            /* with the cover's column: the line between the heads' side and the clips on its right, the cover inside it */
+            style={{ height: `calc(100% - ${RULER_H}px - ${H_SCROLL_H}px)`, background: 'var(--tl-gap)', ...(cover ? { boxShadow: `inset -1px 0 0 ${TL.line}` } : {}) }}
           >
             {/* moved with the track area's vertical scroll (onScroll), as the rows' backgrounds are; its own block
                 (flow-root), so the first head's margin stays inside it and the reorder guide's top counts from it */}
-            <div ref={headShiftRef} className="relative flow-root" style={{ transform: rowsShift }}>
+            <div ref={headShiftRef} className="relative flow-root" style={{ transform: rowsShift, ...(cover ? { width: `calc(100% - ${COVER_COL_W}px)` } : {}) }}>
               {heads}
               {laneOrder ? (() => {
                 const hover = laneOrder.hoverLane;
@@ -4278,7 +4471,10 @@ export const Timeline = React.memo(function Timeline({
         {/* right: ruler + track area; the only part that scrolls, and where media-pane drops land */}
         <div
           className="relative flex min-w-0 flex-1 flex-col"
-          onPointerDownCapture={focusTimeline}
+          onPointerDownCapture={(e) => { clearSkim(); focusTimeline(e); }}
+          onPointerMoveCapture={skimPointer}
+          onPointerLeave={clearSkim}
+          onWheelCapture={clearSkim}
           onDragOver={onAssetDragOver}
           onDragLeave={onAssetDragLeave}
           onDrop={onAssetDrop}
@@ -4305,7 +4501,7 @@ export const Timeline = React.memo(function Timeline({
               onKeyDown={onKeyDown}
               onPointerMove={hoverRuler}
               onPointerLeave={() => { rulerPointerX.current = null; setRulerHoverMs(null); }}
-              onContextMenu={rulerMenu || range ? (e) => {
+              onContextMenu={rulerMenu || range || onSkimPreview ? (e) => {
                 e.preventDefault();
                 const items = rulerItems(Math.max(0, Math.min(totalMs, msAtClientX(e.clientX))));
                 if (items.length) setRulerMenuAt({ x: e.clientX, y: e.clientY, items });
@@ -4335,7 +4531,7 @@ export const Timeline = React.memo(function Timeline({
           <div
             ref={scrollRef}
             onScroll={onScroll}
-            onContextMenu={onOrganizeTracks && hasLanes ? (e) => openLaneMenu(e, null) : undefined}
+            onContextMenu={hasLanes && (onOrganizeTracks || onSkimPreview) ? (e) => openLaneMenu(e, null) : undefined}
             /* capture phase: a press on the playhead line goes to the scrub before clips and marquee (grabPlayhead);
                move / leave only manage the cursor */
             onPointerDownCapture={grabPlayhead}
@@ -4479,6 +4675,15 @@ export const Timeline = React.memo(function Timeline({
                 <PlayheadKnob filled={scrubbing} />
               </span>
             </PlayheadTrack>
+          </div>
+        </div>
+      ) : null}
+
+      {hasLanes && onSkimPreview ? (
+        <div aria-hidden className="pointer-events-none absolute z-[34] overflow-hidden"
+          style={{ left: headW, right: 0, top: TOOLBAR_H, bottom: H_SCROLL_H }}>
+          <div ref={skimLine} data-timeline-skimmer="" className="absolute inset-y-0 w-px bg-[var(--accent)]" style={{ display: 'none' }}>
+            <span ref={skimLabel} className="absolute left-1 top-0 rounded bg-[var(--bg-raised)] px-1 py-0.5 font-mono text-[10px] tabular-nums text-[var(--accent)]" />
           </div>
         </div>
       ) : null}
@@ -4748,6 +4953,8 @@ function ToolButton({
   disabled,
   label,
   hint,
+  action,
+  note,
   active = false,
   children,
 }: {
@@ -4756,13 +4963,18 @@ function ToolButton({
   label: string;
   /** The shortcut, already formatted by shortcutHint (⌘ on Mac, Ctrl elsewhere); shown as `Label (⌘Z)`. */
   hint?: string;
+  action?: ActionId;
+  note?: string;
   /** Pressed state: a toggle that is on. */
   active?: boolean;
   children: React.ReactNode;
 }) {
+  const keyHint = useKeyHint();
+  hint = action ? keyHint(action) : hint;
+  label = note ? `${label} · ${note}` : label;
   const title = hint ? `${label} (${hint})` : label;
   return (
-    <Tooltip side="bottom" label={label} {...(hint ? { shortcut: hint } : {})}>
+    <Tooltip side="bottom" label={label} action={action} wrap={Boolean(note)} {...(hint ? { shortcut: hint } : {})}>
       <button
         type="button"
         onClick={() => { if (!disabled) onClick(); }}
@@ -4796,6 +5008,39 @@ export type TimelineMode = 'select' | 'split';
  * Select / split — a button and a dropdown. Split is a mode, not only a button: a rough cut is a dozen cuts in a row,
  * and the pointer becoming a blade beats select-then-split each time.
  */
+/**
+ * Cutting or animating the film: two icons side by side, the way it is shown now raised (the accent when animating),
+ * each naming on hover what it is for. Both always in sight, so which one is on, and that there is another, needs no
+ * menu.
+ */
+function ViewPicker({ now, onView }: { now: 'edit' | 'motion'; onView: (view: 'edit' | 'motion') => void }) {
+  const t = useT();
+  const items = [
+    { id: 'edit' as const, label: t('timeline.viewEdit'), note: t('timeline.viewEditNote'), icon: <Film size={15} /> },
+    { id: 'motion' as const, label: t('timeline.viewMotion'), note: t('timeline.viewMotionNote'), icon: <Waypoints size={15} /> },
+  ];
+  return (
+    <div role="radiogroup" aria-label={t('timeline.viewPick')} data-timeline-view={now}
+      className="flex h-[26px] shrink-0 items-center gap-px rounded-[7px] p-[2px]" style={{ background: 'var(--tl-line)' }}>
+      {items.map((item) => {
+        const on = item.id === now;
+        return (
+          <Tooltip key={item.id} side="bottom" label={`${item.label} · ${item.note}`}>
+            <button type="button" role="radio" aria-checked={on} aria-label={item.label} data-timeline-view-item={item.id}
+              onMouseDown={(e) => e.preventDefault()} onClick={() => { if (!on) onView(item.id); }}
+              className={`flex h-[22px] w-[26px] items-center justify-center rounded-[5px] outline-none transition focus-visible:ring-1 focus-visible:ring-[var(--tl-accent)] ${on ? '' : 'hover:bg-black/5 dark:hover:bg-white/10'}`}
+              style={on
+                ? { background: 'var(--tl-head)', color: item.id === 'motion' ? 'var(--tl-accent)' : 'var(--tl-text)', boxShadow: '0 1px 2px rgb(0 0 0 / 0.25)' }
+                : { color: 'var(--tl-faint)' }}>
+              {item.icon}
+            </button>
+          </Tooltip>
+        );
+      })}
+    </div>
+  );
+}
+
 function ModePicker({
   mode, onPick,
 }: { mode: TimelineMode; onPick: (m: TimelineMode) => void }) {

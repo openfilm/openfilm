@@ -1,7 +1,7 @@
 /**
  * The system notifications for the chat's turns, while OpenFilm is not in front (#230): a turn done, one stopped by an
  * error, and an agent waiting for the person's answer (a question, a permission). Clicking one shows its project's tab
- * (main.mjs). Settings › General switches them off (`notify`, chat-ipc.mjs preferences).
+ * (main.mjs). Settings › Advanced switches them on (`notify`, chat-ipc.mjs preferences); off by default.
  *
  * Pure: no Electron, so `node --test` runs it.
  */

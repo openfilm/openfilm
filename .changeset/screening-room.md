@@ -1,0 +1,7 @@
+---
+"openfilm": minor
+---
+
+A new workbench, Screening, for people who have never edited: the film plays large, as it will be exported, and is watched as on any video player: under it the film as a strip of its frames (a click goes there, a drag runs the picture along) and the player's row of controls — play, volume, the time; the speed, how Screening is used, full screen. Pointing at what to change is as plain: with the pointer on the strip, a row shows above it, where a click points at that moment and a drag at a stretch, the picture following; a drag on the picture circles a part of it. Each goes into the chat, numbered there and on the bar: a number goes back to it, its × takes it out. A mark and its pill in the chat point at each other: either under the pointer lights the other (a box's pill shows its box on the picture, whatever the moment), and either pressed goes to the place and rings the mark and its pill once. Scrolling or pinching over the strip brings the film closer, down to a second across it, for exact moments and stretches; sideways moves along it, and 0 shows the whole film again. The help button (or ⌘ held, Ctrl on Windows) shows how Screening is used, step by step, and its keys. It brings no skill of its own: it builds on the film skill, as the edit does.
+
+The top bar's workbench menu lists each workbench by name with its key: ⌥1, ⌥2… (Alt on Windows) show them in order, and ⌘E (Ctrl+E) goes back to the one shown before.

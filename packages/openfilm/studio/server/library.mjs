@@ -33,9 +33,11 @@ import { dirname, isAbsolute, join, normalize, relative, resolve, sep } from 'no
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { fileURLToPath } from 'node:url';
-import { communityCatalog, communityReady, fetchCommunity, isCommunity, refreshCommunity } from './community-library.mjs';
+import { communityCatalog, communityReady, fetchCommunity, isCommunity, refreshCommunity, streamCommunity } from './community-library.mjs';
 import { setSharedPref, sharedHome, sharedPref } from '../../src/locations.mjs';
 import { SKILL_UID } from '../../src/skills.mjs';
+import { ownVoiceKeys } from './voice-store.mjs';
+import { DOUBAO_PAIRS } from './providers/doubao-dialogue.mjs';
 
 export { refreshCommunity };
 
@@ -107,15 +109,31 @@ function fetchFile(rel) {
 
 /** One file of the published library into the cache: whole or not at all. */
 async function downloadFile(/** @type {string} */ rel) {
+  /* Doubao's official previews use the same local player/cache as the published library. Keep their verified
+     public source in the catalog so a new release works before its previews have been mirrored to our host. */
+  const source = officialVoiceSample(rel);
   /* a model is a hundred megabytes: time for a slow line */
-  const res = await fetch(`${libraryHost()}/${rel.split('/').map(encodeURIComponent).join('/')}`, { signal: AbortSignal.timeout(rel.startsWith('models/') ? 30 * 60_000 : 60_000) });
+  const res = await fetch(source ?? `${libraryHost()}/${rel.split('/').map(encodeURIComponent).join('/')}`, {
+    signal: AbortSignal.timeout(rel.startsWith('models/') ? 30 * 60_000 : 60_000), ...(source ? { redirect: 'error' } : {}),
+  });
   if (!res.ok) throw new Error(`the library's ${rel} came back ${res.status}`);
+  if (source && (!/^audio\//i.test(res.headers.get('content-type') ?? '') || Number(res.headers.get('content-length') ?? 0) > (20 << 20))) throw new Error('The voice service returned no playable sample.');
   const at = inside(libraryCache(), rel);
   await mkdir(dirname(at), { recursive: true });
   const part = `${at}.part-${process.pid}`;
   /* written as it comes: how far a model is can be read off its size (local-models.mjs) */
   try {
-    await pipeline(Readable.fromWeb(/** @type {import('node:stream/web').ReadableStream} */ (res.body)), createWriteStream(part));
+    const stream = Readable.fromWeb(/** @type {import('node:stream/web').ReadableStream} */ (res.body));
+    if (source) {
+      let size = 0;
+      await pipeline(stream, async function* (chunks) {
+        for await (const chunk of chunks) {
+          size += chunk.length;
+          if (size > (20 << 20)) throw new Error('The voice sample exceeded 20 MB.');
+          yield chunk;
+        }
+      }, createWriteStream(part));
+    } else await pipeline(stream, createWriteStream(part));
   } catch (e) {
     await rm(part, { force: true });
     throw e;
@@ -243,12 +261,76 @@ export function libraryIndex() {
     }
     items.push(...(catalog.items ?? []));
   }
-  merged = { parts, index: { ...own, groups, items } };
+  merged = { parts, index: { ...own, groups, items, packs: packsOf(groups, items) } };
   return merged.index;
+}
+
+/**
+ * The library's packs: OpenFilm's own are its groups (`openfilm/<category>/<group>`, always there); the community's
+ * come from its catalog (`<maker>/<name>`, each a group of every category it has things in), there once the person
+ * adds them (libraryAdded).
+ * @param {Record<string, unknown[]>} groups @param {unknown[]} items
+ */
+function packsOf(groups, items) {
+  const community = communityCatalog().packs;
+  const theirs = new Set(community.map((p) => p.id));
+  /** @type {Map<string, number>} */
+  const count = new Map();
+  for (const item of /** @type {{ cat: string, group: string }[]} */ (items)) count.set(`${item.cat}\0${item.group}`, (count.get(`${item.cat}\0${item.group}`) ?? 0) + 1);
+  const own = Object.entries(groups).flatMap(([cat, list]) => (/** @type {{ id: string, name: Record<string, string> }[]} */ (list))
+    .filter((g) => !theirs.has(g.id) && count.get(`${cat}\0${g.id}`))
+    .map((g) => ({ id: `openfilm/${cat}/${g.id}`, name: g.name, cats: [cat], group: g.id, count: count.get(`${cat}\0${g.id}`), official: true })));
+  const byId = new Map(/** @type {{ id: string, cat: string }[]} */ (items).map((it) => [it.id, it.cat]));
+  return [...own, ...community.map((p) => ({ ...p, group: p.id, cats: [...new Set(p.items.map((id) => byId.get(id)).filter(Boolean))], count: p.items.length }))];
+}
+
+/** Where the community's packs and things the person added are kept in the shared prefs.json: their ids. */
+const ADDED = 'libraryAdded';
+
+/** The community's packs and things the person added (OpenFilm's own are always there). */
+export function libraryAdded() {
+  return addedIds(sharedPref(ADDED));
+}
+
+export function setLibraryAdded(/** @type {unknown} */ ids) {
+  const next = addedIds(ids);
+  setSharedPref(ADDED, next);
+  return next;
+}
+
+/** Ids the community's catalog has: its packs' and its things'. Kept while it cannot be read (offline: nothing lost). */
+function addedIds(/** @type {unknown} */ ids) {
+  if (!Array.isArray(ids)) return [];
+  const { packs, items } = communityCatalog();
+  if (!items.length) return [...new Set(ids.filter((id) => typeof id === 'string' && id.length < 300))];
+  const known = new Set([...packs.map((p) => p.id), ...items.map((it) => it.id)]);
+  return [...new Set(ids.filter((id) => typeof id === 'string' && known.has(id)))];
 }
 
 /** The voices as library/voices.json has them: the services (each with its voice-over models) and their voices. */
 export const libraryVoices = () => read('voices.json', { version: 1, providers: [], voices: [] });
+
+/**
+ * The voices with the pairs that speak a dialogue together (`pair`, its two `members`; doubao-dialogue.mjs): a pair's
+ * id is its two voices' ("a+b"), as `openfilm get tts --voice` takes it.
+ * @param {{ voices: object[] }} voices
+ */
+export function withPairs(voices) {
+  return { ...voices, voices: [...voices.voices, ...DOUBAO_PAIRS.map((p) => ({ provider: 'doubao', id: p.id, name: p.name, description: p.description,
+    gender: null, age: null, language: p.language, accent: null, tags: [], sample: p.sample, featured: true, uses: null, pair: true, members: p.members }))] };
+}
+
+/** Only an indexed public recording on the provider's own CDN, never an arbitrary URL supplied by the page. */
+function officialVoiceSample(/** @type {string} */ rel) {
+  if (!rel.startsWith('voices/doubao/')) return null;
+  const voice = /** @type {{ voices: { provider: string, sample?: string, sampleSource?: string }[] }} */ (libraryVoices()).voices.find((v) => v.provider === 'doubao' && v.sample === rel);
+  if (!voice?.sampleSource) return null;
+  try {
+    const url = new URL(voice.sampleSource);
+    return url.protocol === 'https:' && url.hostname === 'lf3-static.bytednsdoc.com' && !url.username && !url.password
+      && url.pathname.startsWith('/obj/eden-cn/lm_hz_ihsph/ljhwZthlaukjlkulzlp/portal/bigtts/') ? url.href : null;
+  } catch { return null; }
+}
 
 /** A voice's id among the starred things: `voice:<service>/<its id there>`. */
 export const voiceKey = (/** @type {{ provider: string, id: string }} */ v) => `voice:${v.provider}/${v.id}`;
@@ -258,6 +340,8 @@ function starrable() {
   return new Set([
     ...(/** @type {{ items: { id: string }[] }} */ (libraryIndex())).items.map((item) => item.id),
     ...(/** @type {{ voices: { provider: string, id: string }[] }} */ (libraryVoices())).voices.map(voiceKey),
+    ...ownVoiceKeys(),
+    ...(/** @type {{ packs: { id: string }[] }} */ (libraryIndex())).packs.map((p) => `pack:${p.id}`),
   ]);
 }
 
@@ -266,6 +350,16 @@ export function libraryFile(/** @type {unknown} */ rel) {
   if (typeof rel !== 'string' || !rel) return null;
   const file = located(rel);
   return file && statSync(file).isFile() ? file : null;
+}
+
+/**
+ * A Community sound or piece of music not here yet, sent to `res` as it is fetched (so a click is heard at once);
+ * false when it is to be served the usual way.
+ * @param {unknown} rel @param {import('node:http').ServerResponse} res
+ */
+export function streamLibrary(rel, res) {
+  if (typeof rel !== 'string' || !isCommunity(rel) || !SAFE_PLACE.test(rel) || rel.split('/').some((part) => part === '..' || part === '.')) return Promise.resolve(false);
+  return streamCommunity(libraryCache(), rel, res);
 }
 
 /** libraryFile, fetching it first when it is a published part not here yet (fetchLibrary). */
@@ -277,20 +371,22 @@ export async function libraryFileFetched(/** @type {unknown} */ rel) {
 /** Where the starred things are kept in the shared prefs.json. */
 const FAVORITES = 'libraryFavorites';
 
-/** Skill stars outlive a catalog refresh or a change of project; they are shown when that uid is available again. */
-const skillFavorite = (/** @type {string} */ id) => id.startsWith('skill:') && SKILL_UID.test(id.slice(6));
+/** A file of the person's own library starred: by its identity there (asset-library.mjs), so it stays starred as it moves. */
+export const SAVED_STAR = /^saved:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
-/** The ids the person starred, in order: available library things and voices, and skills by their uid. */
-export function libraryFavorites() {
-  const starred = sharedPref(FAVORITES);
-  const ids = starrable();
-  return Array.isArray(starred) ? [...new Set(starred.filter((id) => typeof id === 'string' && (ids.has(id) || skillFavorite(id))))] : [];
+/** Keep skill stars by UID so they survive going offline or moving between Installed and Discover. */
+function favoriteIds(/** @type {unknown} */ ids) {
+  if (!Array.isArray(ids)) return [];
+  const known = starrable();
+  return [...new Set(ids.filter((id) => typeof id === 'string' && (known.has(id) || SAVED_STAR.test(id) || (id.startsWith('skill:') && SKILL_UID.test(id.slice(6))))))];
 }
 
-/** Keep valid skill ids and available library things as favorites. Returns them as kept. */
+export function libraryFavorites() {
+  return favoriteIds(sharedPref(FAVORITES));
+}
+
 export function setLibraryFavorites(/** @type {unknown} */ ids) {
-  const known = starrable();
-  const next = Array.isArray(ids) ? [...new Set(ids.filter((id) => typeof id === 'string' && (known.has(id) || skillFavorite(id))))] : [];
+  const next = favoriteIds(ids);
   setSharedPref(FAVORITES, next);
   return next;
 }

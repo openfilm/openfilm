@@ -1,0 +1,225 @@
+{
+  "order": 25,
+  "icon": "plug",
+  "title": {
+    "en": "Vimeo",
+    "zh-CN": "Vimeo",
+    "ja": "Vimeo",
+    "ko": "Vimeo",
+    "es": "Vimeo"
+  },
+  "summary": {
+    "en": "Publish with Vimeo: the agent uploads the film, sets its title and description, and reads how it does.",
+    "zh-CN": "用 Vimeo 发布：智能体上传片子、填标题和简介，还能看数据。",
+    "ja": "Vimeo で公開：映像をアップロードし、タイトルや説明を付け、反応を確認します。",
+    "ko": "Vimeo로 게시: 영상을 올리고, 제목과 설명을 달고, 반응을 확인합니다.",
+    "es": "Publica con Vimeo: el agente sube la película, pone título y descripción y consulta cómo va."
+  },
+  "details": {
+    "en": "When to use it: you host or share films on Vimeo (Professional, Studio or Enterprise plans; in beta).\nHow: Connect and sign in once in your browser, then just ask in the chat, for example \"Upload this film to Vimeo and write its title and description\". The agent asks you before it changes anything in Vimeo.",
+    "zh-CN": "什么时候用：你在 Vimeo 上托管或分享片子（需要专业版、工作室版或企业版；测试中）。\n怎么用：点「连接」在浏览器里登录一次，之后在对话里直接说，比如「把这部片子上传到 Vimeo，标题和简介你来写」。智能体改动 Vimeo 里的东西前会先问你。",
+    "ja": "使うとき：Vimeo で映像を公開・共有しているとき（Professional、Studio、Enterprise プラン、ベータ）。\n使い方：「接続」でブラウザから一度サインインし、あとはチャットで頼むだけ。例：「この映像を Vimeo にアップロードして、タイトルと説明も書いて」。Vimeo の中を変える前には確認されます。",
+    "ko": "언제: Vimeo에서 영상을 호스팅·공유할 때(Professional, Studio, Enterprise 요금제, 베타).\n사용법: 「연결」을 눌러 브라우저에서 한 번 로그인한 뒤 대화에서 바로 말하면 됩니다. 예: \"이 영상을 Vimeo에 올리고 제목과 설명도 써 줘\". Vimeo의 내용을 바꾸기 전에는 먼저 묻습니다.",
+    "es": "Cuándo: alojas o compartes películas en Vimeo (planes Professional, Studio o Enterprise; en beta).\nCómo: conecta e inicia sesión una vez en el navegador; luego pídelo en el chat, por ejemplo «Sube esta película a Vimeo y escribe su título y descripción». El agente te pregunta antes de cambiar algo en Vimeo."
+  },
+  "examples": {
+    "zh-CN": [
+      {
+        "say": "把这部片子上传到 Vimeo，标题和简介你来写",
+        "does": "导出后上传到 Vimeo，按片子内容写好标题和简介，把链接给你。"
+      },
+      {
+        "say": "看看我 Vimeo 上最近三条视频的播放数据，哪条看完率最高",
+        "does": "读三条视频的播放和完播数据，比较后告诉你哪条最好、可能为什么。"
+      },
+      {
+        "say": "把 Vimeo 上「发布会」那条视频的简介改成新的版本",
+        "does": "找到那条视频，把简介改成新版本，改前先给你看一眼。"
+      }
+    ],
+    "en": [
+      {
+        "say": "Upload this film to Vimeo and write its title and description",
+        "does": "Exports, uploads to Vimeo, writes a title and description from the film and gives you the link."
+      },
+      {
+        "say": "Look at the stats of my last three Vimeo videos: which one is watched to the end most?",
+        "does": "Reads plays and completion for the three videos and tells you which does best, and likely why."
+      },
+      {
+        "say": "Update the description of the \"Launch\" video on Vimeo",
+        "does": "Finds that video and updates its description, showing you the new text first."
+      }
+    ],
+    "ja": [
+      {
+        "say": "この映像を Vimeo にアップロードして、タイトルと説明も書いて",
+        "does": "書き出して Vimeo に上げ、内容に合うタイトルと説明を書いてリンクを伝えます。"
+      },
+      {
+        "say": "Vimeo の最近の 3 本の再生データを見て、最後まで見られているのはどれ？",
+        "does": "3 本の再生数と完了率を比べ、どれが一番か、理由も推測して伝えます。"
+      },
+      {
+        "say": "Vimeo の「発表会」動画の説明を新しくして",
+        "does": "その動画を見つけて説明を新しくします。変える前に一度見せます。"
+      }
+    ],
+    "ko": [
+      {
+        "say": "이 영상을 Vimeo에 올리고 제목과 설명도 써 줘",
+        "does": "내보내서 Vimeo에 올리고 내용에 맞게 제목과 설명을 쓴 뒤 링크를 알려 줍니다."
+      },
+      {
+        "say": "내 Vimeo 최근 영상 세 개의 재생 데이터를 보고, 끝까지 본 비율이 가장 높은 건 어느 거야?",
+        "does": "세 영상의 재생과 완주 데이터를 비교해 어느 것이 가장 좋은지, 이유도 짐작해 알려 줍니다."
+      },
+      {
+        "say": "Vimeo의 「런칭」 영상 설명을 새 버전으로 바꿔 줘",
+        "does": "그 영상을 찾아 설명을 바꾸고, 바꾸기 전에 먼저 보여 줍니다."
+      }
+    ],
+    "es": [
+      {
+        "say": "Sube esta película a Vimeo y escribe su título y descripción",
+        "does": "Exporta, sube a Vimeo, escribe título y descripción según la película y te da el enlace."
+      },
+      {
+        "say": "Mira las estadísticas de mis tres últimos vídeos de Vimeo: ¿cuál se ve hasta el final más?",
+        "does": "Lee reproducciones y finalización de los tres vídeos y te dice cuál va mejor y quizá por qué."
+      },
+      {
+        "say": "Actualiza la descripción del vídeo «Lanzamiento» en Vimeo",
+        "does": "Encuentra ese vídeo y actualiza su descripción, enseñándote antes el texto nuevo."
+      }
+    ]
+  },
+  "showcase": {
+    "highlights": {
+      "zh-CN": [
+        {
+          "icon": "upload",
+          "title": "一句话发布",
+          "text": "导出、上传、写标题和简介，一次做完。"
+        },
+        {
+          "icon": "gauge",
+          "title": "看数据",
+          "text": "播放、完播和来源，比较几条视频。"
+        },
+        {
+          "icon": "pen",
+          "title": "改信息",
+          "text": "标题、简介和标签随时更新。"
+        },
+        {
+          "icon": "video",
+          "title": "你的视频库",
+          "text": "列出和查找你 Vimeo 上的视频。"
+        }
+      ],
+      "en": [
+        {
+          "icon": "upload",
+          "title": "Publish in a line",
+          "text": "Export, upload, title and description, all at once."
+        },
+        {
+          "icon": "gauge",
+          "title": "Read the numbers",
+          "text": "Plays, completion and sources, compared across videos."
+        },
+        {
+          "icon": "pen",
+          "title": "Edit the details",
+          "text": "Titles, descriptions and tags updated any time."
+        },
+        {
+          "icon": "video",
+          "title": "Your library",
+          "text": "Lists and finds the videos in your Vimeo."
+        }
+      ],
+      "ja": [
+        {
+          "icon": "upload",
+          "title": "ひと言で公開",
+          "text": "書き出し・アップロード・タイトルと説明まで一度に。"
+        },
+        {
+          "icon": "gauge",
+          "title": "数字を見る",
+          "text": "再生・完了率・流入元を動画ごとに比べます。"
+        },
+        {
+          "icon": "pen",
+          "title": "情報を直す",
+          "text": "タイトル・説明・タグをいつでも更新。"
+        },
+        {
+          "icon": "video",
+          "title": "あなたのライブラリ",
+          "text": "Vimeo の動画を一覧・検索します。"
+        }
+      ],
+      "ko": [
+        {
+          "icon": "upload",
+          "title": "한마디로 게시",
+          "text": "내보내기·업로드·제목과 설명까지 한 번에."
+        },
+        {
+          "icon": "gauge",
+          "title": "데이터 보기",
+          "text": "재생·완주율·유입 경로를 영상별로 비교합니다."
+        },
+        {
+          "icon": "pen",
+          "title": "정보 수정",
+          "text": "제목·설명·태그를 언제든 바꿉니다."
+        },
+        {
+          "icon": "video",
+          "title": "내 영상 라이브러리",
+          "text": "Vimeo의 영상을 목록으로 보고 찾습니다."
+        }
+      ],
+      "es": [
+        {
+          "icon": "upload",
+          "title": "Publica con una frase",
+          "text": "Exportar, subir, título y descripción, todo a la vez."
+        },
+        {
+          "icon": "gauge",
+          "title": "Lee los números",
+          "text": "Reproducciones, finalización y origen, comparados entre vídeos."
+        },
+        {
+          "icon": "pen",
+          "title": "Edita los datos",
+          "text": "Títulos, descripciones y etiquetas cuando quieras."
+        },
+        {
+          "icon": "video",
+          "title": "Tu biblioteca",
+          "text": "Lista y busca los vídeos de tu Vimeo."
+        }
+      ]
+    }
+  },
+  "about": "uploads films, edits their details and reads their analytics on Vimeo (Vimeo's own MCP server, beta)",
+  "category": "tool",
+  "difficulty": 1,
+  "ease": 5,
+  "cost": "free",
+  "audience": {
+    "en": "Anyone who publishes films on Vimeo",
+    "zh-CN": "在 Vimeo 发布片子的人",
+    "ja": "Vimeo で映像を公開する人",
+    "ko": "Vimeo에 영상을 게시하는 사람",
+    "es": "Quien publica sus películas en Vimeo"
+  },
+  "on": false,
+  "beta": true
+}

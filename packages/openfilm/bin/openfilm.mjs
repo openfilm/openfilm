@@ -2,19 +2,27 @@
 import { setPriority } from 'node:os';
 import { parseArgs } from 'node:util';
 
+/* an agent the desktop app started says so (OPENFILM_AGENT): Studio is beside it; any other is in a terminal */
+const IN_APP = Boolean(process.env.OPENFILM_AGENT?.startsWith('app:'));
+
+/* in the app, Studio is open on the project and the app updates itself: `open` and `update` are not said there */
 const USAGE = `openfilm — a film is a function of time: given t, it draws that moment
 
-  openfilm open    [folder | url]      start or open a project; Studio shows it to the person
-  openfilm look    [what] [t | a-b]    check the film and draw it: a contact sheet with its sound and loudness
-  openfilm render  [a-b]               the MP4, saved beside film.html
-  openfilm get     [what] [--options]  media: free from OpenFilm's library (music, sounds, transitions…), else a connected service
-  openfilm canvas  [apply <steps>]     the canvas beside the edit: read it, or lay out notes, files and what to make on it
-  openfilm skills                      the skills this film can be made with; \`openfilm skill <name>\` prints one
-  openfilm update                      the newest OpenFilm; Studio starts again on it
-  openfilm doctor                      what this computer has for OpenFilm, to paste into an issue
+${[
+  ...(IN_APP ? [] : ['  openfilm open    [folder | url]      start or open a project; Studio shows it to the person']),
+  '  openfilm look    [what] [t | a-b]    check the film and draw it: a contact sheet with its sound and loudness',
+  '  openfilm render  [a-b]               the MP4, saved beside film.html',
+  '  openfilm get     [what] [--options]  media: the person\'s own, OpenFilm\'s free library (music, sound effects, stickers), else a connected service',
+  '  openfilm skills                      the skills installed for this film; `openfilm skill <name>` prints one',
+  '  openfilm publish [folder]            check a workbench or a skill as the community\'s review will, before you publish it',
+  '  openfilm <name> [command] …          a command a plugin or a skill brings; its skill or its --help says what it does',
+  ...(IN_APP ? [] : ['  openfilm update                      the newest OpenFilm; Studio starts again on it']),
+  '  openfilm doctor                      what this computer has for OpenFilm, to paste into an issue',
+].join('\n')}
 
-  Run with no arguments for the manual; \`openfilm <command> --help\` for one command's options; --version for the version.
-  look, render, get and canvas work on the project around the current folder.
+  Run with no arguments for how to work here and the skills that say how; \`openfilm <command> --help\` for one command's options;
+  --version for the version.
+  look, render and get work on the project around the current folder.
   Exit status: 0 done, 1 the film or the command failed (the output says why), 2 not a project or a wrong command.`;
 
 /* one command's help: what it does, what it takes, where its output goes */
@@ -64,44 +72,21 @@ openfilm skill remove <name>
   look: `openfilm look [what] [t | a-b]
 
   what   the project (default), a web page (.html), or a media file (video, image, sound)
-  t      one frame at full size, e.g. 4.5
+  t      one frame, e.g. 4.5: a JPEG at most 1568 px on its long edge (a PNG when it has transparency)
   a-b    a dense sheet of a stretch, e.g. 3-6
+         several, e.g. 8.4-8.8 26.5 35.9-36.3: one sheet of them all, in one look (every cut checked at once):
+         a time is one frame, a range three across it (--count frames)
          without either: a contact sheet of the whole thing, its sound and loudness, and a check that
          the same t draws the same picture
 
-  Writes PNGs under .film/cache/look/ of the project and prints their paths. A project Studio has not shown yet is
+  Writes pictures under .film/cache/look/ of the project and prints their paths. A project Studio has not shown yet is
   opened in Studio first, so the person watches it.
 
-  --count <n>     frames in a sheet (12)
+  --count <n>     frames in a sheet (12), or across each range of several (3)
   --full          watch every frame of the rendered film (what render wrote beside film.html), or of a video
                   given: white flashes, frames unlike those on both sides, still pictures (6 s or more) and
                   black, each with its time
   --loudness=<n>  say how far the mix is from n LUFS and -1 dBTP, the target render --loudness brings it to`,
-  canvas: `openfilm canvas [apply <steps>]
-
-  The project's canvas: a board beside the edit where the person lays out notes, the project's files and nodes that
-  make a picture, a clip or a sound, wired into each other. Nothing on it is in the film until it is put on the timeline.
-
-  canvas                 the board as JSON: nodes (id, x, y; a note's text, a file's path, a group's name and color,
-                         a making node's make, prompt, model, opts, versions and the one shown, path) and wires
-                         (from, to, order: what goes into a node, in that order)
-  canvas apply <steps>   steps on it, all taken or none: a JSON list, a .json file, or - to read it
-    {"op":"add","kind":"note|file|image|video|sfx|music|tts|cut|group","id":"…", text | path | prompt, via, model,
-      preset, opts: {ratio, sec, mode, quality, size, count, voice}, name, color, x, y, w, h, group: "<group id>",
-      inputs: ["<id>", …], around: ["<id>", …]}
-                         a node; its id names it for later steps. Without x, y it goes right of its inputs (wired into
-                         it in that order), else below the rest. A group made around nodes holds them. A cut is
-                         the order what is wired into it goes onto the timeline in, when the person sends it there.
-    {"op":"set","id":"…", …}   {"op":"remove","id":"…"}   {"op":"wire","from":"…","to":"…"}   {"op":"unwire",…}
-    {"op":"version","id":"…","path":"assets/…"}   a file made with \`openfilm get\` as a making node's newest version
-
-  A making node is asked its prompt with the notes wired into it first; a tts node speaks it in opts.voice (a voiceId
-  from \`openfilm get voice\`; none: its service's first voice in the person's language). How a video uses the
-  pictures wired in is its opts.mode: text, first (the first picture is its first frame), firstLast (first and last
-  frame), refs (references for people and places) or omni (pictures, a voice or a clip). A picture's preset puts
-  ready words first: portrait, fullBody, expressions, turnaround16 (a character), storyboard, cameras9, scene,
-  product… The person presses Make (a group's Make all makes it in wire order), or you make it with \`openfilm get\`
-  and add the file as a version. The person sees each change on the board at once.`,
   render: `openfilm render [a-b]
 
   Render the project around the current folder to video.
@@ -114,11 +99,13 @@ openfilm skill remove <name>
   --blur          motion blur (8 samples)   --samples <n>   --shutter <0..1>
   --alpha         transparent background    --workers <n>   parallel browsers
   --subtitles     burn in a project's subtitles from before caption tracks
-  --loudness=<n>  the sound at n LUFS (-70 to -5; -14 for online video), true peaks under -1 dBTP; the
-                  picture is not touched. Write it with = so the minus sign is read as the value`,
+  --loudness=<n>  the sound at n LUFS (-70 to -5; -14 for online video, what Studio exports at unless the
+                  person picks another), true peaks under -1 dBTP; the picture is not touched. Write it
+                  with = so the minus sign is read as the value. Without it, the sound as mixed, its peaks
+                  caught so it never clips`,
 };
 
-/* `openfilm` alone: the manual, the whole of what an agent needs to know. `get` takes any options its verb has,
+/* `openfilm` alone: the system prompt (src/system-prompt.mjs) and OpenFilm's own skills, each in a line. `get` takes any options its verb has,
    so it goes to Studio (studio/client.mjs) before the fixed options below are parsed. */
 const RAW = process.argv.slice(2);
 /* the command as the agent can type it here: the one that ran it when it says so (OPENFILM_RUN: the development
@@ -127,17 +114,18 @@ const RAW = process.argv.slice(2);
 const RUN = process.env.OPENFILM_RUN || (process.env.npm_command === 'exec' ? 'npx -y openfilm@latest' : 'openfilm');
 /**
  * A newer openfilm, said once in a line before what the command prints: looked up on npm (at most daily, briefly) when
- * a session starts (the manual, open), else only as learnt before, so look, render and get never wait for it.
+ * a session starts (the system prompt, open), else only as learnt before, so look, render and get never wait for it.
  */
 const updateNotice = async (network) => {
   const latest = await (await import('../studio/client.mjs')).newerOpenfilm({ network }).catch(() => null);
   if (latest) console.error(`openfilm ${latest} is out (this is an older one): \`${RUN} update\` updates it, and Studio with it.`);
 };
 if (RAW.length === 0) {
-  const { readFileSync } = await import('node:fs');
   await updateNotice(true);
-  const { asRun } = await import('../src/skills.mjs');
-  console.log(asRun(readFileSync(new URL('../MANUAL.md', import.meta.url), 'utf8'), RUN));
+  const { asRun, promptSkills } = await import('../src/skills.mjs');
+  const { systemPrompt } = await import('../src/system-prompt.mjs');
+  const where = IN_APP ? 'app' : 'terminal';
+  console.log(asRun(`${systemPrompt(where)}\n${promptSkills()}`, RUN).trimEnd());
   process.exit(0);
 }
 if (RAW.length === 1 && (RAW[0] === '--version' || RAW[0] === '-v')) {
@@ -145,7 +133,8 @@ if (RAW.length === 1 && (RAW[0] === '--version' || RAW[0] === '-v')) {
   console.log(JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version);
   process.exit(0);
 }
-if (RAW[0] !== 'update') await updateNotice(RAW[0] === 'open');
+/* not again in a command a plugin's runs (OPENFILM_PLUGIN): the `openfilm` that ran the plugin has said it */
+if (RAW[0] !== 'update' && !process.env.OPENFILM_PLUGIN) await updateNotice(RAW[0] === 'open');
 /**
  * What the person changed in Studio while the agent worked and Studio kept, said once before a command's answer, on
  * stderr (stdout stays the command's own); Studio hears it was said once it is printed.
@@ -156,7 +145,14 @@ const keptNotice = async (/** @type {string} */ from = '.') => {
   console.error(note.line);
   await note.said();
 };
-if (RAW[0] === 'get') {
+/* a command a plugin brings (src/plugin-commands.mjs): every word after its name is its own, as typed. OpenFilm's own
+   commands are never a plugin's */
+const OWN = ['open', 'look', 'render', 'get', 'skills', 'skill', 'update', 'doctor'];
+const ofPlugin = RAW[0] && !RAW[0].startsWith('-') && !OWN.includes(RAW[0])
+  ? await (await import('../src/plugin-commands.mjs')).runPluginCommand(RAW, RUN) : null;
+if (ofPlugin != null) {
+  process.exitCode = ofPlugin;
+} else if (RAW[0] === 'get') {
   await keptNotice();
   let result;
   try { result = await (await import('../studio/client.mjs')).getMedia(RAW.slice(1), (line) => console.error(line)); }
@@ -212,10 +208,10 @@ if (RAW[0] === 'get') {
         return m.render(args, opts);
       }));
     },
-    canvas: () => import('../studio/client.mjs').then((m) => m.canvasCommand(args, (line) => console.error(line))),
     update: () => import('../studio/client.mjs').then((m) => m.updateOpenfilm((line) => console.error(line))),
     skills: () => import('../src/skills-cli.mjs').then((m) => m.skillsCommand(RUN)),
     skill: () => import('../src/skills-cli.mjs').then((m) => m.skillCommand(args, RUN)),
+    publish: () => import('../src/publish-cli.mjs').then((m) => m.publishCommand(args, RUN)),
     doctor: () => import('../src/doctor.mjs').then(async (m) => {
       const report = await m.doctor({ run: RUN });
       return { ok: report.ok, lines: [report.text] };
@@ -300,11 +296,10 @@ if (RAW[0] === 'get') {
 
   if (cmd === 'look' || cmd === 'render') {
     const { existsSync } = await import('node:fs');
-    const { dirname, join, resolve } = await import('node:path');
-    /* a project is made by \`open\`: look and render work in one (the one around here, or around what they look at) */
-    const around = (from) => { for (let up = resolve(from); up !== dirname(up); up = dirname(up)) if (existsSync(join(up, 'film.html'))) return up; return null; };
-    const target = args.find((a) => !/^\d+(\.\d+)?(-\d+(\.\d+)?)?$/.test(a));
-    const project = around('.') ?? (target ? around(target) : null);
+    const { join, resolve } = await import('node:path');
+    /* a project is made by \`open\`: look and render work in one (the one around here, or around what they look at),
+       found as a plugin's look finds it (src/plugin-look.mjs) */
+    const project = (await import('../src/plugin-look.mjs')).lookProject(args);
     if (!project) { console.error(`${RUN} ${cmd}: ${resolve('.')} is not in a project; \`${RUN} open\` makes one and shows it in Studio`); process.exit(2); }
     /* a project Studio has never shown (copied, cloned, forked): show it now, so the person watches from the start */
     if (!existsSync(join(project, '.film', 'opened'))) {

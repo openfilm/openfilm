@@ -8,7 +8,7 @@
 import React from 'react';
 import type { StudioRef } from './host';
 import { libraryUrl } from './library.ts';
-import type { OwnProvider, ProvidersState } from './providers';
+import { useProviders, type OwnProvider, type ProvidersState } from './providers.ts';
 
 export interface LibraryVoice {
   provider: string;
@@ -28,7 +28,17 @@ export interface LibraryVoice {
   featured?: boolean;
   /** how much it is used, where its service says (characters spoken in a year) */
   uses?: number | null;
+  /** two voices that speak a dialogue together (its id is theirs, "a+b"): each line of the words is one turn */
+  pair?: boolean;
+  members?: { id: string; name: string; gender: 'm' | 'f' | null }[];
 }
+
+/** A pair of two of a service's voices, made by the person (VoicesPane's "Choose two voices"). */
+export const voicePair = (a: LibraryVoice, b: LibraryVoice): LibraryVoice => ({
+  provider: a.provider, id: `${a.id}+${b.id}`, name: `${a.name} & ${b.name}`, description: null, gender: null, age: null,
+  language: a.language, accent: null, tags: [], sample: null, pair: true,
+  members: [{ id: a.id, name: a.name, gender: a.gender === 'f' || a.gender === 'm' ? a.gender : null }, { id: b.id, name: b.name, gender: b.gender === 'f' || b.gender === 'm' ? b.gender : null }],
+});
 
 export interface VoiceService { id: string; name: string; models: { id: string; name: string }[] }
 export interface LibraryVoices { version: number; providers: VoiceService[]; voices: LibraryVoice[] }
@@ -62,7 +72,11 @@ export function useLibraryVoices(): LibraryVoices | null {
 /** A voice's id among the library's starred things (the server's voiceKey). */
 export const voiceKey = (v: Pick<LibraryVoice, 'provider' | 'id'>): string => `voice:${v.provider}/${v.id}`;
 
-export const sampleUrl = (v: LibraryVoice): string | null => (v.sample ? libraryUrl(v.sample) : null);
+export const sampleUrl = (v: LibraryVoice): string | null => ('previewUrl' in v && typeof v.previewUrl === 'string' ? v.previewUrl : v.sample ? libraryUrl(v.sample) : null);
+
+/** A generated file can be auditioned before an explicit timeline insertion. */
+export interface VoiceSpeech { src: string; url: string; add: () => Promise<string | null> }
+export type SpeakVoice = (voice: LibraryVoice, access: VoiceAccess, text: string) => Promise<VoiceSpeech | string | null>;
 
 /** A language tag's first part, the one the drawer sorts by: `en-US` → `en`. */
 export const languageOf = (v: LibraryVoice): string | null => v.language?.split(/[-_]/)[0]?.toLowerCase() || null;
@@ -88,15 +102,7 @@ export function voiceAccess(services: readonly VoiceService[], state: Pick<Provi
 
 /** What Settings › Services has (lib/providers), read once while the voices are shown. */
 export function useServices(): Pick<ProvidersState, 'providers'> | null {
-  const [state, setState] = React.useState<Pick<ProvidersState, 'providers'> | null>(null);
-  React.useEffect(() => {
-    let live = true;
-    void fetch('/api/providers', { cache: 'no-store' })
-      .then((r) => (r.ok ? r.json() : null), () => null)
-      .then((body: ProvidersState | null) => { if (live && body && Array.isArray(body.providers)) setState(body); });
-    return () => { live = false; };
-  }, []);
-  return state;
+  return useProviders().state;
 }
 
 /** The chat's reference to a voice: who it is, at which service, and how the agent speaks in it now. */

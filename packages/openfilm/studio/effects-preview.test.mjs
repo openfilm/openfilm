@@ -1,0 +1,83 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
+import { mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+import { filmHtml } from '../src/film-doc.mjs';
+import { launch } from '../src/host.mjs';
+import { studioHomeDir } from '../src/locations.mjs';
+import { openProject } from './server/projects.mjs';
+import { startStudio } from './server/server.mjs';
+import { patchProjectSettings } from './server/project-settings.mjs';
+const model = join(studioHomeDir(), 'cache/vision/1/refine.onnx');
+const portrait = process.env.OPENFILM_VISION_TEST_PORTRAIT;
+test('effects preview separates final quality, cancels work, yields to playback, persists and plays detailed caches', {
+  timeout: 240000, skip: !portrait || !existsSync(portrait) || !existsSync(model) ? 'portrait and optional refinement model required' : false,
+}, async () => {
+  const scratch = await mkdtemp(join(tmpdir(), 'of-effects-preview-'));
+  const names = ['HOME','SHARED_HOME','LIBRARY','SAVED','EXPORTS'], saved = new Map(names.map((n) => [`OPENFILM_${n}`, process.env[`OPENFILM_${n}`]]));
+  for (const name of names) process.env[`OPENFILM_${name}`] = join(scratch,name.toLowerCase());
+  let studio, browser;
+  try {
+    const cache = join(process.env.OPENFILM_HOME,'cache/vision/1'); await mkdir(cache,{recursive:true}); await symlink(model,join(cache,'refine.onnx'));
+    const root = join(process.env.OPENFILM_LIBRARY,'Preview'); await mkdir(root,{recursive:true});
+    execFileSync('ffmpeg',['-v','error','-loop','1','-i',portrait,'-vf','scale=640:360','-t','4','-r','10','-pix_fmt','yuv420p',join(root,'v.mp4')]);
+    const value = filmHtml({stage:{w:640,h:360},tracks:[{clips:[{id:'v',src:'v.mp4',time:[0,4],style:'--of-cutout:1;--of-cutout-mode:4;--of-beauty-smooth:.25'}]}]});
+    await writeFile(join(root,'film.html'),value);
+    const project = await openProject(root); await patchProjectSettings(root,{fps:24});
+    studio = await startStudio({port:0,openBrowser:()=>{}}); browser = await launch();
+    const page = await browser.newPage({viewport:{width:1600,height:1100},locale:'en-US'}), errors=[];
+    page.on('pageerror',(e)=>errors.push(e.message));
+    await page.addInitScript(()=>{localStorage.setItem('openfilm.language','en');localStorage.setItem('openfilm.project.timelineH','350');});
+    await page.goto(`${studio.origin}/projects/${project.id}?key=${studio.key}`);
+    await page.locator('[data-block-kind="video"]').click({position:{x:25,y:10}});
+    await page.locator('[data-inspector-workspace]').getByRole('tab',{name:'Effects',exact:true}).click();
+    await page.locator('[data-vision-profile="quality"]').waitFor({timeout:60000});
+    await page.getByRole('button',{name:'Preview strategy',exact:true}).click();
+    await page.getByRole('option',{name:'Smooth preview',exact:true}).click();
+    assert.equal(await page.evaluate(()=>localStorage.getItem('openfilm.preview.effects')),'smooth');
+    const render = page.getByRole('button',{name:'Render detailed preview',exact:true});
+    await render.click();
+    await page.locator('[data-preview-cache-state="making"]').first().waitFor({timeout:60000});
+    await page.getByRole('button',{name:'Cancel preview rendering',exact:true}).last().click();
+    await page.waitForFunction(()=>!document.querySelector('[data-preview-cache-state="making"]'));
+    await render.click();
+    await page.locator('[data-preview-cache-state="making"]').first().waitFor({timeout:60000});
+    await page.keyboard.press('Home');
+    await page.getByRole('button',{name:'Play',exact:true}).click();
+    await page.locator('[data-block-kind="video"]').click({position:{x:25,y:10}});
+    await page.locator('[data-inspector-workspace]').getByRole('tab',{name:'Effects',exact:true}).click();
+    await page.locator('[data-preview-cache-state="paused"]').first().waitFor({timeout:10000});
+    const liveFrame = page.frames().find((f)=>f.url().includes('/film.html'));
+    assert.ok(liveFrame);
+    await liveFrame.waitForFunction(()=>window.__filmEditor.stage.vision('v').preview==='draft',null,{timeout:10000});
+    await page.getByRole('button',{name:'Pause',exact:true}).click();
+    await page.locator('[data-block-kind="video"]').click({position:{x:25,y:10}});
+    await page.locator('[data-inspector-workspace]').getByRole('tab',{name:'Effects',exact:true}).click();
+    await page.locator('[data-preview-cache-state="ready"]').first().waitFor({timeout:120000});
+    assert.equal(await readFile(join(root,'film.html'),'utf8'),value,'preview strategies and cached renders do not alter the chosen final effect');
+    await page.reload();
+    await page.locator('[data-block-kind="video"]').click({position:{x:25,y:10}});
+    await page.locator('[data-inspector-workspace]').getByRole('tab',{name:'Effects',exact:true}).click();
+    await page.locator('[data-preview-cache-state="ready"]').first().waitFor({timeout:30000});
+    assert.equal(await page.evaluate(()=>localStorage.getItem('openfilm.preview.effects')),'smooth');
+    await page.keyboard.press('Home');
+    await page.getByRole('button',{name:'Play',exact:true}).click();
+    const film = page.frames().find((f)=>f.url().includes('/film.html'));
+    assert.ok(film);
+    await film.waitForFunction(()=>[...document.querySelectorAll('video')].some(v=>v.src.includes('__film/preview/')&&v.style.visibility==='visible'&&!v.paused));
+    await page.getByRole('button',{name:'Pause',exact:true}).click();
+    await page.locator('[data-block-kind="video"]').click({position:{x:25,y:10}});
+    await page.locator('[data-inspector-workspace]').getByRole('tab',{name:'Effects',exact:true}).click();
+    await page.getByRole('button',{name:'Clear preview caches',exact:true}).click();
+    await page.waitForFunction(()=>!document.querySelector('[data-preview-cache-state="ready"]'));
+    const files = await readdir(join(root,'.film/cache/preview')); assert.equal(files.some((p)=>p.endsWith('.mp4')),false);
+    assert.deepEqual(errors,[]);
+  } finally {
+    await browser?.close(); await studio?.close();
+    for (const [key,value] of saved) { if (value===undefined) delete process.env[key]; else process.env[key]=value; }
+    await rm(scratch,{recursive:true,force:true});
+  }
+});

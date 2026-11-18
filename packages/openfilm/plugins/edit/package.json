@@ -1,0 +1,9 @@
+{
+  "name": "openfilm-edit",
+  "private": true,
+  "browser": "ui.js",
+  "bin": {
+    "add": "add.mjs",
+    "look": "look.mjs"
+  }
+}

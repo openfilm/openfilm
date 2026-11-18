@@ -1,0 +1,5 @@
+{
+  "name": "openfilm-screening",
+  "private": true,
+  "browser": "ui.js"
+}

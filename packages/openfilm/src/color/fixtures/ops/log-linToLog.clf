@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ProcessList compCLFversion="3.0" id="fixture">
+    <Log inBitDepth="32f" outBitDepth="32f" style="linToLog">
+<LogParams base="10" logSideSlope="0.25" logSideOffset="0.6" linSideSlope="1.1" linSideOffset="0.01"/>
+    </Log>
+</ProcessList>

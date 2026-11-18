@@ -95,7 +95,7 @@ export function registerSkillsIpc(ipcMain, { trusted, projects, dataDir, mine, p
 
   handle('desktop:skills:texts', async ({ project: path, agent, names }) => {
     const cwd = await project(path);
-    const { readSkill, skillText } = await lib();
+    const { asRun, readSkill, skillText } = await lib();
     const wanted = Array.isArray(names) ? names.filter((n) => typeof n === 'string') : [];
     /* named in the message: any of OpenFilm's but those turned off, an official one installed or not (Try now), by
        the name the agent knows it by */
@@ -103,7 +103,8 @@ export function registerSkillsIpc(ipcMain, { trusted, projects, dataDir, mine, p
     const own = new Map((await agentOwn(agent, cwd)).map((s) => [s.name, s]));
     return wanted.flatMap((name) => {
       const skill = openfilm.get(name) ?? (own.has(name) ? readSkill(own.get(name).folder, 'mine') : null);
-      return skill ? [{ name, text: skillText(skill) }] : [];
+      /* `npx openfilm` (a skill written for a terminal) as the app's `openfilm`, as `openfilm skill` prints it */
+      return skill ? [{ name, text: asRun(skillText(skill), 'openfilm') }] : [];
     });
   });
 

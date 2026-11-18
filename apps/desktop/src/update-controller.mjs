@@ -10,13 +10,13 @@
  *   agent-busy | exporting | install-failed   Restart was refused or did not work (the update stays ready)
  */
 
-const NETWORK_CODES = ['ENOTFOUND', 'EAI_AGAIN', 'ECONNREFUSED', 'ECONNRESET', 'ETIMEDOUT', 'ERR_INTERNET_DISCONNECTED', 'ERR_NETWORK_CHANGED'];
+const NETWORK_CODES = ['ENOTFOUND', 'EAI_AGAIN', 'ECONNREFUSED', 'ECONNRESET', 'ETIMEDOUT', 'ERR_INTERNET_DISCONNECTED', 'ERR_NETWORK_CHANGED', 'ERR_QUIC_PROTOCOL_ERROR'];
 
 /** Which kind of failure an updater error is: the feed missing or the host busy, the network, or anything else. */
 export function classifyUpdateError(error) {
   if (error?.code === 'ERR_UPDATER_CHANNEL_FILE_NOT_FOUND' || [404, 429, 502, 503, 504].includes(error?.statusCode)) return 'unavailable';
   if (NETWORK_CODES.includes(error?.code)) return 'offline';
-  if (/net::ERR_(INTERNET_DISCONNECTED|NAME_NOT_RESOLVED|CONNECTION_[A-Z_]+|TIMED_OUT|NETWORK_CHANGED)/.test(error?.message ?? '')) return 'offline';
+  if (/net::ERR_(INTERNET_DISCONNECTED|NAME_NOT_RESOLVED|CONNECTION_[A-Z_]+|TIMED_OUT|NETWORK_CHANGED|QUIC_PROTOCOL_ERROR)/.test(error?.message ?? '')) return 'offline';
   return 'failed';
 }
 
@@ -81,7 +81,12 @@ export function createUpdateController({ updater, nativeUpdater = null, version,
     /** Check now; a check already under way is shared. Once an update is on its way there is nothing to check. */
     async check() {
       if (['downloading', 'staging', 'ready', 'installing'].includes(state.status)) return { ...state };
-      checking ??= (async () => updater.checkForUpdates())().catch(fail).finally(() => { checking = null; });
+      checking ??= (async () => {
+        const result = await updater.checkForUpdates();
+        /* The check resolves before its automatic download. That separate promise can reject after an error
+           event too; consume it here so an offline update cannot become an unhandled main-process exception. */
+        result?.downloadPromise?.catch(fail);
+      })().catch(fail).finally(() => { checking = null; });
       await checking;
       return { ...state };
     },

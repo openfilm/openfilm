@@ -94,7 +94,7 @@ test('nothing that fits is nothing found, and said so', async () => {
   if (semantic) assert.match(said.lines[0], /^No words of “qwzxv” are in OpenFilm's library; the 8 nearest in meaning, which may not fit:$/);
   else {
     assert.match(said.lines[0], /^Nothing in OpenFilm's library for “qwzxv”: make one with `openfilm get music`\.$/);
-    assert.match((await libraryGet('transition', { prompt: 'qwzxv' })).lines[0], /write it yourself/);
+    assert.match((await libraryGet('sticker', { prompt: 'qwzxv' })).lines[0], /write it yourself/);
   }
 });
 
@@ -113,8 +113,8 @@ test('with OpenFilm\'s service, what is meant is found with no word in common, a
   assert.ok(long.every(({ item }) => /** @type {number} */ (item.durationMs) >= 50000 || item.loop), 'music at least as long as asked, or a loop');
 });
 
-test('the library is part of `openfilm get`: a search verb beside each one that makes, a verb for each kind only it has', () => {
-  assert.deepEqual(Object.keys(LIBRARY_VERBS), ['music-search', 'sfx-search', 'transition', 'effect', 'filter', 'sticker', 'text', 'template']);
+test('the library is part of `openfilm get`: music and sounds beside what makes them, and stickers; the rest is the person\'s to pick in Studio', () => {
+  assert.deepEqual(Object.keys(LIBRARY_VERBS), ['music-search', 'sfx-search', 'sticker']);
   for (const v of libraryVerbs()) {
     assert.match(v.help, /^Free and offline/);
     assert.ok(v.options.prompt && v.options.take && v.options.limit);
@@ -126,15 +126,14 @@ test('the library is part of `openfilm get`: a search verb beside each one that 
 });
 
 test('a search prints each match\'s id to take, what it is like and where to see it', async () => {
-  const { code, lines } = await libraryGet('transition', { prompt: 'glitch', limit: '3' });
+  const { code, lines } = await libraryGet('sticker', { prompt: 'heart', limit: '3' });
   const text = lines.join('\n');
   assert.equal(code, 0);
-  assert.match(text, /^3 in OpenFilm's library for “glitch”, the best first/);
-  assert.match(text, /^ {4}openfilm\/transitions\/glitch$/m);
-  assert.match(text, /over a cut/);
-  assert.match(text, /see it: .*transitions[\\/]glitch[\\/]preview\.mp4/);
-  assert.match(text, /`openfilm get transition --take <id>`/);
-  assert.equal((await libraryGet('transition', { prompt: 'glitch', n: '2' })).lines.filter((l) => /^ {4}openfilm\//.test(l)).length, 2, '--n is --limit');
+  assert.match(text, /^3 in OpenFilm's library for “heart”, the best first/);
+  assert.match(text, /^ {4}openfilm\/stickers\/heart$/m);
+  assert.match(text, /see it: .*stickers[\\/]heart[\\/]preview\.mp4/);
+  assert.match(text, /`openfilm get sticker --take <id>`/);
+  assert.equal((await libraryGet('sticker', { prompt: 'heart', n: '2' })).lines.filter((l) => /^ {4}openfilm\//.test(l)).length, 2, '--n is --limit');
   const music = (await libraryGet('music-search', { prompt: 'calm piano', sec: '50' })).lines.join('\n');
   assert.match(music, /^ {4}has: calm, piano$/m, 'what of the prompt each has');
   assert.match(music, /None fits well enough, or the film needs its own\? Make one with `openfilm get music`, made to the prompt \(it costs\)\./);
@@ -160,10 +159,10 @@ test('--take copies a thing into the project and says what to write in film.html
   const before = process.cwd();
   process.chdir(join(root, 'scenes'));
   try {
-    const page = await libraryGet('transition', { take: 'openfilm/transitions/glitch' });
+    const page = await libraryGet('sticker', { take: 'openfilm/stickers/heart' });
     assert.equal(page.code, 0);
-    assert.ok(existsSync(join(root, 'saved/openfilm/transitions-glitch')));
-    assert.match(page.lines.join('\n'), /its middle on the cut[\s\S]*<iframe src="saved\/openfilm\/transitions-glitch\/glitch\.html"><\/iframe>/);
+    assert.ok(existsSync(join(root, 'saved/openfilm/stickers-heart')));
+    assert.match(page.lines.join('\n'), /on a track above what it goes over:\n {2}<iframe src="saved\/openfilm\/stickers-heart\/heart\.html#t=0,3"/);
     const sound = await libraryGet('sfx-search', { take: 'sounds/whoosh.m4a' });
     assert.ok(existsSync(join(root, 'assets/whoosh.m4a')));
     assert.match(sound.lines.join('\n'), /<audio src="assets\/whoosh\.m4a"><\/audio>/);
@@ -171,12 +170,9 @@ test('--take copies a thing into the project and says what to write in film.html
     writeFileSync(join(root, 'film.html'), '<!doctype html><html><body><section><audio src="assets/whoosh.m4a"></audio></section></body></html>');
     const again = (await libraryGet('sfx-search', { prompt: 'whoosh' })).lines.join('\n');
     assert.match(again, /^ {4}openfilm\/sounds\/whoosh\.m4a\n(?: {4}.*\n)*? {4}in this film already$/m);
-    const motion = await libraryGet('effect', { take: 'openfilm/motions/in-fade' });
-    assert.match(motion.lines.join('\n'), /@keyframes motion-in-fade \{ from \{ opacity: 0 \} \}[\s\S]*animation: motion-in-fade 0\.5s ease-out backwards/);
-    const look = await libraryGet('filter', { take: 'openfilm/filters/warm-film' });
-    assert.match(look.lines.join('\n'), /in Studio/);
-    assert.equal((await libraryGet('transition', { take: 'openfilm/nope' })).code, 2);
-    assert.equal((await libraryGet('music-search', { take: 'openfilm/transitions/glitch' })).code, 2, 'a thing of its own kind');
+    assert.equal((await libraryGet('sticker', { take: 'openfilm/nope' })).code, 2);
+    assert.equal((await libraryGet('music-search', { take: 'openfilm/stickers/heart' })).code, 2, 'a thing of its own kind');
+    assert.equal((await libraryGet('sticker', { take: 'openfilm/transitions/glitch' })).code, 2, 'a transition is the person\'s to pick in Studio');
     process.chdir(tmpdir());
     assert.equal((await libraryGet('sfx-search', { take: 'sounds/whoosh.m4a' })).code, 2, 'not in a project');
   } finally {

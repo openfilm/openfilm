@@ -7,7 +7,7 @@
  * model is given go inline, as data: URIs.
  */
 import { extname } from 'node:path';
-import { RATIO_SIZE, billedBy, call, clamp, dataUri, download, extOf, landing, list, madePicture, mediaSeconds, mimeOf, modelOf, mp3Seconds, needed, notes, number, ownAddress, pictureSize, pngOnly, round, serviceUrl, sleep, text, wavSeconds } from './common.mjs';
+import { RATIO_SIZE, billedBy, call, clamp, dataUri, download, extOf, landing, list, madePicture, mediaSeconds, mimeOf, modelOf, needed, notes, number, ownAddress, pictureSize, pngOnly, round, serviceUrl, sleep, text, wavSeconds } from './common.mjs';
 
 /** @typedef {import('./contract.mjs').Provider} Provider @typedef {import('./contract.mjs').RunContext} RunContext */
 
@@ -31,22 +31,17 @@ const MODELS = {
     { id: 'sync-3', name: 'sync-3 (a clip\'s lips made to follow a recording)' },
   ],
   music: [{ id: 'fal-ai/stable-audio-25/text-to-audio', name: 'Stable Audio 2.5' }, { id: 'fal-ai/lyria2', name: 'Lyria 2' }],
-  sfx: [{ id: 'fal-ai/elevenlabs/sound-effects/v2', name: 'ElevenLabs Sound Effects v2' }, { id: 'fal-ai/stable-audio-25/text-to-audio', name: 'Stable Audio 2.5' }],
+  sfx: [{ id: 'fal-ai/stable-audio-25/text-to-audio', name: 'Stable Audio 2.5' }],
 };
 
 /**
  * Each sound model's input for a prompt and a length, and the lengths it makes: `seconds`, a range (`whole`: in whole
- * seconds), or `fixed`. `chooses`: with no length asked, it chooses one. `mp3`: it answers with 128 kbps MP3, whose
- * length is known from its size.
- * @type {Record<string, { name: string, seconds?: [number, number], whole?: boolean, fixed?: number, chooses?: boolean, mp3?: boolean, input: (prompt: string, sec: number | null) => Record<string, unknown> }>}
+ * seconds), or `fixed`.
+ * @type {Record<string, { name: string, seconds?: [number, number], whole?: boolean, fixed?: number, input: (prompt: string, sec: number | null) => Record<string, unknown> }>}
  */
 const AUDIO = {
   'fal-ai/stable-audio-25/text-to-audio': { name: 'Stable Audio 2.5', seconds: [1, 190], whole: true, input: (prompt, sec) => ({ prompt, seconds_total: sec }) },
   'fal-ai/lyria2': { name: 'Lyria 2', fixed: 30, input: (prompt) => ({ prompt }) },
-  'fal-ai/elevenlabs/sound-effects/v2': {
-    name: 'ElevenLabs Sound Effects', seconds: [0.5, 22], chooses: true, mp3: true,
-    input: (prompt, sec) => ({ text: prompt, ...(sec !== null ? { duration_seconds: sec } : {}), output_format: 'mp3_44100_128' }),
-  },
 };
 /** the length asked of a model that needs one when none is given */
 const LENGTH = { music: 60, sfx: 5 };
@@ -102,13 +97,15 @@ const FROM_SPEECH = {
 };
 
 /* what each model makes, as the canvas offers it (contract.mjs ModelSpec) */
-for (const model of MODELS.image) Object.assign(model, { spec: { ratios: Object.keys(RATIO_SIZE), refs: 0, sizes: ['1k', '2k', '4k'] } });
+/* FLUX.2 makes at most 4 megapixels (a larger size is scaled down), so 2K is its largest */
+for (const model of MODELS.image) Object.assign(model, { spec: { ratios: Object.keys(RATIO_SIZE), refs: 0, sizes: ['1k', '2k'] } });
 for (const model of MODELS.video) {
   const v = VIDEO[model.id];
   const c = FROM_CLIP[model.id];
   const s = FROM_SPEECH[model.id];
-  const spec = v ? { ratios: v.ratios, seconds: v.seconds, refs: v.reference ? 9 : 0, frames: true }
-    : c ? { seconds: c.clip, refs: c.way === 'recast' ? 9 : 0, needs: 'clip' }
+  const spec = v ? { ratios: v.ratios, seconds: v.seconds, refs: v.reference ? 9 : 0, frames: true,
+    ...(v.reference ? { clip: true, voice: true, voiceNeedsVisual: true } : {}) }
+    : c ? { seconds: c.clip, refs: c.way === 'modify' ? 0 : 4, needs: 'clip' }
     : s ? { seconds: s.seconds, refs: s.from === 'picture' ? 1 : 0, needs: 'audio' } : null;
   if (spec) Object.assign(model, { spec });
 }
@@ -144,8 +141,9 @@ export default {
       const result = await queued(model, { prompt, image_size: pixels, output_format: 'png' }, ctx, polling.ms.image);
       const image = result?.images?.[0];
       if (!text(image?.url)) throw new Error(`${NAME} answered without a picture.`);
-      const { bytes, type } = await download(NAME, image.url, ctx);
+      const { bytes, type } = ctx.handOff ? { bytes: null, type: image.content_type } : await download(NAME, image.url, ctx);
       const path = landing('image', args.out, extOf(image.content_type ?? type, 'png'));
+      if (!bytes) return { files: [{ path, url: image.url, type: image.content_type ?? 'image/png' }], index: [{ src: path, kind: 'image', w: image.width, h: image.height, from: { mode: 'generate', prompt, provider: 'fal', model } }], receipt: { provider: 'fal', model, src: path, ...notes(said) }, cost: billedBy(NAME) };
       return { ...madePicture({ path, bytes, prompt, provider: 'fal', model, notes: said }), cost: billedBy(NAME) };
     }
     if (verb === 'video') return video(args, ctx);
@@ -213,10 +211,10 @@ async function video(args, ctx) {
   };
   const result = await queued(endpoint, input, ctx, polling.ms.video);
   if (!text(result?.video?.url)) throw new Error(`${NAME} answered without a clip.`);
-  const { bytes } = await download(NAME, result.video.url, ctx);
+  const file = ctx.handOff ? { path, url: result.video.url, type: 'video/mp4' } : { path, bytes: (await download(NAME, result.video.url, ctx)).bytes };
   const resolution = spec.resolution ? { resolution: spec.resolution } : {};
   return {
-    files: [{ path, bytes }],
+    files: [file],
     index: [{ src: path, kind: 'video', dur: seconds, hasAudio: true, from: {
       mode: 'generate', prompt, provider: 'fal', model: endpoint, ...resolution, sec: seconds,
       ...(first ? { firstFrame: first } : {}), ...(last ? { lastFrame: last } : {}), ...(refs.length ? { refs } : {}), ...(clip ? { clip } : {}),
@@ -271,9 +269,9 @@ async function fromClip(spec, args, ctx) {
   } else input = { video_url: video, reference_image_urls: images, ...(prompt ? { prompt } : {}), resolution: '1080P' };
   const result = await queued(spec.endpoint, input, ctx, polling.ms.video);
   if (!text(result?.video?.url)) throw new Error(`${NAME} answered without a clip.`);
-  const { bytes } = await download(NAME, result.video.url, ctx);
+  const file = ctx.handOff ? { path, url: result.video.url, type: 'video/mp4' } : { path, bytes: (await download(NAME, result.video.url, ctx)).bytes };
   return {
-    files: [{ path, bytes }],
+    files: [file],
     index: [{ src: path, kind: 'video', dur: seconds, hasAudio: true, from: { mode: 'generate', prompt, provider: 'fal', model: spec.endpoint, sec: seconds, clip, ...(refs.length ? { refs } : {}) } }],
     receipt: { provider: 'fal', model: spec.endpoint, src: path, dur: seconds, hasAudio: true, ...notes(said) },
     cost: billedBy(NAME),
@@ -306,10 +304,10 @@ async function fromSpeech(spec, args, ctx) {
     : { image_url: await dataUri(/** @type {string} */ (picture), ctx), audio_url: audioUrl, prompt: prompt || '.' };
   const result = await queued(spec.endpoint, input, ctx, polling.ms.video);
   if (!text(result?.video?.url)) throw new Error(`${NAME} answered without a clip.`);
-  const { bytes } = await download(NAME, result.video.url, ctx);
+  const file = ctx.handOff ? { path, url: result.video.url, type: 'video/mp4' } : { path, bytes: (await download(NAME, result.video.url, ctx)).bytes };
   const dur = seconds !== null ? Math.round(seconds * 1000) / 1000 : number(args.duration) ?? 5;
   return {
-    files: [{ path, bytes }],
+    files: [file],
     index: [{ src: path, kind: 'video', dur, hasAudio: true, from: { mode: 'generate', prompt, provider: 'fal', model: spec.endpoint, sec: dur, audio, ...(picture && spec.from === 'picture' ? { firstFrame: picture } : {}), ...(clip ? { clip } : {}) } }],
     receipt: { provider: 'fal', model: spec.endpoint, src: path, dur, hasAudio: true, ...notes(said) },
     cost: billedBy(NAME),
@@ -354,18 +352,18 @@ async function sound(verb, args, ctx) {
   const said = [];
   const asked = number(args.sec);
   const within = (/** @type {number} */ v) => { const s = clamp(v, ...(spec.seconds ?? [v, v])); return spec.whole ? Math.round(s) : round(s); };
-  const sec = spec.fixed ?? (asked === null ? (spec.chooses ? null : LENGTH[verb]) : within(asked));
+  const sec = spec.fixed ?? (asked === null ? LENGTH[verb] : within(asked));
   if (asked !== null && sec !== asked) said.push(spec.fixed ? `${spec.name} makes ${spec.fixed} s tracks` : `${spec.name} makes ${spec.seconds?.[0]} to ${spec.seconds?.[1]} s: ${sec} s`);
   const result = await queued(model, spec.input(prompt, sec), ctx, polling.ms.audio);
   const audio = result?.audio;
   if (!text(audio?.url)) throw new Error(`${NAME} answered without audio.`);
-  const { bytes, type } = await download(NAME, audio.url, ctx);
+  const { bytes, type } = ctx.handOff ? { bytes: null, type: audio.content_type } : await download(NAME, audio.url, ctx);
   /* a type it does not say plainly: the file's own extension, when it is one */
   const named = extname(text(audio.file_name)).slice(1).toLowerCase();
   const path = landing(dir, args.out, extOf(audio.content_type ?? type, /^[a-z0-9]{2,4}$/.test(named) ? named : 'wav'));
-  const dur = wavSeconds(bytes) ?? (spec.mp3 && path.endsWith('.mp3') ? mp3Seconds(bytes) : sec);
+  const dur = (bytes ? wavSeconds(bytes) : number(audio.duration)) ?? sec;
   return {
-    files: [{ path, bytes }],
+    files: [bytes ? { path, bytes } : { path, url: audio.url, type: audio.content_type ?? 'audio/wav' }],
     index: [{ src: path, kind: 'audio', ...(dur !== null ? { dur } : {}), from: { mode: 'generate', prompt, ...(asked !== null ? { sec: asked } : {}), provider: 'fal', model } }],
     receipt: { provider: 'fal', model, src: path, dur, ...notes(said) },
     cost: billedBy(NAME),
@@ -380,17 +378,20 @@ async function sound(verb, args, ctx) {
 async function queued(model, input, ctx, every) {
   const auth = { authorization: `Key ${ctx.key}` };
   const base = serviceUrl('FAL', 'https://queue.fal.run');
-  const job = await (await call(NAME, `${base}/${model}`, { method: 'POST', headers: { ...auth, 'content-type': 'application/json' }, body: JSON.stringify(input) }, ctx)).json();
+  /* a job taken before (saved, the run started again) is waited for, never submitted and paid again */
+  const job = ctx.resume ?? await (await call(NAME, `${base}/${model}`, { method: 'POST', headers: { ...auth, 'content-type': 'application/json' }, body: JSON.stringify(input) }, ctx)).json();
   if (!text(job?.status_url) || !text(job?.response_url)) throw new Error(`${NAME} did not take the request.`);
+  await ctx.checkpoint?.(job);
   /* the queue's own addresses, which the key goes to: on the queue's origin only */
   const statusUrl = ownAddress(NAME, job.status_url, base);
   const responseUrl = ownAddress(NAME, job.response_url, base);
   const cancelUrl = text(job.cancel_url) ? ownAddress(NAME, job.cancel_url, base) : null;
-  const cancel = () => { if (cancelUrl) fetch(cancelUrl, { method: 'PUT', headers: auth }).then((r) => r.body?.cancel(), () => {}); };
+  const cancel = () => { if (ctx.checkpoint) return; if (cancelUrl) fetch(cancelUrl, { method: 'PUT', headers: auth }).then((r) => r.body?.cancel(), () => {}); };
   ctx.signal.addEventListener('abort', cancel, { once: true });
   try {
     for (;;) {
       const status = await (await call(NAME, statusUrl, { headers: auth }, ctx)).json();
+      if (['FAILED','CANCELLED','CANCELED'].includes(status?.status)) throw new Error(`${NAME} could not make it: ${text(status.error) || status.status}`);
       if (status?.status === 'COMPLETED') {
         if (status.error) throw new Error(`${NAME} could not make it: ${text(status.error) || JSON.stringify(status.error)}`);
         break;

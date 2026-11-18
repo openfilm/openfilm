@@ -400,6 +400,19 @@ export function proxyVariables(found) {
 }
 
 /**
+ * What Node's own fetch needs to take the proxy in `env` (Studio's, which reaches the image and video services with
+ * it): Node goes direct whatever HTTPS_PROXY says unless NODE_USE_ENV_PROXY is set. This computer never goes through
+ * the proxy, whatever NO_PROXY the person wrote. None: {}.
+ */
+export function nodeProxyVariables(env) {
+  const value = (name) => Object.entries(env).find(([key, v]) => key.toLowerCase() === name && v)?.[1];
+  if (!value('https_proxy') && !value('http_proxy')) return {};
+  const own = String(value('no_proxy') ?? '').split(',').map((s) => s.trim()).filter(Boolean);
+  const noProxy = [...new Set([...own, 'localhost', '127.0.0.1', '::1'])].join(',');
+  return { NODE_USE_ENV_PROXY: '1', NO_PROXY: noProxy, no_proxy: noProxy };
+}
+
+/**
  * The person's variables, with the system's proxy (`proxy`, proxyVariables') unless they set one themselves; a
  * NO_PROXY of theirs stays.
  */
@@ -453,7 +466,7 @@ export async function loginShellEnvironment(options = {}) {
 }
 
 /** What scripts/start.mjs passes on to Electron besides the OS identity: this app's own switches. */
-export const LAUNCHER_FLAGS = ['OPENFILM_DESKTOP_FLAVOR', 'OPENFILM_DESKTOP_CAPTURE', 'OPENFILM_EXAMPLES_INDEX', 'OPENFILM_API_URL', 'ELECTRON_ENABLE_LOGGING', 'ELECTRON_ENABLE_STACK_DUMPING'];
+export const LAUNCHER_FLAGS = ['OPENFILM_DESKTOP_FLAVOR', 'OPENFILM_DEV_LANE', 'OPENFILM_DESKTOP_CAPTURE', 'OPENFILM_EXAMPLES_INDEX', 'OPENFILM_COMMUNITY_LIBRARY_URL', 'OPENFILM_API_URL', 'ELECTRON_ENABLE_LOGGING', 'ELECTRON_ENABLE_STACK_DUMPING'];
 
 /** Electron's environment when run from source: the OS identity, the login shell's PATH, LAUNCHER_FLAGS. */
 export function launcherEnvironment(source, path) {

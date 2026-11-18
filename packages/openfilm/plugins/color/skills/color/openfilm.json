@@ -1,0 +1,29 @@
+{
+  "repository": "https://github.com/openfilm/openfilm/tree/main/packages/openfilm/plugins/color/skills/color",
+  "order": 7,
+  "icon": "palette",
+  "requires": [
+    "film"
+  ],
+  "title": {
+    "en": "Color",
+    "zh-CN": "调色",
+    "ja": "カラー",
+    "ko": "컬러",
+    "es": "Color"
+  },
+  "summary": {
+    "en": "Grading the film's color clip by clip: camera log, white balance, matching shots, looks and LUTs.",
+    "zh-CN": "逐个片段给片子调色：相机 Log、白平衡、镜头匹配、风格和 LUT。",
+    "ja": "クリップごとに映像の色を整える：カメラのログ、ホワイトバランス、ショットのマッチ、ルックと LUT。",
+    "ko": "클립마다 영상의 색을 다듬기: 카메라 로그, 화이트 밸런스, 장면 맞추기, 룩과 LUT.",
+    "es": "Gradar el color del vídeo clip a clip: log de cámara, balance de blancos, igualar planos, looks y LUT."
+  },
+  "details": {
+    "zh-CN": "什么时候用：你让智能体调色、校正白平衡、匹配几个镜头的颜色、加风格或 LUT，或者素材看起来发灰、偏色、太暗的时候。\n它教什么：每个片段的调色是项目里一串标准调色文件（.ctf）：素材输入、调色层、输出；智能体用 openfilm color look 测量成片画面并看示波器图，用 input、balance、match 处理 Log、白平衡和镜头匹配，再自己写调色层，你在 Studio 里马上能看到。\n关掉后：智能体不会给片子调色。调好的颜色照样播放和导出。",
+    "en": "When it is used: when you ask an agent to grade, fix white balance, match shots, add a look or a LUT, or when footage looks grey, off-color or dark.\nWhat it teaches: that each clip's grade is a chain of standard color files (.ctf) of the project: the footage's input, layers, the output; to measure the finished picture with openfilm color look and read its scopes, to handle log, white balance and matching with input, balance and match, and to write layers itself, which you see in Studio at once.\nTurned off: agents don't grade the film. Grades still play and export.",
+    "ja": "使うとき：エージェントにグレーディング、ホワイトバランスの修正、ショットのマッチ、ルックや LUT を頼んだとき、または素材が眠い・色かぶり・暗いとき。\n教えること：各クリップのグレードはプロジェクトの標準カラーファイル（.ctf）の連なり（素材の入力、レイヤー、出力）であること。openfilm color look で仕上がりの画面を測りスコープを読むこと、input・balance・match でログ、ホワイトバランス、マッチを扱い、レイヤーを自分で書くこと。変更は Studio にすぐ表示されます。\nオフにすると：エージェントは映像をグレーディングしません。グレードはそのまま再生・書き出しされます。",
+    "ko": "언제 쓰나요: 에이전트에게 색보정, 화이트 밸런스 수정, 장면 맞추기, 룩이나 LUT를 부탁하거나, 소스가 흐리거나 색이 틀어지거나 어두울 때.\n무엇을 알려 주나요: 각 클립의 그레이드는 프로젝트의 표준 컬러 파일(.ctf) 체인(소스 입력, 레이어, 출력)이라는 것. openfilm color look으로 완성 화면을 재고 스코프를 읽으며, input·balance·match로 로그, 화이트 밸런스, 매칭을 처리하고 레이어를 직접 쓰는 것. 바뀐 내용은 Studio에 바로 보입니다.\n끄면: 에이전트가 영상을 색보정하지 않습니다. 보정한 색은 그대로 재생·내보내기됩니다.",
+    "es": "Cuándo se usa: cuando pides a un agente gradar, corregir el balance de blancos, igualar planos, añadir un look o un LUT, o cuando el material se ve gris, con dominante u oscuro.\nQué enseña: que la gradación de cada clip es una cadena de archivos de color estándar (.ctf) del proyecto: la entrada del material, capas, la salida; a medir la imagen final con openfilm color look y leer sus scopes, a resolver log, balance de blancos e igualación con input, balance y match, y a escribir capas por sí mismo, que ves en Studio al momento.\nSi se desactiva: los agentes no gradan el vídeo. Las gradaciones se siguen reproduciendo y exportando."
+  }
+}

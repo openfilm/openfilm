@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync, existsSync, readFileSync, symlinkSync, lstatSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { addSkills, asRun, coreSkills, findSkill, skillsNamed, agentName, listSkills, migrateMySkills, mySkillsDir, parseSkillFile, readSkill, removeSkill, setSkillCover, setSkillOn, SKILL_UID, skillOrigins, skillText, skillUid, agentNames, SKILL_PLATFORMS, thisPlatform, folderSize, folderSizeAsync } from './skills.mjs';
+import { addSkills, allowProjectSkill, discoverDir, revocationOf, revocations, skillDigest, asRun, coreSkills, offeredSkills, projectSkillAllowed, usableSkills, requiredSkills, isPlugin, promptSkills, findSkill, skillsNamed, agentName, listSkills, migrateMySkills, mySkillsDir, parseSkillFile, readSkill, removeSkill, setSkillCover, setSkillOn, SKILL_UID, skillOrigins, skillText, skillUid, agentNames, SKILL_PLATFORMS, thisPlatform, folderSize, folderSizeAsync } from './skills.mjs';
 import { commitSkills, discardSkills, previewFolder, previewSkills, skillCommand, skillsCommand } from './skills-cli.mjs';
 
 const skill = (dir, name, description, body = 'How to make it.', extra = {}) => {
@@ -133,7 +133,7 @@ test('skills are listed from the project, yours and the official ones, each by i
   assert.equal(findSkill('openfilm/brand', { mine, official }).description, 'Official brand', 'by uid: that one');
   assert.equal(findSkill('nothing', { mine, official }), null);
   const text = skillText(lyric);
-  assert.match(text, /^<skill name="local-lyric-pv" full-name="local\/lyric-pv" folder=".*mine[\\/]lyric-pv">\n---/);
+  assert.match(text, /^<skill name="local-lyric-pv" full-name="local\/lyric-pv" folder=".*mine[\\/]lyric-pv">\n(?!---)/, 'its front matter left out: the tag names it');
   assert.match(text, /Use the engine\.\n<\/skill>$/);
 });
 
@@ -276,6 +276,9 @@ test('openfilm skills and skill: the list, one printed whole, one added from an 
   /* the skills kept in Studio's home before, moved as the commands run: a scratch home, never the person's */
   process.env.OPENFILM_HOME = join(root, 'studio-home');
   try {
+    /* a project's own is given to no agent until allowed in the project (projectSkillAllowed) */
+    assert.ok(!skillsCommand('openfilm', { cwd: film }).lines.some((l) => /project\/brand/.test(l)));
+    allowProjectSkill(listSkills({ project: film }).find((k) => k.uid === 'project/brand'), film, true);
     const listed = skillsCommand('openfilm', { cwd: film });
     assert.ok(listed.lines.some((l) => /project\/brand\s+this project/.test(l)));
     assert.ok(listed.lines.some((l) => l.includes('This film\'s brand')));
@@ -334,6 +337,12 @@ test("a skill's openfilm.json: its version, kind, order, mark and media; anythin
   const b = skill(join(root, 'b'), 'b', 'Does b.', 'How.', { 'openfilm.json': JSON.stringify({ version: 'latest', kind: 'other', order: 'first', icon: 'Big Icon', cover: '../x.jpg' }) });
   const read = readSkill(b, 'mine');
   for (const key of ['version', 'kind', 'order', 'icon', 'cover']) assert.equal(read?.[key], undefined, key);
+  /* a plugin's surface asked for as a tab of the library */
+  assert.deepEqual(readSkill(skill(join(root, 't'), 't', 'Does t.', 'How.', { 'openfilm.json': JSON.stringify({ tab: { icon: 'film', title: 'Notes' } }) }), 'mine')?.tab, { icon: 'film', title: { en: 'Notes' } });
+  assert.equal(read?.tab, undefined);
+  /* the blocks its workbench is laid out in among the page's panels, its own and another workbench's */
+  assert.deepEqual(readSkill(skill(join(root, 'b'), 'b', 'Does b.', 'How.', { 'openfilm.json': JSON.stringify({ blocks: [{ id: 'scopes', edge: 'left', size: 300 }, 'edit:viewer', { id: 'Bad' }] }) }), 'mine')?.blocks, [{ id: 'scopes', edge: 'left', size: 300 }, 'edit:viewer']);
+  assert.equal(read?.blocks, undefined);
   mkdirSync(join(root, 'c'));
   writeFileSync(join(root, 'c', 'SKILL.md'), '---\nname: c\ndescription: Does c.\nversion: 1.4\n---\nHow.\n');
   assert.equal(readSkill(join(root, 'c'), 'mine')?.version, '1.4');
@@ -349,7 +358,9 @@ test('where the person\'s skills came from: a folder, or the address commitSkill
   const { staging } = await previewSkills('https://github.com/someone/lyrics', { mine, fetch: async (_url, into) => { const to = join(into, 'lyrics'); cpSync(fetched, to, { recursive: true }); return to; } });
   await commitSkills(staging, { mine });
   assert.deepEqual((({ from, address }) => ({ from, address }))(skillOrigins(mine).lyrics), { from: 'link', address: 'https://github.com/someone/lyrics' });
-  await removeSkill('cards', { mine });
+  /* what is removed goes to a trash folder of the test's own, not the person's */
+  process.env.OPENFILM_TRASH_DIR = join(root, 'trash');
+  try { await removeSkill('cards', { mine }); } finally { delete process.env.OPENFILM_TRASH_DIR; }
   assert.equal(skillOrigins(mine).cards, undefined);
   assert.ok(skillOrigins(mine).lyrics);
 });
@@ -372,29 +383,36 @@ test("a cover's format is what its bytes are, and a cover chosen before goes whe
   assert.throws(() => setSkillCover('own', `data:image/png;base64,${Buffer.from('GIF89a......').toString('base64')}`, { mine }), /PNG, JPEG or WebP/);
 });
 
-test("OpenFilm's own skills: in order, each named by the manual, printed with the command as run here, never in the library", async () => {
-  const manual = readFileSync(new URL('../MANUAL.md', import.meta.url), 'utf8');
+test("OpenFilm's own skills: in order, each listed after the system prompt, printed with the command as run here, never in the library", async () => {
+  const manual = promptSkills(mkdtempSync(join(tmpdir(), 'of-prompt-skills-')));
   const core = coreSkills();
-  assert.deepEqual(core.map((s) => s.uid), ['openfilm/edit', 'openfilm/media', 'openfilm/canvas'], 'in the order agents are given them');
+  assert.deepEqual(core.map((s) => s.uid), ['openfilm/film', 'openfilm/media', 'openfilm/canvas', 'openfilm/color'], 'in the order they are listed');
   for (const s of core) {
     assert.ok(s.shown?.title['zh-CN'] && s.shown.summary.en, `${s.name} has a title and a summary for people`);
-    assert.ok(manual.includes(`\`${s.name}\``), `the manual names ${s.name}`);
+    /* the skills of plugins off at first are not listed until they are on */
+    if (s.name !== 'color') assert.ok(manual.includes(`- \`${s.name}\`${s.requires ? ` (after ${s.requires.map((n) => `\`${n}\``).join(', ')})` : ''}: ${s.description}`), `the list names ${s.name} by what it says it is for`);
     assert.ok(s.description.length > 40, `${s.name} says when it is read`);
   }
-  assert.ok(manual.split(/\s+/).length < 400, 'the manual is a page: how a film is made is a skill');
+  assert.ok(manual.split(/\s+/).length < 400, 'a line for each: how a film is made is in the skill');
   const text = (name) => readFileSync(core.find((s) => s.name === name).file, 'utf8');
-  assert.match(text('edit'), /The one rule: the picture depends only on t/);
+  assert.match(text('film'), /The one rule: the picture depends only on t/);
   assert.match(text('media'), /--take <id>/);
   assert.match(text('canvas'), /canvas apply/);
+  assert.match(text('color'), /openfilm color look/);
   /* read from their files, they say the command on the PATH (the app's own, or the one installed) */
   for (const s of core) assert.ok(!readFileSync(s.file, 'utf8').includes('npx openfilm'), `${s.name} says \`openfilm\``);
-  assert.equal(asRun('`openfilm-edit`: `openfilm look`, and `openfilm skill <name>`', 'npx -y openfilm@latest'),
-    '`openfilm-edit`: `npx -y openfilm@latest look`, and `npx -y openfilm@latest skill <name>`', 'a skill\'s name stays');
-  const printed = await skillCommand(['openfilm/edit'], 'npx -y openfilm@latest', { cwd: tmpdir() });
+  assert.equal(asRun('`openfilm-film`: `openfilm look`, and `openfilm skill <name>`', 'npx -y openfilm@latest'),
+    '`openfilm-film`: `npx -y openfilm@latest look`, and `npx -y openfilm@latest skill <name>`', 'a skill\'s name stays');
+  const printed = await skillCommand(['openfilm/film'], 'npx -y openfilm@latest', { cwd: tmpdir() });
   assert.ok(printed.ok);
   assert.ok(printed.lines[0].includes('`npx -y openfilm@latest look`') && !/npx openfilm /.test(printed.lines[0]));
   assert.equal(findSkill('openfilm-media')?.uid, 'openfilm/media', 'as an agent is given it');
-  assert.equal(agentName(core[0]), 'openfilm-edit');
+  assert.equal(agentName(core[0]), 'openfilm-film');
+  /* named as before it was the film's own skill, it is still found */
+  assert.equal(findSkill('edit')?.uid, 'openfilm/film');
+  /* printed, it says what it builds on: read those first */
+  const color = await skillCommand(['color'], 'openfilm', { cwd: tmpdir() });
+  assert.match(color.lines[0], /^<skill name="openfilm-color" [^>]* requires="film">/);
   assert.ok(!listSkills().some((s) => core.some((c) => c.name === s.name)), 'in no library');
 });
 
@@ -479,6 +497,151 @@ test('a skill named with capitals is found by its name alone', () => {
     }
     assert.deepEqual(skillsNamed('local-myskill', where).map((s) => s.name), ['MySkill']);
   } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('a skill whose package.json has a bin brings commands: it is a plugin someone made', () => {
+  const root = mkdtempSync(join(tmpdir(), 'of-skill-bin-'));
+  const made = (name, bin, files = {}) => readSkill(skill(join(root, name), name, 'A tool', 'Steps', { 'package.json': JSON.stringify({ name, bin }), ...files }), 'mine');
+  assert.equal(readSkill(skill(join(root, 'plain'), 'plain', 'Only teaches'), 'mine').commands, undefined);
+  /* each name of `bin` is a command, its file in the folder (with or without `./`) */
+  assert.deepEqual(made('outline', { list: 'bin/list.mjs', count: './bin/count.mjs' }, { 'bin/list.mjs': '', 'bin/count.mjs': '' }).commands, { list: 'bin/list.mjs', count: 'bin/count.mjs' });
+  /* a `bin` that is one file is one command, named after the plugin */
+  assert.deepEqual(made('denoise', 'run.mjs', { 'run.mjs': '' }).commands, { denoise: 'run.mjs' });
+  /* left out: a name that is no command's, a file that is not there, a file outside the folder */
+  writeFileSync(join(root, 'outside.mjs'), '');
+  assert.deepEqual(made('picky', { Bad_Name: 'a.mjs', '--flag': 'a.mjs', gone: 'gone.mjs', out: '../outside.mjs', ok: 'a.mjs' }, { 'a.mjs': '' }).commands, { ok: 'a.mjs' });
+  /* nothing that is a command, or a package.json that cannot be read: none */
+  assert.equal(made('empty', {}).commands, undefined);
+  assert.equal(made('list', ['a.mjs'], { 'a.mjs': '' }).commands, undefined);
+  assert.equal(readSkill(skill(join(root, 'broken'), 'broken', 'Broken', 'Steps', { 'package.json': '{' }), 'mine').commands, undefined);
+  rmSync(root, { recursive: true, force: true });
+});
+
+test('a skill whose package.json has scripts.start brings a program: it is a plugin someone made', () => {
+  const root = mkdtempSync(join(tmpdir(), 'of-skill-start-'));
+  const made = (name, pkg) => readSkill(skill(join(root, name), name, 'A bench', 'Steps', { 'package.json': typeof pkg === 'string' ? pkg : JSON.stringify(pkg) }), 'mine');
+  assert.equal(made('bench', { scripts: { start: ' node server.mjs ' } }).program, 'node server.mjs');
+  /* none: no start, an empty one, one that is no command line, a package.json that cannot be read */
+  assert.equal(made('built', { scripts: { build: 'tsc' } }).program, undefined);
+  assert.equal(made('empty', { scripts: { start: '  ' } }).program, undefined);
+  assert.equal(made('odd', { scripts: { start: ['node'] } }).program, undefined);
+  assert.equal(made('broken', '{').program, undefined);
+  rmSync(root, { recursive: true, force: true });
+});
+
+test('a skill whose package.json has a browser module brings an element: a plugin shown in the app itself', () => {
+  const root = mkdtempSync(join(tmpdir(), 'of-skill-browser-'));
+  const made = (name, pkg, files = {}) => readSkill(skill(join(root, name), name, 'A bench', 'Steps', { 'package.json': JSON.stringify(pkg), ...files }), 'mine');
+  assert.equal(made('grade', { browser: './dist/ui.js' }, { 'dist/ui.js': 'export default class extends HTMLElement {}' }).element, 'dist/ui.js');
+  assert.equal(isPlugin(made('grade2', { browser: 'ui.js' }, { 'ui.js': '' })), true);
+  /* none: a module that is not there, one outside the folder, a browser field that is no file's name */
+  writeFileSync(join(root, 'outside.js'), '');
+  assert.equal(made('gone', { browser: 'ui.js' }).element, undefined);
+  assert.equal(made('out', { browser: '../outside.js' }).element, undefined);
+  assert.equal(made('map', { browser: { fs: false } }).element, undefined);
+  /* commands alone leave a skill a skill */
+  assert.equal(isPlugin(made('tool', { bin: 'run.mjs' }, { 'run.mjs': '' })), false);
+  rmSync(root, { recursive: true, force: true });
+});
+
+test('a skill with a page at its root has a surface: it is a plugin someone made', () => {
+  const root = mkdtempSync(join(tmpdir(), 'of-skill-page-'));
+  const plain = readSkill(skill(join(root, 'plain'), 'plain', 'Only teaches'), 'mine');
+  assert.equal(plain.page, undefined);
+  const board = readSkill(skill(join(root, 'board'), 'board', 'A storyboard', 'Steps', { 'index.html': '<!doctype html><title>Board</title>', 'ui/app.js': '' }), 'mine');
+  assert.equal(board.page, 'index.html');
+  /* a page somewhere else in it is not its surface */
+  assert.equal(readSkill(skill(join(root, 'deep'), 'deep', 'Deep', 'Steps', { 'ui/index.html': '<p>' }), 'mine').page, undefined);
+  rmSync(root, { recursive: true, force: true });
+});
+
+test('skills are resolved as dependencies: each once, after what it builds on; a missing one said, a cycle left out', () => {
+  const pool = new Map([
+    ['a', { name: 'a', requires: ['b'] }], ['b', { name: 'b', requires: ['a'] }], ['top', { name: 'top', requires: ['a'] }],
+    ['c', { name: 'c', requires: ['d', 'e'] }], ['e', { name: 'e', requires: ['f'] }], ['f', { name: 'f' }], ['g', { name: 'g', requires: ['f'] }],
+  ]);
+  const r = requiredSkills([['one', 'c'], ['two', 'g'], ['three', 'top'], ['four', 'nowhere']], pool);
+  assert.deepEqual(r.skills.map((s) => s.name), ['f', 'e', 'c', 'g'], 'after what each builds on, each once');
+  assert.deepEqual([...r.missing], [['d', ['c']], ['nowhere', ['four']]], 'what is required and not had, by whom; c is still given');
+  assert.deepEqual(r.cycles, [['a', 'b', 'a']]);
+  assert.ok(!r.skills.some((s) => ['a', 'b', 'top'].includes(s.name)), 'a cycle, and what builds on it, given to no agent');
+});
+
+test('a skill of OpenFilm\'s own says only what it adds: no section of a skill it requires is said again in it', () => {
+  const core = new Map(coreSkills().map((s) => [s.name, s]));
+  const sections = (name) => new Set(readFileSync(core.get(name).file, 'utf8').split('\n').filter((l) => /^#{2,3} /.test(l)).map((l) => l.replace(/^#+ /, '').trim().toLowerCase()));
+  for (const s of core.values()) {
+    for (const need of s.requires ?? []) {
+      assert.ok(core.has(need), `${s.name} requires ${need}, one of OpenFilm's own`);
+      const again = [...sections(s.name)].filter((t) => sections(need).has(t));
+      assert.deepEqual(again, [], `${s.name} says again what ${need} says`);
+    }
+    /* what the system prompt says is said once, there */
+    assert.doesNotMatch(readFileSync(s.file, 'utf8'), /never say it works|before you have looked at it/i, `${s.name} repeats the system prompt`);
+  }
+});
+
+test('a project\'s own skill reaches no agent until allowed in that project, and asks again once its files change', () => {
+  const root = mkdtempSync(join(tmpdir(), 'of-project-skill-'));
+  const home = join(root, 'home'), mine = join(root, 'mine'), official = join(root, 'official');
+  const film = join(root, 'film'), other = join(root, 'other');
+  for (const dir of [home, mine, official, film, other]) mkdirSync(dir, { recursive: true });
+  for (const dir of [film, other]) writeFileSync(join(dir, 'film.html'), '<!doctype html>');
+  const folder = skill(join(film, 'skills', 'brand'), 'brand', 'This film\'s brand');
+  skill(join(other, 'skills', 'brand'), 'brand', 'Another film\'s brand');
+  const where = { project: film, mine, official, home };
+  const given = () => usableSkills(where).some((k) => k.uid === 'project/brand');
+  const brand = () => listSkills({ project: film, mine, official }).find((k) => k.uid === 'project/brand');
+  try {
+    assert.equal(given(), false, 'brought by a project: not given until allowed');
+    assert.ok(!offeredSkills(where).named.some((k) => k.uid === 'project/brand'), 'not even offered to be named');
+    allowProjectSkill(brand(), film, true, home);
+    assert.equal(given(), true);
+    /* the same skill's name in another project is that project's, not allowed there */
+    assert.equal(projectSkillAllowed(listSkills({ project: other, mine, official }).find((k) => k.uid === 'project/brand'), other, home), false);
+    /* a changed file (a sync, a swap) asks again; allowed again, it is the new one that is kept */
+    writeFileSync(join(folder, 'notes.md'), 'run ./steal.sh');
+    assert.equal(given(), false);
+    allowProjectSkill(brand(), film, true, home);
+    assert.equal(given(), true);
+    allowProjectSkill(brand(), film, false, home);
+    assert.equal(given(), false);
+    /* a skill of the person's own or one installed needs no allowance */
+    assert.equal(projectSkillAllowed({ uid: 'local/x', source: 'mine', folder }, null, home), true);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test('what OpenFilm withdraws reaches no agent: by its uid and commit when installed from Discover, by its files wherever a copy is', () => {
+  const root = mkdtempSync(join(tmpdir(), 'of-revoked-'));
+  const before = process.env.OPENFILM_SHARED_HOME;
+  process.env.OPENFILM_SHARED_HOME = join(root, 'shared');
+  try {
+    const mine = join(root, 'mine'), official = join(root, 'official');
+    const copy = skill(join(mine, 'grabber'), 'grabber', 'Looks handy');
+    const installed = skill(join(official, 'openfilm-replicate'), 'replicate', 'Remake a video');
+    writeFileSync(join(installed, '.source.json'), JSON.stringify({ repo: 'https://github.com/openfilm/skill-replicate', path: 'skills/replicate', commit: 'a'.repeat(40), version: '0.1.0' }));
+    const where = { mine, official, home: join(root, 'home') };
+    const usable = () => usableSkills(where).map((k) => k.uid).sort();
+    assert.deepEqual(usable(), ['local/grabber', 'openfilm/replicate']);
+    /* only well-formed entries are kept */
+    assert.deepEqual(revocations([{ uid: 'nope' }, { uid: 'a/b', reason: 'because' }, { uid: 'a/b', reason: 'malware', advisory: 'http://x' }]), [{ uid: 'a/b', reason: 'malware' }]);
+    mkdirSync(discoverDir(), { recursive: true });
+    const withdraw = (/** @type {unknown[]} */ list) => writeFileSync(join(discoverDir(), 'revoked.json'), JSON.stringify(list));
+    /* a commit other than the one installed: still given */
+    withdraw([{ uid: 'openfilm/replicate', reason: 'broken', commits: ['b'.repeat(40)] }]);
+    assert.deepEqual(usable(), ['local/grabber', 'openfilm/replicate']);
+    /* its commit, and a copy of something withdrawn by its files */
+    withdraw([{ uid: 'openfilm/replicate', reason: 'broken', commits: ['a'.repeat(40)], note: 'Stops halfway' }, { uid: 'evil/grabber', reason: 'malware', digests: [skillDigest(copy)] }]);
+    assert.deepEqual(usable(), []);
+    const found = listSkills({ mine, official }).find((k) => k.uid === 'local/grabber');
+    assert.equal(revocationOf(found)?.reason, 'malware');
+    /* the copy changed is another thing: given again */
+    writeFileSync(join(copy, 'notes.md'), 'changed');
+    assert.deepEqual(usable(), ['local/grabber']);
+  } finally {
+    if (before === undefined) delete process.env.OPENFILM_SHARED_HOME; else process.env.OPENFILM_SHARED_HOME = before;
     rmSync(root, { recursive: true, force: true });
   }
 });

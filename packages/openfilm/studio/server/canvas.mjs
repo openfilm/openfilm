@@ -4,13 +4,13 @@
  * and what leads to what drawn. Studio's own, beside film.html, not in it (SPEC §1: an editor's own state lives in
  * `.film/`): nothing on it is in the film until it is put on the timeline.
  *
- * A node is a note (`text`), a file of the project (`path`, project-relative), a group (`group`, its name, and a
- * `color`) or a node that makes something with the person's services (`make`: image, video, sfx or music; its
- * `prompt`, `via` and `model`, its `opts`, the files it made, `versions`, the one shown `path`, and `made` what it was
- * asked when it last made one), at `x`, `y` on the board, `w` wide (and `h` high, for a note or a group). A node in a
- * group names it (`parent`), and its `x`, `y` are from the group's corner; one an agent put there names it (`by`). A
- * cut (`cut`) is the order what is wired into it goes onto the timeline in. An
- * edge goes from one node to another, `order` its place among those into that node.
+ * A node is a note (`text`, its `title`, a `color` tinting it, and its earlier words, `versions`), a file of the
+ * project (`path`, project-relative), a group (`group`, its name, and a `color`) or a node that makes something with
+ * the person's services (`make`: image, video, sfx or music; its `prompt`, `via` and `model`, its `opts`, the files it
+ * made, `versions`, the one shown `path`, and `made` what it was asked when it last made one), at `x`, `y` on the
+ * board, `w` wide (and `h` high, for a note or a group). A node in a group names it (`parent`), and its `x`, `y` are
+ * from the group's corner; one an agent put there names it (`by`). A cut (`cut`) is the order what is wired into it
+ * goes onto the timeline in. An edge goes from one node to another, `order` its place among those into that node.
  *
  *   GET canvas                    → { nodes, edges, name? }
  *   PUT canvas { nodes, edges }   → { nodes, edges, name? }: the whole board, as kept (the board in Studio writes it)
@@ -65,7 +65,7 @@ const VERSIONS_MAX = 50;
 const SHORT_MAX = 120;
 
 /**
- * @typedef {{ id: string, x: number, y: number, w?: number, h?: number, z?: number, parent?: string, by?: { agent: string, session?: string } } & ({ text: string } | { path: string, title?: string } | { group: string, color: string } | { make: string, title?: string } | { cut: true })} CanvasNode
+ * @typedef {{ id: string, x: number, y: number, w?: number, h?: number, z?: number, parent?: string, by?: { agent: string, session?: string } } & ({ text: string, title?: string, color?: string, versions?: string[] } | { path: string, title?: string } | { group: string, color: string } | { make: string, title?: string } | { cut: true })} CanvasNode
  * @typedef {{ id: string, from: string, to: string, order?: number }} CanvasEdge
  * @typedef {{ nodes: CanvasNode[], edges: CanvasEdge[], name?: string }} Canvas
  */
@@ -104,7 +104,13 @@ export function parseCanvas(raw) {
     if (MAKE_KINDS.includes(String(n.make))) out.nodes.push({ ...box, ...parent, ...named, ...readMake(n), make: String(n.make) });
     else if (n.cut === true) out.nodes.push({ ...box, ...parent, cut: true });
     else if (projectPath(n.path)) out.nodes.push({ ...box, ...parent, ...named, path: /** @type {string} */ (n.path) });
-    else if (typeof n.text === 'string') out.nodes.push({ ...box, ...parent, text: n.text.slice(0, TEXT_MAX) });
+    else if (typeof n.text === 'string') {
+      /* a note's color is a tint over its card: none is its own */
+      const tint = n.color !== 'gray' && GROUP_COLORS.includes(String(n.color)) ? { color: String(n.color) } : {};
+      /* a note's earlier words, the ones its agent's writing took the place of (oldest first) */
+      const earlier = (Array.isArray(n.versions) ? n.versions : []).filter((v) => typeof v === 'string' && v.trim()).slice(-VERSIONS_MAX).map((v) => v.slice(0, TEXT_MAX));
+      out.nodes.push({ ...box, ...parent, ...named, text: n.text.slice(0, TEXT_MAX), ...tint, ...(earlier.length ? { versions: earlier } : {}) });
+    }
     else if (typeof n.group === 'string') {
       out.nodes.push({ ...box, ...readBy(n.by), group: n.group.trim().slice(0, NAME_MAX), color: GROUP_COLORS.includes(String(n.color)) ? String(n.color) : 'gray' });
     }
@@ -156,6 +162,10 @@ function readMake(n) {
     ...(projectPath(o.markup) ? { markup: o.markup } : {}),
     ...(o.count === 2 || o.count === 4 ? { count: o.count } : {}),
     ...(short(o.voice) ? { voice: o.voice } : {}),
+    /* a style, a camera move, a camera (`body|lens|focal|aperture`) picked from the canvas's libraries: their words go in when it is made */
+    ...(short(o.style) ? { style: o.style } : {}),
+    ...(short(o.effect) ? { effect: o.effect } : {}),
+    ...(short(o.camera) ? { camera: o.camera } : {}),
   };
   const versions = (Array.isArray(n.versions) ? n.versions : []).filter(projectPath).slice(-VERSIONS_MAX);
   const fields = {
@@ -312,14 +322,15 @@ async function writingReferences(root, paths) {
 
 /**
  * A text node's words written by the person's own agent (an app with a chat, `askAgent`): POST `canvas-write`
- * { prompt, inputs: [the words wired in], model?, attachments?: [project paths] } → { text }.
+ * { prompt, inputs: [the words wired in], model?, attachments?: [project paths], stream? } → { text }; with `stream`, a
+ * line of JSON for each piece as it comes, then the whole.
  * @param {import('./http.mjs').Req} req @param {import('./http.mjs').Res} res @param {string} rest
  * @param {import('./get.mjs').AskAgent | undefined} askAgent
  * @param {string} [root]
  */
 export async function canvasWriteRoute(req, res, rest, askAgent, root = '') {
   if (rest !== 'canvas-write' || req.method !== 'POST') return false;
-  const body = /** @type {{ prompt?: unknown, inputs?: unknown, model?: unknown, attachments?: unknown }} */ (await readJson(req));
+  const body = /** @type {{ prompt?: unknown, inputs?: unknown, model?: unknown, attachments?: unknown, stream?: unknown }} */ (await readJson(req));
   const prompt = typeof body.prompt === 'string' ? body.prompt.trim().slice(0, TEXT_MAX) : '';
   const inputs = (Array.isArray(body.inputs) ? body.inputs : []).filter((i) => typeof i === 'string' && i.trim()).slice(0, 20).map((i) => /** @type {string} */ (i).slice(0, TEXT_MAX));
   const paths = body.attachments ?? [];
@@ -337,8 +348,26 @@ export async function canvasWriteRoute(req, res, rest, askAgent, root = '') {
     ...(inputs.length ? ['', 'What is wired into it:', ...inputs.map((i, n) => `[${n + 1}] ${i}`)] : []),
     ...(references.length ? ['', 'Reference attachments (image numbers are in the order supplied):', ...references] : []),
     '', 'What they ask:', prompt || 'Write it from the provided references.'].join('\n');
+  const writingModel = /** @type {import('./get.mjs').WritingModel | undefined} */ (model);
+  if (body.stream === true) {
+    /* as it comes: a line of JSON for each piece ({ delta }), then the whole ({ text }) or why not ({ error, code? });
+       stopped when the person goes (the request closed) */
+    const stop = new AbortController();
+    res.on('close', () => { if (!res.writableFinished) stop.abort(); });
+    res.writeHead(200, { 'content-type': 'application/x-ndjson; charset=utf-8', 'cache-control': 'no-store' });
+    const line = (/** @type {Record<string, unknown>} */ value) => { if (!res.writableEnded) res.write(`${JSON.stringify(value)}\n`); };
+    try {
+      const text = await askAgent(ask, stop.signal, writingModel, images, (delta) => line({ delta }));
+      line({ text: text.trim() });
+    } catch (e) {
+      const code = /** @type {{ code?: unknown }} */ (e)?.code;
+      if (!stop.signal.aborted) line({ error: e instanceof Error ? e.message : String(e), ...(code ? { code: String(code) } : {}) });
+    }
+    res.end();
+    return true;
+  }
   try {
-    json(res, 200, { text: (await askAgent(ask, undefined, /** @type {import('./get.mjs').WritingModel | undefined} */ (model), images)).trim() });
+    json(res, 200, { text: (await askAgent(ask, undefined, writingModel, images)).trim() });
   } catch (e) {
     if (/** @type {{ code?: unknown }} */ (e)?.code === 'no-agent') throw new HttpError(409, e instanceof Error ? e.message : String(e), { code: 'no-agent' });
     throw e;

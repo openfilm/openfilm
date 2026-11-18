@@ -166,6 +166,21 @@ test('keyframes: set by name; a cut clip\'s right half and a copy move by keyfra
   assert.throws(() => applyOps(film(), [{ op: 'keyframes', set: { 'bad name': 'x' } }]), EditError);
 });
 
+test('a page element\'s keyframes (an override\'s animation) stay while it plays them, and a copy gets its own', () => {
+  const body = '0% { translate: 0px 0px } 100% { translate: 40px 0px }';
+  const moving = () => applyOps(film(), [
+    { op: 'props', edits: [{ clip: 'v', prop: 'overrides', value: [{ at: 'h1', style: { animation: 'v--e1a--translate 2s linear both' } }] }] },
+    { op: 'keyframes', set: { 'v--e1a--translate': body } },
+  ]);
+  assert.equal(moving().keyframes['v--e1a--translate'], body);
+  const copy = applyOps(moving(), [{ op: 'insert', from: 'v', at: 12, track: 1 }]);
+  assert.equal(copy.tracks[1].clips[1].overrides[0].style.animation, 'v-2--e1a--translate 2s linear both');
+  assert.equal(copy.keyframes['v-2--e1a--translate'], body);
+  /* nothing plays them any more: they go */
+  const still = applyOps(moving(), [{ op: 'props', edits: [{ clip: 'v', prop: 'overrides', value: null }] }]);
+  assert.equal(still.keyframes['v--e1a--translate'], undefined);
+});
+
 test('motion: a clip\'s keyframes by property, written as its animations and the film\'s @keyframes', () => {
   const f = applyOps(film(), [{ op: 'props', edits: [{ clip: 'v', prop: 'motion', value: { opacity: [{ t: 0, v: 0 }, { t: 0.5, v: 1, ease: 'ease-out' }] } }] }]);
   assert.equal(f.tracks[1].clips[0].style, 'animation: v--opacity 0.5s linear both');

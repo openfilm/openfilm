@@ -4,6 +4,7 @@
  * results land, word timings, WAV and picture sizes, and subtitle translation's prompt and answer.
  */
 import { execFile } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { basename, extname, join } from 'node:path';
 
 /** @typedef {import('./contract.mjs').RunContext} RunContext */
@@ -12,27 +13,58 @@ import { basename, extname, join } from 'node:path';
 export const serviceUrl = (/** @type {string} */ name, /** @type {string} */ fallback) =>
   (process.env[`OPENFILM_${name}_URL`]?.trim() || fallback).replace(/\/+$/, '');
 
+/** A service between two of its own processes (a release restarting it), or a gateway before it that lost it a moment. */
+const PASSING = new Set([502, 503, 504, 520, 521, 522, 523, 524]);
+/** How long to wait before saying a request again, then how long at most (tests make it short). */
+export const steadily = { first: 1000, most: 10_000 };
+
 /**
  * `fetch` that answers only when the service said yes. Otherwise it throws a sentence naming the service and its
- * reason, with the key blanked out wherever the service echoed it.
+ * reason, with the key blanked out wherever the service echoed it. `patience`: said again (the same request) while
+ * the service cannot be reached or is passing between processes, for up to that long; `keep`: answers handed back as
+ * they are, for the caller to read (an asynchronous run's 404 or 409).
  * @param {string} service @param {string} url @param {RequestInit} init @param {RunContext} ctx
+ * @param {{ patience?: number, keep?: number[] }} [how]
  */
-export async function call(service, url, init, ctx) {
+export async function call(service, url, init, ctx, how = {}) {
+  const until = Date.now() + (how.patience ?? 0);
   let res;
-  try { res = await fetch(url, { ...init, signal: ctx.signal }); }
-  catch (e) {
-    if (ctx.signal.aborted) throw e;
-    throw new Error(`${service} could not be reached (${/** @type {Error} */ (e).message}).`);
+  for (let wait = steadily.first; ; wait = Math.min(steadily.most, wait * 2)) {
+    try {
+      /* a short call can be given its own limit (`networkTimeoutMs`), so a silent connection is retried instead of awaited */
+      res = await fetch(url, { ...init, signal: ctx.networkTimeoutMs ? AbortSignal.any([ctx.signal, AbortSignal.timeout(ctx.networkTimeoutMs)]) : ctx.signal });
+      if (!PASSING.has(res.status) || Date.now() + wait > until) break;
+      /* the answer not taken: let its connection go before asking again */
+      await res.body?.cancel();
+    } catch (e) {
+      if (init.method === 'POST' && !new Headers(init.headers).has('idempotency-key')) throw Object.assign(new Error(`${service} connection ended before its outcome was confirmed.`), { mediaUncertain: true });
+      if (ctx.signal.aborted) throw e;
+      /* never reached: whether it was taken is not known (`unreached`) */
+      if (Date.now() + wait > until) throw Object.assign(new Error(`${service} could not be reached (${/** @type {Error} */ (e).message}).`), { unreached: true });
+    }
+    await sleep(wait, ctx.signal);
   }
-  if (res.ok) return res;
+  if (res.ok || how.keep?.includes(res.status)) return res;
+  /* its status, and whether the service itself said it (a JSON answer, not a gateway's page): a run it refused is over */
+  const error = Object.assign(await failure(service, res, ctx), { status: res.status, answered: /json/i.test(res.headers.get('content-type') ?? '') });
+  if (init.method === 'POST' && res.status >= 500 && !new Headers(init.headers).has('idempotency-key')) Object.assign(error, { mediaUncertain: true });
+  throw error;
+}
+
+/**
+ * The error a service's refusal (`res`, not ok) is, as `call` says it: its key or plan, its balance, or what it said.
+ * @param {string} service @param {Response} res @param {RunContext} ctx @returns {Promise<Error>}
+ */
+export async function failure(service, res, ctx) {
   const text = await res.text().catch(() => '');
-  if (KEY_LIMIT.test(text)) throw keyLimit(service);
-  if (outOfBalance(res.status, text)) throw noBalance(service);
+  if (KEY_LIMIT.test(text)) return keyLimit(service);
+  if (outOfBalance(res.status, text)) return noBalance(service);
   /* with no key (a keyless provider) there is nothing to blank out */
   const reason = (ctx.key ? reasonOf(text).split(ctx.key).join('•••') : reasonOf(text)).slice(0, 500);
-  if (PAID_PLAN.test(text)) throw new Error(`${service} needs a paid plan for this (${res.status})${reason ? `: ${reason}` : ''}`);
-  if (res.status === 401 || res.status === 403) throw new Error(`${service} did not accept your key (${res.status}). Check it in Studio: Settings (the OpenFilm logo at the top left) → Services.`);
-  throw new Error(`${service} answered ${res.status}${reason ? `: ${reason}` : ''}`);
+  if (PAID_PLAN.test(text)) return new Error(`${service} needs a paid plan for this (${res.status})${reason ? `: ${reason}` : ''}`);
+  if (res.status === 401 || res.status === 403) return new Error(`${service} did not accept your key (${res.status}). Check it in Studio: Settings (the OpenFilm logo at the top left) → Services.`);
+  if (res.status >= 500 && !reason) return new Error(`${service} is not answering right now (${res.status}). Try again in a moment.`);
+  return new Error(`${service} answered ${res.status}${reason ? `: ${reason}` : ''}`);
 }
 
 /**
@@ -77,10 +109,12 @@ export const keyLimit = (service) => Object.assign(new Error(`${service}: this k
 /** The human part of a service's error body (each service nests it its own way). */
 function reasonOf(/** @type {string} */ text) {
   let body;
+  /* a web page (a gateway's error page): only its title says anything */
+  if (/^\s*</.test(text)) return (text.match(/<title[^>]*>([^<]*)<\/title>/i)?.[1] ?? '').replace(/\s+/g, ' ').trim();
   try { body = JSON.parse(text); } catch { return text.trim(); }
   const detail = body?.error?.message ?? body?.detail?.message ?? body?.detail ?? body?.message ?? body?.error;
   if (Array.isArray(detail)) return detail.map((d) => d?.msg ?? d?.message ?? JSON.stringify(d)).join('; ');
-  return typeof detail === 'string' ? detail : JSON.stringify(body);
+  return typeof detail === 'string' ? detail : body && typeof body === 'object' && !Object.keys(body).length ? '' : JSON.stringify(body);
 }
 
 /**
@@ -120,10 +154,26 @@ export function needed(/** @type {Record<string, unknown>} */ args, /** @type {s
   return value;
 }
 
+/**
+ * A result's name can use every script, combining marks, emoji, spaces and punctuation that file systems allow.
+ * Leave room for the extension and numbered results, and reject Windows device names even on macOS or Linux.
+ * @param {unknown} name @returns {name is string}
+ */
+export function isOutputName(name) {
+  return typeof name === 'string' && name.length <= 120 && Buffer.byteLength(name, 'utf8') <= 240 && portableName(name);
+}
+
+/** A single file name, without any size limit (the completed name includes its extension). @param {string} name */
+function portableName(name) {
+  return name.length > 0 && name === name.trim() && !name.startsWith('.') && !name.endsWith('.')
+    && !/[/\\:*?"<>|\u0000-\u001f\u007f]/.test(name)
+    && !/^(?:con|conin\$|conout\$|prn|aux|nul|com[1-9¹²³]|lpt[1-9¹²³])(?:\.|$)/i.test(name);
+}
+
 /** Where a result lands: `assets/<dir>/<out>.<ext>`; `--out` is a name, not a path. */
 export function landing(/** @type {string} */ dir, /** @type {unknown} */ out, /** @type {string} */ ext) {
   const name = text(out).replace(/\.[a-z0-9]{2,4}$/i, '');
-  if (!name || name === '.' || name === '..' || /[/\\\u0000-\u001f]/.test(name)) throw new Error('--out is a name (no folders, no extension), e.g. --out intro.');
+  if (!portableName(name) || Buffer.byteLength(`${name}.${ext}`, 'utf8') > 255) throw new Error('--out is a name (no folders, no extension), e.g. --out intro.');
   return `assets/${dir}/${name}.${ext}`;
 }
 
@@ -240,6 +290,15 @@ export function wavSeconds(/** @type {Uint8Array} */ bytes) {
     at += 8 + size + (size & 1);
   }
   return null;
+}
+
+/** The first `seconds` of a 16-bit mono PCM WAV (the voice samples Studio keeps), as a WAV of its own. */
+export function wavFirst(/** @type {Uint8Array} */ bytes, /** @type {number} */ seconds) {
+  const b = Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  if (b.length < 44 || b.toString('ascii', 0, 4) !== 'RIFF' || b.toString('ascii', 36, 40) !== 'data') return bytes;
+  const rate = b.readUInt32LE(24);
+  const keep = Math.min(b.length - 44, Math.floor(rate * seconds) * 2);
+  return wav(new Uint8Array(b.subarray(44, 44 + keep)), rate);
 }
 
 /** How long a constant-bitrate MP3 plays (what the services here deliver at the bitrate asked for). */
@@ -476,6 +535,72 @@ export function modelOf(models, verb, ctx) {
 }
 
 export const notes = (/** @type {string[]} */ list) => list.length ? { notes: list } : {};
+
+/**
+ * A provider's cloned voices, as the voice-from-a-recording runs (`sampleVoice`) and Studio's own voices use them:
+ * `make` clones one from a WAV and gives its id; `remove` deletes one; `list` gives the account's own clones, each with
+ * the name and description it was made with.
+ * @typedef {{
+ *   make: (ctx: RunContext, voice: { name: string, description?: string, wav: Uint8Array, language?: string | null }) => Promise<string>,
+ *   remove: (ctx: RunContext, voiceId: string) => Promise<void>,
+ *   list: (ctx: RunContext) => Promise<{ voiceId: string, name: string, description: string }[]>,
+ * }} VoiceClones
+ */
+
+const SAMPLE_PREFIX = 'openfilm-';
+const MADE = /made (\d{4}-\d\d-\d\dT[\d:.]+Z)/;
+/** The voices this process found or made, by provider and name, and when each was last spoken in. */
+const samples = new Map();
+const lastUsed = new Map();
+/** A provider saying the account has no room for another cloned voice. */
+const FULL = /maximum number of custom voices|voice_limit_reached|voice limit|too many voices|custom voice slots/i;
+
+/**
+ * The name a recording's clone goes by at a provider: from whose it is (`scope`) and the recording's SHA-256, so the
+ * same recording is cloned once for each person, and the service can find it again to delete it.
+ * @param {string} scope @param {string} sampleSha256
+ */
+export const sampleVoiceName = (scope, sampleSha256) => `${SAMPLE_PREFIX}${createHash('sha256').update(scope).update('\0').update(sampleSha256).digest('hex').slice(0, 32)}`;
+
+/**
+ * The voice of a recording a run brings (`--voice-sample`, a WAV): cloned at the provider the first time, then found
+ * there by its name (`sampleVoiceName`). The clone is kept as long as there is room: when the account has none, the
+ * one spoken in longest ago (or, not known here, made longest ago) gives way; cloning it again costs nothing.
+ * @param {Record<string, unknown>} args @param {RunContext & { scope?: string }} ctx @param {string} service @param {VoiceClones} clones
+ */
+export async function sampleVoice(args, ctx, service, clones) {
+  const bytes = await ctx.read(needed(args, 'voice-sample'));
+  const name = sampleVoiceName(ctx.scope ?? '', createHash('sha256').update(bytes).digest('hex'));
+  const at = `${service}\0${name}`;
+  const seen = samples.get(at);
+  if (seen && Date.now() - seen.at < 10 * 60_000) { lastUsed.set(seen.voiceId, Date.now()); return seen.voiceId; }
+  const now = Date.now();
+  const ours = (await clones.list(ctx)).filter((v) => v.name.startsWith(SAMPLE_PREFIX))
+    .map((v) => ({ ...v, used: lastUsed.get(v.voiceId) ?? (Date.parse(MADE.exec(v.description)?.[1] ?? '') || 0) }));
+  let voiceId = ours.find((v) => v.name === name)?.voiceId;
+  if (!voiceId) {
+    const make = () => clones.make(ctx, { name, description: `OpenFilm voice sample, made ${new Date().toISOString()}`, wav: bytes, language: text(args.language) || null });
+    try { voiceId = await make(); }
+    catch (e) {
+      if (!FULL.test(/** @type {Error} */ (e)?.message ?? '')) throw e;
+      /* the one spoken in longest ago gives way, never one used in the last ten minutes (it may be speaking now) */
+      const oldest = ours.filter((v) => now - v.used > 10 * 60_000).sort((a, b) => a.used - b.used)[0];
+      if (!oldest) throw Object.assign(new Error(`${service} has no room for another voice now. Try again in a few minutes.`), { code: 'balance' });
+      await forgetSampleVoice(ctx, clones, oldest.voiceId);
+      voiceId = await make();
+    }
+  }
+  samples.set(at, { voiceId, at: Date.now() });
+  lastUsed.set(voiceId, Date.now());
+  return voiceId;
+}
+
+/** Delete a recording's clone at a provider, and forget it here. @param {RunContext} ctx @param {VoiceClones} clones @param {string} voiceId */
+export async function forgetSampleVoice(ctx, clones, voiceId) {
+  await clones.remove(ctx, voiceId);
+  lastUsed.delete(voiceId);
+  for (const [key, value] of samples) if (value.voiceId === voiceId) samples.delete(key);
+}
 
 /** What a run tells the person about the bill. */
 export const billedBy = (/** @type {string} */ service) => ({ note: `billed by ${service} to your key` });

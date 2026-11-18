@@ -1,6 +1,6 @@
 // The reference host (SPEC §4): serves a film folder over HTTP, opens its page in Chromium and asks it for frames.
 import { execFile } from 'node:child_process';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { createServer } from 'node:http';
 import { pipeline } from 'node:stream';
 import { createReadStream, readFileSync, realpathSync, statSync } from 'node:fs';
@@ -10,6 +10,7 @@ import { chromium } from 'playwright-core';
 import { DEFAULT_STAGE, FILM_FILE, readFilmFile } from './film-doc.mjs';
 import { readableLink, referenceSource } from './media-links.mjs';
 import { guard } from './browser-memory.mjs';
+import { serveVision } from './vision-assets.mjs';
 
 // Media seeks that land inside the frame they name. A plain `video.currentTime = t` at a frame boundary otherwise
 // shows the previous frame about a third of the time. Every page that draws a film by seeking video runs it first,
@@ -73,21 +74,28 @@ const TYPES = {
   '.glsl': 'text/plain', '.txt': 'text/plain',
 };
 
+/** @typedef {(file: string, luts: string[], time: [number, number] | null) => { key: string, from?: number } | { making: true } | null | Promise<{ key: string, from?: number } | { making: true } | null>} Grade */
+
 /**
  * A handler that serves the files of `root` for one request, at `path` (the part of the URL inside the folder): HTML
  * with `inject` put before any page script (unless `?film-host=0`, the page as a visitor sees it), media with ranges.
  * `headers` go on every response (a host adds its own policy); the film (film.html) is played by the built-in
  * timeline, and gets `timelineInject` instead of `inject` (a host that drives it, like Studio, adds its bridge there). Returns false when the path is not inside
  * `root`, or leads out of it through a link.
- * `swap(file)` may name another file to serve in a file's place (a render's fast-seeking copy of a video, seekable.mjs;
- * the preview's proxy of heavy footage, studio/server/proxies.mjs); not for `?film-facts`, which asks what the file is.
+ * `swap(file, query)` may name another file to serve in a file's place (a render's fast-seeking copy of a video,
+ * seekable.mjs; the preview's proxy of heavy footage, studio/server/proxies.mjs; a video's graded copy, asked as
+ * `?of-grade=` its key); not for `?film-facts`, which asks what the file is.
  * `missed(file)` is told of a file in the folder asked for and not there, or refused (a link out of the folder): a
  * render keys its chunks on those too, as the page would draw otherwise once the file is there.
- * @param {string} root @param {{ inject?: string, timelineInject?: string, headers?: Record<string, string>, swap?: (file: string) => string | null, missed?: (file: string) => void }} [options]
+ * `grade(file, luts, time)` says a video graded by LUT files (SPEC.md `--of-lut`), of which a clip plays `time` ([in,
+ * out] source seconds, or null): the key of its graded copy (seekable.mjs gradeKey) and the source second it starts at
+ * (`from`) once it is made, `making` while it is, null when it is played as it is. Without it, every video is.
+ * @param {string} root @param {{ inject?: string, timelineInject?: string, headers?: Record<string, string>, swap?: (file: string, query?: URLSearchParams, source?: string) => string | null, missed?: (file: string) => void, grade?: Grade }} [options]
  */
-export function folderFiles(root, { inject = `<script>${HOST_FLAG}</script>`, timelineInject = inject, headers: extraHeaders = {}, swap, missed } = {}) {
+export function folderFiles(root, { inject = `<script>${HOST_FLAG}</script>`, timelineInject = inject, headers: extraHeaders = {}, swap, missed, grade } = {}) {
   root = resolve(root);
   return (req, res, path, query) => {
+    if (serveVision(req, res, path, extraHeaders)) return true;
     /* beside any film, wherever in the folder it is (its page asks for them relative to itself) */
     if (path.endsWith('/__film/timeline.mjs')) {
       // the built-in timeline: plays a film.html (see timeline.mjs)
@@ -135,6 +143,22 @@ export function folderFiles(root, { inject = `<script>${HOST_FLAG}</script>`, ti
       else void mediaFacts(file).then(answer);
       return true;
     }
+    if (path.endsWith('/__film/graded')) {
+      /* a video clip graded by LUTs (SPEC.md --of-lut): where to play it from, its graded copy (`src`, from the film's
+         folder, as `of` is, and `from`, the source second its picture starts at), or null (as it is), `making` while
+         its copy is made; `?of=` the video, `&lut=` each LUT, in order, all from the film's folder, `&t=in,out` the
+         part of it the clip plays */
+      const base = path.slice(0, -'/__film/graded'.length);
+      const of = query?.get('of') ?? '';
+      const file = fileInRoot(root, `${base}/${of}`);
+      const luts = (query?.getAll('lut') ?? []).map((lut) => fileInRoot(root, `${base}/${lut}`));
+      const time = (query?.get('t') ?? '').split(',').map(Number);
+      const answer = (/** @type {{ key: string, from?: number } | { making: true } | null} */ said) => res.writeHead(200, { ...extraHeaders, 'content-type': 'application/json', 'cache-control': 'no-store' })
+        .end(JSON.stringify(said && 'key' in said ? { src: `${of}?of-grade=${said.key}`, from: said.from ?? 0 } : { src: null, making: Boolean(said?.making) }));
+      if (!grade || !file || !luts.length || luts.some((lut) => !lut)) answer(null);
+      else void Promise.resolve(grade(file, /** @type {string[]} */ (luts), time.length === 2 && time.every(Number.isFinite) ? time : null)).then(answer, () => answer(null));
+      return true;
+    }
     let rel;
     try { rel = decodeURIComponent(path); } catch { res.writeHead(400, extraHeaders).end('bad address'); return true; }
     /* an address speaks in `/`: a `\` in it (escaped as %5C) would be a separator on Windows, past every check */
@@ -150,7 +174,7 @@ export function folderFiles(root, { inject = `<script>${HOST_FLAG}</script>`, ti
     if (!inRoot) try { inRoot = within(realpathSync(root), realpathSync(asked)) || readableLink(root, asked); } catch { /* gone meanwhile */ }
     if (!inRoot) { missed?.(asked); return false; }
     /* what a file is (its length and size: `film-facts`) is the file's own, never its copy's */
-    const file = (query?.has('film-facts') ? null : swap?.(asked)) ?? linked ?? asked;
+    const file = (query?.has('film-facts') ? null : swap?.(asked, query, linked ?? asked)) ?? linked ?? asked;
     /* given up while its file was being made (a media element that seeked on, a page closed): nothing to send, and a
        pipe to the closed response would throw */
     if (res.destroyed) return true;
@@ -158,7 +182,9 @@ export function folderFiles(root, { inject = `<script>${HOST_FLAG}</script>`, ti
     try { stat = statSync(file); } catch { res.writeHead(404, extraHeaders).end('not found'); return true; }
     if (stat.isDirectory()) { res.writeHead(302, { ...extraHeaders, location: `${path}/` }).end(); return true; }
     const type = TYPES[extname(file).toLowerCase()] ?? 'application/octet-stream';
-    const headers = { ...extraHeaders, 'content-type': type, 'cache-control': 'no-store', 'accept-ranges': 'bytes' };
+    const headers = { ...extraHeaders, 'content-type': type, 'cache-control': 'no-store', 'accept-ranges': 'bytes',
+      ...(type.startsWith('video/') ? { 'x-openfilm-media-id': createHash('sha256').update(`${file}\0${stat.size}\0${stat.mtimeMs}\0${stat.ctimeMs}\0${stat.ino}`).digest('hex') } : {}),
+    };
     /* a HEAD has no body (the browser cancels one that brings it) */
     if (req.method === 'HEAD') { res.writeHead(200, headers).end(); return true; }
     if (type.startsWith('text/html') && query?.get('film-host') !== '0') {
@@ -285,8 +311,8 @@ export async function listenLocal(server, port = 0) {
  * Serve `root`. HTML gets the host flag injected before any page script;
  * ?film-host=0 serves the page untouched, as a visitor would see it.
  */
-export async function serve(root, { port = 0, swap, missed } = {}) {
-  const files = folderFiles(root, { swap, missed });
+export async function serve(root, { port = 0, swap, missed, grade } = {}) {
+  const files = folderFiles(root, { swap, missed, grade });
   const server = createServer((req, res) => {
     const url = new URL(req.url, 'http://x');
     if (!files(req, res, url.pathname, url.searchParams)) res.writeHead(403).end();
@@ -428,7 +454,8 @@ const deviceOf = (/** @type {string} */ renderer) => {
  * Windows: headless Chromium picks no ANGLE backend by itself and draws WebGL with SwiftShader, on the CPU. Vulkan
  * reaches the GPU (on a laptop with two, the discrete one: d3d11 and gl take the integrated one). A virtual machine, a
  * CI runner or a computer without a Vulkan driver has none, so the first browser reads its renderer once: when Vulkan
- * did not start, or is software too, it and every later browser take Chromium's default.
+ * did not start, or is software too, it and every later browser take Direct3D when that reaches a GPU (a computer
+ * whose driver has no Vulkan), else Chromium's default.
  *
  * Vulkan on a GPU may still never show a video's frames (presentsVideo). Then Direct3D is taken when it reaches the
  * same GPU (a computer with one), else Vulkan with videos decoded on the CPU, else Direct3D on the other GPU; each only
@@ -450,10 +477,20 @@ export function vulkanFirst(renderer = rendererOf, presents = presentsVideo) {
     const read = (/** @type {import('playwright-core').Browser} */ b) => inTime(renderer(b), 30_000, 'no renderer').catch(() => 'none');
     const shows = (/** @type {import('playwright-core').Browser} */ b) => inTime(presents(b), 30_000, '').catch(() => true);
     const vulkan = ['--use-angle=vulkan'];
+    const d3d11 = ['--use-angle=d3d11'];
     const browser = await open(vulkan).catch(() => null);
     const gpu = browser ? await read(browser) : 'none';
     if (!browser || gpu === 'none' || SOFTWARE_GL.test(gpu)) {
       await browser?.close().catch(() => {});
+      /* no Vulkan on a GPU (an older driver, or none for it): Direct3D reaches the GPU of most such computers, and is
+         taken when it does and shows a video's frames; else the default, on the CPU */
+      const direct = await open(d3d11).catch(() => null);
+      const directGpu = direct ? await read(direct) : 'none';
+      if (direct && directGpu !== 'none' && !SOFTWARE_GL.test(directGpu) && await shows(direct)) {
+        choose(d3d11);
+        return direct;
+      }
+      await direct?.close().catch(() => {});
       choose([]);
       return open([]);
     }
@@ -463,7 +500,6 @@ export function vulkanFirst(renderer = rendererOf, presents = presentsVideo) {
     }
     await browser.close().catch(() => {});
     /* Direct3D, asked for by name (the default is SwiftShader, on the CPU): first on the same GPU, a computer with one */
-    const d3d11 = ['--use-angle=d3d11'];
     const direct = await open(d3d11).catch(() => null);
     const directGpu = direct ? await read(direct) : 'none';
     /** @type {boolean | null} */
@@ -529,6 +565,9 @@ const OPEN_TRIES = 3;
 /** How long a frame's picture may take once it is drawn. */
 const CAPTURE_MS = 30_000;
 
+/** How many times a frame's picture is asked for when Chromium has none to give (FilmPage.capture). */
+const CAPTURE_TRIES = 4;
+
 /** A frame that threw inside the page: the film's fault, reported as such rather than as a crash of the tool. */
 export class FrameError extends Error {}
 /** A film whose video frames this browser never showed, drawn again in browsers that show video another way. */
@@ -591,6 +630,12 @@ export class FilmPage {
     /* `size`: a page clip's (SPEC §1), what a page without a size of its own is laid out at, from its first layout */
     const laid = size?.w > 0 && size?.h > 0 ? { width: Math.round(size.w), height: Math.round(size.h) } : { width: 1920, height: 1080 };
     film.context = await browser.newContext({ viewport: laid, deviceScaleFactor: scale });
+    // Persistent media caching can hash local requests; changing external resources have no such identity.
+    film.externalRequests = new Set();
+    film.context.on('request', (r) => {
+      const url = r.url();
+      if (!url.startsWith(origin + '/') && !/^(data|blob):/.test(url)) film.externalRequests.add(url);
+    });
     film.page = await film.context.newPage();
     const problems = film.problems;
     film.page.on('pageerror', (e) => problems.push({ kind: 'error', message: e.message }));
@@ -733,9 +778,20 @@ export class FilmPage {
     const clip = { x: 0, y: 0, width: this.meta.width, height: this.meta.height, scale: this.scale };
     // Fast compression, for a PNG too: the same pixels in a larger file, two to four times sooner (a 4K frame of
     // footage: 240 ms instead of a second).
-    const { data } = await inTime(this.cdp.send('Page.captureScreenshot', { format, quality, clip, fromSurface: true, optimizeForSpeed: true }),
-      CAPTURE_MS, `the picture did not come within ${CAPTURE_MS / 1000} s`);
-    return Buffer.from(data, 'base64');
+    for (let tries = 1; ; tries++) {
+      try {
+        const { data } = await inTime(this.cdp.send('Page.captureScreenshot', { format, quality, clip, fromSurface: true, optimizeForSpeed: true }),
+          CAPTURE_MS, `the picture did not come within ${CAPTURE_MS / 1000} s`);
+        return Buffer.from(data, 'base64');
+      } catch (e) {
+        /* Chromium had no picture to give (its compositor had none ready, or the GPU's readback failed: a busy machine
+           drawing heavy footage): asked again after two more frames. Still none, the render is drawn again in new
+           browsers (browserFailed) */
+        if (tries >= CAPTURE_TRIES || !/Unable to capture screenshot/i.test(e instanceof Error ? e.message : '')) throw e;
+        await inTime(this.page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => r(undefined))))),
+          CAPTURE_MS, `the picture did not come within ${CAPTURE_MS / 1000} s`);
+      }
+    }
   }
 
   /** What the page leaves unpainted from now on: clear (a capture keeps it transparent), else black. */

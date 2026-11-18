@@ -1,0 +1,224 @@
+{
+  "order": 22,
+  "icon": "plug",
+  "title": {
+    "en": "Notion",
+    "zh-CN": "Notion",
+    "ja": "Notion",
+    "ko": "Notion",
+    "es": "Notion"
+  },
+  "summary": {
+    "en": "Scripts and shot lists from Notion: the agent reads your pages and writes back what it made.",
+    "zh-CN": "从 Notion 拿脚本和分镜表：智能体读你的页面，也能把做好的写回去。",
+    "ja": "Notion の台本やショットリスト：ページを読み、作ったものを書き戻します。",
+    "ko": "Notion의 대본과 샷 리스트: 페이지를 읽고 만든 결과를 다시 적습니다.",
+    "es": "Guiones y listas de planos de Notion: el agente lee tus páginas y escribe lo que hizo."
+  },
+  "details": {
+    "en": "When to use it: your script, brief or shot list is in Notion.\nHow: Connect and sign in once in your browser, then just ask in the chat, for example \"Make a one-minute video from the \"Launch script\" page in Notion\". The agent asks you before it changes anything in Notion.",
+    "zh-CN": "什么时候用：脚本、需求或分镜表写在 Notion 里。\n怎么用：点「连接」在浏览器里登录一次，之后在对话里直接说，比如「按 Notion 里「发布会脚本」那一页做一条 1 分钟的视频」。智能体改动 Notion 里的东西前会先问你。",
+    "ja": "使うとき：台本や要件、ショットリストが Notion にあるとき。\n使い方：「接続」でブラウザから一度サインインし、あとはチャットで頼むだけ。例：「Notion の「発表会台本」ページから 1 分の映像を作って」。Notion の中を変える前には確認されます。",
+    "ko": "언제: 대본, 요구 사항, 샷 리스트가 Notion에 있을 때.\n사용법: 「연결」을 눌러 브라우저에서 한 번 로그인한 뒤 대화에서 바로 말하면 됩니다. 예: \"Notion의 「런칭 대본」 페이지로 1분짜리 영상을 만들어 줘\". Notion의 내용을 바꾸기 전에는 먼저 묻습니다.",
+    "es": "Cuándo: tu guion, briefing o lista de planos está en Notion.\nCómo: conecta e inicia sesión una vez en el navegador; luego pídelo en el chat, por ejemplo «Haz un vídeo de un minuto con la página «Guion de lanzamiento» de Notion». El agente te pregunta antes de cambiar algo en Notion."
+  },
+  "examples": {
+    "zh-CN": [
+      {
+        "say": "按 Notion 里「发布会脚本」那一页做一条 1 分钟的视频",
+        "does": "读那一页的脚本，拆成镜头，配旁白和字幕，做出一分钟的初剪。"
+      },
+      {
+        "say": "把这部片子的分镜表写到 Notion 的「项目」数据库里",
+        "does": "按镜头写成数据库里的一行行：时长、画面、台词，各一列。"
+      },
+      {
+        "say": "读一下 Notion 里的品牌规范，按它调字幕和配色",
+        "does": "从规范里读出字体、主色和用法，改字幕样式和配色。"
+      }
+    ],
+    "en": [
+      {
+        "say": "Make a one-minute video from the \"Launch script\" page in Notion",
+        "does": "Reads the script on that page, breaks it into shots with voice-over and captions, and makes a one-minute first cut."
+      },
+      {
+        "say": "Write this film's shot list into the \"Projects\" database in Notion",
+        "does": "Writes each shot as a row of that database: length, picture and lines in their own columns."
+      },
+      {
+        "say": "Read the brand guide in Notion and set the captions and colours by it",
+        "does": "Reads the fonts, main colours and rules from the guide and restyles captions and colours."
+      }
+    ],
+    "ja": [
+      {
+        "say": "Notion の「発表会台本」ページから 1 分の映像を作って",
+        "does": "そのページの台本を読み、カットに分けてナレーションと字幕を付け、1 分の初稿を作ります。"
+      },
+      {
+        "say": "この映像のショットリストを Notion の「プロジェクト」データベースに書いて",
+        "does": "カットごとにデータベースの行として書き込みます。長さ・画面・セリフを列に。"
+      },
+      {
+        "say": "Notion のブランドガイドを読んで、字幕と色をそれに合わせて",
+        "does": "ガイドからフォント・メインカラー・使い方を読み、字幕と配色を直します。"
+      }
+    ],
+    "ko": [
+      {
+        "say": "Notion의 「런칭 대본」 페이지로 1분짜리 영상을 만들어 줘",
+        "does": "그 페이지의 대본을 읽고 샷으로 나눠 내레이션과 자막을 붙여 1분 초안을 만듭니다."
+      },
+      {
+        "say": "이 영상의 샷 리스트를 Notion의 「프로젝트」 데이터베이스에 적어 줘",
+        "does": "샷마다 데이터베이스의 한 줄로 씁니다. 길이·장면·대사를 각 열에."
+      },
+      {
+        "say": "Notion의 브랜드 가이드를 읽고 자막과 색을 거기에 맞춰 줘",
+        "does": "가이드에서 글꼴·주색·규칙을 읽고 자막과 색을 바꿉니다."
+      }
+    ],
+    "es": [
+      {
+        "say": "Haz un vídeo de un minuto con la página «Guion de lanzamiento» de Notion",
+        "does": "Lee el guion de esa página, lo divide en planos con voz y subtítulos, y hace un primer montaje de un minuto."
+      },
+      {
+        "say": "Escribe la lista de planos de esta película en la base de datos «Proyectos» de Notion",
+        "does": "Escribe cada plano como una fila de esa base de datos: duración, imagen y texto en columnas."
+      },
+      {
+        "say": "Lee la guía de marca de Notion y ajusta los subtítulos y colores a ella",
+        "does": "Lee de la guía las fuentes, colores y reglas y adapta subtítulos y colores."
+      }
+    ]
+  },
+  "showcase": {
+    "highlights": {
+      "zh-CN": [
+        {
+          "icon": "pen",
+          "title": "从脚本开始",
+          "text": "读 Notion 里的脚本和提纲，直接做成片子。"
+        },
+        {
+          "icon": "list",
+          "title": "写回分镜表",
+          "text": "做好的镜头写进你的数据库，团队一起看。"
+        },
+        {
+          "icon": "palette",
+          "title": "照品牌规范",
+          "text": "字体、颜色和用语都按你写的规范来。"
+        },
+        {
+          "icon": "search",
+          "title": "找资料",
+          "text": "搜你的页面，找到采访稿、需求和反馈。"
+        }
+      ],
+      "en": [
+        {
+          "icon": "pen",
+          "title": "Start from a script",
+          "text": "Reads scripts and outlines in Notion and turns them into a film."
+        },
+        {
+          "icon": "list",
+          "title": "Shot lists back",
+          "text": "Writes the shots into your database for the team."
+        },
+        {
+          "icon": "palette",
+          "title": "Follow the brand guide",
+          "text": "Fonts, colours and wording as your guide says."
+        },
+        {
+          "icon": "search",
+          "title": "Find notes",
+          "text": "Searches your pages for interviews, briefs and feedback."
+        }
+      ],
+      "ja": [
+        {
+          "icon": "pen",
+          "title": "台本から始める",
+          "text": "Notion の台本や構成を読み、そのまま映像にします。"
+        },
+        {
+          "icon": "list",
+          "title": "カット表を書き戻す",
+          "text": "作ったカットをデータベースに書き込み、チームで共有。"
+        },
+        {
+          "icon": "palette",
+          "title": "ブランドガイドどおりに",
+          "text": "フォント・色・言葉づかいをガイドどおりに。"
+        },
+        {
+          "icon": "search",
+          "title": "資料を探す",
+          "text": "ページを検索して原稿・要件・フィードバックを見つけます。"
+        }
+      ],
+      "ko": [
+        {
+          "icon": "pen",
+          "title": "대본에서 시작",
+          "text": "Notion의 대본과 개요를 읽어 바로 영상으로 만듭니다."
+        },
+        {
+          "icon": "list",
+          "title": "콘티 다시 쓰기",
+          "text": "만든 샷을 데이터베이스에 써서 팀과 함께 봅니다."
+        },
+        {
+          "icon": "palette",
+          "title": "브랜드 가이드대로",
+          "text": "글꼴·색·문구를 가이드대로 맞춥니다."
+        },
+        {
+          "icon": "search",
+          "title": "자료 찾기",
+          "text": "페이지에서 원고·요청·피드백을 찾습니다."
+        }
+      ],
+      "es": [
+        {
+          "icon": "pen",
+          "title": "Empieza por el guion",
+          "text": "Lee guiones y esquemas en Notion y los convierte en película."
+        },
+        {
+          "icon": "list",
+          "title": "Listas de planos",
+          "text": "Escribe los planos en tu base de datos para el equipo."
+        },
+        {
+          "icon": "palette",
+          "title": "Sigue la guía de marca",
+          "text": "Fuentes, colores y textos como dice tu guía."
+        },
+        {
+          "icon": "search",
+          "title": "Encuentra notas",
+          "text": "Busca en tus páginas entrevistas, encargos y comentarios."
+        }
+      ]
+    }
+  },
+  "about": "reads and writes the person's Notion pages and databases (Notion's own MCP server)",
+  "category": "tool",
+  "difficulty": 1,
+  "ease": 5,
+  "cost": "free",
+  "audience": {
+    "en": "Anyone who plans videos in Notion",
+    "zh-CN": "在 Notion 里策划视频的人",
+    "ja": "Notion で映像を企画する人",
+    "ko": "Notion에서 영상을 기획하는 사람",
+    "es": "Quien planifica sus vídeos en Notion"
+  },
+  "on": false
+}

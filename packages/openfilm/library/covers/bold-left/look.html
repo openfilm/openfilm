@@ -1,0 +1,35 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Bold left</title>
+<style>
+:root { --font: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; --accent: #ffd60a; --ink: #ffffff; }
+html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+* { box-sizing: border-box; }
+.shade { position: fixed; inset: 0; background: linear-gradient(90deg, rgba(0,0,0,.82) 0%, rgba(0,0,0,.5) 42%, rgba(0,0,0,0) 68%); }
+.box { position: fixed; left: 6vw; top: 50%; transform: translateY(-50%); width: 60vw; font-family: var(--font); }
+.tag { display: inline-block; font-size: 2.3vmax; font-weight: 700; line-height: 1; color: #111; background: var(--accent); padding: .38em .6em; border-radius: .18em; margin-bottom: .9vmax; }
+.t1, .t2 { display: block; font-size: 8.6vmax; font-weight: 900; line-height: 1.04; letter-spacing: -.02em; color: var(--ink); text-shadow: 0 .04em .18em rgba(0,0,0,.45); }
+.t2 { color: var(--accent); }
+.t3 { display: block; margin-top: 1.4vmax; font-size: 2.2vmax; font-weight: 500; line-height: 1.3; color: var(--ink); opacity: .86; }
+@media (max-aspect-ratio: 1/1) {
+  .shade { background: linear-gradient(0deg, rgba(0,0,0,.85) 0%, rgba(0,0,0,.55) 38%, rgba(0,0,0,0) 62%); }
+  .box { top: auto; bottom: 9vh; transform: none; width: 88vw; }
+  .t1, .t2 { font-size: 8vmax; }
+  .t3 { font-size: 2vmax; }
+}
+/* a full-screen feed: words kept clear of its caption, its buttons and its top bar */
+@media (max-aspect-ratio: 10/16) { .box { bottom: 24vh; width: 80vw; } }
+</style>
+</head>
+<body>
+<div class="shade"></div><div class="box"><span class="tag">实测</span><span class="t1">一个人做完</span><span class="t2">整部短片</span><span class="t3">从剧本到成片，只用一个应用</span></div>
+<script>
+/*
+ * A huge headline on the left over a shade, its second line in the accent color: a cover over a frame of the film. A page of OpenFilm's library (CC0): a still, the same at every t.
+ */
+window.film = { frame() {} };
+</script>
+</body>
+</html>

@@ -25,6 +25,8 @@ interface Native {
   pickFolder(options?: { title?: string; button?: string; at?: string }): Promise<string | null>;
   capture(rect: { x: number; y: number; width: number; height: number }): Promise<string | null>;
   agents: NonNullable<StudioHost['agents']>;
+  /* the connectors (src/connectors.mjs) */
+  connectors: NonNullable<StudioHost['connectors']>;
   /* the window's tabs (src/tabs.mjs) */
   tabs: NonNullable<StudioHost['tabs']>;
   localAgents: Record<string, unknown>;
@@ -38,6 +40,9 @@ interface Native {
   onFullScreen(listener: Listener<boolean>): Stop;
   onToggleChat(listener: Listener<void>): Stop;
   onOpenSettings(listener: Listener<void>): Stop;
+  /* an openfilm:// link (src/deep-links.mjs): what it names in the community */
+  takeLink(): Promise<{ kind: 'community'; uid: string } | null>;
+  onOpenLink(listener: Listener<{ kind: 'community'; uid: string }>): Stop;
   onStudioBrowser(listener: Listener<unknown>): Stop;
   onFfmpeg(listener: Listener<unknown>): Stop;
   onUpdate(listener: Listener<unknown>): Stop;
@@ -66,7 +71,7 @@ const column = document.getElementById('of-chat')!;
 const layout = { open: true, width: 420, min: 340, studioMin: 640, side: 'left' as 'left' | 'right', libraryDock: 'left' as 'left' | 'right' | 'bottom' | 'chat' };
 /** the assets open in the column (Studio draws them, above the composer); `bottom`: the composer's height, all the
     chat shows then */
-const assets = { open: false, bottom: 120 };
+const assets = { open: false, bottom: 120, beside: 120 };
 const assetsSignal = signal(false);
 const assetsOverlaySignal = signal(false);
 const chatOpenSignal = signal(true);
@@ -74,7 +79,7 @@ const chatOpenSignal = signal(true);
 /** The column's width as the window allows it: Studio keeps its least width, the chat its own while it fits. */
 let workspaceBounds: { left: number; top: number; width: number; height: number } | null = null;
 const shownWidth = () => workspaceBounds && layout.open ? workspaceBounds.width : (layout.open ? workspaceChatWidth(innerWidth, layout.width, layout.min, layout.studioMin) : 0);
-const panelState = () => ({ open: layout.open, width: shownWidth(), preferredWidth: layout.width, assets: { open: assets.open && (layout.libraryDock !== 'chat' || layout.open), bottom: assets.bottom } });
+const panelState = () => ({ open: layout.open, width: shownWidth(), preferredWidth: layout.width, assets: { open: assets.open && (layout.libraryDock !== 'chat' || layout.open), bottom: assets.bottom, beside: assets.beside } });
 const panelListeners = new Set<Listener<ReturnType<typeof panelState>>>();
 
 /** The page shows a project (not a new tab's launcher): only then is there a chat to show. */
@@ -178,6 +183,8 @@ projectReady = follow();
 /* ── between Studio and the chat: what is selected, what is referenced, what Studio is asked to show ── */
 const selection = signal<StudioSelection | null>(null);
 const refer = events<StudioRef>();
+/* a reference taken out of the message being written, from Studio (what it marked closed there) */
+const unrefer = events<StudioRef>();
 /* a skill tried in Studio's library, to be named in the message; and "Add a skill" */
 const skillPicked = events<{ name: string; description: string; title?: string; newConversation?: boolean }>();
 const skillAdd = events<void>();
@@ -248,9 +255,9 @@ const developer = {
 
 /* ── Settings → Advanced (kept by the app): the system's notifications of a turn done, stopped or waiting ── */
 const notifications = {
-  get: async () => (await native.prefs.get()).notify !== false,
+  get: async () => (await native.prefs.get()).notify === true,
   set: (on: boolean) => native.prefs.set({ notify: on }),
-  onChange: (listener: Listener<boolean>) => native.prefs.onChange((prefs) => listener(prefs.notify !== false)),
+  onChange: (listener: Listener<boolean>) => native.prefs.onChange((prefs) => listener(prefs.notify === true)),
 };
 
 /* ── the app's update, for Studio's top bar: a version downloaded and ready (src/updates.mjs), Restart to install it ── */
@@ -291,15 +298,23 @@ export const host: StudioHost = {
   name: 'OpenFilm',
   projectChanged,
   ...(mac ? { titlebar: { get inset() { return fullScreen.get() ? 0 : INSET; }, onChange: (listener: Listener<number>) => { fullScreen.on((full) => listener(full ? 0 : INSET)); } } } : {}),
-  ...(windows ? { titlebar: { get inset() { return fullScreen.get() ? 0 : 6; }, insetRight: INSET_RIGHT, onChange: (listener: Listener<number>) => { fullScreen.on(full => listener(full ? 0 : 6)); } } } : {}),
+  ...(windows ? { titlebar: { inset: 0, insetRight: INSET_RIGHT } } : {}),
   /* in order, each with its picture: two pointed at quickly must not swap or share a screenshot */
   refer: (ref) => {
     if (!layout.open) setChatOpen(true);
     pictured = pictured.then(() => withPicture(ref)).then((done) => refer.set(done));
   },
+  /* after any reference still being pictured, so one closed at once is not put back after */
+  unrefer: (ref) => { pictured = pictured.then(() => unrefer.set(ref)); },
   onSelection: (next) => selection.set(next),
   onHover: (ref) => hover.set(ref ?? null),
-  onCommand: (listener) => { command = listener; },
+  onCommand: (listener) => {
+    command = listener;
+    /* an openfilm:// link opens the Community on what it names: the one that opened the app, once Studio listens */
+    void native.takeLink().then((link) => { if (link) listener({ type: 'show-examples', open: { kind: 'skill', name: link.uid } }); }, () => {});
+    /* and those that come while the app runs */
+    native.onOpenLink((link) => command?.({ type: 'show-examples', open: { kind: 'skill', name: link.uid } }));
+  },
   settings: { onOpen: (listener) => native.onOpenSettings(listener) },
   /* read live: Studio may read the panel before or after the kept layout arrives */
   panel: {
@@ -326,6 +341,7 @@ export const host: StudioHost = {
     onChange: (listener) => { panelListeners.add(listener); listener(panelState()); return () => { panelListeners.delete(listener); }; },
   },
   agents: native.agents,
+  connectors: native.connectors,
   asks: { show: (list, answer) => { answerAsk = answer; asks.set(list); } },
   developer,
   notifications,
@@ -379,10 +395,13 @@ function commandFor(ref: StudioRef): StudioCommand {
   platform: native.platform,
   pathForFile: native.pathForFile,
   revealPath: native.revealPath,
+  /* the composer's Add folder */
+  pickFolder: native.pickFolder,
   agents: {
     list: native.agents.list,
     connect: native.agents.connect,
     onChange: native.agents.onChange,
+    refreshModels: native.agents.refreshModels,
   },
   localAgents: native.localAgents,
   openSettings: (section: string) => command?.({ type: 'settings', section: section === 'providers' ? 'providers' : 'agents' }),
@@ -402,9 +421,11 @@ function commandFor(ref: StudioRef): StudioCommand {
   /* Studio failing to start leaves no page to tell: the app shows that itself (src/main.mjs) */
   onStudioFailed: () => () => {},
   onRefer: refer.on,
+  onUnrefer: unrefer.on,
   onSelection: (listener: Listener<StudioSelection>) => selection.on((s) => { if (s) listener(s); }),
   onFfmpeg: native.onFfmpeg,
   showInStudio: (ref: StudioRef) => command?.(commandFor(ref)),
+  openInStudio: (link: string) => command?.({ type: 'open', link }),
   /* an example's folder on this computer (Studio fetches it when needed), for a reference to one in a message sent */
   async exampleFolder(id: string) {
     const res = await fetch(`/api/examples/${encodeURIComponent(id)}/folder`, { method: 'POST' });
@@ -431,22 +452,6 @@ function commandFor(ref: StudioRef): StudioCommand {
     if (!id) return { files: [] };
     try { return await (await fetch(`/api/projects/${encodeURIComponent(id)}/files`)).json(); } catch { return { files: [] }; }
   },
-  /* Studio's skills (its own listing, with their covers), Discover's among them, for the cards of an empty conversation:
-     Discover read first unless it was in the last ten minutes (Studio reads it as it starts), a few seconds at most */
-  async starterSkills() {
-    const id = project.get()?.id;
-    if (!id) return [];
-    type Listed = { name: string; description: string; cover?: string; order?: number; off?: true; shown?: { title: Record<string, string> } };
-    try {
-      await fetch('/api/skills/catalog', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ fresh: 10 * 60 * 1000 }), signal: AbortSignal.timeout(5000) })
-        .catch(() => { /* offline or slow: what Discover read before */ });
-      const body = await (await fetch(`/api/skills?project=${encodeURIComponent(id)}`)).json() as { skills?: Listed[] };
-      return (body.skills ?? [])
-        .filter((s): s is Listed & { cover: string } => Boolean(s.cover) && !s.off)
-        .sort((a, b) => (a.order ?? Number.MAX_SAFE_INTEGER) - (b.order ?? Number.MAX_SAFE_INTEGER))
-        .map((s) => ({ name: s.name, description: s.description, cover: s.cover, title: s.shown?.title ?? null }));
-    } catch { return []; }
-  },
   setChatWidth: (width: number, done?: boolean) => setChatWidth(width, done === true),
   setChatOpen,
   assetsOpen: () => assets.open,
@@ -454,10 +459,14 @@ function commandFor(ref: StudioRef): StudioCommand {
   onAssets: assetsSignal.on,
   assetsOverlay: () => assetsOverlaySignal.get(),
   onAssetsOverlay: assetsOverlaySignal.on,
-  setComposerHeight(px: number) {
+  setComposerHeight(px: number, besidePx?: number) {
     const bottom = Math.round(px);
-    if (!Number.isFinite(bottom) || bottom < 40 || bottom === assets.bottom) return;
+    if (!Number.isFinite(bottom) || bottom < 40) return;
+    /* beside the way back to the chat: the composer alone */
+    const beside = Number.isFinite(besidePx) ? Math.min(bottom, Math.max(0, Math.round(besidePx!))) : bottom;
+    if (bottom === assets.bottom && beside === assets.beside) return;
     assets.bottom = bottom;
+    assets.beside = beside;
     place();
   },
   /* a menu of the chat's floats in its own layer over everything: nothing to make room for */

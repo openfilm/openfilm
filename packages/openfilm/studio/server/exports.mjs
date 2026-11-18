@@ -10,19 +10,24 @@
  *
  * What an export asks (POST exports, one ask or `{ jobs: [ask…], folder? }`):
  *
- *   { kind: 'video', codec?, frame?, fill?, shortEdge?, fps?, quality?, audio?, clip?, scale?, preset?, sidecar?, loudness? }
+ *   { kind: 'video', codec?, frame?, fill?, shortEdge?, fps?, quality?, bitrate?, maxrate?, audio?, clip?, scale?, preset?, sidecar?, loudness? }
  *       codec    h264 (default) | hevc | vp9 | prores422hq | prores4444 | hevc_alpha | png (a zipped PNG sequence);
  *                vp9, prores4444, hevc_alpha and png keep transparency
  *       frame    native (default), or a ratio W:H from 1:4 to 4:1 (16:9, 9:16, 4:5, 2.39:1…): a delivery frame around
  *                the film, which is fitted with bars (fill: 'contain', default) or fills it and is cropped (fill: 'cover')
  *       shortEdge the picture's short side in pixels (default: the film's own size)
  *       clip     only this clip of film.html (by id), from its start, at the stage's size × `scale` (default 1)
+ *       bitrate  the picture's average bits a second (BITRATE_RANGE), instead of a quality: a delivery's rate or
+ *                size, for h264, hevc and vp9 (see targetEncoding)
+ *       maxrate  with a bitrate, its peaks over a second, bitrate to twice it (default: a fifth over); a file size's
+ *                bitrate is asked with its peaks at it, so the file never comes out over
  *       preset   a platform's name, for the file name
  *       sidecar  'srt' | 'vtt': the subtitles as a file beside the video too
+ *       cover    a cover of the film (`covers/<name>`, covers.mjs) drawn as the video's first frame (h264 and hevc)
  *       loudness the sound brought to this many LUFS (-70 to -5), true peaks under -1 dBTP (render --loudness);
  *                none: as mixed
  *   { kind: 'gif', frame?, fill?, width? (long side, default 640), fps? (default 15) }
- *   { kind: 'audio', format?: 'wav' | 'm4a' | 'mp3', mix?: boolean (default true), stems?: boolean }
+ *   { kind: 'audio', format?: 'wav' | 'm4a' | 'mp3', mix?: boolean (default true), stems?: boolean, loudness? }
  *       mix: `<name> - mix`; stems: voice, music, sound effects and the footage's own sound, each its own file
  *       (`<name> - voice`…), a sound grouped by where it is (assets/audio/music/…, assets/audio/sfx/…, anything
  *       else is voice) and a video's sound as the footage's (nle.mjs soundStem)
@@ -69,25 +74,26 @@ import { promisify } from 'node:util';
 import { randomBytes } from 'node:crypto';
 import { constants as fsConstants, existsSync, readFileSync, statSync } from 'node:fs';
 import { copyFile, mkdir, mkdtemp, readdir, readFile, rename, rm, rmdir, stat, writeFile } from 'node:fs/promises';
-import { homedir, setPriority, tmpdir } from 'node:os';
+import { availableParallelism, homedir, setPriority, tmpdir } from 'node:os';
 import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { FilmPage, launch } from '../../src/host.mjs';
-import { alphaCompositeFilter, broken, encoders, FRAMES_709, hardwareEncoder, hardwareOptions, onTheChip, prores709, proresOptions } from '../../src/encoders.mjs';
+import { alphaCompositeFilter, broken, chipDelivery, encoders, FRAMES_709, hardwareEncoder, holdsQuality, onTheChip, prores709, proresOptions, unheld } from '../../src/encoders.mjs';
 import { COMMAND_ROOM, filmSound, filterScriptOption, kill as killProcess, mix, open } from '../../src/shared.mjs';
-import { defaultWorkers, machine } from '../../src/render.mjs';
-import { isLoudness, LOUDNESS_RANGE } from '../../src/loudness.mjs';
+import { defaultWorkers, machine, renderWorkerLimit } from '../../src/render.mjs';
+import { isLoudness, LOUDNESS_RANGE, toLoudness } from '../../src/loudness.mjs';
 import { selectionClips } from '../../src/render-ranges.mjs';
 import { filmVideos } from '../../src/seekable.mjs';
 import { FILM_FILE, clipFade, filmHtml, fittedFade, kindOf, pictureRect, readFilmFile } from '../../src/film-doc.mjs';
 import { layerBlocks, rowBadges, trackKind } from './track-layout.mjs';
 import { fcpxmlDocument } from './fcpxml.mjs';
 import { markHevcStraightAlpha } from './hevc-alpha.mjs';
-import { frameSpan, NLE_FPS, nleFps, ownLook, planNleTimeline, probeSource, soundStem, xmemlDocument } from './nle.mjs';
+import { frameSpan, NLE_FPS, nleFps, ownLook, plainFootageCss, planNleTimeline, probeSource, soundStem, xmemlDocument } from './nle.mjs';
 import { draftsRoot, jianyingClipLook, jianyingDraft } from './jianying.mjs';
-import { jianyingCaptionFonts } from './jianying-captions.mjs';
+import { captionNeedsRendering, jianyingCaptionFonts } from './jianying-captions.mjs';
 import { slidesPdf, writePptx } from './slides.mjs';
 import { subtitlesForExport } from './captions.mjs';
+import { coverAsFirstFrame } from './covers.mjs';
 import { burned, even, frameBox, frameRatio, stageOf } from '../../src/burn.mjs';
 export { frameBox, frameRatio };
 import { filmSubtitleCuesInRange, filmSubtitleCuesInRanges, filmSubtitleShown, filmSubtitleSrt, filmSubtitleTranscript, filmSubtitleVtt } from './film-subtitle.mjs';
@@ -98,6 +104,9 @@ import { mediaReferences, referenceSource } from '../../src/media-links.mjs';
 import { PROJECT_PARTS, TOOL_DIR } from './projects.mjs';
 import { exportsRoot } from '../../src/locations.mjs';
 import { recordProblem } from '../../src/problems.mjs';
+import { compactDraftPng, cropDraftPng, draftCache, draftEngineVersion, draftPartPath, draftRgbProfile, draftRleProfile, draftVideoCodec, splitDraftPng } from './draft-media.mjs';
+import { staticCaptionFrames } from './draft-captions.mjs';
+import { postprocessingLimit, workGate } from './work-gate.mjs';
 
 /** The exports folder: the one chosen in Settings, else the Desktop, where a file just made is found (src/locations.mjs). */
 export { exportsRoot };
@@ -108,10 +117,10 @@ export { exportsRoot };
  * @typedef {'standard' | 'high' | 'master'} Quality
  * @typedef {{ frame?: FrameId, fill?: 'contain' | 'cover', burnSubtitles?: boolean }} Framing
  * @typedef {Framing & { kind: 'video', codec?: VideoCodec, shortEdge?: number, scale?: number,
- *   fps?: number, quality?: Quality, audio?: boolean, clip?: string, preset?: string, sidecar?: 'srt' | 'vtt', hardware?: boolean, loudness?: number,
- *   samples?: number, shutter?: number }} VideoAsk
+ *   fps?: number, quality?: Quality, bitrate?: number, maxrate?: number, audio?: boolean, clip?: string, preset?: string, sidecar?: 'srt' | 'vtt', hardware?: boolean, loudness?: number,
+ *   samples?: number, shutter?: number, cover?: string }} VideoAsk
  * @typedef {Framing & { kind: 'gif', width?: number, fps?: number }} GifAsk
- * @typedef {{ kind: 'audio', format?: 'wav' | 'm4a' | 'mp3', mix?: boolean, stems?: boolean }} AudioAsk
+ * @typedef {{ kind: 'audio', format?: 'wav' | 'm4a' | 'mp3', mix?: boolean, stems?: boolean, loudness?: number }} AudioAsk
  * @typedef {Framing & { kind: 'stills', as?: 'files' | 'zip', format?: 'png' | 'jpg', shortEdge?: number, at?: number[] }} StillsAsk
  * @typedef {Framing & { kind: 'poster', format?: 'png' | 'jpg', shortEdge?: number, at?: number }} PosterAsk
  * @typedef {{ kind: 'subtitles', format?: 'srt' | 'vtt' | 'txt' }} SubtitlesAsk
@@ -120,7 +129,7 @@ export { exportsRoot };
  * @typedef {{ kind: 'project', parts?: ProjectPart[], as?: 'zip' | 'folder' }} ProjectAsk
  * @typedef {typeof PROJECT_PARTS[number]} ProjectPart
  * @typedef {VideoAsk | GifAsk | AudioAsk | StillsAsk | PosterAsk | SubtitlesAsk | SlidesAsk | NleAsk | ProjectAsk} ExportSpec
- * @typedef {ExportSpec & { range?: [number, number], ranges?: [number, number][], label?: string, name?: string }} ExportAsk
+ * @typedef {ExportSpec & { range?: [number, number], ranges?: [number, number][], label?: string, name?: string, workers?: number }} ExportAsk
  * @typedef {import('./film-subtitle.mjs').FilmSubtitleCue & { draftLook?: import('./jianying-captions.mjs').CaptionLook }} Cue
  * @typedef {import('./film-subtitle.mjs').FilmSubtitleStyle} SubtitleStyle
  * @typedef {'preparing' | 'audio' | 'rendering' | 'encoding' | 'copying' | 'finishing'} ExportPhase
@@ -128,7 +137,8 @@ export { exportsRoot };
  *   status: 'waiting' | 'running' | 'done' | 'failed' | 'cancelled', progress: number, phase: ExportPhase | null,
  *   framesDone: number, framesTotal: number, rate: number, etaMs: number | null, encoder: string | null,
  *   out?: string, outputs: string[], bytes: number | null, alpha: { any: boolean } | null, error?: string, cancelling?: boolean,
- *   at: number, startedAt: number | null, finishedAt: number | null, draftsRefused?: string, diskFull?: boolean }} ExportJob
+ *   at: number, startedAt: number | null, finishedAt: number | null, draftsRefused?: string, diskFull?: boolean, software?: boolean,
+ *   renderWorkers?: number, postWorkers?: number, mediaStats?: Record<string, unknown>[] }} ExportJob
  */
 
 /** Whether an error is the disk being full, in ffmpeg's words or the system's (a Mac, Linux, Windows). @param {unknown} e */
@@ -151,6 +161,8 @@ export async function exportCapabilities() {
   return {
     h264: have.has('libx264'),
     hevc: have.has('libx265') || have.has('hevc_videotoolbox'),
+    /* a bitrate held on the processor (targetEncoding): HEVC's needs libx265 */
+    hevcBitrate: have.has('libx265'),
     hevcAlpha: have.has('hevc_videotoolbox'),
     vp9: have.has('libvpx-vp9'),
     prores: have.has('prores_ks') || have.has('prores_videotoolbox'),
@@ -159,6 +171,9 @@ export async function exportCapabilities() {
     mp3: have.has('libmp3lame'),
   };
 }
+
+/** The current Auto recommendation, separate from boolean encoder capabilities. */
+export const renderDefaults = () => ({ auto: defaultWorkers(machine()), max: 8 });
 
 /** 剪映's or CapCut's drafts folder on this computer, or null. @param {'jianying' | 'capcut'} app */
 const defaultDrafts = (app) => draftsRoot(app, { home: homedir(), localAppData: process.env.LOCALAPPDATA, exists: existsSync });
@@ -290,6 +305,9 @@ export async function sweep(dir, pattern) {
 
 const ALPHA_CODECS = new Set(['vp9', 'prores4444', 'hevc_alpha', 'png']);
 const CODECS = ['h264', 'hevc', 'vp9', 'prores422hq', 'prores4444', 'hevc_alpha', 'png'];
+/** The codecs a bitrate can be asked of (targetEncoding), and the bitrates, in bits a second. */
+const TARGET_CODECS = ['h264', 'hevc', 'vp9'];
+const BITRATE_RANGE = /** @type {const} */ ([100_000, 200_000_000]);
 const CODEC_EXT = /** @type {Record<VideoCodec, string>} */ ({ h264: '.mp4', hevc: '.mp4', vp9: '.webm', prores422hq: '.mov', prores4444: '.mov', hevc_alpha: '.mov', png: '.zip' });
 const SOUND_CODECS = /** @type {Record<string, string[]>} */ ({ wav: ['-c:a', 'pcm_s16le'], m4a: ['-c:a', 'aac', '-b:a', '256k'], mp3: ['-c:a', 'libmp3lame', '-b:a', '256k'] });
 
@@ -337,6 +355,9 @@ function checked(/** @type {ExportAsk} */ ask) {
   }
   if (ask.label !== undefined && (typeof ask.label !== 'string' || ask.label.length > 120)) throw new ExportError('label: text, at most 120 characters');
   if (ask.name !== undefined && (typeof ask.name !== 'string' || ask.name.length > 120)) throw new ExportError('name: text, at most 120 characters');
+  if (ask.workers !== undefined && (!['video', 'gif', 'nle'].includes(ask.kind) || !Number.isInteger(ask.workers) || !between(ask.workers, 1, 8))) {
+    throw new ExportError('workers: 1 to 8 whole browsers, for video, GIF or editing-project exports');
+  }
   if ('frame' in ask && ask.frame !== undefined && ask.frame !== 'native' && frameRatio(ask.frame) == null) throw new ExportError('frame: native, or a ratio W:H from 1:4 to 4:1 (16:9, 2.39:1)');
   if ('fill' in ask && ask.fill !== undefined && ask.fill !== 'contain' && ask.fill !== 'cover') throw new ExportError('fill: contain or cover');
   if ('shortEdge' in ask && !between(ask.shortEdge, 64, MAX_DIM)) throw new ExportError(`shortEdge: 64 to ${MAX_DIM} pixels`);
@@ -349,10 +370,19 @@ function checked(/** @type {ExportAsk} */ ask) {
       if (ask.samples !== undefined && (!Number.isInteger(ask.samples) || !between(ask.samples, 1, 64))) throw new ExportError('samples: 1 to 64 whole samples');
       if (!between(ask.shutter, 0, 1)) throw new ExportError('shutter: 0 to 1');
       if (ask.quality !== undefined && !['standard', 'high', 'master'].includes(ask.quality)) throw new ExportError('quality: standard, high or master');
+      if (ask.bitrate !== undefined) {
+        if (ask.quality !== undefined) throw new ExportError('choose a quality or a bitrate, not both');
+        if (!TARGET_CODECS.includes(ask.codec ?? 'h264')) throw new ExportError(`bitrate: for ${TARGET_CODECS.join(', ')}`);
+        if (!isNum(ask.bitrate) || !between(ask.bitrate, ...BITRATE_RANGE)) throw new ExportError(`bitrate: ${BITRATE_RANGE[0] / 1e6} to ${BITRATE_RANGE[1] / 1e6} Mb/s, in bits a second`);
+      }
+      if (ask.maxrate !== undefined && !(ask.bitrate !== undefined && isNum(ask.maxrate) && between(ask.maxrate, ask.bitrate, ask.bitrate * 2))) throw new ExportError('maxrate: with a bitrate, from it to twice it');
       if (ask.hardware !== undefined && typeof ask.hardware !== 'boolean') throw new ExportError('hardware: true or false');
       if (ask.clip !== undefined && (typeof ask.clip !== 'string' || !ask.clip || ask.clip.length > 200)) throw new ExportError(`clip: a clip id of ${FILM_FILE}`);
       if (ask.preset !== undefined && (typeof ask.preset !== 'string' || ask.preset.length > 60)) throw new ExportError('preset: a name, at most 60 characters');
       if (ask.sidecar !== undefined && ask.sidecar !== 'srt' && ask.sidecar !== 'vtt') throw new ExportError('sidecar: srt or vtt');
+      if (ask.cover !== undefined && (typeof ask.cover !== 'string' || !/^covers\/[^/]+$/.test(ask.cover))) throw new ExportError('cover: a cover of the film, covers/<name>');
+      if (ask.cover !== undefined && !['h264', 'hevc'].includes(ask.codec ?? 'h264')) throw new ExportError('cover: for h264 and hevc');
+      if (ask.cover !== undefined && ask.clip !== undefined) throw new ExportError('cover: for the whole film, not a clip');
       if (ask.loudness !== undefined && !isLoudness(ask.loudness)) throw new ExportError(`loudness: ${LOUDNESS_RANGE[0]} to ${LOUDNESS_RANGE[1]} LUFS`);
       break;
     case 'gif':
@@ -362,6 +392,7 @@ function checked(/** @type {ExportAsk} */ ask) {
     case 'audio':
       if (ask.format !== undefined && !(ask.format in SOUND_CODECS)) throw new ExportError('sound as wav, m4a or mp3');
       if (ask.mix === false && !ask.stems) throw new ExportError('choose the mix, the stems, or both');
+      if (ask.loudness !== undefined && !isLoudness(ask.loudness)) throw new ExportError(`loudness: ${LOUDNESS_RANGE[0]} to ${LOUDNESS_RANGE[1]} LUFS`);
       break;
     case 'stills':
     case 'poster':
@@ -559,8 +590,26 @@ async function filmElsewhere(root, dir, value) {
   const own = existsSync(join(root, FILM_FILE)) ? readFileSync(join(root, FILM_FILE), 'utf8') : '';
   /* the head's addresses: a stylesheet's href, and url() in its styles (and in a clip's own) */
   const head = urls(own.replace(/(<link\b[^>]*\bhref\s*=\s*)(["'])([^"']*)\2/gi, (_, a, q, /** @type {string} */ path) => `${a}${q}${back(path)}${q}`));
-  const moved = { ...value, tracks: value.tracks.map((t) => ({ ...t, clips: t.clips.map((c) => ({ ...c, src: back(c.src), ...(typeof c.style === 'string' ? { style: urls(c.style) } : {}) })) })) };
+  const moved = { ...value, tracks: value.tracks.map((t) => ({ ...t,
+    ...(t.captions ? { captions: { ...t.captions, src: back(t.captions.src) } } : {}),
+    clips: t.clips.map((c) => ({ ...c, src: back(c.src), ...(typeof c.style === 'string' ? { style: urls(c.style) } : {}) })) })) };
   await writeFile(join(dir, FILM_FILE), filmHtml(moved, head));
+}
+
+/** The original caption tracks over a transparent clock, preserving their CSS, markup and project-relative fonts.
+ * @param {string} root @param {import('../../src/film-doc.mjs').FilmDoc} doc @param {number} duration */
+async function captionFilm(root, doc, duration) {
+  const dir = join(root, '.film', 'cache', 'export', `clip-${process.pid}-${randomBytes(4).toString('hex')}`);
+  await mkdir(dir, { recursive: true });
+  try {
+    const clock = join(dir, 'clock.html');
+    await writeFile(clock, `<!doctype html><style>html,body{margin:0;background:transparent}</style><script>window.film={width:${doc.stage.w},height:${doc.stage.h},duration:${duration},frame(){}}</script>`);
+    await filmElsewhere(root, dir, { stage: doc.stage, tracks: [
+      ...doc.tracks.filter((track) => track.captions && !track.hidden).map((track) => ({ clips: [], captions: track.captions })),
+      { clips: [{ id: 'clock', src: '/' + relative(root, clock).split(sep).join('/'), time: [0, duration] }] },
+    ] });
+    return { dir, remove: () => tidy(dir) };
+  } catch (error) { await tidy(dir); throw error; }
 }
 
 /**
@@ -634,21 +683,25 @@ const chipCodec = (codec, quality) => ((codec === 'h264' || codec === 'hevc') &&
 
 /**
  * How render should encode a codec: its encoder (for the person's list), and the container format render takes,
- * through the graphics chip's encoder when it has one that works (`hw`: hardwareEncoder for chipCodec).
- * @param {VideoCodec} codec @param {Quality} quality @param {{ w: number, h: number }} size @param {number} fps @param {Set<string>} have @param {string | null} [hw]
+ * through the graphics chip's encoder when it has one that works (`hw`: hardwareEncoder for chipCodec). `held`: the
+ * chip's H.264 or HEVC is held to the quality (holdsQuality), as x264 and x265 are to their CRF: each frame gets what
+ * its picture needs, and its file may not pass two and a half times the bitrate (chipDelivery). Else the chip is
+ * given the bitrate.
+ * @param {VideoCodec} codec @param {Quality} quality @param {{ w: number, h: number }} size @param {number} fps @param {Set<string>} have @param {string | null} [hw] @param {boolean} [held]
  */
-function encoding(codec, quality, size, fps, have, hw = null) {
+function encoding(codec, quality, size, fps, have, hw = null, held = false) {
   const bits = (/** @type {number} */ k) => Math.min(120e6, Math.max(2e6, size.w * size.h * fps * BPP[quality] * k));
   const bitrate = (/** @type {number} */ k) => `${Math.round(bits(k) / 1000)}k`;
   /* a key frame every two seconds */
   const gop = Math.round(fps * 2);
+  const chip = { gop, ...(held && quality !== 'master' ? { quality } : {}) };
   switch (codec) {
     case 'h264':
       /* with room for screen text: half again the dialog's scale */
-      if (hw) return { encoder: hw, format: { video: [...hardwareOptions(hw, bits(1.5), { gop }), ...BT709] } };
+      if (hw) return { encoder: hw, format: chipDelivery(hw, bits(1.5), chip, BT709) };
       return { encoder: 'libx264', format: { video: ['-c:v', 'libx264', '-preset', quality === 'master' ? 'slow' : 'medium', '-crf', String(H264_CRF[quality]), ...BT709] } };
     case 'hevc':
-      if (hw) return { encoder: hw, format: { video: [...hardwareOptions(hw, bits(0.8), { gop }), ...BT709], tag: ['-tag:v', 'hvc1', ...HEVC_709] } };
+      if (hw) return { encoder: hw, format: { ...chipDelivery(hw, bits(0.8), chip, BT709), tag: ['-tag:v', 'hvc1', ...HEVC_709] } };
       if (have.has('libx265')) {
         /* master in 10 bits (Main 10), with finer grain-aware encoding: small changing dither must not become one
            frozen texture. It costs more time and bytes; the smaller delivery qualities keep their settings. */
@@ -670,6 +723,35 @@ function encoding(codec, quality, size, fps, have, hw = null) {
       return { encoder: 'png', format: { video: ['-c:v', 'png'], pix: 'format=rgba' } };
   }
 }
+
+/**
+ * How render should encode a codec at a bitrate asked (a delivery's rate, or a file size the dialog turned into one):
+ * on the processor, whose encoders hold an average (the chip's may not: the Mac's wrote 8.6 Mb/s on a busy picture
+ * asked for 3). Its peaks over a second are held to `peak` (a fifth over unless asked): a stretch that turns busy late
+ * in a part otherwise takes what the quiet start left, and peaks of half again came out a tenth over the rate in all.
+ * Each of render's parts is an encode held to the rate on its own, so a part is PART_SECONDS at least: shorter ones do
+ * not settle (a second's parts came out a sixth over).
+ * @param {VideoCodec} codec @param {number} bits a second @param {number | undefined} peak @param {Set<string>} have
+ */
+function targetEncoding(codec, bits, peak, have) {
+  const k = (/** @type {number} */ n) => `${Math.round(n / 1000)}k`;
+  const rate = ['-b:v', k(bits), '-maxrate', k(peak ?? bits * 1.2), '-bufsize', k(bits)];
+  switch (codec) {
+    case 'h264':
+      return { encoder: 'libx264', format: { video: ['-c:v', 'libx264', '-preset', 'medium', ...rate, ...BT709] } };
+    case 'hevc':
+      if (!have.has('libx265')) throw new ExportError('a bitrate for HEVC needs ffmpeg with libx265');
+      return { encoder: 'libx265', format: { video: ['-c:v', 'libx265', '-preset', 'medium', ...rate, '-x265-params', 'log-level=error', '-tag:v', 'hvc1', ...BT709], tag: ['-tag:v', 'hvc1', ...HEVC_709] } };
+    case 'vp9':
+      /* libvpx holds the average alone (in one pass it takes no notice of the peaks), and goes no coarser than its
+         last quantizer: a picture of noise asked for a low rate comes out over it */
+      return { encoder: 'libvpx-vp9', format: { video: ['-c:v', 'libvpx-vp9', ...rate, '-row-mt', '1', ...BT709] } };
+    default:
+      throw new ExportError(`bitrate: for ${TARGET_CODECS.join(', ')}`);
+  }
+}
+/** The seconds of each part render encodes at a bitrate asked, at least (targetEncoding). */
+const PART_SECONDS = 5;
 
 /**
  * Whether a video with an alpha channel lets anything through: a few frames' alpha, sampled. Null when it can't be
@@ -756,43 +838,48 @@ const execFileP = promisify(execFile);
  * drawing it.
  */
 const QUICK_PNG = { video: ['-c:v', 'png', '-compression_level', '1', '-pred', 'sub'], pix: 'format=rgba' };
+// One lossless encode. Level 3 + SUB retains the small files of the slow second pass on real noisy/photographic pages.
+const DRAFT_PNG = { video: ['-c:v', 'png', '-compression_level', '3', '-pred', 'sub'], pix: 'format=rgba' };
 
 /**
  * A PNG video with each picture kept once: a frame that repeats the one before is dropped and the one before lasts
  * until the next (the timestamps say so), so a page that holds still is one picture, not a second's worth. A repeat is
- * found by its bytes: one encoder at one setting writes the same picture the same way, so a frame a pixel apart is
- * never taken for one; the frames kept are written again as PNG at ffmpeg's own settings, the same pixels. The last
- * frame stays, so the length does too; a video that changes in most of its frames keeps every frame, written again the
- * same way (it may have been drawn as a quick PNG).
- * @param {string} file @param {AbortSignal} signal
+ * found by its bytes: one encoder at one setting writes the same picture the same way. Only identical packets are
+ * removed. No PNG is decoded or encoded again; PTS and the last sample retain the original picture clock.
+ * QTRLE is treated separately: only its exact seven-byte no-op packet (no rows updated) is removed. Changing delta
+ * packets are retained even if their encoded bytes repeat. Keyframes and the first/last samples are retained.
+ * @param {string} file @param {AbortSignal} signal @param {string} [codec]
  */
-export async function keepChanges(file, signal) {
+export async function keepChanges(file, signal, codec = 'png') {
   const { stdout } = await execFileP('ffmpeg', ['-hide_banner', '-nostdin', '-loglevel', 'error', '-i', file, '-map', '0:v:0', '-c', 'copy', '-f', 'framemd5', '-'],
     { maxBuffer: 256 << 20, signal, windowsHide: true });
-  const sums = String(stdout).split('\n').filter((l) => l && !l.startsWith('#')).map((l) => l.split(',').pop()?.trim());
-  const kept = sums.flatMap((sum, i) => (i === 0 || i === sums.length - 1 || sum !== sums[i - 1] ? [i] : []));
+  const packets = String(stdout).split('\n').filter((l) => l && !l.startsWith('#')).map((l) => l.split(',').map((s) => s.trim()));
+  const sums = packets.map((row) => row.at(-1));
+  const dropped = sums.flatMap((sum, i) => (i > 0 && i < sums.length - 1 && (codec === 'png' ? sum === sums[i - 1]
+    : codec === 'qtrle' && packets[i][4] === '7' && sum === '6a99a8950931b3962ef9c27dd4206160') ? [i] : []));
+  if (!dropped.length) return { frames: sums.length, kept: sums.length };
   /* frames kept one after another are one term; the terms are added as a balanced tree, since ffmpeg parses no more
      than 100 in a row */
   /** @type {[number, number][]} */
   const runs = [];
-  for (const i of kept) { const last = runs.at(-1); if (last && last[1] === i - 1) last[1] = i; else runs.push([i, i]); }
+  for (const i of dropped) { const last = runs.at(-1); if (last && last[1] === i - 1) last[1] = i; else runs.push([i, i]); }
   /** @type {(part: [number, number][]) => string} */
   const sum = (part) => (part.length === 1 ? (part[0][0] === part[0][1] ? `eq(n,${part[0][0]})` : `between(n,${part[0][0]},${part[0][1]})`)
     : `(${sum(part.slice(0, part.length >> 1))}+${sum(part.slice(part.length >> 1))})`);
   const part = `${file}.part.mov`;
-  const all = kept.length > sums.length / 2;
-  const graph = all ? '' : `[0:v:0]select='${sum(runs)}'[v]`;
-  /* a long one goes in a file: Windows takes a command of no more than 32,767 characters, and a long page that steps
-     every few frames keeps thousands of runs */
-  const script = graph.length > COMMAND_ROOM ? `${part}.filter` : null;
+  const graph = `noise=amount=0:drop='${sum(runs)}'`;
+  /* FFmpeg's option-file syntax keeps even an hours-long expression below Windows' command-line limit. */
+  const script = graph.length > COMMAND_ROOM ? `${part}.bsf` : null;
   if (script) await writeFile(script, graph, 'utf8');
   try {
-    const select = all ? ['-map', '0:v:0'] : [...(script ? [await filterScriptOption(), script] : ['-filter_complex', graph]), '-map', '[v]', '-fps_mode', 'vfr'];
-    await run(['-i', file, ...select, '-c:v', 'png', part], signal);
+    await run(['-i', file, '-map', '0:v:0', '-map', '0:a?', '-c', 'copy',
+      ...(script ? ['-/bsf:v', script] : ['-bsf:v', graph]), part], signal);
+    await renameSafely(part, file);
   } finally {
     if (script) await tidy(script);
+    await tidy(part);
   }
-  await renameSafely(part, file);
+  return { frames: sums.length, kept: sums.length - dropped.length };
 }
 
 const IMAGE_TYPES = /** @type {Record<string, string>} */ ({ svg: 'image/svg+xml', webp: 'image/webp', avif: 'image/avif', gif: 'image/gif', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', bmp: 'image/bmp' });
@@ -895,7 +982,10 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
   /** Render the film (or `target`) to `out`, with progress. @param {ExportJob} job @param {string} target @param {string} out @param {Record<string, unknown>} opts @param {AbortSignal} signal */
   const renderTo = (job, target, out, opts, signal, share = 0.96) => {
     const range = job.ask.range ? [`${num(job.ask.range[0])}-${num(job.ask.range[1])}`] : [];
-    return render([target, ...range], { ...opts, ...(job.ask.ranges ? { ranges: job.ask.ranges } : {}), out, signal, onProgress: frames(job, share) });
+    return render([target, ...range], { ...opts, ...(job.ask.workers != null ? { workers: renderWorkerLimit(job.ask.workers) } : {}), ...(job.ask.ranges ? { ranges: job.ask.ranges } : {}), out, signal, onProgress: frames(job, share),
+      onEncoder: (/** @type {string} */ encoder) => update(job, { encoder, rate: 0, etaMs: null }),
+      /* drawn without a graphics chip: said on the export while it runs, slowly */
+      onSoftware: () => update(job, { software: true }) });
   };
 
   /** @param {ExportJob} job @param {string} root @param {string} dir @param {AbortSignal} signal */
@@ -926,14 +1016,16 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
       const fps = ask.fps;
       const quality = ask.quality ?? 'high';
       const have = await encoders();
-      const chipFor = chipCodec(codec, quality);
+      /* a bitrate asked is held on the processor (targetEncoding) */
+      const chipFor = ask.bitrate ? null : chipCodec(codec, quality);
       const hw = ask.hardware !== false && chipFor ? await hardwareEncoder(chipFor, have) : null;
+      let held = hw ? await holdsQuality(hw) : false;
       /** @param {string | null} chip */
       const how = (chip) => {
-        const { encoder, format } = encoding(codec, quality, size, fps ?? 30, have, chip);
+        const { encoder, format } = ask.bitrate ? targetEncoding(codec, ask.bitrate, ask.maxrate, have) : encoding(codec, quality, size, fps ?? 30, have, chip, held);
         const container = /** @type {{ pix?: string }} */ (format).pix ?? (codec === 'h264' || codec === 'hevc' ? YUV_709('yuv420p') : codec === 'vp9' ? YUV_709('yuva420p') : 'format=yuva444p10le');
         /* master: frames taken as PNG and footage read from copies near the file (`fine`), so nothing on the way bands */
-        return { encoder, opts: { fps, samples: ask.samples, shutter: ask.shutter, scale: place.scale, alpha, silent: ask.audio === false || codec === 'png', ...(ask.loudness != null ? { loudness: ask.loudness } : {}), format: { ...format, pix: `${place.vf},${container}` }, ...(quality === 'master' ? { fine: true } : {}), ...(clip || burn ? { root } : {}) } };
+        return { encoder, opts: { fps, samples: ask.samples, shutter: ask.shutter, scale: place.scale, alpha, silent: ask.audio === false || codec === 'png', ...(ask.loudness != null ? { loudness: ask.loudness } : {}), format: { ...format, pix: `${place.vf},${container}` }, ...(quality === 'master' ? { fine: true } : {}), ...(ask.bitrate ? { partSeconds: PART_SECONDS } : {}), ...(clip || burn ? { root } : {}) } };
       };
       let { encoder, opts } = how(hw);
       update(job, { encoder });
@@ -964,13 +1056,32 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
           }
         } catch (e) {
           /* the graphics chip's encoder gave up partway (a driver, a size it does not take, sessions or memory it ran out
-             of): the rest of this launch encodes without it, starting with this export again */
-          if (!hw || signal.aborted || !/^ffmpeg[: ]/.test(e instanceof Error ? e.message : '')) throw e;
-          broken(hw);
-          ({ encoder, opts } = how(null));
-          update(job, { encoder, framesDone: 0, progress: 0, etaMs: null });
-          const rendered = await renderTo(job, target, part, { ...opts, resumeAs: out }, signal);
-          selectedRanges = rendered.ranges ?? null;
+             of): the rest of this launch encodes without it, starting with this export again. One held to a quality is
+             first given its bitrate, as it was before it could be held */
+          const gaveUp = (/** @type {unknown} */ err) => !signal.aborted && /^ffmpeg[: ]/.test(err instanceof Error ? err.message : '');
+          if (!hw || !gaveUp(e)) throw e;
+          const again = async (/** @type {string | null} */ chip) => {
+            ({ encoder, opts } = how(chip));
+            update(job, { encoder, framesDone: 0, progress: 0, etaMs: null });
+            const rendered = await renderTo(job, target, part, { ...opts, resumeAs: out }, signal);
+            selectedRanges = rendered.ranges ?? null;
+          };
+          let failure = /** @type {unknown} */ (e);
+          if (held) {
+            unheld(hw);
+            held = false;
+            failure = await again(hw).then(() => null, (err) => err);
+            if (failure && !gaveUp(failure)) throw failure;
+          }
+          if (failure) {
+            broken(hw);
+            await again(null);
+          }
+        }
+        /* the film's cover as its first frame (covers.mjs), before the file is the export's */
+        if (ask.cover) {
+          update(job, { phase: 'encoding', rate: 0, etaMs: null });
+          await coverAsFirstFrame(root, ask.cover, part, size, codec === 'hevc' ? 'hevc' : 'h264');
         }
         await renameSafely(part, out);
         update(job, { out, outputs: [out] });
@@ -1057,10 +1168,10 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
       const allClips = await filmSound(probe, selected ? 0 : from);
       const clips = selected ? selectionClips(allClips, selected) : allClips;
       if (!clips.length) throw new ExportError('this film has no sound');
-      /** @type {{ suffix: string, clips: typeof clips }[]} */
+      /** @type {{ suffix: string, clips: typeof clips, mix?: boolean }[]} */
       const plan = [];
       /* named for what each is: the whole mix, or one stem of it */
-      if (ask.mix !== false) plan.push({ suffix: ' - mix', clips });
+      if (ask.mix !== false) plan.push({ suffix: ' - mix', clips, mix: true });
       if (ask.stems) {
         for (const role of STEMS) {
           const part = clips.filter((c) => soundStem(relative(root, c.file).split(sep).join('/')) === role);
@@ -1076,7 +1187,15 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
         const part = partialOf(out, job.id);
         outputs.push(part);
         update(job, { out: outputs[0], outputs: [...outputs], progress: Math.floor((i / plan.length) * 100) / 100 });
-        await mix(step.clips, to - from, part, codec);
+        /* the mix as the film's sound is delivered: brought to the loudness asked (render --loudness), or its peaks
+           caught under the ceiling; a stem as it is, for mixing elsewhere */
+        if (step.mix && ask.loudness != null) {
+          const wav = `${part}.mix.wav`;
+          try {
+            await mix(step.clips, to - from, wav, ['-c:a', 'pcm_f32le']);
+            await toLoudness(wav, part, codec, { lufs: ask.loudness, signal });
+          } finally { await rm(wav, { force: true }); }
+        } else await mix(step.clips, to - from, part, codec, { limit: Boolean(step.mix) });
         await renameSafely(part, out);
         outputs[i] = out;
         update(job, { out: outputs[0], outputs: [...outputs] });
@@ -1258,17 +1377,38 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
     const have = await encoders();
     /** how a page with alpha is drawn: PNG (a draft's a quick one, its pictures thinned after; PNG's alpha is exact,
         ProRes's comes back a little off full), or (null) ProRes 4444, whose encoder render picks */
-    const pngFormat = app ? QUICK_PNG : alpha === 'png' ? encoding('png', 'master', { w: 0, h: 0 }, fps, have).format : null;
+    const pngFormat = app ? DRAFT_PNG : alpha === 'png' ? encoding('png', 'master', { w: 0, h: 0 }, fps, have).format : null;
     /* the edit with every track shown: a hidden track comes over disabled, one click from back on, so it is drawn too */
     const doc = existsSync(join(root, FILM_FILE)) ? filmDoc(root)
       : { stage: await stageOf(root), tracks: [{ clips: [{ src: 'index.html', id: title }] }] };
+    const markup = existsSync(join(root, FILM_FILE)) ? readFileSync(join(root, FILM_FILE), 'utf8') : '';
     update(job, { encoder: prores && !app ? (await hardwareEncoder('prores', have)) ?? 'prores_ks' : 'png' });
     /* a source out of the project fails the export before anything is drawn */
     for (const track of doc.tracks) for (const row of track.clips) clipPath(root, row.src);
+    /* A failed probe used to look like a source without sound, silently dropping whole audio tracks while the
+       export reported success. Check sound sources before opening the browser, including muted/disabled clips:
+       those still belong in the editing project and must be possible to turn back on. */
+    /** @type {Map<string, import('./nle.mjs').SourceFacts>} */
+    const facts = new Map();
+    const factsOf = async (/** @type {string} */ path) => {
+      if (!facts.has(path)) facts.set(path, existsSync(path) ? await probeSource(path) : {});
+      return /** @type {import('./nle.mjs').SourceFacts} */ (facts.get(path));
+    };
+    for (const track of doc.tracks) for (const row of track.clips) {
+      const kind = kindOf(row);
+      if (kind !== 'sound' && kind !== 'video') continue;
+      const path = clipPath(root, row.src);
+      const source = await factsOf(path);
+      if (kind === 'sound' && !source.hasAudio) throw new ExportError(`Cannot export audio clip "${row.id}" (${row.src}): ${existsSync(path) ? 'the file has no readable audio stream' : 'the file is missing'}.`);
+      if (source.hasAudio === undefined) throw new ExportError(`Cannot inspect the audio in video clip "${row.id}" (${row.src}); check that the media file can be read.`);
+    }
     const { cues, style: shown } = await subtitlesOf(root, true).catch((error) => {
       if (fcp) throw error;
       return { cues: [], style: null };
     });
+    const fonts = app ? await jianyingCaptionFonts(cues) : new Map();
+    const captionBackup = Boolean(app && cues.some((cue) => captionNeedsRendering(cue.draftLook, fonts)));
+    const captionId = `captions-${randomBytes(4).toString('hex')}`;
     const scratch = join(root, '.film', 'cache', 'export', `nle-${process.pid}-${randomBytes(4).toString('hex')}`);
     const final = freeFile(dir, baseName(job.name, ask), '');
     const staging = join(dir, `.${basename(final)}.partial-${process.pid}-${job.id}`);
@@ -1277,10 +1417,11 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
       await filmElsewhere(root, scratch, { stage: doc.stage, tracks: doc.tracks.map((t) => ({ clips: t.clips })) });
       const probe = await open(scratch, { root });
       /** @type {{ id: string, at: number, end: number, from: number, to: number, speed: number, native: number | null, w: number | null, h: number | null,
-       * hasEffect: boolean, draftStyle: import('./jianying.mjs').DraftStyle | null, fit: string | null, position: string | null,
-       * animationTiming?: { durations: number[], delays: number[] } }[]} */
+       * hasEffect: boolean, draftStyle: import('./jianying.mjs').DraftStyle | null, plainSurface: boolean, fit: string | null, position: string | null, animationTiming?: { durations: number[], delays: number[] } }[]} */
       let loaded;
+      let browserVersion = '';
       try {
+        browserVersion = probe.browser.version();
         loaded = await probe.film.page.evaluate(() => /** @type {any} */ (window).__filmEditor.stage.clips().map((/** @type {any} */ c) => {
           const css = c.el ? getComputedStyle(c.el) : null;
           const seconds = (/** @type {string} */ value) => value.split(',').map((v) => parseFloat(v) * (v.trim().endsWith('ms') ? 0.001 : 1));
@@ -1291,10 +1432,14 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
           const simple = Boolean(css && standardMask && css.clipPath === 'none' && css.filter === 'none' && css.backdropFilter === 'none'
             && css.mixBlendMode === 'normal' && css.borderRadius === '0px' && css.borderWidth === '0px' && css.boxShadow === 'none'
             && css.backgroundColor === 'rgba(0, 0, 0, 0)' && css.backgroundImage === 'none'
-            && css.objectFit === 'contain' && css.objectPosition === '50% 50%' && !timing);
+            && !timing);
           const hasEffect = Boolean(css && (css.maskImage !== 'none' || css.clipPath !== 'none' || css.filter !== 'none' || css.opacity !== '1' || timing));
           const draftStyle = css ? { opacity: Number(css.opacity), maskImage: css.maskImage, maskComposite: css.maskComposite, simple } : null;
-          return { id: c.id, at: c.at, end: c.end, from: c.span.from, to: c.span.to, speed: c.span.speed, hasEffect, draftStyle,
+          const plainSurface = Boolean(css && standardMask && css.maskImage === 'none' && css.clipPath === 'none' && css.filter === 'none'
+            && css.backdropFilter === 'none' && css.mixBlendMode === 'normal' && css.borderRadius === '0px' && css.borderWidth === '0px'
+            && css.boxShadow === 'none' && css.opacity === '1' && css.backgroundImage === 'none' && !timing
+            && css.getPropertyValue('object-view-box') === 'none' && css.transitionDuration.split(',').every((v) => parseFloat(v) === 0));
+          return { id: c.id, at: c.at, end: c.end, from: c.span.from, to: c.span.to, speed: c.span.speed, hasEffect, draftStyle, plainSurface,
             fit: css ? css.objectFit : null, position: css ? css.objectPosition : null,
             native: Number.isFinite(c.native) ? c.native : null, w: c.nw ?? null, h: c.nh ?? null,
             ...(timing && [...timing.durations, ...timing.delays].every(Number.isFinite) ? { animationTiming: timing } : {}) };
@@ -1316,13 +1461,6 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
       const badges = rowBadges(rows.map((row) => row.kind));
       const sourceRows = new Map(rows.flatMap((row, i) => row.clips.map((clip) => [clip.id, badges[i]])));
 
-      /* every source's facts, once */
-      /** @type {Map<string, import('./nle.mjs').SourceFacts>} */
-      const facts = new Map();
-      const factsOf = async (/** @type {string} */ path) => {
-        if (!facts.has(path)) facts.set(path, existsSync(path) ? await probeSource(path) : {});
-        return /** @type {import('./nle.mjs').SourceFacts} */ (facts.get(path));
-      };
       /** @type {import('./nle.mjs').NlePicture[]} */
       const pictures = [];
       /** @type {import('./nle.mjs').NleSound[]} */
@@ -1332,7 +1470,8 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
         for (const row of track.clips) {
           const c = byId.get(row.id);
           const kind = kindOf(row);
-          if (!c || !kind) continue;
+          if (!kind) continue;
+          if (!c) throw new ExportError(`Cannot export ${kind === 'sound' ? 'audio' : kind} clip "${row.id}" (${row.src}): the clip did not load.`);
           const path = clipPath(root, row.src);
           const volume = /** @type {{ volume?: number }} */ (row).volume ?? 1;
           const heard = !track.muted && !track.hidden && !row.disabled && volume > 0;
@@ -1347,10 +1486,17 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
               f = { ...f, w: Math.max(1, Math.round(f.w * k)), h: Math.max(1, Math.round(f.h * k)) };
             }
             let draftLook;
+            if (app === 'jianying' && ask.footage !== 'render' && kind === 'video' && f?.w && f.h && f.alpha === false
+              && c.plainSurface && !fade && !row.overrides?.length && plainFootageCss(markup, row)) {
+              const rect = pictureRect(kind, { w: f.w, h: f.h }, doc.stage, row.box);
+              // Cover the entire stage so the picture also hides ancestor backgrounds outside its own CSS box.
+              if (rect.r === 0 && rect.x === 0 && rect.y === 0 && rect.w === doc.stage.w && rect.h === doc.stage.h
+                && (c.fit === 'cover' || Math.abs(rect.w / rect.h - f.w / f.h) < 1e-6)) draftLook = { opacity: 1, rotation: 0, exactPixels: true };
+            }
             if (app === 'jianying' && kind === 'video' && f?.w && f.h && !row.class && !fade && !row.overrides?.length) {
               const rect = pictureRect(kind, { w: f.w, h: f.h }, doc.stage, row.box);
               const maskFits = Math.abs(rect.w / rect.h - f.w / f.h) < 1e-6;
-              draftLook = jianyingClipLook(row.style ?? '', c.draftStyle, rect.r, maskFits);
+              draftLook ??= jianyingClipLook(row.style ?? '', c.draftStyle, rect.r, maskFits);
             }
             pictures.push({ id: row.id, kind, src: row.src, path, at: c.at, end: c.end, from: c.from, speed: c.speed, box: row.box,
               ...(draftLook ? { draftLook } : {}),
@@ -1368,6 +1514,13 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
         }
       }
       if (!pictures.length && !sounds.length) throw new ExportError('the film is empty');
+
+      /* The browser remains the authority for caption layouts, project fonts and effects a native text cannot draw.
+         Keep the words as a disabled native track, alongside the separate transparent appearance layer. */
+      if (captionBackup) {
+        pictures.push({ id: captionId, kind: 'page', src: 'captions', path: join(scratch, 'captions.html'),
+          at: 0, end: duration, from: 0, speed: 1, track: -1, hidden: false, facts: null });
+      }
 
       await mkdir(join(staging, 'media'), { recursive: true });
       /* stems: each role's sound mixed (what is heard: muted tracks and silenced clips out) */
@@ -1389,8 +1542,34 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
 
       const timeline = planNleTimeline({ stage: doc.stage, duration: duration || 0.001, pictures, sounds },
         { title, fps, audio: mode, media: ask.media ?? 'copy', mediaDir: join(final, 'media'), stems: [...stems.keys()],
-          audioTracks: fcp ? 'source' : 'roles', alpha: prores ? 'prores4444' : 'png', editable: Boolean(app), footage: ask.footage ?? 'auto' });
+          audioTracks: fcp || app ? 'source' : 'roles', alpha: prores ? 'prores4444' : 'png', editable: Boolean(app), embeddedAudio: Boolean(app), footage: ask.footage ?? 'auto' });
       const staged = (/** @type {import('./nle.mjs').NleFile} */ f) => join(staging, 'media', basename(f.path));
+      const cache = app ? draftCache(root, `${await draftEngineVersion()}:${browserVersion}`) : null;
+      const rgbProfile = alpha === 'auto' && have.has('libx264rgb') ? await draftRgbProfile(app) : null;
+      const rleProfile = alpha === 'auto' && have.has('qtrle') ? await draftRleProfile(app) : null;
+      const transparentFormat = rleProfile ? { video: ['-c:v', 'qtrle', '-g', String(Math.round(fps * 10))], pix: 'format=argb' } : DRAFT_PNG;
+      const head = (existsSync(join(root, FILM_FILE)) ? readFileSync(join(root, FILM_FILE), 'utf8') : '').split(/<body\b/i)[0];
+      /** @type {Record<string, unknown>[]} */ const mediaStats = [];
+      const reportMedia = (/** @type {Record<string, unknown>} */ stats) => { mediaStats.push(stats); update(job, { mediaStats: [...mediaStats] }); };
+      const restoreCrop = (/** @type {import('./nle.mjs').NleFile} */ file, /** @type {import('./draft-media.mjs').Crop | null} */ crop) => {
+        if (!crop || !file.video) return;
+        file.video.w = crop.w; file.video.h = crop.h;
+        for (const track of timeline.video) for (const clip of track.clips) if (clip.fileId === file.id) {
+          clip.motion = { scale: 100, center: { h: (crop.x + crop.w / 2) / timeline.width - 0.5, v: (crop.y + crop.h / 2) / timeline.height - 0.5 } };
+          clip.rasterCrop = crop;
+        }
+      };
+      const restoreParts = (/** @type {import('./nle.mjs').NleFile} */ file, /** @type {import('./draft-media.mjs').DraftPart[] | null} */ parts) => {
+        if (!parts?.length || !file.video) return;
+        const base = { ...file, video: { ...file.video } };
+        const files = parts.map((part, i) => ({ ...base, id: i ? `${base.id}.part-${i}` : base.id, path: draftPartPath(base.path, part.suffix),
+          durationFrames: part.to - part.from, video: { ...base.video, alpha: !part.opaque } }));
+        Object.assign(file, files[0]);
+        timeline.files.push(...files.slice(1));
+        for (const track of timeline.video) track.clips = track.clips.flatMap((clip) => clip.fileId === base.id
+          ? parts.map((part, i) => ({ ...clip, id: i ? `${clip.id}.part-${i}` : clip.id, fileId: files[i].id,
+            start: clip.start + part.from, end: clip.start + part.to, in: 0, out: part.to - part.from })) : [clip]);
+      };
 
       /* each web page (and each picture Basic Motion can't place) drawn alone, full frame, with alpha. Several are drawn at
          once, the longest first, with as many browsers in all as one render of every frame would get (render.mjs
@@ -1402,7 +1581,10 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
       /** @type {Map<string, number>} */
       const drawnFrames = new Map();
       const budget = machine();
-      let free = defaultWorkers(budget, totalFrames);
+      let free = renderWorkerLimit(job.ask.workers, totalFrames, budget);
+      const postWorkers = postprocessingLimit(free, availableParallelism());
+      const takePost = workGate(postWorkers);
+      update(job, { renderWorkers: renders.length ? free : 0, postWorkers: renders.length ? postWorkers : 0 });
       /* the chip's ProRes until one of the pages has to do without it: the rest do without it too */
       let hardware = true;
       const stop = new AbortController();
@@ -1426,7 +1608,7 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
       const asEditorsPlay = async (draw, codec) => {
         /** @param {string | null} encoder */
         const formats = (encoder) => (codec === 'h264'
-          ? { format: { video: [...encoding('h264', 'master', doc.stage, timeline.rate.fps, have, encoder).format.video, ...H264_709], pix: YUV_709('yuv420p') }, clear: QUICK_PNG }
+          ? { format: { video: [...encoding('h264', 'master', doc.stage, timeline.rate.fps, have, encoder).format.video, ...H264_709], pix: YUV_709('yuv420p') }, clear: transparentFormat }
           : { format: prores709(encoder ?? 'prores_ks', false), clear: prores709(encoder ?? 'prores_ks', true) });
         const chip = await hardwareEncoder(codec, have);
         try {
@@ -1441,8 +1623,33 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
       };
       /** @param {import('./nle.mjs').NleFile} file @param {number} workers @param {() => void} drawn */
       const page = async (file, workers, drawn) => {
+        const started = performance.now();
         const { clip: id, frames, fullSource } = /** @type {Extract<import('./nle.mjs').NleMediaJob, { kind: 'render' }>} */ (file.job);
         const p = /** @type {import('./nle.mjs').NlePicture} */ (pictures.find((x) => x.id === id));
+        const row = doc.tracks.flatMap((t) => t.clips).find((c) => c.id === id);
+        const frameHolds = id === captionId ? staticCaptionFrames(root, doc, { markup, fps: timeline.rate.fps, frames }) : null;
+        const cacheKey = cache?.keyOf({ head, stage: doc.stage, row: row ?? { captions: cues, tracks: doc.tracks.filter((t) => t.captions) }, frames, fullSource,
+          fps: timeline.rate.fps, alpha, rgbProfile, rleProfile, frameHolds, footage: ask.footage, job: { ...file.job, clip: row?.id ?? 'captions' } });
+        const hit = cache && cacheKey ? await cache.get(cacheKey, staged(file)) : null;
+        if (hit) {
+          file.durationFrames = hit.durationFrames;
+          for (const t of timeline.video) for (const c of t.clips) if (c.fileId === file.id && hit.durationFrames < frames) {
+            c.out = fullSource ? Math.min(c.out, hit.durationFrames) : hit.durationFrames;
+            c.end = c.start + Math.round((c.out - c.in) / (c.speed ?? 1));
+          }
+          restoreCrop(file, hit.crop);
+          restoreParts(file, hit.parts);
+          drawnFrames.set(file.id, framesOf(file));
+          tick([...drawnFrames.values()].reduce((n, d) => n + d, 0), totalFrames);
+          const bytes = (await Promise.all((hit.parts ?? [{ suffix: '' }]).map((/** @type {{suffix:string}} */ part) => stat(draftPartPath(staged(file), part.suffix))))).reduce((n, s) => n + s.size, 0);
+          reportMedia({ clip: id, cached: true, bytes, seconds: (performance.now() - started) / 1000, crop: hit.crop, parts: hit.parts });
+          return;
+        }
+        /** @type {string[]} */ let dependencies = [];
+        /** @type {Map<string, string>} */ let dependencySignatures = new Map();
+        let cacheable = false;
+        let renderSeconds = 0;
+        let heldFrames = 0;
         const native = byId.get(id)?.native ?? p.facts?.duration ?? Infinity;
         /* as long as its frames on the sequence: a page holds its last frame, a still lasts as long as it is told */
         const time = p.kind === 'video' ? [p.from, Math.min(native, p.from + (frames / timeline.rate.fps) * p.speed)] : [p.from, p.from + frames / timeline.rate.fps];
@@ -1459,14 +1666,17 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
         });
         let clear = true;
         try {
-          const one = fullSource ? await sourceClipFilm(root, p, native, doc)
+          const one = id === captionId ? await captionFilm(root, doc, duration)
+            : fullSource ? await sourceClipFilm(root, p, native, doc)
             : await clipFilm(root, id, { change: { time, disabled: undefined }, doc });
           try {
             /** @param {Record<string, unknown>} how */
             const draw = async (how) => {
               const result = await pool.render([one.dir], {
-                root, alpha: !ground, silent: true, fps: timeline.rate.fps, out: staged(file), signal: stop.signal, workers,
+                root, alpha: !ground, silent: true, fps: timeline.rate.fps, out: staged(file), signal: stop.signal, workers, dependencies: true,
+                ...(frameHolds ? { frameHolds } : {}),
                 ...(ground ? { format: how.format } : how),
+                onEncoder: (/** @type {string} */ encoder) => update(job, { encoder, rate: 0, etaMs: null }),
                 /* a page drawn again counts from where it was: it holds until the second drawing passes it */
                 onProgress: (/** @type {number} */ done) => {
                   drawnFrames.set(file.id, Math.max(drawnFrames.get(file.id) ?? 0, done));
@@ -1474,6 +1684,10 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
                 },
               });
               if (result.encoder !== job.encoder) update(job, { encoder: result.encoder });
+              dependencies = result.dependencies ?? [];
+              dependencySignatures = new Map(result.dependencySignatures ?? []);
+              cacheable = result.cacheable === true;
+              heldFrames = result.heldFrames ?? 0;
               return result;
             };
             if (app && alpha !== 'png') clear = (await asEditorsPlay(draw, alpha === 'prores' ? 'prores' : 'h264')).clear === true;
@@ -1482,30 +1696,81 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
             await one.remove();
           }
         } finally {
-          drawn();
+          renderSeconds = (performance.now() - started) / 1000;
         }
-        /* a source shorter than its place by a frame of rounding: the clip ends where its picture does */
-        const made = await countFrames(staged(file));
-        if (made > 0 && made !== frames) {
-          file.durationFrames = made;
-          for (const t of timeline.video) for (const c of t.clips) if (c.fileId === file.id) {
-            c.out = fullSource ? Math.min(c.out, made) : made;
-            c.end = c.start + Math.round((c.out - c.in) / (c.speed ?? 1));
+        // A completed page keeps its browser permits until a postprocessing slot is ready. This bounds the waiting
+        // media and memory, while allowing the GPU to draw the next page alongside a bounded CPU stage.
+        const postWaitingAt = performance.now();
+        const releasePost = await takePost(stop.signal);
+        const postWaitSeconds = (performance.now() - postWaitingAt) / 1000;
+        drawn();
+        try {
+          /* a source shorter than its place by a frame of rounding: the clip ends where its picture does */
+          const made = await countFrames(staged(file));
+          if (made > 0 && made !== frames) {
+            file.durationFrames = made;
+            for (const t of timeline.video) for (const c of t.clips) if (c.fileId === file.id) {
+              c.out = fullSource ? Math.min(c.out, made) : made;
+              c.end = c.start + Math.round((c.out - c.in) / (c.speed ?? 1));
+            }
           }
-        }
-        /* a draft's PNG page keeps each picture once, for as long as it shows (剪映 plays a picture's own length): a
-           fraction of the frames, the same pixels */
-        if (app && clear && alpha !== 'prores') await keepChanges(staged(file), stop.signal);
+          /* a draft's PNG page keeps each picture once, for as long as it shows (剪映 plays a picture's own length): a
+             fraction of the frames, the same pixels */
+          let analysis = null;
+          /** @type {import('./draft-media.mjs').DraftPart[] | null} */ let parts = null;
+          const sourceFrames = file.durationFrames;
+          const postStarted = performance.now();
+          const transparentCodecs = [];
+          if (app && clear && alpha !== 'prores') {
+            const compact = await keepChanges(staged(file), stop.signal, await draftVideoCodec(staged(file), stop.signal));
+            analysis = await cropDraftPng(staged(file), { ...doc.stage, frames: compact.kept, fps: timeline.rate.fps }, stop.signal, keepChanges);
+            restoreCrop(file, analysis.crop);
+            const placements = timeline.video.flatMap((t) => t.clips).filter((c) => c.fileId === file.id);
+            const collisions = Array.from({ length: 15 }, (_, i) => draftPartPath(file.path, `.part-${i + 1}`).normalize('NFD').toLowerCase());
+            if (rgbProfile && p.kind === 'page' && !analysis.crop && placements.length === 1 && placements[0].in === 0 && !placements[0].speed
+              && !timeline.files.some((f) => f !== file && collisions.includes(f.path.normalize('NFD').toLowerCase()))) {
+              parts = await splitDraftPng(staged(file), analysis, { fps: timeline.rate.fps, frames: sourceFrames, signal: stop.signal });
+              restoreParts(file, parts);
+            }
+            if (rleProfile) for (const part of parts ?? [{ suffix: '', opaque: false }]) if (!part.opaque) {
+              const result = await compactDraftPng(draftPartPath(staged(file), part.suffix), { fps: timeline.rate.fps, signal: stop.signal });
+              if (result) transparentCodecs.push({ suffix: part.suffix, ...result });
+              if (result?.codec === 'png') await keepChanges(draftPartPath(staged(file), part.suffix), stop.signal);
+            }
+          }
+          /* A rendered picture still owns the sound recorded with it. Put that sound on the rendered media's clock;
+             clip gain, mute and fades remain editable in the draft instead of becoming detached audio clips. */
+          const audio = /** @type {Extract<import('./nle.mjs').NleMediaJob, { kind: 'render' }>} */ (file.job).audio;
+          if (audio) {
+            const seconds = file.durationFrames / timeline.rate.fps;
+            const temp = `${staged(file)}.audio.mov`;
+            try {
+              await run(['-i', staged(file), '-ss', String(audio.from), '-t', String(audio.to - audio.from), '-i', audio.path,
+                '-map', '0:v:0', '-map', '1:a:0', '-c:v', 'copy',
+                '-af', `asetpts=PTS-STARTPTS,${tempo(audio.speed)},apad=whole_dur=${seconds},atrim=0:${seconds}`,
+                '-c:a', 'pcm_s16le', '-ar', '48000', '-ac', String(file.audio?.channels ?? 2), '-t', String(seconds), temp], stop.signal);
+              await rename(temp, staged(file));
+            } finally { await rm(temp, { force: true }); }
+          }
+          const bytes = (await Promise.all((parts ?? [{ suffix: '' }]).map((part) => stat(draftPartPath(staged(file), part.suffix))))).reduce((n, s) => n + s.size, 0);
+          const stats = { clip: id, workers, cached: false, bytes, seconds: (performance.now() - started) / 1000,
+            renderSeconds, heldFrames, postWaitSeconds, postSeconds: (performance.now() - postStarted) / 1000, crop: analysis?.crop ?? null, alphaSpans: analysis?.spans, parts, rgbProfile, rleProfile, transparentCodecs };
+          const cacheStarted = performance.now();
+          if (cache && cacheKey && cacheable) await cache.put(cacheKey, staged(file), dependencies, { crop: analysis?.crop ?? null, durationFrames: sourceFrames, parts }, file.path,
+            (parts ?? [{ suffix: '' }]).map((part) => part.suffix), dependencySignatures).catch(() => {});
+          Object.assign(stats, { cacheWriteSeconds: (performance.now() - cacheStarted) / 1000, seconds: (performance.now() - started) / 1000 });
+          reportMedia(stats);
+        } finally { releasePost(); }
       };
       try {
         let left = totalFrames;
         for (const file of renders) {
           while (!free && !failed) await Promise.race(drawing);
           if (failed) break;
-          const workers = shareOf(free, framesOf(file), left, defaultWorkers(budget, framesOf(file)));
+          const workers = shareOf(free, framesOf(file), left, renderWorkerLimit(job.ask.workers, framesOf(file), budget));
           left -= framesOf(file);
           free -= workers;
-          /* its browsers back for the next page once it is drawn, while its pictures are thinned (a PNG page) */
+          /* Browser permits return once a bounded postprocessing slot is ready; waiting pages retain theirs. */
           /** @type {() => void} */
           let drawn = () => {};
           const slot = new Promise((r) => { drawn = () => r(undefined); }).then(() => { drawing.delete(slot); free += workers; });
@@ -1513,7 +1778,7 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
           pages.push(page(file, workers, drawn).catch((e) => {
             failed ??= e;
             stop.abort();
-          }));
+          }).finally(drawn));
         }
         await Promise.all(pages);
       } finally {
@@ -1550,6 +1815,13 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
       }
 
       update(job, { phase: 'finishing', progress: 0.98 });
+      if (captionBackup) await writeFile(join(staging, 'Caption appearance.txt'), [
+        'Subtitle appearance and editable text', '',
+        'The captions video layer preserves the original subtitle positions, project fonts and effects with transparency.',
+        'The hidden "Subtitles (editable backup)" text track retains the words and timing.',
+        'To edit the text in this editor, hide the captions video layer and enable the text backup, then choose its font and style.',
+        'Editing the backup does not update the rendered appearance layer. Re-export from the original project to keep its exact style.', '',
+      ].join('\n'), 'utf8');
       if (ask.footage === 'source') await writeFile(join(staging, 'Original media.txt'), [
         'Original-media editing project', '',
         ask.media === 'link' ? 'Original media is referenced at its existing paths. Keep those files available; relink them if moved.'
@@ -1561,8 +1833,8 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
       if (app) {
         /* the app on Windows reads draft_content.json, on a Mac draft_info.json: the same draft in both */
         /* the subtitles' language: a translation shown alone is in its own; else told from the words (jianying.mjs) */
-        const fonts = await jianyingCaptionFonts(cues);
-        const draft = jianyingDraft(timeline, { app, name: basename(final), folder: final, root: dir, cues, fonts, language: shown?.bilingual ? null : shown?.language });
+        const draft = jianyingDraft(timeline, { app, name: basename(final), folder: final, root: dir, cues, fonts, captionBackup,
+          language: shown?.bilingual ? null : shown?.language });
         const info = JSON.stringify(draft.info);
         await writeFile(join(staging, 'draft_info.json'), info, 'utf8');
         await writeFile(join(staging, 'draft_content.json'), info, 'utf8');
@@ -1790,7 +2062,7 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
  * @param {string[]} args @param {Record<string, any>} opts @returns {Promise<{ out: string, encoder: string, lines: string[], ranges?: [number, number][] }>}
  */
 function render(args, opts) {
-  const { signal, onProgress, ...rest } = opts;
+  const { signal, onProgress, onSoftware, onEncoder, ...rest } = opts;
   return new Promise((done, fail) => {
     if (signal?.aborted) return fail(new Error('cancelled'));
     const child = fork(fileURLToPath(new URL('./render-worker.mjs', import.meta.url)), [], { stdio: ['ignore', 'inherit', 'pipe', 'ipc'] });
@@ -1809,6 +2081,8 @@ function render(args, opts) {
     signal?.addEventListener('abort', cancel, { once: true });
     child.on('message', (/** @type {any} */ m) => {
       if (m?.type === 'progress') onProgress?.(m.done, m.total);
+      else if (m?.type === 'software') onSoftware?.();
+      else if (m?.type === 'encoder') onEncoder?.(m.encoder);
       else if (m?.type === 'done') settle(() => done(m.result));
       else if (m?.type === 'failed') settle(() => fail(new Error(m.error)));
     });
@@ -1833,7 +2107,7 @@ function drawer() {
   below(child);
   let said = '';
   child.stderr?.on('data', (d) => { said = (said + d).slice(-4000); process.stderr.write(d); });
-  /** @type {Map<string, { onProgress?: (done: number, total: number) => void, done: (r: any) => void, fail: (e: Error) => void, signal?: AbortSignal }>} */
+  /** @type {Map<string, { onProgress?: (done: number, total: number) => void, onEncoder?: (encoder: string) => void, done: (r: any) => void, fail: (e: Error) => void, signal?: AbortSignal }>} */
   const jobs = new Map();
   /** @type {Error | null} */
   let gone = null;
@@ -1842,6 +2116,7 @@ function drawer() {
     const job = jobs.get(m?.id);
     if (!job) return;
     if (m.type === 'progress') job.onProgress?.(m.done, m.total);
+    else if (m.type === 'encoder') job.onEncoder?.(m.encoder);
     else if (m.type === 'done' || m.type === 'failed') {
       jobs.delete(m.id);
       if (m.type === 'done') job.done(m.result);
@@ -1858,9 +2133,9 @@ function drawer() {
     end(new Error(`the renderer stopped (${sig ?? `exit ${code}`})${last ? `: ${last.slice(0, 300)}` : ''}`));
   });
   return {
-    /** @param {string[]} args @param {Record<string, any>} opts @returns {Promise<{ out: string, encoder: string, clear?: boolean, lines: string[] }>} */
+    /** @param {string[]} args @param {Record<string, any>} opts @returns {Promise<{ out: string, encoder: string, clear?: boolean, heldFrames?: number, dependencies?: string[], dependencySignatures?: [string, string][], cacheable?: boolean, lines: string[] }>} */
     render(args, opts) {
-      const { signal, onProgress, ...rest } = opts;
+      const { signal, onProgress, onEncoder, ...rest } = opts;
       return new Promise((done, fail) => {
         if (signal?.aborted) return fail(new Error('cancelled'));
         if (gone) return fail(gone);
@@ -1868,7 +2143,7 @@ function drawer() {
         const cancel = () => { if (child.connected) child.send({ type: 'cancel', id }); };
         signal?.addEventListener('abort', cancel, { once: true });
         const off = () => signal?.removeEventListener('abort', cancel);
-        jobs.set(id, { onProgress, signal, done: (r) => { off(); done(r); }, fail: (e) => { off(); fail(e); } });
+        jobs.set(id, { onProgress, onEncoder, signal, done: (r) => { off(); done(r); }, fail: (e) => { off(); fail(e); } });
         child.send({ type: 'render', id, args, opts: rest });
       });
     },

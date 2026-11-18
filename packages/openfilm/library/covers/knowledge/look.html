@@ -1,0 +1,34 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Knowledge card</title>
+<style>
+:root { --font: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; --paper: #f3efe6; --ink: #161616; --accent: #2b59ff; }
+html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+* { box-sizing: border-box; }
+.win { position: fixed; right: 4vw; top: 7vh; bottom: 7vh; width: 46vw; border-radius: 2.4vmin; box-shadow: 0 0 0 200vmax var(--paper); }
+.box { position: fixed; left: 6vw; top: 50%; transform: translateY(-50%); width: 40vw; font-family: var(--font); color: var(--ink); }
+.t3 { display: block; font-size: 11vmax; font-weight: 900; line-height: .9; color: var(--accent); letter-spacing: -.04em; }
+.t1 { display: block; margin-top: 1.6vmax; font-size: 4.6vmax; font-weight: 900; line-height: 1.12; }
+.t2 { display: block; margin-top: 1.4vmax; font-size: 1.9vmax; font-weight: 500; line-height: 1.4; opacity: .7; }
+.foot { position: fixed; left: 6vw; bottom: 6vh; width: 3vmax; height: .5vmax; background: var(--ink); }
+@media (max-aspect-ratio: 1/1) {
+  .win { left: 5vw; right: 5vw; top: 4vw; bottom: auto; width: auto; height: 54vh; }
+  .box { top: auto; bottom: 8vh; transform: none; width: 88vw; }
+  .t3 { font-size: 8vmax; } .t1 { font-size: 5.4vmax; margin-top: 1vmax; } .foot { display: none; }
+}
+/* a full-screen feed: words kept clear of its caption, its buttons and its top bar */
+@media (max-aspect-ratio: 10/16) { .win { top: 9vh; height: 46vh; } .box { bottom: 24vh; width: 78vw; } }
+</style>
+</head>
+<body>
+<div class="win"></div><div class="box"><span class="t3">03</span><span class="t1">为什么你的视频没人看完</span><span class="t2">开头三秒决定一切</span></div><div class="foot"></div>
+<script>
+/*
+ * A paper card with a big number and a title, the frame showing through a window in it: a new design around a frame. A page of OpenFilm's library (CC0): a still, the same at every t.
+ */
+window.film = { frame() {} };
+</script>
+</body>
+</html>

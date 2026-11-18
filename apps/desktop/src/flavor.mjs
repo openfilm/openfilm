@@ -8,7 +8,9 @@
  *   · preview — a packaged app built with `release --preview`, "OpenFilm Preview", to try a build in: its own data
  *               folder, Studio home and port, so it never meets an installed OpenFilm (its package says so:
  *               `openfilmFlavor`).
- *   · dev     — `pnpm --filter @openfilm/desktop start`: this repository's code, with its own Studio home.
+ *   · dev     — `pnpm --filter @openfilm/desktop start`: this repository's code, with its own Studio home. A lane of
+ *               it (`start --lane sound`, OPENFILM_DEV_LANE) is another such app beside it, "OpenFilm Dev sound", with
+ *               its own name, bundle id, data folder, Studio home and port: one for each checkout being tried at once.
  *   · bench   — `node bench/run.mjs`: this repository's code, everything (data, Studio home, projects) in the throwaway
  *               folder the benchmark names in OPENFILM_BENCH_DIR, so a run never touches a person's dev or installed app.
  *
@@ -33,6 +35,25 @@ export const FLAVORS = Object.freeze({
   },
 });
 
+/** A lane's name: lowercase letters, digits and dashes, starting with a letter. */
+export const LANE = /^[a-z][a-z0-9-]{0,23}$/;
+
+/**
+ * The dev app of the lane `lane` (none: OpenFilm Dev itself). Its Studio port is taken from its name, three apart (a
+ * Studio uses the two after its own) in 4800–4997, so the same lane comes back on the same port and keeps what its
+ * page kept in that origin.
+ * @param {string | undefined} lane
+ */
+export function devIdentity(lane) {
+  if (!lane || !LANE.test(lane)) return FLAVORS.dev;
+  let hash = 0;
+  for (const c of lane) hash = (hash * 31 + c.charCodeAt(0)) >>> 0;
+  return Object.freeze({
+    productName: `OpenFilm Dev ${lane}`, bundleId: `dev.openfilm.desktop.dev.${lane}`, studioPort: 4800 + (hash % 66) * 3,
+    studioHome: join(homedir(), `.openfilm-dev-${lane}`), library: null, sharedHome: join(homedir(), '.openfilm'),
+  });
+}
+
 const benchDir = process.env.OPENFILM_BENCH_DIR ?? '';
 const BENCH = Object.freeze({
   productName: 'OpenFilm Bench', bundleId: 'dev.openfilm.desktop.bench', studioPort: 4767,
@@ -54,5 +75,5 @@ export function flavorName(env = process.env, isPackaged = packaged, built = isP
 }
 
 export const FLAVOR = flavorName();
-export const IDENTITY = FLAVOR === 'bench' ? BENCH : FLAVORS[FLAVOR];
+export const IDENTITY = FLAVOR === 'bench' ? BENCH : FLAVOR === 'dev' ? devIdentity(process.env.OPENFILM_DEV_LANE) : FLAVORS[FLAVOR];
 export const PRODUCT_NAME = IDENTITY.productName;

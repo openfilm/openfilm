@@ -29,7 +29,7 @@ openfilm get    [what]            # voice-over, music, sound effects, transcript
 openfilm doctor                   # what this computer has for OpenFilm, to paste into an issue
 ```
 
-`MANUAL.md` (in this package) is what `openfilm` tells your agent, and `SPEC.md` is the film format, for anyone
+`SYSTEM_PROMPT.md` (in this package) is what `openfilm` tells your agent, and `SPEC.md` is the film format, for anyone
 building a player, renderer or editor. Settings, how it works and the source:
 [github.com/openfilm/openfilm](https://github.com/openfilm/openfilm).
 

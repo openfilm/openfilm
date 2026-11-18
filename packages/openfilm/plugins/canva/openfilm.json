@@ -1,0 +1,224 @@
+{
+  "order": 24,
+  "icon": "plug",
+  "title": {
+    "en": "Canva",
+    "zh-CN": "Canva",
+    "ja": "Canva",
+    "ko": "Canva",
+    "es": "Canva"
+  },
+  "summary": {
+    "en": "Designs from Canva: the agent finds or makes a thumbnail, a cover or a social post for the film.",
+    "zh-CN": "用 Canva 的设计：智能体为片子找或做封面、缩略图和社交帖子。",
+    "ja": "Canva のデザイン：映像のサムネイルやカバー、SNS 投稿を探したり作ったりします。",
+    "ko": "Canva 디자인: 영상의 썸네일, 커버, SNS 게시물을 찾거나 만듭니다.",
+    "es": "Diseños de Canva: el agente busca o crea una miniatura, una portada o un post para la película."
+  },
+  "details": {
+    "en": "When to use it: your brand kit or templates are in Canva, or the film needs a thumbnail.\nHow: Connect and sign in once in your browser, then just ask in the chat, for example \"Make a cover for this video in Canva\". The agent asks you before it changes anything in Canva.",
+    "zh-CN": "什么时候用：品牌素材和模板在 Canva 里，或片子需要一张封面。\n怎么用：点「连接」在浏览器里登录一次，之后在对话里直接说，比如「在 Canva 里给这条视频做一张封面」。智能体改动 Canva 里的东西前会先问你。",
+    "ja": "使うとき：ブランドキットやテンプレートが Canva にある、または映像にサムネイルが必要なとき。\n使い方：「接続」でブラウザから一度サインインし、あとはチャットで頼むだけ。例：「Canva でこの動画のカバーを作って」。Canva の中を変える前には確認されます。",
+    "ko": "언제: 브랜드 키트나 템플릿이 Canva에 있거나 영상에 썸네일이 필요할 때.\n사용법: 「연결」을 눌러 브라우저에서 한 번 로그인한 뒤 대화에서 바로 말하면 됩니다. 예: \"Canva에서 이 영상의 커버를 만들어 줘\". Canva의 내용을 바꾸기 전에는 먼저 묻습니다.",
+    "es": "Cuándo: tu kit de marca o tus plantillas están en Canva, o la película necesita una miniatura.\nCómo: conecta e inicia sesión una vez en el navegador; luego pídelo en el chat, por ejemplo «Haz una portada para este vídeo en Canva». El agente te pregunta antes de cambiar algo en Canva."
+  },
+  "examples": {
+    "zh-CN": [
+      {
+        "say": "在 Canva 里给这条视频做一张封面",
+        "does": "取片子里最好看的一帧，在 Canva 里排版出封面，导回来设成项目封面。"
+      },
+      {
+        "say": "把我 Canva 里「新品发布」那套设计用到片子的字幕和片尾",
+        "does": "读你那套设计的字体和颜色，把字幕样式和片尾卡改成一致。"
+      },
+      {
+        "say": "用这部片子的画面在 Canva 里做三张社交媒体海报",
+        "does": "从片子里挑三帧，在 Canva 做成三张尺寸合适的海报，存进你的 Canva。"
+      }
+    ],
+    "en": [
+      {
+        "say": "Make a cover for this video in Canva",
+        "does": "Takes the film's best frame, lays out a cover in Canva and sets it as the project's cover."
+      },
+      {
+        "say": "Use my \"New launch\" design in Canva for the film's captions and end card",
+        "does": "Reads the fonts and colours of that design and makes the captions and end card match."
+      },
+      {
+        "say": "Make three social posts in Canva from this film's frames",
+        "does": "Picks three frames and makes three posts at the right sizes in your Canva."
+      }
+    ],
+    "ja": [
+      {
+        "say": "Canva でこの動画のカバーを作って",
+        "does": "映像のいちばん良いフレームで Canva にカバーを作り、プロジェクトのカバーに設定します。"
+      },
+      {
+        "say": "Canva の「新製品発表」デザインを字幕とエンドカードに使って",
+        "does": "そのデザインのフォントと色を読み、字幕とエンドカードをそろえます。"
+      },
+      {
+        "say": "この映像のカットで Canva の SNS 投稿画像を 3 枚作って",
+        "does": "映像から3フレームを選び、Canva で適切なサイズの投稿画像を3枚作ります。"
+      }
+    ],
+    "ko": [
+      {
+        "say": "Canva에서 이 영상의 커버를 만들어 줘",
+        "does": "영상의 가장 좋은 프레임으로 Canva에서 표지를 만들고 프로젝트 표지로 정합니다."
+      },
+      {
+        "say": "Canva의 「신제품 출시」 디자인을 자막과 엔딩 카드에 써 줘",
+        "does": "그 디자인의 글꼴과 색을 읽어 자막과 엔딩 카드를 맞춥니다."
+      },
+      {
+        "say": "이 영상의 장면으로 Canva에서 SNS 게시물 세 장을 만들어 줘",
+        "does": "영상에서 3프레임을 골라 Canva에서 알맞은 크기의 게시물 3장을 만듭니다."
+      }
+    ],
+    "es": [
+      {
+        "say": "Haz una portada para este vídeo en Canva",
+        "does": "Toma el mejor fotograma, compone una portada en Canva y la pone como portada del proyecto."
+      },
+      {
+        "say": "Usa mi diseño «Lanzamiento» de Canva para los subtítulos y el cierre",
+        "does": "Lee las fuentes y colores de ese diseño y adapta los subtítulos y el cierre."
+      },
+      {
+        "say": "Haz tres publicaciones para redes en Canva con fotogramas de esta película",
+        "does": "Elige tres fotogramas y crea tres publicaciones del tamaño adecuado en tu Canva."
+      }
+    ]
+  },
+  "showcase": {
+    "highlights": {
+      "zh-CN": [
+        {
+          "icon": "image",
+          "title": "封面和缩略图",
+          "text": "用片子的画面做封面，按平台尺寸出图。"
+        },
+        {
+          "icon": "palette",
+          "title": "用你的品牌设计",
+          "text": "读你 Canva 里的设计，字体和颜色用到片子上。"
+        },
+        {
+          "icon": "share",
+          "title": "社交海报",
+          "text": "一次做好几张不同尺寸的宣传图。"
+        },
+        {
+          "icon": "folder",
+          "title": "存在你的 Canva",
+          "text": "做好的设计留在你的账号里，随时再改。"
+        }
+      ],
+      "en": [
+        {
+          "icon": "image",
+          "title": "Covers and thumbnails",
+          "text": "Covers from the film's frames, at each platform's size."
+        },
+        {
+          "icon": "palette",
+          "title": "Your brand designs",
+          "text": "Reads designs in your Canva and brings their fonts and colours to the film."
+        },
+        {
+          "icon": "share",
+          "title": "Social posts",
+          "text": "Several promo images at different sizes in one go."
+        },
+        {
+          "icon": "folder",
+          "title": "Kept in your Canva",
+          "text": "What it makes stays in your account to change later."
+        }
+      ],
+      "ja": [
+        {
+          "icon": "image",
+          "title": "カバーとサムネイル",
+          "text": "映像のフレームからカバーを作り、各プラットフォームのサイズで出力。"
+        },
+        {
+          "icon": "palette",
+          "title": "ブランドのデザインを使う",
+          "text": "Canva のデザインを読み、フォントと色を映像に反映します。"
+        },
+        {
+          "icon": "share",
+          "title": "SNS 投稿画像",
+          "text": "サイズ違いの告知画像を一度に作ります。"
+        },
+        {
+          "icon": "folder",
+          "title": "Canva に保存",
+          "text": "作ったデザインはアカウントに残り、後で直せます。"
+        }
+      ],
+      "ko": [
+        {
+          "icon": "image",
+          "title": "표지와 썸네일",
+          "text": "영상 프레임으로 표지를 만들고 플랫폼 크기에 맞춥니다."
+        },
+        {
+          "icon": "palette",
+          "title": "브랜드 디자인 활용",
+          "text": "Canva의 디자인을 읽어 글꼴과 색을 영상에 적용합니다."
+        },
+        {
+          "icon": "share",
+          "title": "SNS 게시물",
+          "text": "크기가 다른 홍보 이미지를 한 번에 만듭니다."
+        },
+        {
+          "icon": "folder",
+          "title": "내 Canva에 저장",
+          "text": "만든 디자인은 계정에 남아 나중에 고칠 수 있습니다."
+        }
+      ],
+      "es": [
+        {
+          "icon": "image",
+          "title": "Portadas y miniaturas",
+          "text": "Portadas con fotogramas de la película, al tamaño de cada plataforma."
+        },
+        {
+          "icon": "palette",
+          "title": "Tus diseños de marca",
+          "text": "Lee tus diseños de Canva y lleva sus fuentes y colores a la película."
+        },
+        {
+          "icon": "share",
+          "title": "Publicaciones sociales",
+          "text": "Varias imágenes promocionales de distintos tamaños de una vez."
+        },
+        {
+          "icon": "folder",
+          "title": "Guardado en tu Canva",
+          "text": "Lo que crea queda en tu cuenta para cambiarlo luego."
+        }
+      ]
+    }
+  },
+  "about": "finds and makes Canva designs (Canva's own MCP server)",
+  "category": "picture",
+  "difficulty": 1,
+  "ease": 5,
+  "cost": "free",
+  "audience": {
+    "en": "Creators and marketers who design in Canva",
+    "zh-CN": "在 Canva 里做设计的创作者和市场人员",
+    "ja": "Canva でデザインするクリエイターやマーケター",
+    "ko": "Canva에서 디자인하는 크리에이터와 마케터",
+    "es": "Creadores y equipos de marketing que diseñan en Canva"
+  },
+  "on": false
+}

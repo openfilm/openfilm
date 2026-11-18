@@ -1,0 +1,323 @@
+{
+  "order": 0,
+  "beta": true,
+  "icon": "projector",
+  "title": {
+    "en": "Screening",
+    "zh-CN": "放映",
+    "ja": "試写",
+    "ko": "시사",
+    "es": "Proyección"
+  },
+  "summary": {
+    "en": "Watch the film, point at what to change and say it. No editing skills needed.",
+    "zh-CN": "看片子，指着要改的地方说一句。不用会剪辑。",
+    "ja": "映像を見て、直したいところを指して一言。編集の知識はいりません。",
+    "ko": "영상을 보고 고칠 곳을 가리키며 한마디. 편집을 몰라도 됩니다.",
+    "es": "Mira el vídeo, señala lo que quieres cambiar y dilo. No hace falta saber editar."
+  },
+  "details": {
+    "en": "When to use it: the film is made and you want to watch it through as the audience will, then point at what to change.\nHow it changes: while watching, point at a moment, drag over a stretch or circle part of the picture, say what you want, and your agent changes it.\nTurned off: the edit still plays the film; only this place for watching and pointing is gone.",
+    "zh-CN": "什么时候用：片子做出来了，想像观众一样完整看一遍，再指出哪里要改。\n怎么改：边看边点住某个时刻、拖一段时间，或在画面上圈出一块，说一句要怎么改，智能体去改。\n关掉后：剪辑里照样能看片，只是少了这个专门看片、指着说的地方。",
+    "ja": "使うとき：映像ができて、観客のように通して見てから直すところを伝えたいとき。\n直し方：見ながら時点を指す、範囲をドラッグする、画面の一部を囲むなどして一言伝えると、エージェントが直します。\nオフにすると：編集でも再生できます。見て指すための場所がなくなるだけです。",
+    "ko": "언제 쓰나요: 영상이 완성되어 관객처럼 끝까지 보고 고칠 곳을 짚고 싶을 때.\n고치는 법: 보면서 시점을 짚거나 구간을 드래그하거나 화면 일부를 동그라미 치고 한마디 하면 에이전트가 고칩니다.\n끄면: 편집에서도 재생됩니다. 보고 짚는 전용 공간만 없어집니다.",
+    "es": "Cuándo usarlo: el vídeo está hecho y quieres verlo entero como lo verá el público, y señalar qué cambiar.\nCómo se cambia: mientras lo ves, señala un momento, arrastra un tramo o rodea una parte de la imagen, di lo que quieres y tu agente lo cambia.\nSi se desactiva: la edición sigue reproduciendo el vídeo; solo desaparece este lugar para ver y señalar."
+  },
+  "examples": {
+    "zh-CN": [
+      {
+        "say": "①这里太拖了，剪短一点",
+        "does": "找到标记的那段，去掉多余的停顿；你跳回那里再看一遍。"
+      },
+      {
+        "say": "②圈出来的字太小了，放大一些",
+        "does": "定位到圈出的那个元素，只调大它的字号，别的不动。"
+      },
+      {
+        "say": "③④ 之间换一个干脆的转场",
+        "does": "在那两个镜头之间换上转场，标记显示改好了，你回放确认。"
+      }
+    ],
+    "en": [
+      {
+        "say": "① This drags, make it shorter",
+        "does": "Finds the marked stretch and takes out the slack; jump back there and watch it again."
+      },
+      {
+        "say": "② The text I boxed is too small, make it bigger",
+        "does": "Finds the element you boxed and makes only its text larger, nothing else."
+      },
+      {
+        "say": "Use a crisper cut between ③ and ④",
+        "does": "Swaps the transition between those two shots; the marks show it done for you to check."
+      }
+    ],
+    "ja": [
+      {
+        "say": "①ここが間延びしてる、短くして",
+        "does": "印の範囲を見つけて余分な間を取ります。そこへ戻ってもう一度見てください。"
+      },
+      {
+        "say": "②囲んだ文字が小さい、大きくして",
+        "does": "囲んだ要素を特定して、その文字だけを大きくします。"
+      },
+      {
+        "say": "③と④の間をキレのある転換に",
+        "does": "その2つのショットの間の転換を替えます。印が完了を示すので再生して確認を。"
+      }
+    ],
+    "ko": [
+      {
+        "say": "①여기가 늘어져, 좀 짧게 해 줘",
+        "does": "표시된 구간을 찾아 군더더기를 뺍니다. 그곳으로 돌아가 다시 보세요."
+      },
+      {
+        "say": "②동그라미 친 글자가 너무 작아, 키워 줘",
+        "does": "동그라미 친 요소를 찾아 그 글자만 키우고 나머지는 그대로 둡니다."
+      },
+      {
+        "say": "③과 ④ 사이를 깔끔한 전환으로 바꿔 줘",
+        "does": "두 샷 사이의 전환을 바꾸고, 표시에 완료가 뜨면 다시 보며 확인하세요."
+      }
+    ],
+    "es": [
+      {
+        "say": "① Aquí se hace largo, acórtalo",
+        "does": "Encuentra el tramo marcado y quita lo que sobra; vuelve allí y mírala de nuevo."
+      },
+      {
+        "say": "② El texto que marqué es pequeño, agrándalo",
+        "does": "Encuentra el elemento marcado y agranda solo su texto, nada más."
+      },
+      {
+        "say": "Pon una transición más seca entre ③ y ④",
+        "does": "Cambia la transición entre esos dos planos; las marcas lo muestran hecho para que lo compruebes."
+      }
+    ]
+  },
+  "showcase": {
+    "highlights": {
+      "zh-CN": [
+        {
+          "icon": "eye",
+          "title": "像观众一样看",
+          "text": "整部片子连续播放，没有时间线和面板打扰。"
+        },
+        {
+          "icon": "map-pin",
+          "title": "指着说",
+          "text": "点住一个时刻、拖一段时间，或在画面上圈出一块。"
+        },
+        {
+          "icon": "message",
+          "title": "一句话改",
+          "text": "标记带着编号进对话，说一句要怎么改，智能体去改。"
+        },
+        {
+          "icon": "list",
+          "title": "改到哪一目了然",
+          "text": "每个标记显示改好没有，点一下跳回那里再看一遍。"
+        }
+      ],
+      "en": [
+        {
+          "icon": "eye",
+          "title": "Watch like an audience",
+          "text": "The whole film plays on, with no timeline or panels in the way."
+        },
+        {
+          "icon": "map-pin",
+          "title": "Point at it",
+          "text": "Mark a moment, drag over a stretch, or draw a box on the picture."
+        },
+        {
+          "icon": "message",
+          "title": "One line to change it",
+          "text": "Marks go into the chat numbered; say what to change and your agent does it."
+        },
+        {
+          "icon": "list",
+          "title": "See what is done",
+          "text": "Each mark says whether it is done; click it to go back and watch again."
+        }
+      ],
+      "ja": [
+        {
+          "icon": "eye",
+          "title": "観客のように観る",
+          "text": "タイムラインやパネルに邪魔されず、通して再生します。"
+        },
+        {
+          "icon": "map-pin",
+          "title": "指して伝える",
+          "text": "ある瞬間を押さえる、範囲をドラッグする、画面を囲む。"
+        },
+        {
+          "icon": "message",
+          "title": "ひと言で直す",
+          "text": "印は番号付きでチャットへ。どう直すか言えばエージェントが直します。"
+        },
+        {
+          "icon": "list",
+          "title": "進み具合が一目でわかる",
+          "text": "印ごとに直ったかどうか表示。クリックでそこへ戻って見直せます。"
+        }
+      ],
+      "ko": [
+        {
+          "icon": "eye",
+          "title": "관객처럼 보기",
+          "text": "타임라인과 패널 없이 처음부터 끝까지 이어서 봅니다."
+        },
+        {
+          "icon": "map-pin",
+          "title": "가리켜 말하기",
+          "text": "한 순간을 찍거나, 구간을 끌거나, 화면에 영역을 그립니다."
+        },
+        {
+          "icon": "message",
+          "title": "한마디로 고치기",
+          "text": "표시는 번호와 함께 대화에 들어가고, 한마디 하면 에이전트가 고칩니다."
+        },
+        {
+          "icon": "list",
+          "title": "어디까지 고쳤는지 한눈에",
+          "text": "표시마다 고쳤는지 보여 주고, 누르면 그곳으로 돌아가 다시 봅니다."
+        }
+      ],
+      "es": [
+        {
+          "icon": "eye",
+          "title": "Mírala como el público",
+          "text": "La película entera de corrido, sin línea de tiempo ni paneles de por medio."
+        },
+        {
+          "icon": "map-pin",
+          "title": "Señala",
+          "text": "Marca un momento, arrastra un tramo o dibuja un recuadro en la imagen."
+        },
+        {
+          "icon": "message",
+          "title": "Una frase para cambiarlo",
+          "text": "Las marcas entran numeradas en la conversación; di qué cambiar y tu agente lo hace."
+        },
+        {
+          "icon": "list",
+          "title": "Ve qué está hecho",
+          "text": "Cada marca dice si ya está hecha; pulsa para volver allí y verla otra vez."
+        }
+      ]
+    },
+    "keys": [
+      {
+        "keys": [
+          "Space"
+        ],
+        "label": {
+          "zh-CN": "播放 / 暂停",
+          "en": "Play / pause",
+          "ja": "再生 / 一時停止",
+          "ko": "재생 / 일시정지",
+          "es": "Reproducir / pausa"
+        }
+      },
+      {
+        "keys": [
+          "←",
+          "→"
+        ],
+        "label": {
+          "zh-CN": "后退 / 前进 5 秒",
+          "en": "Back / forward 5 s",
+          "ja": "5 秒戻る / 進む",
+          "ko": "5초 뒤로 / 앞으로",
+          "es": "Atrás / adelante 5 s"
+        }
+      },
+      {
+        "keys": [
+          "M"
+        ],
+        "label": {
+          "zh-CN": "指住这个时刻",
+          "en": "Point at this moment",
+          "ja": "この瞬間を指す",
+          "ko": "이 순간 가리키기",
+          "es": "Señalar este momento"
+        }
+      },
+      {
+        "keys": [
+          "S"
+        ],
+        "label": {
+          "zh-CN": "换播放速度",
+          "en": "Change the speed",
+          "ja": "再生速度を変える",
+          "ko": "재생 속도 바꾸기",
+          "es": "Cambiar la velocidad"
+        }
+      },
+      {
+        "keys": [
+          "F"
+        ],
+        "label": {
+          "zh-CN": "全屏",
+          "en": "Full screen",
+          "ja": "全画面",
+          "ko": "전체 화면",
+          "es": "Pantalla completa"
+        }
+      },
+      {
+        "keys": [
+          "?"
+        ],
+        "label": {
+          "zh-CN": "打开说明",
+          "en": "Open the help",
+          "ja": "ヘルプを開く",
+          "ko": "도움말 열기",
+          "es": "Abrir la ayuda"
+        }
+      }
+    ]
+  },
+  "about": "watching the film and pointing at what to change, for the chat",
+  "category": "edit",
+  "difficulty": 1,
+  "ease": 5,
+  "cost": "free",
+  "audience": {
+    "en": "Everyone, above all people who don't edit",
+    "zh-CN": "所有人，尤其是不会剪辑的人",
+    "ja": "すべての人、特に編集をしない人",
+    "ko": "모든 사람, 특히 편집을 안 해 본 사람",
+    "es": "Todo el mundo, sobre todo quien no edita"
+  },
+  "workbench": "screening",
+  "blocks": [
+    {
+      "id": "screening",
+      "title": {
+        "en": "Screening",
+        "zh-CN": "放映",
+        "ja": "試写",
+        "ko": "시사",
+        "es": "Proyección"
+      },
+      "edge": "center",
+      "min": [
+        320,
+        240
+      ]
+    }
+  ],
+  "on": true,
+  "skills": [],
+  "requires": [
+    "film",
+    "media"
+  ]
+}

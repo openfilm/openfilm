@@ -179,7 +179,7 @@ export function Tile({ item, playing, loading = false, size, cover }: { item: Li
 }
 
 /** Its waveform as a mask: lit in the accent as far as it has played, the rest quiet. */
-function Wave({ item, played, className = 'h-4' }: { item: LibraryItem; played: number; className?: string }) {
+export function Wave({ item, played, className = 'h-4' }: { item: LibraryItem; played: number; className?: string }) {
   const lit = Math.round(played * 1000) / 10;
   /* Eighty rows may be drawn at once. Their cloud waveforms share the bounded background queue so a click's
      audio request has a free connection, even when none of those pictures is cached yet. */

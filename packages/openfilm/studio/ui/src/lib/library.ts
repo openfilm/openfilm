@@ -13,6 +13,8 @@ import { gradeFilter, gradeOf, withGrade, type Grade } from './grade.ts';
 
 /** What a path names OpenFilm's library by, as `saved/` names Saved. */
 export const BUILT_IN = 'openfilm';
+/** How a Community sticker moves while it is shown: the same keyframes on its page and its tile (globals.css). */
+export type StickerIdle = 'bounce' | 'wiggle' | 'pulse' | 'float' | 'spin' | 'pop';
 
 export type LibraryCategory = 'transition' | 'effect' | 'filter' | 'text' | 'sticker' | 'sound' | 'music' | 'template';
 export type LibraryNames = Partial<Record<Language, string>> & { en: string };
@@ -20,10 +22,13 @@ export type LibraryNames = Partial<Record<Language, string>> & { en: string };
 export interface LibraryItem {
   /** Its place in the library (`effects/snow`, `sounds/whoosh.m4a`). */
   id: string;
-  cat: LibraryCategory;
+  /** its category; `media`: a file of the Community's media, kept in one of the person's folders, never in a tab of its own */
+  cat: LibraryCategory | 'media';
   group: string;
   name: LibraryNames;
-  kind: 'page' | 'sound' | 'look' | 'fade' | 'textstyle' | 'textmotion' | 'group' | 'motion';
+  kind: 'page' | 'sound' | 'look' | 'fade' | 'textstyle' | 'textmotion' | 'group' | 'motion' | 'file';
+  /** a media file (`file`): what it is */
+  media?: 'video' | 'image' | 'audio';
   durationMs?: number;
   /** A page: its clip's page (in its bundle's files/, with the stretch it plays), and a size of its own. */
   src?: string;
@@ -56,6 +61,8 @@ export interface LibraryItem {
   music?: string;
   /** A motion preset (src/clip-motion.mjs withPreset): how a clip comes in, goes out, moves while shown; on a cut, the
    *  clip before it goes out and the one after comes in. */
+  /** A Community sticker's idle movement, shown on its tile as on its page (StickerIdle). */
+  idle?: StickerIdle;
   motion?: Partial<Record<'in' | 'out' | 'loop', { name: string; body: string; secs: number; ease: string }>>;
   /** A transition of two shots moving at once (a push, a wipe): the incoming clip overlaps the outgoing one by its
       length, coming in by `motion.in` while that one goes out by `motion.out` (lib/clip-presets withCutMove). */
@@ -66,9 +73,63 @@ export interface LibraryItem {
 
 export interface LibraryIndex {
   version: number;
-  groups: Partial<Record<LibraryCategory, { id: string; name: LibraryNames }[]>>;
+  /** each category's groups; a community pack is a group too (`by`, its maker) */
+  groups: Partial<Record<LibraryCategory, { id: string; name: LibraryNames; by?: string }[]>>;
   items: LibraryItem[];
+  /** OpenFilm's packs (its groups, always in the library) and the community's (in it once added) */
+  packs?: LibraryPack[];
 }
+
+/**
+ * A pack: things put together (a music pack of forty pieces). OpenFilm's are its groups (`openfilm/<category>/<group>`);
+ * the community's are by their makers (`<maker>/<name>`, or one thing listed alone: `lone`), their things in their
+ * own order (`items`), each a group of every category it has things in (`group`, the same in each).
+ */
+/**
+ * A pack of the Community's media kept as a folder of the person's own (studio/server/saved.mjs savePack): its files
+ * fetched and copied into a new folder named after it, the pack then added. Resolves to the folder's place.
+ */
+export async function savePack(id: string, lang: string): Promise<string> {
+  const response = await fetch('/api/library/packs/save', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ pack: id, lang }) });
+  const body = await response.json().catch(() => ({})) as { path?: string; error?: string };
+  if (!response.ok || !body.path) throw new Error(body.error ?? 'failed');
+  added = [...new Set([...(added ?? []), id])];
+  tellAdded();
+  return body.path;
+}
+
+export interface LibraryPack {
+  id: string;
+  name: LibraryNames;
+  about?: string;
+  by?: string;
+  license?: string;
+  version?: number;
+  /** its picture, by its place in the library */
+  cover?: string;
+  items?: string[];
+  cats: LibraryCategory[];
+  group: string;
+  count: number;
+  official?: true;
+  lone?: true;
+}
+
+/** The things of a pack, in its order (OpenFilm's: as its group lists them). */
+export function packItems(index: LibraryIndex | null, pack: LibraryPack): LibraryItem[] {
+  const all = index?.items ?? [];
+  if (pack.official) return all.filter((it) => !it.by && it.cat === pack.cats[0] && it.group === pack.group);
+  const byId = new Map(all.map((it) => [it.id, it]));
+  return (pack.items ?? []).map((id) => byId.get(id)).filter((it): it is LibraryItem => Boolean(it));
+}
+
+/** The pack a thing is in. */
+export const packOf = (index: LibraryIndex | null, item: LibraryItem): LibraryPack | undefined =>
+  index?.packs?.find((p) => (p.official ? !item.by && p.cats[0] === item.cat && p.group === item.group : p.group === item.group));
+
+/** Whether a thing is in the person's library: OpenFilm's always; the community's once it or its pack is added. */
+export const inLibrary = (item: Pick<LibraryItem, 'id' | 'group' | 'by'>, added: readonly string[]): boolean =>
+  !item.by || added.includes(item.group) || added.includes(item.id);
 
 let index: LibraryIndex | null = null;
 let reading: Promise<LibraryIndex | null> | null = null;
@@ -156,7 +217,8 @@ export function defaultTextWords(): string {
 export const libraryUrl = (rel: string): string => `/api/library/file?path=${encodeURIComponent(rel)}&v=2`;
 /** A page of the library, served as a page (for a try over the viewer's picture). */
 export const pageUrl = (item: LibraryItem): string => `/api/library/pages/${`${item.id}/files/${item.src ?? ''}`.split('/').map(encodeURIComponent).join('/')}`;
-export const posterUrl = (item: LibraryItem): string => libraryUrl(item.poster ?? `${item.id}/poster.jpg`);
+/* a media picture is its own poster */
+export const posterUrl = (item: LibraryItem): string => libraryUrl(item.poster ?? (item.kind === 'file' && item.media === 'image' ? item.id : `${item.id}/poster.jpg`));
 export const previewUrl = (item: LibraryItem): string => libraryUrl(`${item.id}/preview.mp4`);
 /** A sound's waveform, beside it in waves/ (`sounds/whoosh.m4a` → `sounds/waves/whoosh.png`). */
 export const waveUrl = (item: LibraryItem): string => libraryUrl(item.id.replace(/([^/]+)\.[^./]+$/, 'waves/$1.png'));
@@ -173,6 +235,8 @@ export function libraryDragItem(item: LibraryItem, name: string): ResourceDragIt
   if (item.kind === 'motion' && item.place === 'cut') return { path: saved, name, kind: 'other', saved, apply: 'fade' };
   if (item.kind === 'sound') return { path: saved, name, kind: 'audio', ...(item.durationMs ? { durationMs: item.durationMs } : {}), saved };
   if (item.kind === 'group') return { path: saved, name, kind: 'mg', ...(item.durationMs ? { durationMs: item.durationMs } : {}), saved };
+  /* a file of the Community's media: footage, a picture, a recording, as one of the person's own goes in */
+  if (item.kind === 'file') return { path: saved, name, kind: item.media ?? 'video', ...(item.durationMs ? { durationMs: item.durationMs } : {}), saved };
   /* a text style: a new line of words in it (the drop takes the text component with its variables) */
   if (item.kind === 'textstyle') {
     const text = builtInItem(`${BUILT_IN}/${TEXT_COMPONENT}`);
@@ -361,10 +425,14 @@ export async function prepareLibraryItem(id: string): Promise<boolean> {
 /** A template's full example, shared by the card and the viewer, with the bundled preview as a fallback. */
 export const templateExamplePath = (item: LibraryItem): string => `examples/${item.id}.mp4`;
 export const templatePreviewUrl = (item: LibraryItem): string => {
+  /* a Community template brings its own preview */
+  if (item.id.startsWith('community/')) return previewUrl(item);
   const path = templateExamplePath(item);
   return failed.has(path) ? previewUrl(item) : libraryUrl(path);
 };
 export function prepareTemplatePreview(item: LibraryItem): Promise<boolean> {
+  /* a Community template's preview is fetched as it is played */
+  if (item.id.startsWith('community/')) return Promise.resolve(true);
   const path = templateExamplePath(item);
   return failed.has(path) ? Promise.resolve(false) : prepareLibraryItem(path);
 }
@@ -398,7 +466,49 @@ export function useLibraryHere(): (id: string, confirmed?: boolean) => HereState
   return (id: string, confirmed = false) => (fetching.has(id) ? 'fetching' : failed.has(id) ? 'failed' : missing.has(id) || (!confirmed && asking.has(id)) ? 'missing' : 'here');
 }
 
+let added: readonly string[] | null = null;
+const addedSeen = new Set<() => void>();
+const tellAdded = () => { for (const fn of addedSeen) fn(); };
+
+/** The community's packs and things the person added to the library (ids), kept for every OpenFilm on this computer. */
+export function useLibraryAdded(): readonly string[] {
+  const seen = React.useSyncExternalStore(
+    (fn) => { addedSeen.add(fn); return () => { addedSeen.delete(fn); }; },
+    () => added,
+    () => added,
+  );
+  React.useEffect(() => {
+    if (added) return;
+    void fetch('/api/library/added', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null), () => null).then((body: { ids?: string[] } | null) => {
+      if (body && Array.isArray(body.ids)) { added = body.ids; tellAdded(); }
+    });
+  }, []);
+  return seen ?? [];
+}
+
+/** Add a pack or a thing of the community to the library, or take it out: shown at once, then kept. */
+export function setAdded(id: string, on: boolean): void {
+  const had = added ?? [];
+  if (had.includes(id) === on) return;
+  added = on ? [...had, id] : had.filter((x) => x !== id);
+  tellAdded();
+  void fetch('/api/library/added', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ids: added }) })
+    .then((r) => (r.ok ? r.json() : null))
+    .then((body: { ids?: string[] } | null) => { if (body && Array.isArray(body.ids)) { added = body.ids; tellAdded(); } });
+}
+
 /** Star a thing, or take its star away: shown at once, then kept. */
+/** The favorites as the server now has them (a file of the person's own starred: lib/saved starSaved). */
+export function takeFavorites(ids: readonly string[]): void {
+  favorites = ids;
+  tellStarred();
+}
+
+/** Who made a thing of the Community, as said: OpenFilm's own account by its name (with its tick where shown). */
+export const makerName = (by: string): string => (by.toLowerCase() === 'openfilm' ? 'OpenFilm' : by);
+/** Whether a thing of the Community was published by OpenFilm itself. */
+export const byOpenFilm = (by: string | undefined): boolean => by?.toLowerCase() === 'openfilm';
+
 export function toggleFavorite(id: string): void {
   const had = favorites ?? [];
   favorites = had.includes(id) ? had.filter((x) => x !== id) : [...had, id];

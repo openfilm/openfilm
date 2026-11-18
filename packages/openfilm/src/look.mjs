@@ -7,11 +7,13 @@ import { FrameError, launch, SOFTWARE_GL } from './host.mjs';
 import { LOUDNESS_SLACK, TRUE_PEAK } from './loudness.mjs';
 import { hasAlpha } from './seekable.mjs';
 import { blockDiff, checkSound, cutText, fileOf, ffmpeg, filmSound, fmt, hash, homeFor, locate, mix, open, outDir, parseTarget, SAME_LIMIT, shown, shuffled, spread, UsageError } from './shared.mjs';
-import { sheetTimes } from './samples.mjs';
+import { MOMENT_FRAMES, momentTimes, sheetTimes } from './samples.mjs';
 import { watch } from './watch.mjs';
 
 const MEDIA = /\.(mp4|mov|m4v|webm|mkv|avi|png|jpe?g|webp|gif|mp3|wav|m4a|aac|ogg|flac)$/i;
 const CELL_WIDTH = 480;
+/* the long edge of a single frame look writes: about what a model service reads a picture at without shrinking it */
+const FRAME_EDGE = 1568;
 /* VP9's and VP8's alpha is a side channel ffmpeg's own decoders drop: libvpx reads it, when this ffmpeg has it */
 const LIBVPX = { vp9: 'libvpx-vp9', vp8: 'libvpx' };
 let decoders;
@@ -21,8 +23,10 @@ const hasDecoder = (name) => {
 };
 
 export async function look(args, opts = {}) {
-  const { film: target, at, range } = parseTarget(args);
-  if (MEDIA.test(target)) return lookMedia(target, at, range, opts);
+  const { film: target, at, range, moments } = parseTarget(args);
+  if (MEDIA.test(target)) return lookMedia(target, at, range, opts, moments);
+  /* several times or ranges: one sheet of them all, drawn in one opening of the film */
+  const several = moments.length > 1;
   if (opts.full) return lookRendered(target, at, range, opts);
   let s;
   /* `playable`: footage the browser does not decode (ProRes; HEVC without a chip for it) is looked at through a copy it plays */
@@ -80,13 +84,16 @@ export async function look(args, opts = {}) {
     // default white it never asked for.
     const shoot = async (t) => { await film.seek(clamp(t)); return film.capture({ format: 'png' }); };
 
-    if (at != null) {
-      // One frame at full size, and the same frame again after another one: it must not change.
+    /* the stretch the sheet and its sound cover */
+    let span = at != null ? [at, at] : range ?? [0, end];
+    if (at != null && !several) {
+      // One frame, and the same frame again after another one: it must not change.
       const t = clamp(at);
       if (at >= dur) warnings.push(`${fmt(at)} is past the film's end (${fmt(dur)}): its last frame is drawn`);
       const png = await shoot(t);
-      const file = join(dir, `${fmt(t)}.png`);
-      writeFileSync(file, png);
+      const frame = framePicture(png, dir);
+      const file = join(dir, `${fmt(t)}.${frame.ext}`);
+      writeFileSync(file, frame.data);
       files.push(file);
       /* another frame between: half the film away, or a second on for a page with no end */
       await shoot(Number.isFinite(dur) ? (t < dur / 2 ? t + dur / 2 : t - dur / 2) : t + 1);
@@ -94,11 +101,19 @@ export async function look(args, opts = {}) {
       const again = await film.capture({ format: 'png' });
       if (await compare([[t, png, again]], 'png')) passed.push('drawn again after another frame: same picture');
     } else {
-      if (range && range[0] >= dur) throw new UsageError(`range ${fmt(range[0])}-${fmt(range[1])} starts at or after the film's end (${fmt(dur)})`);
-      if (range && range[1] > dur) warnings.push(`${fmt(range[0])}-${fmt(range[1])} runs past the film's end (${fmt(dur)}): the sheet stops there`);
-      const [from, to] = range ? [clamp(range[0]), Math.min(range[1], dur)] : [0, dur];
-      const count = Math.max(1, Math.round(opts.count ?? 12));
-      const times = sheetTimes(from, to, count).map(clamp);
+      for (const r of several ? moments.filter(Array.isArray) : range ? [range] : []) {
+        if (r[0] >= dur) throw new UsageError(`range ${fmt(r[0])}-${fmt(r[1])} starts at or after the film's end (${fmt(dur)})`);
+        if (r[1] > dur) warnings.push(`${fmt(r[0])}-${fmt(r[1])} runs past the film's end (${fmt(dur)}): the sheet stops there`);
+      }
+      for (const t of several ? moments.filter((x) => !Array.isArray(x)) : []) if (t >= dur) warnings.push(`${fmt(t)} is past the film's end (${fmt(dur)}): its last frame is drawn`);
+      /* several moments: each time once and each range MOMENT_FRAMES frames across it (--count frames), in their order */
+      const times = several ? momentTimes(moments, Math.max(1, Math.round(opts.count ?? MOMENT_FRAMES))).map(clamp)
+        : sheetTimes(...(range ? [clamp(range[0]), Math.min(range[1], dur)] : [0, dur]), Math.max(1, Math.round(opts.count ?? 12))).map(clamp);
+      const from = several ? Math.min(...times) : range ? clamp(range[0]) : 0;
+      /* moments all at one time still span a frame, for the sound under them */
+      const to = several ? Math.max(...times, from + 0.04) : range ? Math.min(range[1], dur) : dur;
+      span = [from, to];
+      const count = times.length;
       // Twice, each time in its own shuffled order, the way a person scrubs: a frame that depends on what was
       // drawn before it shows up as two different pictures.
       const cut = new Map();
@@ -124,11 +139,11 @@ export async function look(args, opts = {}) {
       await checkOverlaps();
       const wave = await waveform(s, from, to);
       const marks = joinPieces(m.sounds).filter((c) => (c.at ?? 0) >= from && (c.at ?? 0) < to).map((c) => ({ t: c.at ?? 0, name: basename(c.src) }));
-      const file = join(dir, `${Number(from.toFixed(3))}-${fmt(to)}.png`);
+      const file = join(dir, several ? `${Number(from.toFixed(3))}-${fmt(to)}-${count}-moments.png` : `${Number(from.toFixed(3))}-${fmt(to)}.png`);
       writeFileSync(file, await sheet(browser, shots.map((x) => ({ ...x, png: cellPicture(x.png, dir) })), m, from, to, wave, marks));
       files.push(file);
     }
-    sounds.push(...listSounds(s, m, at != null ? [at, at] : range ?? [0, end], warnings));
+    sounds.push(...listSounds(s, m, span, warnings));
     if (s.loudness) sounds.push(s.loudness);
     /* --loudness: how far the mix is from the target a render or an export would bring it to */
     if (opts.loudness != null && s.mixLoudness) sounds.push(`♪ target  ${towards(s.mixLoudness, opts.loudness)}`);
@@ -311,6 +326,29 @@ function cellPicture(png, dir) {
   finally { rmSync(`${stem}-in.png`, { force: true }); rmSync(`${stem}.png`, { force: true }); }
 }
 
+/**
+ * A single frame as look writes it: a JPEG at most FRAME_EDGE on its long edge, light enough for an agent to keep
+ * several in a conversation (a full 4K frame as PNG is 5 to 11 MB, sent again with every request after it). A frame
+ * with alpha stays a PNG, at most as large, so what a layer draws is judged without a ground it never asked for. The
+ * frame as it is when ffmpeg cannot.
+ * @param {Buffer} png @param {string} dir @returns {{ data: Buffer, ext: 'jpg' | 'png' }}
+ */
+export function framePicture(png, dir) {
+  /* the browser and ffmpeg write RGB when nothing shows through: alpha is the color types with it */
+  const alpha = png[25] === 4 || png[25] === 6;
+  if (alpha && Math.max(png.readUInt32BE(16), png.readUInt32BE(20)) <= FRAME_EDGE) return { data: png, ext: 'png' };
+  const ext = alpha ? 'png' : 'jpg';
+  const stem = join(dir, `.frame-${process.pid}-${hash(png)}`);
+  try {
+    writeFileSync(`${stem}-in.png`, png);
+    const fit = `scale=w='min(${FRAME_EDGE},iw)':h='min(${FRAME_EDGE},ih)':force_original_aspect_ratio=decrease:flags=lanczos`;
+    const r = spawnSync('ffmpeg', ['-v', 'error', '-y', '-i', `${stem}-in.png`, '-vf', `${fit},format=${alpha ? 'rgba' : 'yuvj444p'}`,
+      ...(alpha ? [] : ['-q:v', '2']), '-frames:v', '1', '-update', '1', `${stem}.${ext}`], { timeout: 30_000, windowsHide: true });
+    return r.status === 0 ? { data: readFileSync(`${stem}.${ext}`), ext } : { data: png, ext: 'png' };
+  } catch { return { data: png, ext: 'png' }; }
+  finally { rmSync(`${stem}-in.png`, { force: true }); rmSync(`${stem}.${ext}`, { force: true }); }
+}
+
 async function sheet(browser, shots, meta, from, to, wave, marks, label = 'sound mix') {
   const cols = shots.length <= 4 ? shots.length : shots.length <= 9 ? 3 : 4;
   const cellW = CELL_WIDTH;
@@ -386,11 +424,12 @@ export async function watchLines(file, fps, from, to, { decode = [], alpha = fal
 }
 
 /**
- * A media file on its own, to choose what to use from it: frames across the file (or a range, or one second at
- * full size) and its own sound, from ffmpeg. Output goes to the project's .film/cache/look (see homeFor).
+ * A media file on its own, to choose what to use from it: frames across the file (or a range, or one frame, as
+ * framePicture writes it) and its own sound, from ffmpeg. Output goes to the project's .film/cache/look (see homeFor).
  * `full`: a video's every frame is watched too (watchLines), as a rendered film is checked.
  */
-async function lookMedia(target, at, range, opts) {
+async function lookMedia(target, at, range, opts, moments = []) {
+  const several = moments.length > 1;
   const file = resolve(target);
   if (!existsSync(file) || !statSync(file).isFile()) throw new UsageError(`${target}: no such file`);
   const dir = outDir(homeFor(dirname(file)), 'look');
@@ -420,17 +459,22 @@ async function lookMedia(target, at, range, opts) {
   const files = [];
   const watched = [];
   if (opts.full && (!video || still)) watched.push(`! --full watches a video's frames; ${basename(file)} has none to watch`);
-  if (video && (at != null || still)) {
+  if (video && ((at != null && !several) || still)) {
     if (opts.full && !still) watched.push('! --full watches a stretch of frames, not one: give a range (a-b) or none');
     const t = still ? 0 : Math.min(Math.max(0, at), Math.max(0, dur - 0.04));
-    const out = join(dir, still ? `${name}.png` : `${name}-${fmt(t)}.png`);
-    writeFileSync(out, grab(t)); files.push(out);
+    const frame = framePicture(grab(t), dir);
+    const out = join(dir, still ? `${name}.${frame.ext}` : `${name}-${fmt(t)}.${frame.ext}`);
+    writeFileSync(out, frame.data); files.push(out);
   } else {
-    const [from, to] = range ? [Math.max(0, range[0]), Math.min(range[1], dur)] : [0, dur];
-    const count = Math.max(1, Math.round(opts.count ?? 12));
     /* ffmpeg has no frame at the file's own end: the last one a sheet can draw is two frames before it */
-    const last = Math.max(from, dur - (fps ? 2 / fps : 0.04));
-    const times = video ? sheetTimes(from, Math.min(to, last), count) : [];
+    const lastFrame = Math.max(0, dur - (fps ? 2 / fps : 0.04));
+    /* several moments: each time once and each range MOMENT_FRAMES frames across it (--count frames), in their order */
+    const picked = several ? momentTimes(moments, Math.max(1, Math.round(opts.count ?? MOMENT_FRAMES))).map((t) => Math.min(Math.max(0, t), lastFrame)) : [];
+    const [from, to] = several ? [Math.min(...picked), Math.max(...picked, Math.min(...picked) + 0.04)]
+      : range ? [Math.max(0, range[0]), Math.min(range[1], dur)] : [0, dur];
+    const count = Math.max(1, Math.round(opts.count ?? 12));
+    const last = Math.max(from, lastFrame);
+    const times = !video ? [] : several ? picked : sheetTimes(from, Math.min(to, last), count);
     let wave = null;
     if (audio) {
       const png = join(dir, `.${name}-wave.png`);
@@ -441,11 +485,27 @@ async function lookMedia(target, at, range, opts) {
     const browser = await launch(opts.launch);
     try {
       const shots = times.map((t) => ({ t, png: grab(t, true) }));
-      const out = join(dir, `${name}-${Number(from.toFixed(3))}-${fmt(to)}.png`);
+      const out = join(dir, `${name}-${Number(from.toFixed(3))}-${fmt(to)}${several ? `-${times.length}-moments` : ''}.png`);
       writeFileSync(out, await sheet(browser, shots, { width: w || 1920, height: h || 1080 }, from, to, wave, [], 'its sound'));
       files.push(out);
     } finally { await browser.close(); }
     if (opts.full && video && !still) watched.push(...await watchLines(file, fps ?? 30, from, to, { decode, alpha: hasAlpha(video) }));
   }
-  return { ok: true, lines: [head, ...watched, ...files.map((f) => `→ ${shown(f)}`)], files };
+  return { ok: true, lines: [head, ...watched, ...wordsLine(file, { video: Boolean(video), audio, dur }), ...files.map((f) => `→ ${shown(f)}`)], files };
+}
+
+/** Footage this long with sound, and no transcript beside it, is pointed at its words. */
+export const WORDS_AFTER_S = 30;
+
+/**
+ * Footage with sound and no transcript beside it (`<name>.vtt`, as `get asr` writes one): the command that gives its
+ * words, timed, in one run. What is said is read there, not guessed from frame after frame.
+ * @param {string} file @param {{ video: boolean, audio: boolean, dur: number }} facts
+ */
+export function wordsLine(file, { video, audio, dur }) {
+  if (!video || !audio || !(dur >= WORDS_AFTER_S)) return [];
+  const vtt = join(dirname(file), `${basename(file, extname(file))}.vtt`);
+  if (existsSync(vtt)) return [`♪ its words: ${shown(vtt)}`];
+  const src = /\s/.test(shown(file)) ? `"${shown(file)}"` : shown(file);
+  return [`♪ no transcript beside it yet: \`openfilm get asr --src ${src}\` writes its words, each timed, in ${basename(vtt)}; read them to know what is said and where, rather than frames`];
 }

@@ -1,0 +1,5 @@
+---
+"openfilm": patch
+---
+
+Studio: every library tab's side bar has the same order: the media's Import, Favorites, Mine, Official and Community; the text's New text, Favorites, Mine (saved looks), Official and Community; every other tab's Favorites, Official and Community; the voice-over's Favorites, Mine and Services. A box shows all it holds and opens to its lines; Official is shown when OpenFilm has some of that kind, Community always, with Get from Community when nothing is there yet. Favorites gathers files starred in Mine with things starred in Official and the Community, each card saying where it is from. The Community lists only what people publish there, OpenFilm's own things marked OpenFilm ✓ like any publisher's; OpenFilm's built-in library is Official in the library and no longer in the Community. A media pack got from the Community stays under Community: its files are saved to a folder of Mine from their menu, the pack's or by dropping them on the folder. Examples listed in the Community may sit at the top of their own repository.

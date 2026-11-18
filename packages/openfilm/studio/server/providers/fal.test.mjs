@@ -28,6 +28,22 @@ after(() => server.close());
 
 const ctx = (files = {}, signal = new AbortController().signal) => ({ key: KEY, root: '/project', signal, say: () => {}, read: async (p) => files[p] });
 
+test('native image and music URLs pass through without a download or another storage copy', async () => {
+  seen.length = 0;
+  reply = queue('fal-ai/flux-2-pro',{images:[{url:`${base}/files/out.png`,width:1536,height:864,content_type:'image/png'}]},1);
+  const image = await fal.run('image',{out:'hero',prompt:'a brass key'},{...ctx(),handOff:true});
+  assert.equal(image.files[0].url,`${base}/files/out.png`);
+  assert.equal(image.index[0].w,1536);
+  assert.ok(!seen.some(call=>call.url.pathname.startsWith('/files/')));
+  seen.length = 0;
+  reply = queue('fal-ai/stable-audio-25/text-to-audio',{audio:{url:`${base}/files/out.wav`,content_type:'audio/wav',duration:10}},1);
+  const music = await fal.run('music',{out:'bed',prompt:'lofi',sec:10},{...ctx(),handOff:true});
+  assert.equal(music.files[0].url,`${base}/files/out.wav`);
+  assert.equal(music.index[0].dur,10);
+  assert.ok(!seen.some(call=>call.url.pathname.startsWith('/files/')));
+  seen.length = 0;
+});
+
 /**
  * One queued model: submitted at /<model>, done after `ready` status asks (fal's status and result addresses use the
  * app's base id, so they are taken from the submit answer, never built).
@@ -126,19 +142,6 @@ test('music from Lyria 2: its tracks are 30 s, said when another length was aske
   assert.match(result.receipt.notes[0], /30 s tracks/);
 });
 
-test('a sound effect: ElevenLabs Sound Effects through fal as 128 kbps MP3, its length from its size', async () => {
-  seen.length = 0;
-  reply = queue('fal-ai/elevenlabs/sound-effects/v2', { audio: { url: `${base}/files/out.mp3`, content_type: 'audio/mpeg', file_name: 'out.mp3' } });
-  const result = await fal.run('sfx', { out: 'whoosh', prompt: 'a fast whoosh', sec: 1.5 }, ctx());
-  assert.deepEqual(JSON.parse(seen.find((c) => c.method === 'POST').body), { text: 'a fast whoosh', duration_seconds: 1.5, output_format: 'mp3_44100_128' });
-  assert.equal(result.files[0].path, 'assets/audio/sfx/whoosh.mp3');
-  assert.equal(result.index[0].dur, 1);
-  /* no length asked: the model chooses */
-  seen.length = 0;
-  await fal.run('sfx', { out: 'whoosh', prompt: 'x' }, ctx());
-  assert.equal('duration_seconds' in JSON.parse(seen.find((c) => c.method === 'POST').body), false);
-});
-
 test('a cancelled video run cancels the queued request too', async () => {
   seen.length = 0;
   reply = queue('bytedance/seedance-2.0/text-to-video', {}, Infinity);
@@ -234,4 +237,28 @@ test('a person speaking a recording (--audio): from a picture or a clip, the lip
   const voiced = await run('seedance-2.0', { prompt: 'He says: "此刻海上有多少艘船？"', voice: 'assets/audio/vo/line.wav', 'first-frame': 'assets/image/host.png' }, 'bytedance/seedance-2.0/reference-to-video');
   assert.deepEqual([voiced.input.audio_urls, voiced.input.image_urls.length, voiced.input.image_url], [['https://v3b.fal.media/files/clip.mp4'], 1, undefined]);
   await assert.rejects(fal.run('video', { out: 'x', prompt: 'p', voice: 'assets/audio/vo/line.wav' }, { ...ctx(files), model: 'seedance-2.0' }), /goes with a picture or a clip/);
+});
+
+test('a job taken is told as it is taken, and given back after a restart it is waited for, never submitted again', async () => {
+  seen.length = 0;
+  reply = queue('fal-ai/flux-2-pro', { images: [{ url: `${base}/files/out.png`, width: 64, height: 64, content_type: 'image/png' }] }, 1);
+  /** @type {any} */
+  let kept;
+  await fal.run('image', { out: 'hero', prompt: 'a brass key' }, { ...ctx(), handOff: true, checkpoint: async (job) => { kept = job; } });
+  assert.equal(kept?.request_id, 'r1', 'its own answer, kept right after it was taken');
+  assert.equal(seen.filter((c) => c.method === 'POST').length, 1);
+  seen.length = 0;
+  const again = await fal.run('image', { out: 'hero', prompt: 'a brass key' }, { ...ctx(), handOff: true, resume: kept });
+  assert.equal(seen.filter((c) => c.method === 'POST').length, 0, 'not submitted (and paid) again');
+  assert.equal(again.files[0].url, `${base}/files/out.png`);
+  seen.length = 0;
+});
+
+test('a server timeout leaves a durably checkpointed job running for recovery',async()=>{
+  seen.length=0;reply=queue('bytedance/seedance-2.0/text-to-video',{},Infinity);
+  const stop=new AbortController();let saved;
+  const run=fal.run('video',{out:'recover-original',prompt:'clouds'},{...ctx({},stop.signal),checkpoint:async job=>{saved=job;}});
+  await new Promise(done=>setTimeout(done,30));stop.abort();await assert.rejects(run);
+  await new Promise(done=>setTimeout(done,20));assert.equal(saved.request_id,'r1');
+  assert.ok(!seen.some(call=>call.method==='PUT'),'the service must poll the accepted job after a restart, not cancel it at a transport deadline');
 });

@@ -9,6 +9,7 @@ import { clipsNote, cueCss, madeOfSpeech, readVtt, speechClips, speechNote } fro
 import { captionTrackRoutes, subtitleStyleVtt, subtitlesVtt } from './caption-tracks.mjs';
 import { FILM_SUBTITLE_DEFAULT, FILM_SUBTITLE_LOOKS } from './film-subtitle.mjs';
 import { HttpError, json } from './http.mjs';
+import { noteFor, noteSaid } from './person-edits.mjs';
 
 function project(tracks, files = {}) {
   const root = mkdtempSync(join(tmpdir(), 'of-caption-tracks-'));
@@ -113,14 +114,22 @@ test('the captions of what is said: put on top once something is said, written a
   const file = () => readVtt(readFileSync(join(root, 'captions', 'Captions.vtt'), 'utf8'));
   const cut = (at) => writeFileSync(join(root, 'film.html'), readFileSync(join(root, 'film.html'), 'utf8').replace(/<audio id="vo"[^>]*>/, `<audio id="vo" src="assets/vo.mp3" at="${at}">`));
   try {
+    /* an agent at work before Studio wrote */
+    assert.equal(noteFor(root, 'pid:1'), null);
     assert.deepEqual(await sync(), { made: 'captions/Captions.vtt' });
     assert.match(readFileSync(join(root, 'film.html'), 'utf8'), /<section>\s*<track kind="captions" src="captions\/Captions\.vtt" label="Captions"/, 'on top of the film');
+    /* Studio's own write: each agent is told once, in its next command or message */
+    const told = (agent) => { const n = noteFor(root, agent); if (n) noteSaid(n.id); return n?.line ?? null; };
+    assert.equal(told('pid:1'), 'Studio added a caption track of what is said to film.html: captions/Captions.vtt.');
+    assert.equal(told('pid:1'), null, 'once');
+    assert.match(told('app:chat'), /Studio added a caption track/, 'another agent too');
     assert.equal(file().cues[0].text, 'Hello there');
     assert.match(file().styles[0], /color: #ffe14d/, 'in the look the subtitles had');
     assert.deepEqual(await sync(), {}, 'nothing changed: nothing written');
     /* the voice moved: its captions with it */
     cut(3);
     assert.deepEqual(await sync(), { updated: 'captions/Captions.vtt' });
+    assert.equal(told('pid:1'), 'Studio wrote captions/Captions.vtt again to match what is said in the film now.');
     assert.deepEqual(file().cues.map((c) => [c.start, c.end]), [[3, 5]]);
     /* a caption changed by hand: the track is the person's, another cut leaves it */
     writeFileSync(join(root, 'captions', 'Captions.vtt'), readFileSync(join(root, 'captions', 'Captions.vtt'), 'utf8').replace('Hello there', 'Hello, there'));
@@ -139,6 +148,12 @@ test('the captions of what is said: put on top once something is said, written a
     assert.deepEqual(got, {});
     assert.equal(existsSync(join(none, 'captions')), false);
   } finally { other.close(); }
+});
+
+test('the editing manual says Studio adds the caption track of what is said by itself, unasked', () => {
+  const manual = readFileSync(new URL('../../manual/film/SKILL.md', import.meta.url), 'utf8');
+  assert.match(manual, /Studio adds a caption track of them to film\.html by itself/);
+  assert.doesNotMatch(manual, /When the person asks for captions/);
 });
 
 test('a caption track translated: a new file, the same cues at the same times and places, the words the other language\'s', async () => {

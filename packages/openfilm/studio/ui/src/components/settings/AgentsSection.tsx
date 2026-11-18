@@ -128,6 +128,7 @@ export function AgentsSection() {
   const [help, setHelp] = React.useState<HostAgentId | null>(null);
   const [notice, setNotice] = React.useState<{ id: HostAgentId; text: string } | null>(null);
   const [refreshing, setRefreshing] = React.useState(false);
+  const [checkingUpdates, setCheckingUpdates] = React.useState(false);
   const [refreshError, setRefreshError] = React.useState<string | null>(null);
   const [keyOpen, setKeyOpen] = React.useState(false);
   const [openfilmOpen, setOpenfilmOpen] = React.useState(false);
@@ -147,6 +148,12 @@ export function AgentsSection() {
     void (host.refresh ? host.refresh() : host.list())
       .catch((e: unknown) => setRefreshError(e instanceof Error ? e.message : String(e)))
       .finally(() => setRefreshing(false));
+  };
+  const checkUpdates = async () => {
+    setCheckingUpdates(true); setRefreshError(null);
+    try { await host.checkUpdates?.(); }
+    catch (e) { setRefreshError(e instanceof Error ? e.message : String(e)); }
+    finally { setCheckingUpdates(false); }
   };
 
   const act = (id: HostAgentId, run: () => Promise<{ ok?: boolean; error?: string } | unknown>) => {
@@ -219,6 +226,7 @@ export function AgentsSection() {
         return agent.app ? t('settings.agents.appOnly').replace('{app}', agent.app).replaceAll('{name}', agent.name) : t('settings.agents.missing');
       case 'key': return t('settings.agents.needsKey');
       case 'unavailable': return t('settings.agents.unavailable');
+      case 'offline': return t('settings.agents.offline');
       case 'checking': return t('settings.agents.checking');
       default: return null;
     }
@@ -264,7 +272,7 @@ export function AgentsSection() {
       );
     }
     if (agent.status === 'key') return <SettingsButton onClick={() => setKeyOpen(true)}>{t('settings.agents.setUpKey')}</SettingsButton>;
-    if (agent.status === 'unavailable') return agent.id === 'openfilm' ? <SettingsButton disabled={working} onClick={() => act(agent.id, () => host.connect(agent.id))}>{t('settings.agents.connect')}</SettingsButton> : null;
+    if (agent.status === 'unavailable' || agent.status === 'offline') return agent.id === 'openfilm' ? <SettingsButton disabled={working} onClick={() => act(agent.id, () => host.connect(agent.id))}>{t('settings.agents.connect')}</SettingsButton> : null;
     if (agent.status === 'checking') return <Loader2 size={16} className="animate-spin text-[var(--text-muted)]" aria-hidden />;
     if (agent.status === 'waiting') return (
       <SettingsButton variant="quiet" disabled={working} onClick={() => act(agent.id, () => host.cancelSignIn ? host.cancelSignIn(agent.id) : host.disconnect(agent.id))}>
@@ -291,8 +299,13 @@ export function AgentsSection() {
     const said = error?.id === agent.id ? error.text : agent.id === 'openfilm' ? undefined : agent.error ?? (problem ? `${t('settings.agents.unreadable')} ${problem}` : undefined);
     const open = agent.id === 'byok' && keyOpen;
     /* where it is not found: why, on asking (Claude Code waiting for its app's Code tab is not lost) */
-    const showHelper = OWN.includes(agent.id) && (['missing', 'off', 'sign-in', 'waiting'].includes(agent.status) || Boolean(said) || Boolean(agent.connectionIssue));
+    const showHelper = OWN.includes(agent.id) || agent.id === 'byok';
     const description = agent.connectionIssue ? statusLine(agent) : agent.status === 'ready' ? chosen ? accountLine(agent) : t('settings.agents.available') : statusLine(agent);
+    const helpLabel = agent.id === 'openfilm' ? t('settings.agents.openfilmInfo') : t('settings.agents.helpFor').replace('{name}', ownKey ? t('settings.agents.byokName') : agent.name);
+    const helpButton = showHelper || agent.id === 'openfilm' ? <button type="button" aria-label={helpLabel} title={helpLabel}
+      onClick={() => agent.id === 'openfilm' ? setOpenfilmOpen(true) : setHelp(agent.id)} className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full hover:bg-[var(--bg-hover)] hover:text-[var(--text)]"><CircleHelp size={15} aria-hidden /></button> : null;
+    const connectedStatus = agent.status === 'ready' && chosen && !problem && !agent.connectionIssue
+      ? <SettingsStatus>{t('settings.agents.ready')}</SettingsStatus> : null;
     /* what is left of its plan: while being asked, and once told (an agent that can't say shows nothing) */
     const plan = usage[agent.id];
     const meter = chosen && agent.status === 'ready' && PLAN_AGENTS.includes(agent.id) && Boolean(host.usage) && (plan === undefined || Boolean(plan?.windows.length));
@@ -315,13 +328,17 @@ export function AgentsSection() {
                 {t('settings.agents.recommended')}
               </span>
             ) : null}
-            {agent.status === 'ready' && chosen && !problem && !agent.connectionIssue ? <SettingsStatus>{ownKey ? agent.byok!.models.map((m) => m.name).join(', ') : t('settings.agents.ready')}</SettingsStatus> : null}
+            {connectedStatus || !description && helpButton ? <span className="inline-flex items-center gap-1">
+              {connectedStatus}{!description ? helpButton : null}
+            </span> : null}
+            {agent.path && agent.update && ['available', 'unknown', 'queued', 'updating', 'error'].includes(agent.update.status) ? <button type="button" onClick={() => setHelp(agent.id)}
+              className="rounded-full border border-[var(--border)] px-1.5 text-[11px] text-[var(--text-muted)] hover:text-[var(--text)]">
+              {t(`settings.agents.updates.${agent.update.status}`)}
+            </button> : null}
           </>
         )}
-        description={description || showHelper || agent.id === 'openfilm' ? <div className="flex items-center gap-1">
-          {description ? <span className="min-w-0">{description}</span> : null}
-          {showHelper || agent.id === 'openfilm' ? <button type="button" aria-label={agent.id === 'openfilm' ? t('settings.agents.openfilmInfo') : t('settings.agents.helpFor').replace('{name}', agent.name)} title={agent.id === 'openfilm' ? t('settings.agents.openfilmInfo') : t('settings.agents.helpFor').replace('{name}', agent.name)}
-            onClick={() => agent.id === 'openfilm' ? setOpenfilmOpen(true) : setHelp(agent.id)} className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full hover:bg-[var(--bg-hover)] hover:text-[var(--text)]"><CircleHelp size={15} aria-hidden /></button> : null}
+        description={description ? <div className="flex items-center gap-1">
+          <span className="min-w-0">{description}</span>{helpButton}
         </div> : null}
         control={(
           <>
@@ -423,7 +440,10 @@ export function AgentsSection() {
   const openfilmAgent = byId('openfilm');
   return (
     <SettingsPage note={t('settings.agents.intro')}>
-      <div className="mb-3 flex justify-end">
+      <div className="mb-3 flex justify-end gap-2">
+        {host.checkUpdates ? <SettingsButton variant="quiet" disabled={checkingUpdates} aria-busy={checkingUpdates} onClick={() => void checkUpdates()}>
+          <RefreshCw size={15} className={checkingUpdates ? 'animate-spin' : ''} />{t('settings.agents.updates.checkAll')}
+        </SettingsButton> : null}
         <SettingsButton variant="quiet" disabled={refreshing} aria-busy={refreshing} onClick={refreshAgents}><RefreshCw size={15} className={refreshing ? 'animate-spin' : ''} />{t('settings.agents.refreshCheck')}</SettingsButton>
       </div>
       {refreshError ? <p role="alert" className={settingsError}>{refreshError}</p> : null}

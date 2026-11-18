@@ -7,7 +7,8 @@
  * the version Studio has seen (its own writes and others') closest to the write (`closest`). A copy read before the
  * person's edits still has the old values everywhere the person changed since, so it is closest to that older version.
  * Then each unit (a clip there or not, a field, a key of its box or attributes, an overrides entry, each property of
- * the entry, each key of its style, the track a clip is on, a track's flag, the tracks' order, the stage) is merged:
+ * the entry, each key of its style, the track a clip is on, a track's flag, a caption track, the tracks' order, the
+ * stage) is merged:
  * changed by the writer only, the writer's; by the person (or Studio) only, theirs; by both, differently, the person's.
  */
 import { createHash } from 'node:crypto';
@@ -48,6 +49,10 @@ export function alike(a, b) {
 /** An overrides entry's name: what it points at. The entry without `at` is the clip's own (its fades). */
 const entryName = (/** @type {Record<string, unknown>} */ e) => (e && 'at' in e ? JSON.stringify([e.at, e.n ?? null, e.copy ?? null]) : '');
 const FLAGS = /** @type {const} */ (['locked', 'hidden', 'muted']);
+/** A caption track as one unit: its `<track>` (SPEC §1 Captions) and the track's flags; undefined for a track of clips. */
+const captionsUnit = (/** @type {Track} */ t) => (t.captions ? { ...t.captions, ...Object.fromEntries(FLAGS.filter((f) => t[f]).map((f) => [f, true])) } : undefined);
+/** Whether a track holds one of `ids`: a clip's id, or its caption track's file. */
+const holds = (/** @type {Track} */ t, /** @type {Set<string>} */ ids) => t.clips.some((c) => ids.has(c.id)) || Boolean(t.captions && ids.has(t.captions.src));
 /** A clip's fields that have a value when left out (film.html writes none for it): left out and that value are alike. */
 const DEFAULTS = /** @type {Record<string, unknown>} */ ({ at: 0, volume: 1, speed: 1 });
 const orDefault = (/** @type {string} */ key, /** @type {unknown} */ v) => (v === undefined ? DEFAULTS[key] : v);
@@ -57,7 +62,8 @@ const orDefault = (/** @type {string} */ key, /** @type {unknown} */ v) => (v ==
 /**
  * The film's units, by name: `clip␀id` (there), `field␀id␀name`, `box␀id␀key`, `attrs␀id␀key`, `entry␀id␀name` (there),
  * `prop␀id␀name␀prop`, `style␀id␀name␀key`, `track␀id` (the clips it shares a track with), `flag␀id␀flag` (its
- * track's), `order` (the tracks, each as its clips), `stage`. What two versions differ by; what a note names.
+ * track's), `captions␀src` (a caption track, by its file: its `<track>` and flags), `order` (the tracks, each as its
+ * clips), `stage`. What two versions differ by; what a note names.
  * @param {FilmValue} film @returns {Map<string, unknown>}
  */
 export function unitsOf(film) {
@@ -66,6 +72,7 @@ export function unitsOf(film) {
   out.set('stage', film.stage);
   out.set('order', film.tracks.map((t) => t.clips.map((c) => c.id).sort()));
   for (const track of film.tracks) {
+    if (track.captions) out.set(`captions\0${track.captions.src}`, captionsUnit(track));
     const ids = track.clips.map((c) => c.id);
     for (const clip of track.clips) {
       const id = clip.id;
@@ -101,10 +108,11 @@ function clipUnits(/** @type {Clip} */ clip, /** @type {Map<string, unknown>} */
 /* ── films as kept among versions ─────────────────────────────────────────── */
 
 /**
- * A film as Studio keeps it among its versions: its stage and each clip as JSON, by track, with the track's flags. A
+ * A film as Studio keeps it among its versions: its stage and each clip as JSON, by track, with the track's flags
+ * and its `<track>` when it is a caption track (`captions`, as JSON; '' for a track of clips). A
  * track alike in the version before is that version's (the same object), so a version of a long film costs only what
  * changed; and versions are compared clip by clip as strings first (`compare`), which is quick.
- * @typedef {{ flags: string, ids: string[], clips: string[] }} KeptTrack
+ * @typedef {{ flags: string, captions: string, ids: string[], clips: string[] }} KeptTrack
  * @typedef {{ stage: string, tracks: KeptTrack[] }} KeptFilm
  */
 
@@ -114,6 +122,7 @@ export function keepFilm(/** @type {FilmValue} */ film, /** @type {KeptFilm | nu
   let byIds = null;
   const tracks = film.tracks.map((t, i) => {
     const flags = FLAGS.filter((f) => t[f]).join(' ');
+    const captions = t.captions ? canon(t.captions) : '';
     const ids = t.clips.map((c) => c.id);
     const clips = t.clips.map((c) => JSON.stringify(c));
     let was = before?.tracks[i];
@@ -121,18 +130,18 @@ export function keepFilm(/** @type {FilmValue} */ film, /** @type {KeptFilm | nu
       byIds ??= new Map(before.tracks.map((x) => [x.ids.join('\0'), x]));
       was = byIds.get(ids.join('\0')) ?? was;
     }
-    if (!was) return { flags, ids, clips };
-    if (was.flags === flags && was.clips.length === clips.length && clips.every((c, k) => c === was.clips[k])) return was;
+    if (!was) return { flags, captions, ids, clips };
+    if (was.flags === flags && was.captions === captions && was.clips.length === clips.length && clips.every((c, k) => c === was.clips[k])) return was;
     /* a clip alike before is the string before, kept once */
     const old = new Map(was.clips.map((c) => [c, c]));
-    return { flags, ids, clips: clips.map((c) => old.get(c) ?? c) };
+    return { flags, captions, ids, clips: clips.map((c) => old.get(c) ?? c) };
   });
   return { stage: film.stage === undefined ? NONE : JSON.stringify(film.stage), tracks };
 }
 
 /** A film kept back as its value. @returns {FilmValue} */
 export function keptValue(/** @type {KeptFilm} */ kept) {
-  const tracks = kept.tracks.map((t) => /** @type {Track} */ ({ clips: t.clips.map((c) => JSON.parse(c)), ...Object.fromEntries(t.flags ? t.flags.split(' ').map((f) => [f, true]) : []) }));
+  const tracks = kept.tracks.map((t) => /** @type {Track} */ ({ clips: t.clips.map((c) => JSON.parse(c)), ...Object.fromEntries(t.flags ? t.flags.split(' ').map((f) => [f, true]) : []), ...(t.captions ? { captions: JSON.parse(t.captions) } : {}) }));
   return kept.stage === NONE ? { tracks } : { stage: JSON.parse(kept.stage), tracks };
 }
 
@@ -142,7 +151,7 @@ const trackHashes = new WeakMap();
 export function keptHash(/** @type {KeptFilm} */ kept) {
   const of = (/** @type {KeptTrack} */ t) => {
     let h = trackHashes.get(t);
-    if (!h) trackHashes.set(t, (h = hashOf(`${t.flags}\n${t.clips.join('\n')}`)));
+    if (!h) trackHashes.set(t, (h = hashOf(`${t.flags}\n${t.captions}\n${t.clips.join('\n')}`)));
     return h;
   };
   return hashOf(`${kept.stage}\n${kept.tracks.map(of).join('\n')}`);
@@ -185,6 +194,10 @@ export function compare(w, v, cache = {}) {
   let n = 0;
   for (const id of lone) if (at.has(id)) n += 1 + (cache.changed?.get(id) ?? 0);
   if (v.stage !== w.stage && !alike(parse(v.stage), parse(w.stage))) { n++; apart.push('stage'); }
+  /* the caption tracks, by file: one there in one alone, or with another <track> or flags, is a unit apart */
+  const captionsOf = (/** @type {KeptFilm} */ f) => new Map(f.tracks.filter((t) => t.captions).map((t) => [JSON.parse(t.captions).src, `${t.flags}\n${t.captions}`]));
+  const [cw, cv] = [captionsOf(w), captionsOf(v)];
+  for (const src of new Set([...cw.keys(), ...cv.keys()])) if (cw.get(src) !== cv.get(src)) { n++; apart.push(`captions\0${src}`); }
   /* each track as the clips both have, sorted: where clips are */
   const sorted = (/** @type {KeptTrack} */ t) => {
     const out = (/** @type {string} */ id) => lone.has(id) || skip.has(id);
@@ -366,8 +379,8 @@ function likeness(/** @type {Clip} */ a, /** @type {Clip} */ b) {
 function stale(write, versions, at, apart, over = []) {
   const ids = new Set(apart.map((k) => k.split('\0')[1] ?? ''));
   /* the units of the clips named, from the tracks they are on (all of a film's, when a unit names no clip) */
-  const part = (/** @type {FilmValue} */ f) => unitsOf(ids.has('') ? f : { ...f, tracks: f.tracks.filter((t) => t.clips.some((c) => ids.has(c.id))) });
-  const kept = (/** @type {KeptFilm} */ k) => part(keptValue(ids.has('') ? k : { ...k, tracks: k.tracks.filter((t) => t.ids.some((id) => ids.has(id))) }));
+  const part = (/** @type {FilmValue} */ f) => unitsOf(ids.has('') ? f : { ...f, tracks: f.tracks.filter((t) => holds(t, ids)) });
+  const kept = (/** @type {KeptFilm} */ k) => part(keptValue(ids.has('') ? k : { ...k, tracks: k.tracks.filter((t) => t.ids.some((id) => ids.has(id)) || (t.captions && ids.has(JSON.parse(t.captions).src))) }));
   const w = part(write), now = kept(versions[at]);
   for (let i = 0; i < at; i++) {
     if (over[i]) continue;
@@ -386,7 +399,8 @@ function renamed(/** @type {FilmValue} */ film, /** @type {Map<string, string>} 
 /**
  * A write of someone else's merged into `ours` (Studio's film), from the version the writer's copy is inferred to be:
  * of `versions` (kept, oldest first), the oldest of those it is closest to (`compare`), where the person's values stand
- * in every unit the others as near differ in (ties go to the person); or, where an agent passed on a note (`acks`: the
+ * in every unit the others as near differ in (ties go to the person); where those as near differ in nothing of
+ * the person's (`mine`), the newest of them; or, where an agent passed on a note (`acks`: the
  * version Studio had then, by index, and the units the note named; newest last), that version, when the write is as
  * near to it as to any, or differs from it only in what the note named (the agent knew the person's values, and
  * changed them), where the person's still stand in what the versions nearest differ from it in, but what the note
@@ -495,6 +509,14 @@ export function mergeWrite({ ours, write, versions, over = [], gaps = [], added 
     const since = compare(keepFilm(ours), versions[index]).apart;
     const has = new Set(compare(w, keepFilm(ours)).apart);
     const back = all[index].distance === 0 || all[index].apart.some((k) => since.includes(k) && !has.has(k)) ? since.filter((k) => !owns(k)) : [];
+    /* ties go to the person, where the person is: where the versions as near differ in no clip the person touched,
+       nor in the order or the stage they changed (each a write's), the newest is the copy, as an agent reads before it writes (one that swapped a clip for another and
+       takes that one out is as near to the version before its swap as to the swap) */
+    const last = tied[tied.length - 1];
+    const apart = [...unsure(index)].flatMap(asItWas);
+    const touched = new Set(apart.map((k) => k.split('\0')[1]).filter(Boolean));
+    const anyMine = mineSet && [...mineSet].some((m) => touched.has(m.split('\0')[1]) || (!m.split('\0')[1] && apart.includes(m)));
+    if (mineSet && last !== index && !anyMine) return { index: last, doubt: new Set(gapped(last)), note: -1, tied };
     return { index, doubt: new Set([...unsure(index), ...gapped(index), ...back]), note: -1, tied };
   };
   /* clips the write may have renamed (one with an id no version has, one of the same file a version has under an id the
@@ -555,7 +577,7 @@ export function mergeWrite({ ours, write, versions, over = [], gaps = [], added 
   /* the notes the write agrees with: by the tracks of the clips they name, alone, unless one names no clip (the order,
      the stage): then by the whole films */
   const named = new Set(notes.map((k) => k.split('\0')[1] ?? ''));
-  const only = (/** @type {FilmValue} */ f) => unitsOf(named.has('') ? f : { ...f, tracks: f.tracks.filter((t) => t.clips.some((c) => named.has(c.id))) });
+  const only = (/** @type {FilmValue} */ f) => unitsOf(named.has('') ? f : { ...f, tracks: f.tracks.filter((t) => holds(t, named)) });
   const [uw, ur] = [only(write), only(result)];
   return { value: result, kept: kept.map(rename), base: index, note, renamed: [...back], agreed: notes.filter((k) => alike(uw.get(k), ur.get(k))) };
 }
@@ -639,7 +661,7 @@ export function merge3(base, ours, theirs, doubt = new Set(), owns = (/** @type 
     placeOurs.add(id);
   }
   /** @type {Track[]} */
-  const tracks = theirs.tracks.map((t) => ({ ...t, clips: t.clips.filter((c) => clips.has(c.id) && !placeOurs.has(c.id)).map((c) => /** @type {Clip} */ (clips.get(c.id))) }));
+  const tracks = theirs.tracks.filter((t) => !t.captions).map((t) => ({ ...t, clips: t.clips.filter((c) => clips.has(c.id) && !placeOurs.has(c.id)).map((c) => /** @type {Clip} */ (clips.get(c.id))) }));
   /* the person's placings: on a track with clips it shares one with in ours, else on one of its own where ours has it */
   const touched = new Set(/** @type {Track[]} */ ([]));
   for (const [t, track] of ours.tracks.entries()) {
@@ -675,6 +697,8 @@ export function merge3(base, ours, theirs, doubt = new Set(), owns = (/** @type 
       else delete track[f];
     }
   }
+  film = { ...film, tracks: [...film.tracks] };
+  mergeCaptions(film, base, ours, theirs, kept, doubt, owns);
   return { value: film, kept: [...kept].filter((k) => owns(k) || unsure.forPerson.has(k)) };
 }
 
@@ -832,6 +856,54 @@ function mergeOverrides(/** @type {string} */ id, /** @type {any} */ b, /** @typ
   /* the clip's own entry (its fades) goes first */
   out.sort((x, y) => Number('at' in x) - Number('at' in y));
   return out.length ? out : undefined;
+}
+
+/**
+ * The caption tracks (SPEC §1 Captions) merged into `film` (merge3's, its clips' tracks placed): each by its file, a
+ * unit as a clip is (its `<track>` and flags as one), put above the track it is above in the film it comes from (the
+ * writer's, where the writer has it). They hold no clips, so nothing else in the merge places them.
+ * @param {FilmValue} film @param {FilmValue} base @param {FilmValue} ours @param {FilmValue} theirs @param {Set<string>} kept
+ * @param {Set<string>} doubt @param {(k: string) => boolean} owns
+ */
+function mergeCaptions(film, base, ours, theirs, kept, doubt, owns) {
+  const of = (/** @type {FilmValue} */ f) => new Map(f.tracks.flatMap((t, i) => (t.captions ? [/** @type {[string, { unit: Record<string, unknown>, i: number }]} */ ([t.captions.src, { unit: /** @type {Record<string, unknown>} */ (captionsUnit(t)), i }])] : [])));
+  const [CB, CO, CW] = [base, ours, theirs].map(of);
+  /** @type {{ unit: Record<string, unknown>, from: FilmValue, i: number }[]} */
+  const placed = [];
+  for (const src of new Set([...CW.keys(), ...CO.keys()])) {
+    const key = `captions\0${src}`;
+    const b = CB.get(src)?.unit, o = CO.get(src), w = CW.get(src);
+    if (o && w) {
+      const got = pick(b, o.unit, w.unit, doubt.has(key), owns(key));
+      if (got.from === 'o' && !alike(got.v, w.unit)) kept.add(key);
+      placed.push({ unit: /** @type {Record<string, unknown>} */ (got.v), from: theirs, i: w.i });
+    } else if (o) {
+      /* the writer removed it: so it goes, unless the person changed it since; one added since the base stays */
+      const person = b !== undefined && !alike(o.unit, b) && owns(key);
+      if (b && !doubt.has(key) && !person) continue;
+      kept.add(key);
+      placed.push({ unit: o.unit, from: ours, i: o.i });
+    } else if (w) {
+      /* the person removed it; or a write did, and the writer has it as it was; or the writer added it */
+      if ((b || doubt.has(key)) && owns(key)) { kept.add(key); continue; }
+      if (b && alike(w.unit, b) && !doubt.has(key)) continue;
+      placed.push({ unit: w.unit, from: theirs, i: w.i });
+    }
+  }
+  for (const { unit, from, i } of placed) {
+    const { locked, hidden, muted, ...captions } = unit;
+    const { locked: _l, hidden: _h, muted: _m, captions: _c, ...rest } = from.tracks[i];
+    /** @type {Track} */
+    const track = { ...rest, clips: [], ...(locked ? { locked: true } : {}), ...(hidden ? { hidden: true } : {}), ...(muted ? { muted: true } : {}), captions: /** @type {NonNullable<Track['captions']>} */ (/** @type {unknown} */ (captions)) };
+    /* above the first track below it in `from` whose clips the film has */
+    let at = film.tracks.length;
+    for (let j = i + 1; j < from.tracks.length && at === film.tracks.length; j++) {
+      const ids = new Set(from.tracks[j].clips.map((c) => c.id));
+      const k = ids.size ? film.tracks.findIndex((t) => t.clips.some((c) => ids.has(c.id))) : -1;
+      if (k >= 0) at = k;
+    }
+    film.tracks.splice(at, 0, track);
+  }
 }
 
 /** The result's tracks in the writer's order, or in ours where the person reordered them since the base. */

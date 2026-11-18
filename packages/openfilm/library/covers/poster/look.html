@@ -1,0 +1,31 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Poster</title>
+<style>
+:root { --font: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; --bg: transparent; --ink: #f4f1ea; --accent: #ff4d2e; }
+html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+* { box-sizing: border-box; }
+/* its own color only when one is set: the cover's picture (a color, a frame) shows through by default */
+body { background: var(--bg); }
+.dot { position: fixed; right: -12vmin; top: -14vmin; width: 62vmin; height: 62vmin; border-radius: 50%; background: var(--accent); }
+.box { position: fixed; left: 6vw; right: 6vw; bottom: 10vh; font-family: var(--font); color: var(--ink); }
+.t1 { display: block; font-size: 15vmin; font-weight: 900; line-height: .98; letter-spacing: -.03em; }
+.t2 { display: block; margin-top: 3vmin; font-size: 3.4vmin; font-weight: 500; opacity: .75; }
+.t3 { position: fixed; left: 6vw; top: 8vh; font-family: var(--font); font-size: 2.8vmin; font-weight: 700; letter-spacing: .3em; color: var(--ink); }
+@media (max-aspect-ratio: 1/1) { .t1 { font-size: 17vmin; } .dot { width: 80vmin; height: 80vmin; right: -20vmin; top: -10vmin; } }
+/* a full-screen feed: words kept clear of its caption, its buttons and its top bar */
+@media (max-aspect-ratio: 10/16) { .box { bottom: 24vh; right: 18vw; } .t3 { top: 10vh; } }
+</style>
+</head>
+<body>
+<div class="dot"></div><span class="t3">EP.05</span><div class="box"><span class="t1">别再<br>盲目努力</span><span class="t2">一期讲透：怎样找到真正重要的事</span></div>
+<script>
+/*
+ * A plain color, a big circle and huge words: a cover designed from nothing, no frame needed. A page of OpenFilm's library (CC0): a still, the same at every t.
+ */
+window.film = { frame() {} };
+</script>
+</body>
+</html>

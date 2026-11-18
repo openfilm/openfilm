@@ -75,6 +75,28 @@ test('a group moves rows together; its landings may not overlap each other', () 
   assert.equal(groupLaneShift([members[1]!], [{ ...rows[0]!, locked: true }, rows[1]!], -1).ok, false);
 });
 
+test('horizontal group movement preserves existing overlaps on rows spread from the same film track', () => {
+  const rows: DropLane[] = [{ docIndex: 7, sound: true }, { docIndex: 7, sound: true }, { docIndex: 8, sound: true }];
+  const clips = [
+    { id: 'voice-a', laneIndex: 0, startMs: 27000, endMs: 29193, sound: true },
+    { id: 'voice-b', laneIndex: 1, startMs: 28900, endMs: 30967, sound: true },
+  ];
+  const moved = clips.map((c) => ({ ...c, startMs: c.startMs - 767, endMs: c.endMs - 767 }));
+  assert.deepEqual(groupLaneShift(moved, rows, 0), { ok: true, delta: 0, moves: [] });
+  assert.equal(groupLaneShift(clips, [{ docIndex: 6, sound: true }, ...rows], 1).ok, false, 'new conflicting landings remain refused');
+});
+
+test('single captions and groups land on unlocked caption tracks only', () => {
+  const rows: DropLane[] = [{ docIndex: 0, captions: true }, { docIndex: 1, captions: true }, { docIndex: 2 }];
+  assert.deepEqual(moveDestFor(0, rows, 1), { action: 'move', trackIndex: 1 });
+  assert.deepEqual(moveDestFor(0, rows, 2), { action: 'refuse' });
+  assert.deepEqual(moveDestFor(2, rows, 0), { action: 'refuse' });
+  assert.deepEqual(moveDestFor(0, [rows[0]!, { ...rows[1]!, locked: true }], 1), { action: 'refuse' });
+  const cues = [{ id: 'a', laneIndex: 0, startMs: 0, endMs: 1000 }, { id: 'b', laneIndex: 0, startMs: 1000, endMs: 2000 }];
+  assert.deepEqual(groupLaneShift(cues, rows, 1), { ok: true, delta: 1, moves: [{ id: 'a', trackIndex: 1 }, { id: 'b', trackIndex: 1 }] });
+  assert.equal(groupLaneShift(cues, rows, 2).ok, false);
+});
+
 test('a move writes only `at`, whatever float noise its end carries', () => {
   const start = 1000 + 1234.5678901;
   const edits = editsForMoves([{

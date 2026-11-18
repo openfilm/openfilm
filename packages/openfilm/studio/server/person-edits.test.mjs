@@ -741,3 +741,93 @@ test('a write over a file that still holds what it was made from is in place whe
   assert.equal(readFileSync(path, 'utf8'), 'new');
   assert.deepEqual(readdirSync(dir), ['film.html'], 'no bytes on their way left beside it, written or not');
 });
+
+/* caption tracks (SPEC §1 Captions): a <track> alone in its section, no clips; each is merged by its file */
+const cap = (src, extra = {}) => ({ clips: [], ...extra, captions: { src, kind: 'captions', label: 'Captions' } });
+const T = (...tracks) => ({ stage: { w: 1920, h: 1080 }, tracks });
+const captionsOf = (root) => read(root).tracks.map((t) => (t.captions ? `${t.captions.src}${t.hidden ? ' hidden' : ''}` : t.clips.map((c) => c.id).join(',')));
+
+test('caption tracks outlive a merge: in both, added by the person, added by the agent, each in its place', async () => {
+  /* in both: the agent's older copy over the person's edit of a clip */
+  const start = T({ clips: [page('t', { at: 1 })] }, cap('captions/a.vtt'), { clips: [page('u', { at: 5 })] });
+  let root = await project(start);
+  await editProjectFilm(root, null, [{ op: 'set', clip: 't', field: 'at', value: 3 }]);
+  let agent = structuredClone(start);
+  agent.tracks[2].clips[0].at = 7;
+  write(root, agent);
+  await settleProjectFilm(root);
+  assert.deepEqual(captionsOf(root), ['t', 'captions/a.vtt', 'u']);
+  assert.equal(clip(read(root), 't').at, 3);
+  assert.equal(clip(read(root), 'u').at, 7);
+
+  /* added by the person (Studio's captions op), the agent writing from before it */
+  root = await project(T({ clips: [page('t', { at: 1 }), page('u', { at: 5 })] }));
+  await editProjectFilm(root, null, [{ op: 'captions', at: 0, captions: { src: 'captions/b.vtt', kind: 'captions', label: 'Captions' } }]);
+  agent = T({ clips: [page('t', { at: 1 }), page('u', { at: 7 })] });
+  write(root, agent);
+  await settleProjectFilm(root);
+  assert.deepEqual(captionsOf(root), ['captions/b.vtt', 't,u']);
+  assert.equal(clip(read(root), 'u').at, 7);
+
+  /* added by the agent while the person edited a clip */
+  const plain = T({ clips: [page('t', { at: 1 })] }, { clips: [page('u', { at: 5 })] });
+  root = await project(plain);
+  await editProjectFilm(root, null, [{ op: 'set', clip: 't', field: 'at', value: 3 }]);
+  agent = structuredClone(plain);
+  agent.tracks.splice(1, 0, cap('captions/c.vtt'), cap('captions/d.vtt'));
+  write(root, agent);
+  await settleProjectFilm(root);
+  assert.deepEqual(captionsOf(root), ['t', 'captions/c.vtt', 'captions/d.vtt', 'u']);
+  assert.equal(clip(read(root), 't').at, 3);
+});
+
+test('caption tracks in a merge: the person\'s removal and hiding stand over an older copy; the agent\'s removal and label from the latest are taken', async () => {
+  const start = T(cap('captions/a.vtt'), cap('captions/b.vtt'), { clips: [page('t', { at: 1 }), page('u', { at: 5 })] });
+  let root = await project(start);
+  await editProjectFilm(root, null, [{ op: 'uncaptions', src: 'captions/a.vtt' }, { op: 'set', clip: 't', field: 'at', value: 3 }]);
+  await changeProjectFilm(root, (value) => { value.tracks[0].hidden = true; return { value }; });
+  /* an older copy: both tracks as they were */
+  const older = structuredClone(start);
+  older.tracks[2].clips[1].at = 7;
+  write(root, older);
+  await settleProjectFilm(root);
+  assert.deepEqual(captionsOf(root), ['captions/b.vtt hidden', 't,u']);
+  assert.match(tell(root), /caption track captions\/(a|b)\.vtt/);
+
+  /* from the latest: the agent removes one and names another */
+  root = await project(start);
+  await editProjectFilm(root, null, [{ op: 'set', clip: 't', field: 'at', value: 3 }]);
+  const latest = structuredClone(start);
+  latest.tracks.shift();
+  latest.tracks[0].captions.label = 'English';
+  latest.tracks[1].clips[1].at = 7;
+  write(root, latest);
+  await settleProjectFilm(root);
+  assert.deepEqual(captionsOf(root), ['captions/b.vtt', 't,u']);
+  assert.equal(read(root).tracks[0].captions.label, 'English');
+  assert.equal(clip(read(root), 't').at, 3);
+});
+
+test('the films inside a project (a cover) are in the note of the project: once told of them, the agent\'s write of the cover is taken as meant', async () => {
+  const root = await project(F([page('main')]));
+  const cover = join(root, 'covers', 'wide');
+  mkdirSync(cover, { recursive: true });
+  write(cover, F([page('title')]));
+  await settleProjectFilm(cover);
+  /* the person moves the cover's title in Studio */
+  const now = await settleProjectFilm(cover);
+  await editProjectFilm(cover, now.rev, [{ op: 'props', edits: [{ clip: 'title', prop: 'box', value: { x: 100, y: 100, w: 640, h: 360 } }] }]);
+  /* the agent, asking about the project only, writes the cover moving the title too: the person's move stands */
+  assert.equal(tell(root, 'pid:7'), null);
+  const theirs = read(cover);
+  clip(theirs, 'title').box = { x: 900, y: 500, w: 640, h: 360 };
+  write(cover, theirs);
+  await settleProjectFilm(cover);
+  assert.deepEqual(clip(read(cover), 'title').box, { x: 100, y: 100, w: 640, h: 360 });
+  /* its next `openfilm` in the project tells it, naming the cover; its write again is its own */
+  assert.match(tell(root, 'pid:7'), /^In covers\/wide\/film\.html: .*clip title box/);
+  write(cover, theirs);
+  await settleProjectFilm(cover);
+  assert.deepEqual(clip(read(cover), 'title').box, { x: 900, y: 500, w: 640, h: 360 }, 'the agent\'s move stands');
+  assert.equal(tell(root, 'pid:7'), null);
+});

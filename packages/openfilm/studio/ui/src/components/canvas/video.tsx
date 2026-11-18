@@ -126,6 +126,20 @@ export function CanvasVideo({ id, file, selected }: { id: string; file: Workspac
     setAutoplayMuted(false);
   }, []);
   React.useEffect(() => () => cancelAnimationFrame(rewindFrame.current), []);
+  /* the pointer over it, Space plays or pauses it (not while typing) */
+  const toggleNow = React.useRef(toggle);
+  toggleNow.current = toggle;
+  React.useEffect(() => {
+    const key = (event: KeyboardEvent) => {
+      if (event.code !== 'Space' || event.repeat || event.metaKey || event.ctrlKey || event.altKey || !pointerInside.current) return;
+      if ((event.target as HTMLElement | null)?.closest?.('input, textarea, [contenteditable="true"]')) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      toggleNow.current();
+    };
+    window.addEventListener('keydown', key, true);
+    return () => window.removeEventListener('keydown', key, true);
+  }, []);
   const capture = async (mode: typeof frameModes[number]) => {
     const video = player.current;
     if (!video || capturing) return;

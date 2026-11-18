@@ -1,0 +1,5 @@
+---
+"openfilm": patch
+---
+
+Voice-over and captions are categories of the library again, beside the media, as before. Voice-over's side bar lists all voices, your own, the starred, each service's, and Record: recording from the microphone moved there from the timeline's toolbar. It starts at the playhead and puts the sound on a sound track as before, goes on while the library shows another category (voice-over's icon has a red dot meanwhile), and voice-over opens on it again. Captions' side bar is From speech, Subtitle file and By hand (a new caption track, or one caption at the playhead), in place of its source switch. In the library's side bar the project's line is called Import and "+" reads "+ Add". A folder or a pack is moved by holding it and moving it up or down: it follows the pointer while the others make room, Esc puts it back, and it is in its place the moment it is let go. Edit and Canvas have new icons (scissors, linked cards), and a plugin's changed icon shows at once instead of after the hour the page kept the old one.

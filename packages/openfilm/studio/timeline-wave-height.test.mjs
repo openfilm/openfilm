@@ -39,14 +39,14 @@ test('resizing video and sound tracks grows their waveforms and keeps the sound 
       for (let i = 0; i < 100; i += 1) { if (await check()) return; await page.waitForTimeout(100); }
       assert.fail(what);
     };
-    const resize = async (head, height) => {
+    const resize = async (head, height, reached = height) => {
       const box = await head.boundingBox();
       const grip = await head.locator('[data-track-resize]').boundingBox();
       await page.mouse.move(grip.x + grip.width / 2, grip.y + grip.height / 2);
       await page.mouse.down();
       await page.mouse.move(grip.x + grip.width / 2, grip.y + grip.height / 2 + height - box.height, { steps: 8 });
       await page.mouse.up();
-      await until(async () => (await head.boundingBox()).height === height, `track reaches ${height}px`);
+      await until(async () => (await head.boundingBox()).height === reached, `track reaches ${reached}px`);
     };
     for (const [kind, index] of [['audio', 0], ['video', 0], ['video', 1]]) {
       const clip = page.locator(kind === 'audio' ? '[data-block-id]:not([data-block-kind="video"]):not([data-block-kind="mg"])' : '[data-block-id][data-block-kind="video"]').nth(index);
@@ -85,11 +85,17 @@ test('resizing video and sound tracks grows their waveforms and keeps the sound 
            thumbnails come from ffmpeg in their own time (often over 10 s on a CI machine) */
         assert.ok(band.y - (box.y + 15) > band.height, 'the taller sound band leaves the video picture more room than itself');
       }
-      /* Small and minimum-height video tracks keep the original 15 px band (13 px canvas). */
-      for (const height of [kind === 'audio' ? 30 : 36, 28]) {
+      /* Small and minimum-height video tracks keep the original 15 px band (13 px canvas). The main track (the first
+         picture track, marked so on its head) is never lower than 64 px, so its cover stands beside it: dragged lower, it stops there. */
+      const main = (await head.getAttribute('data-main-track')) !== null;
+      for (const height of main ? [] : [kind === 'audio' ? 30 : 36, 28]) {
         await resize(head, height);
         assert.equal((await canvas.boundingBox()).height, kind === 'audio' ? height - 17 : 13, 'small waveforms keep their original height');
         if (kind !== 'audio') assert.equal((await audioBand.boundingBox()).height, 15, 'the video sound band never shrinks below 15px');
+      }
+      if (main) {
+        await resize(head, 28, 64);
+        assert.equal((await audioBand.boundingBox()).height, Math.round((64 - 15) * 0.3), 'the main track at its lowest keeps its share');
       }
       await resize(head, 160);
       if (kind !== 'audio') {

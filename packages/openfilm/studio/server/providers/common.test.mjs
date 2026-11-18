@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { call, imageSize, landing, mp4Facts, outOfBalance, translatedLines, translationAsk, wav, wavSeconds, wordsFromCharacters } from './common.mjs';
+import { call, imageSize, isOutputName, landing, mp4Facts, outOfBalance, translatedLines, translationAsk, wav, wavSeconds, wordsFromCharacters } from './common.mjs';
 
 test('words from character timings: spaces split, punctuation stays, each Chinese character is a word, times clamped', () => {
   const said = 'Hi, there 你好';
@@ -88,6 +88,24 @@ test('an MP4\'s length and picture size from its boxes: 32- and 64-bit headers, 
 test('results land as assets/<dir>/<name>.<ext>; --out is a name, not a path', () => {
   assert.equal(landing('audio/vo', 'intro', 'mp3'), 'assets/audio/vo/intro.mp3');
   for (const out of ['', '..', '../x', 'a/b', 'a\\b']) assert.throws(() => landing('image', out, 'png'));
+  assert.equal(landing('image', `${'x'.repeat(120)}_2`, 'png'), `assets/image/${'x'.repeat(120)}_2.png`, 'numbered search results fit after a valid output name');
+});
+
+test('output names keep spaces, punctuation, emoji and scripts with combining marks', () => {
+  for (const name of ['春日长椅 01', '日本語 한글 🎬', 'नमस्ते', 'العَرَبِيَّة', 'Café', 'Cafe\u0301', "take #1 + 100% & Bob's [$] (v2);=!"]) {
+    assert.ok(isOutputName(name), name);
+    assert.equal(landing('video', name, 'mp4'), `assets/video/${name}.mp4`);
+  }
+  assert.notEqual(landing('image', 'Café', 'png'), landing('image', 'Cafe\u0301', 'png'), 'do not rewrite Unicode normalization');
+});
+
+test('output names that cannot safely land on all supported file systems are refused', () => {
+  for (const name of ['../out', 'a/b', 'a\\b', 'a:b', 'a?b', 'a*b', 'a"b', 'a<b', 'a>b', 'a|b', 'a\0b', 'a\nb', 'a\u007fb',
+    '.hidden', 'trailing.', ' leading', 'trailing ', 'CON', 'con.extra', 'CONIN$', 'CONOUT$', 'NUL', 'AUX', 'PRN', 'COM1', 'LPT9', 'COM¹', 'a'.repeat(121), '图'.repeat(81)]) {
+    assert.equal(isOutputName(name), false, JSON.stringify(name));
+  }
+  assert.equal(isOutputName('图'.repeat(80)), true, 'leave bytes for an extension on Linux');
+  assert.equal(isOutputName('COM10 take'), true, 'ordinary names starting with a device name stay valid');
 });
 
 test('translation: one string per line asked, in order; anything else is refused', () => {
@@ -156,4 +174,16 @@ test('no balance, as each service says it, is one error for all; a plain rate li
   } finally {
     server.close();
   }
+});
+
+test('a gateway\'s error page is said by its title, or plainly when it has none', async () => {
+  const ctx = { signal: new AbortController().signal, key: 'k-123' };
+  const page = (html, status) => { globalThis.fetch = async () => new Response(html, { status }); };
+  const was = globalThis.fetch;
+  try {
+    page('<!DOCTYPE html><html><head><title>openfilm.dev | 502: Bad gateway</title></head><body>…</body></html>', 502);
+    await assert.rejects(call('OpenFilm', 'https://x', {}, ctx), /^Error: OpenFilm answered 502: openfilm\.dev \| 502: Bad gateway$/);
+    page('<html><body>nothing</body></html>', 503);
+    await assert.rejects(call('OpenFilm', 'https://x', {}, ctx), /OpenFilm is not answering right now \(503\)/);
+  } finally { globalThis.fetch = was; }
 });

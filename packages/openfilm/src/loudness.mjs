@@ -1,6 +1,8 @@
 // A film's sound brought to a loudness target (EBU R128), as delivery asks: measured, raised or lowered as a whole,
 // its few loudest peaks caught by a limiter rather than the whole film turned down, measured again as encoded.
 import { spawn } from 'node:child_process';
+import { Bus } from './sound-engine.mjs';
+import { renderSound } from './sound-render.mjs';
 
 /** The targets a film's loudness can be set to, in LUFS. */
 export const LOUDNESS_RANGE = /** @type {const} */ ([-70, -5]);
@@ -8,10 +10,9 @@ export const LOUDNESS_RANGE = /** @type {const} */ ([-70, -5]);
 export const TRUE_PEAK = -1;
 /** How far from the target a result may land, in LU. */
 export const LOUDNESS_SLACK = 0.5;
-/* the limiter works at four times the mix's rate, so it sees the peaks between samples; the encoder adds a little
-   (at the mix's own rate, a -1.5 dBFS limit still read -0.4 dBTP after AAC), so it starts 1 dB under the ceiling */
+/* the limiter (src/sound-engine.mjs) sees the peaks between samples; the encoder adds a little (at the mix's own rate,
+   a -1.5 dBFS limit still read -0.4 dBTP after AAC), so it starts 1 dB under the ceiling */
 const RATE = 48000;
-const OVERSAMPLE = 4;
 const HEADROOM = 1;
 
 /** Whether `n` is a loudness target there can be. @param {unknown} n @returns {n is number} */
@@ -51,22 +52,22 @@ export async function loudnessOf(file, signal) {
 
 /**
  * The mix `from` (a WAV of the film's sound) at `lufs`, its true peaks under `peak`, encoded with `codec` into `to`:
- * measured, then one gain for the whole and a limiter at four times the rate for the peaks it lifts over the ceiling,
- * then measured as encoded; at most twice more when the limiter took off enough to miss the target, or a peak passed.
- * Silence is encoded as it is. `before` and `after` are as measured.
+ * measured, then through the film's bus (src/sound-engine.mjs Bus: one gain for the whole, and the limiter for the
+ * peaks it lifts over the ceiling, as the preview hears it), then measured as encoded; at most twice more when the
+ * limiter took off enough to miss the target, or a peak passed. Silence is encoded as it is. `before` and `after` are
+ * as measured.
  * @param {string} from @param {string} to @param {string[]} codec ffmpeg's options for the sound (`-c:a aac -b:a 192k`)
  * @param {{ lufs: number, peak?: number, signal?: AbortSignal }} target
  * @returns {Promise<{ before: { lufs: number, peak: number }, after: { lufs: number, peak: number } }>}
  */
 export async function toLoudness(from, to, codec, { lufs, peak = TRUE_PEAK, signal }) {
   const before = await loudnessOf(from, signal);
-  const encode = (/** @type {string} */ af) => run(['-v', 'error', '-y', '-i', from, ...(af ? ['-af', af] : []), ...codec, '-ar', String(RATE), to], signal);
-  if (!Number.isFinite(before.lufs)) { await encode(''); return { before, after: before }; }
+  if (!Number.isFinite(before.lufs)) { await run(['-v', 'error', '-y', '-i', from, ...codec, '-ar', String(RATE), to], signal); return { before, after: before }; }
   let gain = lufs - before.lufs;
   let ceiling = peak - HEADROOM;
   let after = before;
   for (let pass = 0; pass < 3; pass += 1) {
-    await encode(`aresample=${RATE * OVERSAMPLE},volume=${gain.toFixed(2)}dB,alimiter=limit=${(10 ** (ceiling / 20)).toFixed(4)}:attack=3:release=60:level=false:asc=1:latency=1,aresample=${RATE}`);
+    await renderSound({ source: ['-i', from], bus: new Bus({ gainDb: Number(gain.toFixed(2)), ceilingDb: ceiling }), frames: Infinity, out: to, codec: [...codec, '-ar', String(RATE)], signal });
     after = await loudnessOf(to, signal);
     if (Math.abs(after.lufs - lufs) <= LOUDNESS_SLACK && after.peak <= peak) break;
     gain += lufs - after.lufs;

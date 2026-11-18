@@ -1,13 +1,12 @@
 /**
  * Settings, opened from the app menu at the top left: a search and the sections in groups on the left, the section on the
- * right as a page of titled groups. General (the theme and the language), Agents (in an app with a chat: the agents
+ * right as a page of titled groups. General (the account, the theme and the language), Agents (in an app with a chat: the agents
  * it can use), Services (which model makes each kind of media, and the services connected for it), the keyboard
  * shortcuts, Advanced and Developer; the search finds a section by any phrase on it. At the
  * foot of the nav, quietly, where OpenFilm lives: its code, the examples and the website.
  */
 import React from 'react';
-import { createPortal } from 'react-dom';
-import { X, Settings2, Keyboard, Sun, Moon, Monitor, Boxes, Bot, Search, SquareTerminal, Loader2, SlidersHorizontal } from 'lucide-react';
+import { Settings2, Keyboard, Sun, Moon, Monitor, Boxes, Bot, SquareTerminal, Loader2, SlidersHorizontal, ChevronLeft } from 'lucide-react';
 import { LANGUAGES, phrasesUnder, useLanguage, useLanguageChoice, useT, type LanguageChoice } from '@/i18n';
 import { studioHost, type HostDeveloper, type HostUpdateState } from '@/lib/host';
 import { showWhatsNew } from '@/lib/whats-new';
@@ -22,15 +21,17 @@ import { SettingsSelect } from './SettingsSelect';
 import { ShortcutsSection } from './ShortcutsSection';
 import { SettingsButton, SettingsGroup, SettingsItem, SettingsPage, SettingsSegmented, SettingsSwitch } from './ui';
 import { useThemeMode, type ThemeMode } from './theme';
-import { StorageGroup } from './StorageGroup';
-import { LARGE_DIALOG_SIZE } from '../dialog-chrome';
+import { AccountGroup } from './AccountGroup';
+import { StorageGroup, StorageEntry } from './StorageGroup';
+import { LargeDialog, LargeDialogGroup, LargeDialogPage, LargeDialogPlace, LargeDialogSearch } from '../LargeDialog';
 import { LibraryCategoriesGroup } from './LibraryCategoriesGroup';
 
 export type SettingsSection = 'general' | 'agents' | 'models' | 'developer' | 'shortcuts' | 'advanced';
 
 /* the nav, in groups: what OpenFilm does, then help (Agents only inside an app with a chat: lib/host.ts `agents`;
-   Advanced for what is already set for the best experience; Developer always, for its diagnostics) */
-const NAV: Array<{ group: 'settings' | 'help'; sections: SettingsSection[] }> = [
+   Advanced for what is already set for the best experience; Developer always, for its diagnostics). Read as it is
+   shown: the app may give Studio its host after this module has run (a build split into several files) */
+const navNow = (): Array<{ group: 'settings' | 'help'; sections: SettingsSection[] }> => [
   { group: 'settings', sections: ['general', ...(studioHost?.agents ? ['agents' as const] : []), 'models'] },
   { group: 'help', sections: ['shortcuts', 'advanced', 'developer'] },
 ];
@@ -54,7 +55,7 @@ const SECTION_ICON: Record<SettingsSection, React.ReactNode> = {
 /** what a search through each section reads: its name and every phrase it shows (Notifications only where it shows:
     inside an app that offers them, lib/host.ts `notifications`) */
 const SECTION_WORDS: Record<SettingsSection, string | string[]> = {
-  general: ['settings.appearance', 'settings.storage'],
+  general: ['settings.account', 'settings.appearance'],
   agents: 'settings.agents',
   models: ['settings.models', 'settings.providers'],
   developer: ['settings.developer', 'settings.report'],
@@ -73,102 +74,40 @@ export interface SettingsModalProps {
 export function SettingsModal({ open, onClose, section: opening }: SettingsModalProps) {
   const t = useT();
   const language = useLanguage();
-  const [section, setSection] = React.useState<SettingsSection>('general');
+  const [section, setSectionNow] = React.useState<SettingsSection>('general');
+  /* a page under General (Storage), opened from its row; any other section shown leaves it */
+  const [sub, setSub] = React.useState<'storage' | null>(null);
+  const setSection = (id: SettingsSection) => { setSectionNow(id); setSub(null); };
   const [query, setQuery] = React.useState('');
-  const dialog = React.useRef<HTMLDivElement>(null);
   const search = React.useRef<HTMLInputElement>(null);
-  /* the latest onClose without re-running the effect below: the page re-renders every frame while it plays, and
-     re-running it would take the focus back each time */
-  const close = React.useRef(onClose);
-  close.current = onClose;
 
-  React.useEffect(() => { if (open) { setSection(opening ?? 'general'); setQuery(''); } }, [open, opening]);
+  React.useEffect(() => { if (open) { setSectionNow(opening ?? 'general'); setSub(null); setQuery(''); } }, [open, opening]);
 
   /* the sections a search finds: by their names and by every phrase on them */
   const words = React.useMemo(() => Object.fromEntries((Object.keys(SECTION_WORDS) as SettingsSection[]).map((id) => [
     id, [t(`settings.sections.${id}`), ...[SECTION_WORDS[id]].flat().flatMap((under) => phrasesUnder(under, language))].join('\n').toLowerCase(),
   ])) as Record<SettingsSection, string>, [t, language]);
   const needle = query.trim().toLowerCase();
-  const nav = NAV.map((group) => ({ ...group, sections: group.sections.filter((id) => !needle || words[id].includes(needle)) }))
+  const nav = navNow().map((group) => ({ ...group, sections: group.sections.filter((id) => !needle || words[id].includes(needle)) }))
     .filter((group) => group.sections.length > 0);
   const found = nav.flatMap((group) => group.sections);
   const showing: SettingsSection | null = found.includes(section) ? section : found[0] ?? null;
 
-  React.useEffect(() => {
-    if (!open) return;
-    const previousFocus = document.activeElement as HTMLElement | null;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.defaultPrevented) return;
-      if (e.key === 'Escape') close.current();
-      if (e.key !== 'Tab' || !dialog.current?.contains(document.activeElement)) return;
-      const focusable = Array.from(dialog.current.querySelectorAll<HTMLElement>('button:not(:disabled), a[href], input:not(:disabled), select:not(:disabled), [tabindex="0"]'))
-        .filter((element) => element.getClientRects().length > 0);
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last?.focus(); }
-      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first?.focus(); }
-    };
-    window.addEventListener('keydown', onKey);
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    /* shown at once, as the projects window is; the search takes the keys */
-    const r = requestAnimationFrame(() => search.current?.focus());
-    return () => {
-      window.removeEventListener('keydown', onKey);
-      document.body.style.overflow = prev;
-      cancelAnimationFrame(r);
-      if (previousFocus?.isConnected) previousFocus.focus();
-    };
-  }, [open]);
-
   if (!open) return null;
 
-  return createPortal(
-    <div
-      className="fixed inset-0 z-[10050] grid place-items-center p-6"
-      style={{ background: 'rgba(0,0,0,0.5)' }}
-      onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
-    >
-      <div
-        ref={dialog}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="settings-title"
-        className={`relative flex ${LARGE_DIALOG_SIZE} overflow-hidden rounded-[14px] border border-[var(--border)] bg-[var(--bg-topbar-popover)] shadow-[0_24px_64px_-12px_rgba(0,0,0,0.5),0_4px_16px_rgba(0,0,0,0.14)]`}
-      >
-        <nav aria-label={t('settings.title')} className="flex w-[264px] shrink-0 flex-col overflow-y-auto border-r border-[var(--border)] px-3 pb-4 pt-3">
-          <label className="mb-3 flex h-10 shrink-0 items-center gap-2.5 rounded-[9px] border border-[var(--border)] px-3 text-[var(--text-muted)] transition focus-within:border-[var(--text-muted)]">
-            <Search size={17} strokeWidth={1.75} className="shrink-0" aria-hidden />
-            <input
-              ref={search}
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder={t('settings.search')}
-              aria-label={t('settings.search')}
-              className="min-w-0 flex-1 bg-transparent text-[15px] text-[var(--text)] outline-none placeholder:text-[var(--text-faint)]"
-            />
-          </label>
+  return (
+    <LargeDialog labelledBy="settings-title" label={t('settings.title')} closeLabel={t('settings.done')} onClose={onClose} focusFirst={search}
+      side={(
+        <>
+          <LargeDialogSearch ref={search} value={query} onChange={setQuery} placeholder={t('settings.search')} />
           {nav.map((group) => (
-            <div key={group.group} className="mt-3 flex flex-col gap-0.5">
-              <div className="px-2.5 pb-1.5 text-[13px] text-[var(--text-faint)]">{t(group.group === 'help' ? 'settings.groups.help' : 'settings.title')}</div>
-              {group.sections.map((id) => {
-                const active = showing === id;
-                return (
-                  <button
-                    key={id}
-                    type="button"
-                    aria-current={active ? 'page' : undefined}
-                    onClick={() => setSection(id)}
-                    className={`flex h-10 min-w-0 items-center gap-3 rounded-[8px] px-2.5 text-left text-[15px] transition ${
-                      active ? 'bg-[var(--bg-pressed)] text-[var(--text)]' : 'text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)]'
-                    }`}
-                  >
-                    <span className={`shrink-0 ${active ? 'text-[var(--text)]' : 'text-[var(--text-muted)]'}`}>{SECTION_ICON[id]}</span>
-                    <span className="min-w-0 truncate">{t(`settings.sections.${id}`)}</span>
-                  </button>
-                );
-              })}
-            </div>
+            <LargeDialogGroup key={group.group} title={t(group.group === 'help' ? 'settings.groups.help' : 'settings.title')}>
+              {group.sections.map((id) => (
+                <LargeDialogPlace key={id} active={showing === id} onClick={() => setSection(id)} icon={SECTION_ICON[id]}>
+                  {t(`settings.sections.${id}`)}
+                </LargeDialogPlace>
+              ))}
+            </LargeDialogGroup>
           ))}
           {found.length === 0 ? <p className="px-2.5 pt-4 text-[14px] text-[var(--text-faint)]">{t('settings.noResults')}</p> : null}
           <div className="mt-auto flex flex-wrap gap-x-4 gap-y-1 px-2.5 pt-6 text-[13px] text-[var(--text-faint)]">
@@ -176,39 +115,40 @@ export function SettingsModal({ open, onClose, section: opening }: SettingsModal
               <a key={link.href} href={link.href} target="_blank" rel="noreferrer" className="rounded-[4px] transition hover:text-[var(--text)]">{t(link.label)}</a>
             ))}
           </div>
-        </nav>
-
-        <div className="relative flex min-w-0 flex-1 flex-col">
-          <button type="button" onClick={onClose} aria-label={t('settings.done')}
-            className="absolute right-4 top-4 z-10 flex h-9 w-9 items-center justify-center rounded-[8px] text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]">
-            <X size={19} strokeWidth={1.75} />
-          </button>
-          {/* one column in the middle of whatever room the window gives */}
-          <div key={showing ?? 'none'} className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-10 pb-12 pt-9">
-            <div className="mx-auto w-full max-w-[920px]">
-            {showing ? <h2 id="settings-title" className="mb-7 text-[22px] font-semibold tracking-[-0.015em] text-[var(--text)]">{t(`settings.sections.${showing}`)}</h2> : null}
-            {showing === 'general' && <GeneralSection />}
-            {showing === 'agents' && <AgentsSection />}
-            {showing === 'models' && <ModelsSection />}
-            {showing === 'developer' && <DeveloperSection />}
-            {showing === 'shortcuts' && <ShortcutsSection />}
-            {showing === 'advanced' && <AdvancedSection />}
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>,
-    document.body,
+        </>
+      )}>
+      {/* one column in the middle of whatever room the window gives */}
+      <LargeDialogPage pageKey={`${showing ?? 'none'}${showing === 'general' && sub ? `/${sub}` : ''}`} titleId="settings-title"
+        title={showing === 'general' && sub ? (
+          /* a page under General: the way back to it, then its own name */
+          <span className="flex items-center gap-1.5">
+            <button type="button" onClick={() => setSub(null)} data-settings-back=""
+              className="-ml-2 flex items-center gap-0.5 rounded-[8px] px-2 py-0.5 text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]">
+              <ChevronLeft size={20} aria-hidden />{t('settings.sections.general')}
+            </button>
+            <span className="text-[var(--text-faint)]">/</span>
+            {t('settings.storage.group')}
+          </span>
+        ) : showing ? t(`settings.sections.${showing}`) : undefined}>
+        {showing === 'general' && (sub === 'storage' ? <StorageGroup titled={false} /> : <GeneralSection onStorage={() => setSub('storage')} />)}
+        {showing === 'agents' && <AgentsSection />}
+        {showing === 'models' && <ModelsSection />}
+        {showing === 'developer' && <DeveloperSection />}
+        {showing === 'shortcuts' && <ShortcutsSection />}
+        {showing === 'advanced' && <AdvancedSection />}
+      </LargeDialogPage>
+    </LargeDialog>
   );
 }
 
-function GeneralSection() {
+function GeneralSection({ onStorage }: { onStorage: () => void }) {
   const t = useT();
   const [mode, setMode] = useThemeMode();
   const [language, setLanguage] = useLanguageChoice();
 
   return (
     <SettingsPage>
+      <AccountGroup />
       <SettingsGroup title={t('settings.appearance.group')}>
         <SettingsItem
           title={t('settings.appearance.theme')}
@@ -243,7 +183,10 @@ function GeneralSection() {
           )}
         />
       </SettingsGroup>
-      <StorageGroup />
+      {/* what OpenFilm takes on this computer, and where its projects live: one row, its page a click away */}
+      <SettingsGroup title={t('settings.storage.group')}>
+        <StorageEntry onOpen={onStorage} />
+      </SettingsGroup>
       {studioHost?.update?.onState ? <AppAboutGroup /> : <AboutGroup />}
     </SettingsPage>
   );

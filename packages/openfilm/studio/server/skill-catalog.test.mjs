@@ -5,8 +5,8 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFil
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
-import { findSkill, listSkills, offeredSkills, usableSkills } from '../../src/skills.mjs';
-import { catalogSkills, installSkill, installedStanding, manifestFiles, readCatalog, readDiscover, refreshCatalog, seedCatalog, uninstallSkill } from './skill-catalog.mjs';
+import { revokedNow, findSkill, listSkills, offeredSkills, usableSkills } from '../../src/skills.mjs';
+import { communitySources, entrySources, indexEntries, setCommunitySources, updateAdds, catalogSkills, installSkill, installedStanding, manifestFiles, readCatalog, readDiscover, refreshCatalog, seedCatalog, uninstallSkill } from './skill-catalog.mjs';
 
 /** A fake GitHub: its API lists a folder's files at a commit, its raw host sends each. `repos[commit]` → { path: text } */
 async function github(/** @type {Record<string, Record<string, string>>} */ commits) {
@@ -182,4 +182,48 @@ test('Discover: the index read as it is now, each skill installed at its commit,
   assert.deepEqual(usableSkills(), []);
   assert.equal(readdirSync(join(root, 'trash')).length, 2, 'uninstalled to the trash');
   assert.equal(existsSync(join(root, 'home', 'skills-installed', 'openfilm-demo')), false);
+});
+
+test('the index\'s revoked list is kept as read, so a withdrawal holds offline, and an index without one clears it', async (t) => {
+  const root = isolated(t);
+  writeFileSync(join(root, 'index.json'), JSON.stringify({ version: 1, skills: [], revoked: [{ uid: 'evil/grabber', reason: 'malware', note: 'Sends files out', digests: ['c'.repeat(64)] }, { uid: 'bad' }] }));
+  await refreshCatalog();
+  assert.deepEqual(revokedNow(), [{ uid: 'evil/grabber', reason: 'malware', digests: ['c'.repeat(64)], note: 'Sends files out' }]);
+  writeFileSync(join(root, 'index.json'), JSON.stringify({ version: 1, skills: [] }));
+  await refreshCatalog();
+  assert.deepEqual(revokedNow(), []);
+});
+
+test('an update says what more it would take: scripts, hosts, a page, a program, an element; nothing when it takes no more', () => {
+  const base = { uid: 'a/b', name: 'b', description: '', folder: '', source: 'official', file: '', scripts: ['scripts/a.mjs'] };
+  assert.equal(updateAdds(/** @type {any} */ (base), /** @type {any} */ ({ ...base })), undefined);
+  assert.deepEqual(updateAdds(/** @type {any} */ ({ ...base, network: { domains: ['a.com'] } }),
+    /** @type {any} */ ({ ...base, scripts: ['scripts/a.mjs', 'scripts/b.mjs'], network: { domains: ['a.com', 'b.com'] }, page: 'index.html', program: 'start' })),
+    { scripts: 1, network: ['b.com'], page: true, program: true });
+});
+
+test('another community index the person adds is read after OpenFilm\'s own: never in place of one of its skills, its own marked, and unable to withdraw', async (t) => {
+  const root = isolated(t);
+  const gh = await github({ [A]: skill('1.0.0', 'First.') }); t.after(gh.close);
+  const other = join(root, 'other.json');
+  writeFileSync(join(root, 'index.json'), JSON.stringify({ version: 1, skills: [entry(A, '1.0.0')] }));
+  writeFileSync(other, JSON.stringify({ version: 1, skills: [entry(B, '9.9.9'), { name: 'demo', repo: 'https://github.com/someone/skill-demo', path: 'skills/demo', version: '2.0.0', commit: B }],
+    revoked: [{ uid: 'openfilm/demo', reason: 'malware' }] }));
+  assert.throws(() => setCommunitySources(['ftp://x']), /Not an index address/);
+  /* a file on a Windows computer is named by its drive */
+  setCommunitySources(['D:\\skills\\index.json']);
+  assert.deepEqual(communitySources(), ['D:\\skills\\index.json']);
+  setCommunitySources([other]);
+  assert.deepEqual(communitySources(), [other]);
+  const catalog = await refreshCatalog({ hosts: gh.hosts });
+  /* OpenFilm's own first, untouched by the other's entry of the same uid; the other's own skill after it, marked */
+  assert.deepEqual(catalog.listed.map((e) => [e.repo, e.commit, e.from ?? null]), [['https://github.com/openfilm/skill-demo', A, null], ['https://github.com/someone/skill-demo', B, other]]);
+  assert.deepEqual([...entrySources(catalog)], [['someone/demo', other]]);
+  assert.deepEqual(revokedNow(), [], 'only OpenFilm\'s own index withdraws');
+});
+
+test('an index entry of a kind this app does not add yet is left out; one with no kind is a skill', () => {
+  const at = (name, kind) => ({ name, ...(kind ? { kind } : {}), repo: 'https://github.com/someone/thing', path: `skills/${name}`, version: '1.0.0', commit: 'a'.repeat(40) });
+  const names = indexEntries({ version: 1, skills: [at('plain'), at('brief', 'skill'), at('desk', 'workbench'), at('link', 'connector'), at('odd', 7)] }).map((e) => e.name);
+  assert.deepEqual(names, ['plain', 'brief', 'desk']);
 });

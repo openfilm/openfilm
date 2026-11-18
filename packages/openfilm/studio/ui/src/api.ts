@@ -30,13 +30,34 @@ export type Track = { clips: Clip[]; locked?: boolean; hidden?: boolean; muted?:
 export type Film = { stage?: { w: number; h: number }; tracks: Track[]; keyframes?: Record<string, string> };
 /** `value`: film.html as read, every clip named (a clip with no id takes its file's name, as the server and preview do). */
 /** `filmMissing`: the folder is there but film.html is not (read as an empty film; see FolderEvent `film-missing`). */
-/** `outer`: a compound clip's film is in that project (studio/server/parts.mjs), `folder` its own folder's name. */
-export type ProjectFilm = { project: Project; folder: string; text: string; rev: string; value: Film | null; doc: Film | null; problems: string[]; filmMissing?: boolean; outer?: { id: string; name: string; folder: string } };
+/** `outer`: a compound clip's film or a cover is in that project (studio/server/parts.mjs, covers.mjs), `folder` its own folder's name, `kind` which. */
+export type ProjectFilm = { project: Project; folder: string; text: string; rev: string; value: Film | null; doc: Film | null; problems: string[]; filmMissing?: boolean; outer?: { id: string; name: string; folder: string; kind?: 'cover' | 'part' } };
 export type MediaFile = { path: string; kind: 'video' | 'image' | 'audio' | 'page' | 'other'; size: number; mtime: number; added?: number };
 /** A project's editor settings (studio/server/project-settings.mjs). */
 export type MotionBlur = { enabled: boolean; samples: number; shutter: number };
 export type ProjectSettings = { fps?: number; trackNames?: { name: string; index: number; clips: string[] }[]; trackHeights?: { height: number; index: number; clips: string[] }[]; motionBlur?: MotionBlur };
-export type Listing = { files: MediaFile[]; folders: string[]; pages: { path: string; size: number; mtime: number }[] };
+export type Listing = { files: MediaFile[]; folders: string[]; pages: { path: string; size: number; mtime: number }[]; links?: Record<string, { to: string; missing?: boolean }> };
+/** Media a project is missing (studio/server/media-reconnect.mjs): a link that leads nowhere (`linked`), or a file its clips name that is gone; `was`: where it was. */
+/** What the listed projects take on disk, the biggest first, in bytes: `clearable` is the cache that is made again when needed. */
+/** What OpenFilm takes on disk (studio/server/storage.mjs): each project by kind (`linked`: a folder elsewhere, opened in
+    place), and OpenFilm's other folders */
+export type ProjectUsage = { id: string; name: string; path: string; linked?: boolean; total: number; media: number; cache: number; clearable: number; history: number; talk: number };
+export type StorageUsage = {
+  projects: ProjectUsage[]; total: number; clearable: number;
+  places?: { saved: number; skills: number; exports: number; app: number };
+};
+export type MissingMedia = { path: string; name: string; folder: boolean; linked: boolean; was: string };
+/**
+ * How a media file was made (studio/server/media-made.mjs): the words it was asked with, who made it with which model,
+ * the rest of what was asked, the files it was made from (each where it is now; null: gone), every version of the
+ * thing in the project (this one among them, the oldest first; alone: none), whose it is when it was found on the
+ * web, and the same asked once more.
+ */
+export interface MediaMade {
+  verb: string; found: boolean; words: string; by: string; model?: string; at: number; args: Record<string, string>;
+  refs?: { as: string; path: string | null; name: string }[]; versions?: string[]; credit?: string; page?: string;
+  again?: { verb: string; args: Record<string, string | true | string[]>; via: string; model?: string };
+}
 export type Op =
   | { op: 'set'; clip: string; field: string; value?: unknown }
   | { op: 'move'; clip: string; at: number; track?: number; newTrack?: number; newTrackAttrs?: Track['attrs'] }
@@ -63,7 +84,9 @@ export type PropEdit = { clip: string; prop: string; value: PropValue };
 /** one of a project's canvases: the first is `main`; `nodes`, how many it has */
 export interface CanvasBoard { id: string; name?: string; nodes: number }
 /** one of the person's characters: its pictures by what they show */
-export interface CanvasCharacter { id: string; name: string; about?: string; created: number; pictures: Array<{ role: 'face' | 'body' | 'expressions' | 'turnaround' | 'other'; url: string }> }
+/** a subject kept to reuse: a character, an object or a place */
+export type SubjectKind = 'person' | 'object' | 'place';
+export interface CanvasCharacter { id: string; name: string; kind: SubjectKind; about?: string; created: number; pictures: Array<{ role: 'face' | 'body' | 'expressions' | 'turnaround' | 'other'; url: string }> }
 /** one thing a canvas made: in this project, or (`project`) another */
 export interface CanvasMade { path: string; make: 'image' | 'video' | 'sfx' | 'music'; prompt?: string; via?: string; model?: string; at: number; project?: string; projectName?: string }
 
@@ -76,7 +99,8 @@ export class ApiError extends Error {
 /** Writes on their way (edits, renames…): a reload for a new Studio waits for them (studioVersion). */
 let writing = 0;
 
-async function call<T>(path: string, init: RequestInit & { json?: unknown } = {}): Promise<T> {
+/** `/api/<path>`, its JSON answer; an ApiError when Studio refuses (lib/plugin-api calls a plugin's routes this way). */
+export async function call<T>(path: string, init: RequestInit & { json?: unknown } = {}): Promise<T> {
   const { json, ...rest } = init;
   const write = (rest.method ?? 'GET') !== 'GET';
   if (write) writing += 1;
@@ -141,6 +165,9 @@ export const api = {
   prefs: () => call<StudioPrefs>('prefs'),
   /** where new projects and exports go, and the free space there */
   locations: () => call<StudioLocations>('locations'),
+  /** the room every project takes and what of it is cache that can be cleared (studio/server/storage.mjs); cleared, the bytes that came back */
+  storage: () => call<StorageUsage>('storage'),
+  clearStorage: () => call<StorageUsage & { freed: number }>('storage/clear', { method: 'POST', json: {} }),
   /** move the library to `path` (null: the default); with `move`, its projects go too (those that could not are in `failed`) */
   /** `failed`: projects that stay where they were; `left`: moved across disks, their old folder left there (the trash would not take it) */
   moveLibrary: (path: string | null, move: boolean) => call<{ moved: number; failed: { name: string; error: string }[]; left: { name: string; path: string; error: string }[]; locations: StudioLocations }>('locations/projects', { method: 'PUT', json: { path, move } }).then((done) => {
@@ -183,6 +210,11 @@ export const api = {
   readPartFilm: (id: string, folder: string) => call<{ film: Film }>(`${p(id)}/films?folder=${encodeURIComponent(folder)}`),
   edit: (id: string, base: string | null, ops: Op[], undo = false) => call<{ text: string; rev: string; value: Film; doc: Film; rebased: boolean }>(`${p(id)}/edit`, { method: 'POST', json: { base, ops, ...(undo ? { undo: true } : {}) } }),
   files: (id: string) => call<Listing>(`${p(id)}/files`),
+  /** what the project's media is missing, and the same looked for again in a folder the person points at */
+  missingMedia: (id: string) => call<{ missing: MissingMedia[] }>(`${p(id)}/files/missing`).then((r) => r.missing),
+  /** how the project's media was made, by path */
+  mediaMade: (id: string) => call<{ made: Record<string, MediaMade> }>(`${p(id)}/files/made`).then((r) => r.made),
+  reconnectMedia: (id: string, folder: string) => call<{ found: number; missing: MissingMedia[] }>(`${p(id)}/files/reconnect`, { method: 'POST', json: { folder } }),
   /** the editor's settings of the project (`.film/settings.json`): its frame rate, its tracks' names */
   settings: (id: string) => call<{ settings: ProjectSettings }>(`${p(id)}/settings`).then((r) => r.settings),
   /** change some of them (null takes one away); answers them all as kept */
@@ -206,15 +238,42 @@ export const api = {
   bringMade: (id: string, made: CanvasMade) => call<{ path: string }>(`${p(id)}/canvas-made/bring`, { method: 'POST', json: { project: made.project, path: made.path } }).then((r) => r.path),
   /** the person's characters (studio/server/canvas-characters.mjs): listed, kept from this project's pictures, changed, removed, brought in */
   canvasCharacters: () => call<{ characters: CanvasCharacter[] }>('canvas-characters').then((r) => r.characters),
-  saveCanvasCharacter: (id: string, body: { name: string; about?: string; pictures: Array<{ role: string; path: string }> }) =>
+  saveCanvasCharacter: (id: string, body: { name: string; kind?: SubjectKind; about?: string; pictures: Array<{ role: string; path: string }> }) =>
     call<{ character: CanvasCharacter }>(`${p(id)}/canvas-characters`, { method: 'POST', json: body }).then((r) => r.character),
-  updateCanvasCharacter: (id: string, body: { name?: string; about?: string }) => call<{ character: CanvasCharacter }>(`canvas-characters/${encodeURIComponent(id)}`, { method: 'PATCH', json: body }),
+  updateCanvasCharacter: (id: string, body: { name?: string; kind?: SubjectKind; about?: string }) => call<{ character: CanvasCharacter }>(`canvas-characters/${encodeURIComponent(id)}`, { method: 'PATCH', json: body }),
   removeCanvasCharacter: (id: string) => call<Record<string, never>>(`canvas-characters/${encodeURIComponent(id)}`, { method: 'DELETE' }),
-  useCanvasCharacter: (project: string, id: string) => call<{ name: string; about?: string; pictures: Array<{ role: string; path: string }> }>(`${p(project)}/canvas-characters/${encodeURIComponent(id)}`, { method: 'POST' }),
+  useCanvasCharacter: (project: string, id: string) => call<{ name: string; kind: SubjectKind; about?: string; pictures: Array<{ role: string; path: string }> }>(`${p(project)}/canvas-characters/${encodeURIComponent(id)}`, { method: 'POST' }),
   removeCanvasBoard: (id: string, board: string) => call<{ boards: CanvasBoard[] }>(`${p(id)}/canvases/${encodeURIComponent(board)}`, { method: 'DELETE' }).then((r) => r.boards),
   /** a text node's words written by the person's own agent (studio/server/canvas.mjs canvasWriteRoute); 409 without one */
   canvasWrite: (id: string, prompt: string, inputs: string[], model?: HostWritingModel, attachments: string[] = []) =>
     call<{ text: string }>(`${p(id)}/canvas-write`, { method: 'POST', json: { prompt, inputs, model, attachments } }),
+  /** the same, each piece of the words to `onDelta` as the agent writes it; the whole at the end */
+  canvasWriteStream: async (id: string, prompt: string, inputs: string[], model: HostWritingModel | undefined, attachments: string[], onDelta: (delta: string) => void, signal?: AbortSignal): Promise<{ text: string }> => {
+    const res = await fetch(`/api/${p(id)}/canvas-write`, {
+      method: 'POST', signal, headers: { 'content-type': 'application/json' }, body: JSON.stringify({ prompt, inputs, model, attachments, stream: true }),
+    });
+    if (res.status === 401) markLocked();
+    if (!res.ok || !res.body) {
+      const body = await res.json().catch(() => ({}));
+      throw new ApiError(String(body.error ?? `Studio answered ${res.status}`), res.status, body);
+    }
+    const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
+    let rest = '';
+    for (;;) {
+      const { value, done } = await reader.read();
+      rest += value ?? '';
+      const lines = done ? [rest] : rest.split('\n');
+      rest = done ? '' : lines.pop() ?? '';
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        const said = JSON.parse(line) as { delta?: string; text?: string; error?: string; code?: string };
+        if (typeof said.delta === 'string') onDelta(said.delta);
+        else if (typeof said.text === 'string') return { text: said.text };
+        else if (said.error) throw new ApiError(said.error, 200, { error: said.error, ...(said.code ? { code: said.code } : {}) });
+      }
+      if (done) throw new ApiError('The agent stopped without an answer.', 200, {});
+    }
+  },
   /** the person's canvas templates (studio/server/canvas-templates.mjs): listed, kept from a project's board, laid down on one, removed */
   canvasTemplates: () => call<{ templates: Array<{ id: string; name: string; nodes: number; created: number }> }>('canvas-templates').then((r) => r.templates),
   saveCanvasTemplate: (id: string, name: string, board: { nodes: unknown[]; edges: unknown[] }) =>
@@ -227,12 +286,21 @@ export const api = {
   loudness: (id: string, path: string, from: number, to: number) => call<{ lufs: number | null; peak: number | null }>(
     `${p(id)}/media?what=loudness&path=${encodeURIComponent(path)}&from=${from}&to=${to}`,
   ),
+  /** how loud the film's sound is as mixed, before any loudness target or limiter: integrated LUFS (null: silent) and true peak */
+  mixLoudness: (id: string, sounds: readonly unknown[], duration: number) => call<{ lufs: number | null; peak: number | null }>(
+    `${p(id)}/mix-loudness`, { method: 'POST', json: { sounds, duration } },
+  ),
   /** a video's frame (`ms` of its own time) made a still beside it; answers its path */
   freezeFrame: (id: string, path: string, ms: number) => call<{ path: string }>(`${p(id)}/files/still`, { method: 'POST', json: { path, ms } }).then((r) => r.path),
   /** The project's own cover for its card (studio/server/cover.mjs): a picture from this computer, a picture of the project,
       the film at `ms`, or none (null: its film's poster again). Each answers when it was set. */
   setCover: (id: string, from: { file: Blob } | { path: string } | { ms: number }) => call<{ cover: number | null }>(`${p(id)}/cover`,
     'file' in from ? { method: 'PUT', body: from.file, headers: { 'content-type': 'application/octet-stream' } } : { method: 'POST', json: from }).then((r) => r.cover),
+  /** a file of the project into the trash */
+  removeFile: (id: string, path: string) => call<object>(`${p(id)}/files?path=${encodeURIComponent(path)}`, { method: 'DELETE' }),
+  /** A clip trimmed, its sound or its shots taken out, cropped to a shape, on this computer (studio/server/clip-tools.mjs). */
+  clipTool: (id: string, body: { op: 'trim' | 'audio' | 'crop' | 'shots' | 'join'; path: string; from?: number; to?: number; ratio?: string; most?: number; work?: boolean; then?: string }) =>
+    call<{ paths: string[]; times?: number[] }>(`${p(id)}/clip-tools`, { method: 'POST', json: body }),
   clearCover: (id: string) => call<{ cover: null }>(`${p(id)}/cover`, { method: 'DELETE' }).then(() => null),
   /**
    * Something made with the person's services, as `openfilm get <verb>` makes it (studio/server/get.mjs): answered
@@ -287,7 +355,7 @@ export type SpendAsk = {
 /** What the person is told without a question (studio/server/get.mjs): a provider with no balance left for a run. */
 export type StudioNotice = { id: string; kind: 'balance'; provider: string; providerId: string };
 
-export type FolderEvent = { type: 'film'; rev: string } | { type: 'files'; paths?: string[] } | { type: 'history' } | { type: 'export'; job: ExportJob } | { type: 'open'; to: string }
+export type FolderEvent = { type: 'film'; rev: string } | { type: 'files'; paths?: string[]; reconnected?: number; made?: boolean } | { type: 'history' } | { type: 'export'; job: ExportJob } | { type: 'open'; to: string }
   | { type: 'history-progress'; op: string; phase: string; done: number; total: number }
   | { type: 'ask'; ask: SpendAsk } | { type: 'asked'; id: string } | { type: 'notice'; notice: StudioNotice } | { type: 'project'; project: Project }
   /* an agent changed the canvas (`openfilm canvas apply`) */
@@ -296,7 +364,9 @@ export type FolderEvent = { type: 'film'; rev: string } | { type: 'files'; paths
      says so, until a `film` event says it is back */
   | { type: 'film-missing' }
   /* the project was deleted, or its folder is missing: its pages leave it */
-  | { type: 'gone' };
+  | { type: 'gone' }
+  /* what one of OpenFilm's own plugins told the pages, from its server code (lib/plugin-api `events`) */
+  | { type: 'plugin'; plugin: string; data: unknown };
 
 /**
  * Listen to a stream of events (a WebSocket: a browser's six HTTP connections to Studio stay free for the page's

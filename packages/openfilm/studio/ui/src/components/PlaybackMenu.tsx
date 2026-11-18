@@ -5,6 +5,7 @@ import { useT } from '@/i18n';
 import { useKeyHint } from '@/lib/keymap-store';
 import { PLAYBACK_SPEEDS, speedStep, speedText } from '@/lib/playback-speed';
 import { Tooltip } from './Tooltip';
+import { mediaButton, SpeedFace } from './player-controls/MediaButtons';
 
 export type PlaybackSettings = {
   /** Loop playback (⇧L): of the range marked (`ranged`), else of the whole film. */
@@ -21,8 +22,9 @@ export type PlaybackSettings = {
  * it is (a row each, its icon in a tile); the speed is one segmented control. Nothing here takes focus on click: the next
  * Space still plays.
  */
-export function PlaybackMenu({ className, disabled, settings }: {
-  className?: string;
+export function PlaybackMenu({ size, disabled, settings }: {
+  /** its icon's size, as the bar it is in has its player buttons (player-controls/MediaButtons) */
+  size: number;
   disabled?: boolean;
   settings: PlaybackSettings;
 }) {
@@ -64,7 +66,7 @@ export function PlaybackMenu({ className, disabled, settings }: {
 
   return <>
     <Tooltip label={t('viewer.playback')}>
-      <button ref={button} type="button" disabled={disabled} className={className} aria-label={t('viewer.playback')}
+      <button ref={button} type="button" disabled={disabled} className={mediaButton(Boolean(anchor) || loop || speed !== 1, size)} aria-label={t('viewer.playback')}
         aria-haspopup="dialog" aria-expanded={!!anchor} aria-controls={anchor ? id : undefined}
         data-viewer-loop={loop ? '1' : '0'} data-viewer-speed={speed}
         /* no focus on click: the next Space would land on this button instead of playing */
@@ -73,9 +75,8 @@ export function PlaybackMenu({ className, disabled, settings }: {
           const rect = button.current!.getBoundingClientRect();
           setAnchor((current) => current ? null : { right: Math.max(12, window.innerWidth - rect.right), bottom: window.innerHeight - rect.top + 6 });
         }}>
-        {loop ? <Repeat size={14} className="text-[var(--accent)]" aria-hidden /> : null}
-        {speed !== 1 ? <span className="text-[12px] leading-none tabular-nums">{speedText(speed)}</span> : null}
-        {!loop && speed === 1 ? <Gauge size={14} aria-hidden /> : null}
+        {loop ? <Repeat size={Math.round(size * 0.8)} className="text-[var(--accent)]" aria-hidden /> : null}
+        {loop && speed === 1 ? null : <SpeedFace speed={speed} size={size} />}
       </button>
     </Tooltip>
     {anchor && createPortal(<div ref={panel} id={id} role="dialog" aria-label={t('viewer.playback')}

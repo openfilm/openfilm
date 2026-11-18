@@ -16,8 +16,26 @@
  * A key in the environment (the provider's variable, e.g. ELEVENLABS_API_KEY) wins over the file: it is how people
  * already keep keys, and Studio cannot remove it. Keys leave this process only towards their own service; the editor
  * page sees where a key comes from and its last four characters, never the key.
+ *
+ * Sealed keys. In the app, Studio is handed a sealer (sealKeysWith): every key it writes is kept sealed instead,
+ *   "sealed": { "keys": { "<provider id>": "<sealed>" }, "custom": { "<service id>": "<sealed>" } }
+ * with '' left in `keys` for a keyless provider (nothing to hide) and no `key` on a custom service. The app's sealer is
+ * AES-256-GCM with a key of its own that only the system's keychain opens for the app (macOS Keychain, Windows DPAPI):
+ * each sealed key is bound to where it goes (its provider, or the service's id and address), so one moved to another
+ * entry, or a service's address changed in the file, opens to nothing. Plain keys found in the file (an older OpenFilm
+ * or `npx openfilm` wrote them, or this one before) are sealed when the app's Studio starts and on every write; a
+ * plain key wins over a sealed one of the same entry, being the newer. Without a sealer (`npx openfilm`, an older app)
+ * the sealed keys are not seen and stay in the file as they are: its own keys are kept plain, as before.
+ *
+ * What this protects, honestly: the OS user is the boundary. Any program running as this user (an agent, a skill, a
+ * plugin's command) can read this file; sealed, it gets nothing usable from it on macOS, where the keychain asks the
+ * person before it opens the app's item to another program. On Windows DPAPI opens to any program of the same user, so
+ * there sealing keeps keys out of copies of the file (backups, a synced folder) but not from such a program. Nothing
+ * here stops a program of this user that reads Studio's memory, or a key the person exported in their own shell.
+ * `npx openfilm` on its own keeps keys plain (0600): a keychain item it made would have to trust `node` or
+ * `security`, which any agent of this user can run too, so it would only add prompts.
  */
-import { randomBytes } from 'node:crypto';
+import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
 import { chmod, mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { studioHome } from './projects.mjs';
@@ -37,23 +55,117 @@ import { keptServices } from './custom-services.mjs';
 export const providersFile = () => join(studioHome(), 'providers.json');
 
 /** Other names a provider's key goes by in the wild (Google's own tools read either). */
-const ALSO = /** @type {Record<string, string[]>} */ ({ GEMINI_API_KEY: ['GOOGLE_API_KEY'] });
+const ALSO = /** @type {Record<string, string[]>} */ ({ GEMINI_API_KEY: ['GOOGLE_API_KEY'], DOUBAO_SPEECH_API_KEY: ['DOUBAO_ASR_API_KEY'] });
 
 const plain = (/** @type {unknown} */ v) => v && typeof v === 'object' && !Array.isArray(v) ? /** @type {Record<string, unknown>} */ (v) : {};
 const strings = (/** @type {unknown} */ v) => /** @type {Record<string, string>} */ (Object.fromEntries(Object.entries(plain(v)).filter(([, s]) => typeof s === 'string')));
 
-/** The saved keys and choices (empty when there are none yet). */
-export async function readSettings(file = providersFile()) {
+/**
+ * Seals and opens keys (see the top): `unseal` gives null for what it cannot open. `bound` is where the key goes
+ * (sealedFor), so a sealed key opens only there.
+ * @typedef {{ seal: (key: string, bound: string) => string, unseal: (sealed: string, bound: string) => string | null }} Sealer
+ */
+
+/** @type {Sealer | null} */
+let sealer = null;
+
+/** Keep keys sealed with `next` from now on (the app's Studio, at its start); null: plain, as `npx openfilm` keeps them. */
+export const sealKeysWith = (/** @type {Sealer | null} */ next) => { sealer = next; };
+
+/**
+ * The app's sealer: AES-256-GCM with `vault` (32 bytes the system's keychain keeps for the app), each key bound to
+ * where it goes. A sealed key reads `v1:` and base64 of its nonce, tag and text.
+ * @param {Buffer} vault @returns {Sealer}
+ */
+export function vaultSealer(vault) {
+  if (vault.length !== 32) throw new Error('a vault is 32 bytes');
+  return {
+    seal(key, bound) {
+      const nonce = randomBytes(12);
+      const cipher = createCipheriv('aes-256-gcm', vault, nonce).setAAD(Buffer.from(bound));
+      const text = Buffer.concat([cipher.update(key, 'utf8'), cipher.final()]);
+      return `v1:${Buffer.concat([nonce, cipher.getAuthTag(), text]).toString('base64')}`;
+    },
+    unseal(sealed, bound) {
+      if (!sealed.startsWith('v1:')) return null;
+      try {
+        const data = Buffer.from(sealed.slice(3), 'base64');
+        const decipher = createDecipheriv('aes-256-gcm', vault, data.subarray(0, 12)).setAAD(Buffer.from(bound));
+        decipher.setAuthTag(data.subarray(12, 28));
+        return Buffer.concat([decipher.update(data.subarray(28)), decipher.final()]).toString('utf8');
+      } catch { return null; }
+    },
+  };
+}
+
+/** Where a key goes, which its seal is bound to: a provider, or a person's service at its address. */
+const sealedFor = {
+  provider: (/** @type {string} */ id) => `keys\n${id}`,
+  custom: (/** @type {import('./custom-services.mjs').CustomService} */ s) => `custom\n${s.id}\n${s.url}`,
+};
+
+/**
+ * The saved keys and choices (empty when there are none yet), sealed keys opened when Studio has the sealer.
+ * `strict`: a file there that cannot be read now (on Windows, held for a moment by an antivirus or indexer) throws
+ * instead of reading as none.
+ */
+export async function readSettings(file = providersFile(), { strict = false } = {}) {
   try {
     const info = await stat(file);
-    /* someone loosened it: keys are this user's alone */
-    if (info.mode & 0o077) await chmod(file, 0o600);
+    /* someone loosened it: keys are this user's alone (Windows has no such bits: it always looks loosened) */
+    if (process.platform !== 'win32' && info.mode & 0o077) await chmod(file, 0o600).catch(() => {});
     const raw = plain(JSON.parse(await readFile(file, 'utf8')));
     /* 'auto' was a choice once: it means none now */
     const use = Object.fromEntries(Object.entries(strings(raw.use)).filter(([, id]) => id !== 'auto'));
     const off = Array.isArray(raw.off) ? raw.off.filter((id) => typeof id === 'string') : [];
-    return /** @type {ProviderSettings} */ ({ keys: strings(raw.keys), use, model: strings(raw.model), off, custom: keptServices(raw.custom), accounts: strings(raw.accounts), libraryOff: raw.libraryOff === true });
-  } catch { return /** @type {ProviderSettings} */ ({ keys: {}, use: {}, model: {}, off: [], custom: [], accounts: {}, libraryOff: false }); }
+    const keys = strings(raw.keys);
+    const custom = keptServices(raw.custom);
+    if (sealer) {
+      const sealed = plain(raw.sealed);
+      for (const [id, value] of Object.entries(strings(sealed.keys))) {
+        if (Object.hasOwn(keys, id)) continue;
+        const key = sealer.unseal(value, sealedFor.provider(id));
+        if (key) keys[id] = key;
+      }
+      const sealedCustom = strings(sealed.custom);
+      for (const s of custom) {
+        const key = !s.key && Object.hasOwn(sealedCustom, s.id) ? sealer.unseal(sealedCustom[s.id], sealedFor.custom(s)) : null;
+        if (key) s.key = key;
+      }
+    }
+    return /** @type {ProviderSettings} */ ({ keys, use, model: strings(raw.model), off, custom, accounts: strings(raw.accounts), libraryOff: raw.libraryOff === true });
+  } catch (e) {
+    /* none yet, or not JSON, reads as none; a file that is there but cannot be read is not "none" */
+    const code = /** @type {NodeJS.ErrnoException} */ (e).code;
+    if (strict && code && code !== 'ENOENT') throw e;
+    return /** @type {ProviderSettings} */ ({ keys: {}, use: {}, model: {}, off: [], custom: [], accounts: {}, libraryOff: false });
+  }
+}
+
+/**
+ * The settings as the file keeps them: with a sealer, every key sealed (what was sealed before and is gone from
+ * `settings` is gone: disconnected, or one this sealer cannot open), else as they are.
+ * @param {ProviderSettings} settings
+ */
+function asKept(settings) {
+  if (!sealer) return settings;
+  const keys = /** @type {Record<string, string>} */ ({}), sealedKeys = /** @type {Record<string, string>} */ ({}), sealedCustom = /** @type {Record<string, string>} */ ({});
+  for (const [id, key] of Object.entries(settings.keys)) {
+    if (key) sealedKeys[id] = sealer.seal(key, sealedFor.provider(id));
+    else keys[id] = key;
+  }
+  const custom = settings.custom.map(({ key, ...s }) => {
+    if (key) sealedCustom[s.id] = /** @type {Sealer} */ (sealer).seal(key, sealedFor.custom(s));
+    return s;
+  });
+  return { ...settings, keys, custom, sealed: { keys: sealedKeys, custom: sealedCustom } };
+}
+
+/** Seal the keys the file keeps plain, when Studio has the sealer (the app's Studio, as it starts). */
+export async function sealPlainKeys(file = providersFile()) {
+  if (!sealer) return;
+  const raw = plain(await readFile(file, 'utf8').then(JSON.parse, () => null));
+  if (Object.values(strings(raw.keys)).some(Boolean) || keptServices(raw.custom).some((s) => s.key)) await changeSettings(() => {}, file);
 }
 
 /**
@@ -85,7 +197,7 @@ export function changeSettings(/** @type {(s: ProviderSettings) => void} */ edit
     const kept = plain(await readFile(file, 'utf8').then(JSON.parse, () => null));
     await mkdir(dirname(file), { recursive: true, mode: 0o700 });
     const tmp = `${file}.${randomBytes(6).toString('hex')}.tmp`;
-    await writeFile(tmp, `${JSON.stringify({ ...kept, ...settings }, null, 2)}\n`, { mode: 0o600, flag: 'wx' });
+    await writeFile(tmp, `${JSON.stringify({ ...kept, ...asKept(settings) }, null, 2)}\n`, { mode: 0o600, flag: 'wx' });
     await replaceFile(tmp, file);
     return settings;
   });
@@ -101,8 +213,8 @@ export function changeSettings(/** @type {(s: ProviderSettings) => void} */ edit
  * @returns {{ key: string, source: 'env' | 'file', env: string } | null}
  */
 export function providerKey(provider, settings, env = process.env) {
-  /* one that takes no key (Local services): connected while it can run */
-  if (provider.ready) return provider.ready() ? { key: '', source: 'file', env: '' } : null;
+  /* one that takes no key (Local services): connected while it can run, unless the person disconnected it */
+  if (provider.ready) return !settings.off?.includes(provider.id) && provider.ready() ? { key: '', source: 'file', env: '' } : null;
   const kept = settings.keys[provider.id];
   if (kept) return { key: kept, source: 'file', env: provider.env };
   if (settings.off?.includes(provider.id)) return null;

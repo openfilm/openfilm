@@ -30,7 +30,7 @@
  */
 import { randomUUID } from 'node:crypto';
 import { readFile, rm, writeFile } from 'node:fs/promises';
-import { basename, join } from 'node:path';
+import { basename, join, relative, sep } from 'node:path';
 import { Worker } from 'node:worker_threads';
 import { deflateRawSync, inflateRawSync } from 'node:zlib';
 import { replaceFile, tempPath } from './atomic.mjs';
@@ -64,9 +64,16 @@ import { compare, hashOf, keepFilm, keptClips, keptHash, keptSize, keptValue, li
  * (the newest last), and `acked` about each file; `asked`: when each agent last asked for notes; `edited`: when the
  * person last changed each unit of film.html; `added`: the clips the person added to it; `mine`: the units Studio has
  * as the person left them (a write that changed them since made them the writer's: `taken`, inside a clip or an
- * entry the person added, too); `renames`: the clips writes renamed, old id to new.
+ * entry the person added, too); `renames`: the clips writes renamed, old id to new; `studio`: Studio's own writes the
+ * agents are to be told of (studioWrote).
  * @typedef {{ film: Kept, files: Map<string, Kept>, said: Map<string, string>, told: Map<string, Set<string>>,
- *   acks: Ack[], acked: Map<string, Ack>, asked: Map<string, number>, edited: Map<string, number>, added: Set<string>, mine: Set<string>, taken: Set<string>, renames: string[][] }} State
+ *   acks: Ack[], acked: Map<string, Ack>, asked: Map<string, number>, edited: Map<string, number>, added: Set<string>, mine: Set<string>, taken: Set<string>, renames: string[][],
+ *   studio: Map<string, StudioWrite> }} State
+ */
+/**
+ * A write Studio made by itself: the line the agents are told, when (`at`, and `clock` for what happened before it),
+ * and the agents told.
+ * @typedef {{ line: string, at: number, clock: number, told: Set<string> }} StudioWrite
  */
 
 /** How many of a file's versions are kept, besides anchors (those go only past the bytes); how many bytes of a project's. */
@@ -79,6 +86,9 @@ let MERGE_MS = 60_000;
 const ACKS_KEPT = 50;
 /** How long a note given out waits to be said passed on. */
 const NOTE_MS = 10 * 60 * 1000;
+/** How long an agent that had not asked before Studio's own write is told of it; how many such writes are kept. */
+const STUDIO_NOTE_MS = 60 * 60 * 1000;
+const STUDIO_KEPT = 50;
 
 /** @type {Map<string, State>} by project folder */
 const projects = new Map();
@@ -116,7 +126,7 @@ export async function keepAside(/** @type {string} */ root, /** @type {Record<st
 const record = () => /** @type {Kept} */ ({ versions: [], ours: null, seen: null, film: null });
 const state = (/** @type {string} */ root) => {
   let s = projects.get(root);
-  if (!s) projects.set(root, (s = { film: record(), files: new Map(), said: new Map(), told: new Map(), acks: [], acked: new Map(), asked: new Map(), edited: new Map(), added: new Set(), mine: new Set(), taken: new Set(), renames: [] }));
+  if (!s) projects.set(root, (s = { film: record(), files: new Map(), said: new Map(), told: new Map(), acks: [], acked: new Map(), asked: new Map(), edited: new Map(), added: new Set(), mine: new Set(), taken: new Set(), renames: [], studio: new Map() }));
   return s;
 };
 
@@ -219,6 +229,7 @@ export function filmReplaced(/** @type {string} */ root) {
   s.acks = [];
   s.acked.clear();
   s.said.clear();
+  s.studio.clear();
 }
 
 /** Whether film.html at `rev` is a write of someone else's with edits to merge (one worth waiting on to settle). */
@@ -561,15 +572,54 @@ export function settleFiles(root, paths = null) {
 /* ── what the agent is told ───────────────────────────────────────────────── */
 
 /**
+ * Studio wrote a file of the project by itself, for neither the person nor an agent (a caption track of what is said,
+ * say). Each agent is told once, in `line`, in its next `openfilm` command or the chat's next message: one that asked
+ * before the write whenever it asks next, any other for STUDIO_NOTE_MS (one that starts later reads the files as they
+ * are). A later write of the same `key` takes the place of the note.
+ * @param {string} root @param {string} key @param {string} line
+ */
+export function studioWrote(root, key, line) {
+  const s = state(root);
+  s.studio.delete(key);
+  s.studio.set(key, { line, at: Date.now(), clock: ++clock, told: new Set() });
+  while (s.studio.size > STUDIO_KEPT) s.studio.delete(/** @type {string} */ (s.studio.keys().next().value));
+}
+
+/**
  * The note for the agent named `agent` (studio/client.mjs agentName) about the project: what the person changed that a
- * write would have undone, kept, and it has not been given yet, in one line, with the note's `id`. Null when nothing.
+ * write would have undone, kept, and what Studio wrote by itself (studioWrote), that it has not been given yet, in one
+ * line, with the note's `id`. Null when nothing.
  * It counts only once `noteSaid(id)` says it was passed on (printed by its command, in a turn the chat sent). At once.
  * @param {string} root @param {string} agent @returns {{ id: string, line: string } | null}
  */
 export function noteFor(root, agent) {
+  /* the films inside the project (a cover, a compound clip's: covers/<name>, parts/<name>) are projects of their own
+     here, edited by the person in Studio; an agent asking about the project is about to read them too */
+  const inside = [...projects.keys()].filter((k) => k.startsWith(root + sep) && INSIDE.test(relative(root, k).split(sep).join('/')));
+  const own = noteOne(root, agent);
+  const more = inside.flatMap((k) => {
+    const note = noteOne(k, agent);
+    return note ? [{ ...note, line: `In ${relative(root, k).split(sep).join('/')}/film.html: ${note.line}` }] : [];
+  });
+  const all = [...(own ? [own] : []), ...more];
+  if (all.length < 2) return all[0] ?? null;
+  const id = randomUUID();
+  together.set(id, all.map((n) => n.id));
+  return { id, line: all.map((n) => n.line).join(' ') };
+}
+
+/** A film inside a project, by its folder there: a cover's or a compound clip's, at any depth. */
+const INSIDE = /^(covers|parts)\/[^/]+(\/(covers|parts)\/[^/]+)*$/;
+/** Notes given as one (the project's and its films'), by the id the agent passes on: theirs. */
+/** @type {Map<string, string[]>} */
+const together = new Map();
+
+/** The note for `agent` about one project's own film.html and files (noteFor). @param {string} root @param {string} agent */
+function noteOne(root, agent) {
   const s = projects.get(root);
   if (!s) return null;
   const now = Date.now();
+  const asked = s.asked.get(agent);
   s.asked.set(agent, ++clock);
   /* the agent is about to read the project: the version it reads is kept while any is */
   if (s.film.film) {
@@ -579,15 +629,26 @@ export function noteFor(root, agent) {
   }
   for (const [id, note] of notes) if (now - note.at > NOTE_MS) notes.delete(id);
   const due = [...s.said].filter(([key]) => !s.told.get(key)?.has(agent));
-  if (!due.length) return null;
+  const wrote = [...s.studio].filter(([, w]) => !w.told.has(agent) && ((asked !== undefined && asked < w.clock) || now - w.at < STUDIO_NOTE_MS));
+  if (!due.length && !wrote.length) return null;
   const id = randomUUID();
-  notes.set(id, { root, agent, keys: due.map(([key]) => key), at: now });
+  notes.set(id, { root, agent, keys: [...due.map(([key]) => key), ...wrote.map(([key]) => `studio\0${key}`)], at: now });
   const said = [...new Set(due.map(([, words]) => words))];
-  return { id, line: `The person changed these in Studio while you worked, and they stand over what you wrote: ${said.join('; ')}. Read the files again before you change them: a change you make then is yours, unless the person changes the same thing after this note. While another agent works here too, what the person changed stands over a change of yours unless you send the very write that was kept out again, unchanged.` };
+  const lines = wrote.map(([, w]) => w.line);
+  if (said.length) lines.unshift(`The person changed these in Studio while you worked, and they stand over what you wrote: ${said.join('; ')}. Read the files again before you change them: a change you make then is yours, unless the person changes the same thing after this note. While another agent works here too, what the person changed stands over a change of yours unless you send the very write that was kept out again, unchanged.`);
+  return { id, line: lines.join(' ') };
 }
 
-/** The note `id` was passed on to its agent: what it names is known to the agent. Whether there was such a note. */
-export function noteSaid(/** @type {string} */ id) {
+/**
+ * The note `id` was passed on to its agent: what it names is known to the agent. Whether there was such a note.
+ * @param {string} id @returns {boolean}
+ */
+export function noteSaid(id) {
+  const parts = together.get(id);
+  if (parts) {
+    together.delete(id);
+    return parts.map((/** @type {string} */ one) => noteSaid(one)).some(Boolean);
+  }
   const note = notes.get(id);
   if (!note) return false;
   notes.delete(id);
@@ -596,6 +657,7 @@ export function noteSaid(/** @type {string} */ id) {
   /** @type {Set<string>} */
   const named = new Set();
   for (const key of note.keys) {
+    if (key.startsWith('studio\0')) { s.studio.get(key.slice(7))?.told.add(note.agent); continue; }
     if (!s.said.has(key)) continue;
     const told = s.told.get(key) ?? new Set();
     told.add(note.agent);
@@ -634,6 +696,7 @@ function words(/** @type {string} */ key) {
     case 'style': return `clip ${id} ${at(name)} style.${more}`;
     case 'track': return `clip ${id} track`;
     case 'flag': return `a track ${name === 'hidden' ? 'shown or hidden' : name === 'muted' ? 'muted or not' : 'locked or not'}`;
+    case 'captions': return `the caption track ${id}`;
     case 'order': return 'the tracks\' order';
     case 'film': return 'film.html as a whole (your write could not be merged; it is kept aside in the project\'s history)';
     default: return 'the stage size';

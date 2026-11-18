@@ -1,6 +1,6 @@
 // @ts-check
 /**
- * The skills Discover shows: the current openfilm/skills index on GitHub. An offline snapshot of official skills is
+ * The skills Discover shows: the current openfilm/community index on GitHub. An offline snapshot of official skills is
  * used only until a live index has been read. The index names each skill's repository, its folder there and the commit
  * it is pinned to (its index.json);
  * each skill at that commit is kept here so Discover shows its picture and words without asking again, and works
@@ -9,7 +9,8 @@
  * Installing one copies it, at the commit Discover shows, among the installed skills (src/skills.mjs officialSkillsDir),
  * with where it came from (`.source.json`): it stays that commit, offline too, until the person updates it. When the
  * index pins a newer commit, it says so (`update`); updating puts the old one in the trash. One the index no longer has
- * stays installed and works, said to be retired (`retired`); one not installed is gone from Discover.
+ * stays installed and works, said to be retired (`retired`); one not installed is gone from Discover. One the index
+ * withdraws (its `revoked`: malware, impersonation, rights…) stops, wherever a copy of it is (src/skills.mjs revocationOf).
  *
  *   ~/.openfilm/skill-catalog/index.json                       what the index said, and when it was read
  *   ~/.openfilm/skill-catalog/<owner>/<name>@<commit>/         a skill at the commit it named
@@ -21,12 +22,16 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { createHash, randomUUID } from 'node:crypto';
 import { cp, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
-import { SKILL_NAME, SOURCE_FILE, discoverDir, discoverFolder, officialSkillsDir, readSkill, skillSource, skillUid, skillsIn } from '../../src/skills.mjs';
+import { setSharedPref, sharedHome, sharedPref } from '../../src/locations.mjs';
+import { REVOKED_FILE, SKILL_NAME, SOURCE_FILE, discoverDir, discoverFolder, officialSkillsDir, readSkill, revocations, skillSource, skillUid, skillsIn } from '../../src/skills.mjs';
 import { downloadFiles, listFiles } from './fetch-github.mjs';
 import { moveToTrash } from './trash.mjs';
+import { recycle } from './recycle-bin.mjs';
 
 /** The index Discover reads. */
-export const INDEX_URL = 'https://raw.githubusercontent.com/openfilm/skills/main/index.json';
+/* the community's repository, renamed from openfilm/skills (its old address still answers, through GitHub's redirect,
+   for the OpenFilm that read it there) */
+export const INDEX_URL = 'https://raw.githubusercontent.com/openfilm/community/main/index.json';
 /** How long what the index said is fresh enough not to read it again when Discover opens. */
 export const FRESH_MS = 10 * 60 * 1000;
 /** The largest skill fetched for the catalog. */
@@ -34,7 +39,8 @@ const MAX_BYTES = 20 * 1024 * 1024;
 export const REFRESH_TIMEOUT_MS = 15_000;
 
 /** @typedef {{ path: string, size: number, sha256: string }} CatalogFile */
-/** @typedef {{ name: string, repo: string, path: string, version: string, commit: string, files?: CatalogFile[] }} IndexEntry */
+/** @typedef {{ name: string, repo: string, path: string, version: string, commit: string, files?: CatalogFile[], from?: string }} IndexEntry
+ *  `from`: the address of the other community index it came from (none: OpenFilm's own, openfilm/community) */
 /** @typedef {{ read: string, entries: IndexEntry[], listed?: IndexEntry[], incomplete?: string[] }} Catalog usable entries, the current index, and failed downloads */
 
 export const catalogDir = discoverDir;
@@ -108,17 +114,44 @@ export function manifestFiles(value) {
   return value.map(({ path, size, sha256 }) => ({ path, size, sha256 }));
 }
 
+const KNOWN_KINDS = new Set(['skill', 'workbench']);
+
 /**
- * The entries of an index that are well formed (as openfilm/skills checks them); the rest are left out.
+ * The entries of an index that are well formed (as openfilm/community checks them); the rest are left out.
  * @param {unknown} index @returns {IndexEntry[]}
  */
 export function indexEntries(index) {
   const skills = /** @type {any} */ (index)?.version === 1 && Array.isArray(/** @type {any} */ (index).skills) ? /** @type {any[]} */ (/** @type {any} */ (index).skills) : [];
-  return skills.filter((e) => typeof e?.name === 'string' && SKILL_NAME.test(e.name)
+  /* the kinds this app adds (a workbench is a skill with a page); a kind listed later (a connector…) waits for an app that knows it */
+  return skills.filter((e) => (e?.kind === undefined || KNOWN_KINDS.has(e.kind)) && typeof e?.name === 'string' && SKILL_NAME.test(e.name)
     && typeof e.repo === 'string' && /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+$/.test(e.repo)
     && e.path === `skills/${e.name}` && typeof e.version === 'string' && /^\d+\.\d+\.\d+$/.test(e.version)
     && typeof e.commit === 'string' && /^[0-9a-f]{40}$/.test(e.commit) && (e.files === undefined || manifestFiles(e.files)))
-    .map((e) => ({ name: e.name, repo: e.repo, path: e.path, version: e.version, commit: e.commit, ...(e.files ? { files: /** @type {CatalogFile[]} */ (manifestFiles(e.files)) } : {}) }));
+    .map((e) => ({ name: e.name, repo: e.repo, path: e.path, version: e.version, commit: e.commit, ...(e.files ? { files: /** @type {CatalogFile[]} */ (manifestFiles(e.files)) } : {}),
+      ...(typeof e.from === 'string' && SOURCE_ADDRESS.test(e.from) ? { from: e.from } : {}) }));
+}
+
+/**
+ * Other community indexes the person added (as Blender's third-party repositories are): read after OpenFilm's own,
+ * each an https address or a file on this computer, at most ten. What they list is shown as not OpenFilm's, not
+ * reviewed by it, and always asks before it is installed; it never takes the place of one of OpenFilm's (its uid), and
+ * only OpenFilm's own index withdraws anything (`revoked`).
+ */
+const SOURCE_ADDRESS = /^(https:\/\/\S{4,500}|\/\S{1,500}|[A-Za-z]:[\\/]\S{1,500})$/;
+export function communitySources(/** @type {string} */ home = sharedHome()) {
+  const kept = sharedPref('communitySources', home);
+  return Array.isArray(kept) ? [...new Set(kept.filter((a) => typeof a === 'string' && SOURCE_ADDRESS.test(a)))].slice(0, 10) : [];
+}
+/** @param {string[]} list @param {string} [home] */
+export function setCommunitySources(list, home = sharedHome()) {
+  const bad = list.find((a) => typeof a !== 'string' || !SOURCE_ADDRESS.test(a));
+  if (bad !== undefined) throw new Error(`Not an index address: ${String(bad)} (an https address, or a file on this computer).`);
+  if (list.includes(INDEX_URL)) throw new Error('OpenFilm\'s own community is always read.');
+  setSharedPref('communitySources', [...new Set(list)].slice(0, 10), home);
+}
+/** Where each listed skill came from, by uid: the other index's address (none: OpenFilm's own). @param {Catalog | null} [catalog] */
+export function entrySources(catalog = readCatalog()) {
+  return new Map((catalog?.listed ?? catalog?.entries ?? []).flatMap((e) => (e.from ? [[uidOf(e), e.from]] : [])));
 }
 
 /** What the index said when last read, or null when it never was. @returns {Catalog | null} */
@@ -153,18 +186,35 @@ export async function refreshCatalog({ signal: caller, timeoutMs = REFRESH_TIMEO
 async function refresh({ signal, hosts, get }) {
   const before = readCatalog();
   const from = process.env.OPENFILM_SKILLS_INDEX || INDEX_URL;
-  let index;
-  if (/^https:\/\//.test(from)) {
-    /* asked past any cache between (GitHub's raw files are cached for minutes): what the index says now */
-    const url = new URL(from);
-    url.searchParams.set('read', String(Date.now()));
-    const res = await get(url, { signal, headers: { accept: 'application/json' }, cache: 'no-store' });
-    if (!res.ok) throw new Error(`The skills index answered ${res.status}.`);
-    index = await res.json();
-  } else index = JSON.parse(await readFile(from, 'utf8'));
-  if (index?.version !== 1 || !Array.isArray(index.skills)) throw new Error('The skills index is not valid.');
+  /** @param {string} at */
+  const readIndex = async (at) => {
+    let read;
+    if (/^https:\/\//.test(at)) {
+      /* asked past any cache between (GitHub's raw files are cached for minutes): what the index says now */
+      const url = new URL(at);
+      url.searchParams.set('read', String(Date.now()));
+      const res = await get(url, { signal, headers: { accept: 'application/json' }, cache: 'no-store' });
+      if (!res.ok) throw new Error(`The skills index answered ${res.status}.`);
+      read = await res.json();
+    } else read = JSON.parse(await readFile(at, 'utf8'));
+    if (read?.version !== 1 || !Array.isArray(read.skills)) throw new Error('The skills index is not valid.');
+    return read;
+  };
+  const index = await readIndex(from);
   const listed = indexEntries(index);
   if (index.skills.length && !listed.length) throw new Error('The skills index has no valid entries.');
+  /* the other indexes the person added, after OpenFilm's own: never in place of one of its uids, nor of an earlier one's;
+     one that cannot be read now is left out, the rest go on */
+  const taken = new Set(listed.map(uidOf));
+  for (const other of communitySources()) {
+    try {
+      for (const e of indexEntries(await readIndex(other))) {
+        if (taken.has(uidOf(e))) continue;
+        taken.add(uidOf(e));
+        listed.push({ ...e, from: other });
+      }
+    } catch { /* unreadable now: its skills are not offered until it is */ }
+  }
   /** @type {IndexEntry[]} */
   const entries = [];
   /** @type {string[]} */
@@ -203,6 +253,10 @@ async function refresh({ signal, hosts, get }) {
   }
   const catalog = { read: new Date().toISOString(), entries, listed, incomplete };
   await mkdir(catalogDir(), { recursive: true });
+  /* what OpenFilm withdrew, kept as the index said it, so it holds offline (src/skills.mjs revocationOf) */
+  const withdrawn = `${join(catalogDir(), REVOKED_FILE)}.${randomUUID()}.tmp`;
+  await writeFile(withdrawn, `${JSON.stringify(revocations(index.revoked), null, 2)}\n`);
+  await rename(withdrawn, join(catalogDir(), REVOKED_FILE));
   const temporary = `${indexFile()}.${randomUUID()}.tmp`;
   await writeFile(temporary, `${JSON.stringify(catalog, null, 2)}\n`);
   await rename(temporary, indexFile());
@@ -252,9 +306,28 @@ export function catalogSkills(catalog = readCatalog()) {
 }
 
 /**
- * How each installed skill stands against the index, by uid: a newer commit there (`update`), or none at all
- * (`retired`). Nothing is said before the index was ever read. @param {Catalog | null} [catalog]
- * @returns {Map<string, { update?: { version: string, commit: string }, retired?: true }>}
+ * What a newer version brings that the installed one did not: more scripts, hosts its page may reach, a page, a
+ * program, an element in the editor. Said before the update, so more is never taken without asking (none: nothing more).
+ * @param {import('../../src/skills.mjs').Skill} now @param {import('../../src/skills.mjs').Skill | null} next
+ * @returns {{ scripts?: number, network?: string[], page?: true, program?: true, element?: true } | undefined}
+ */
+export function updateAdds(now, next) {
+  if (!next) return undefined;
+  const hosts = (next.network?.domains ?? []).filter((d) => !(now.network?.domains ?? []).includes(d));
+  const adds = {
+    ...(next.scripts.length > now.scripts.length ? { scripts: next.scripts.length - now.scripts.length } : {}),
+    ...(hosts.length ? { network: hosts } : {}),
+    ...(next.page && !now.page ? { page: /** @type {const} */ (true) } : {}),
+    ...(next.program && !now.program ? { program: /** @type {const} */ (true) } : {}),
+    ...(next.element && !now.element ? { element: /** @type {const} */ (true) } : {}),
+  };
+  return Object.keys(adds).length ? adds : undefined;
+}
+
+/**
+ * How each installed skill stands against the index, by uid: a newer commit there (`update`, with what it brings
+ * more: updateAdds), or none at all (`retired`). Nothing is said before the index was ever read. @param {Catalog | null} [catalog]
+ * @returns {Map<string, { update?: { version: string, commit: string, adds?: ReturnType<typeof updateAdds> }, retired?: true }>}
  */
 export function installedStanding(catalog = readCatalog()) {
   const out = new Map();
@@ -265,7 +338,10 @@ export function installedStanding(catalog = readCatalog()) {
     if (!source) continue;
     const entry = offered.get(skill.uid);
     if (!entry) out.set(skill.uid, { retired: true });
-    else if (entry.commit !== source.commit) out.set(skill.uid, { update: { version: entry.version, commit: entry.commit } });
+    else if (entry.commit !== source.commit) {
+      const adds = updateAdds(skill, readSkill(catalogFolder(entry), 'official'));
+      out.set(skill.uid, { update: { version: entry.version, commit: entry.commit, ...(adds ? { adds } : {}) } });
+    }
   }
   return out;
 }
@@ -295,10 +371,10 @@ export async function installSkill(uid) {
   return made;
 }
 
-/** Uninstall a skill: its folder to the trash. → whether it was installed. @param {string} uid */
+/** Uninstall a skill: its folder to the recycle bin. → whether it was installed. @param {string} uid */
 export async function uninstallSkill(uid) {
   const there = installedOne(uid);
   if (!there) return false;
-  await moveToTrash(there.folder);
+  await recycle(there.folder, 'skill');
   return true;
 }

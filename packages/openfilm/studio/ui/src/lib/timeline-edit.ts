@@ -78,9 +78,9 @@ export type EditModel = readonly EditTrack[];
 export interface Switches { magnet: boolean; linkage: boolean }
 export const NO_SWITCHES: Switches = { magnet: false, linkage: false };
 
-/** The main track: the lowest picture track (V1), film.html's last track that is not a sound track. */
-export function mainTrackOf(model: readonly Pick<EditTrack, 'index' | 'role'>[]): number | null {
-  const pictures = model.filter((t) => t.index >= 0 && t.role !== 'audio');
+/** The main picture track (V1): caption rows keep their cues and never take the main track's magnet. */
+export function mainTrackOf(model: readonly Pick<EditTrack, 'index' | 'role' | 'captions'>[]): number | null {
+  const pictures = model.filter((t) => t.index >= 0 && t.role !== 'audio' && !t.captions);
   return pictures.length ? Math.max(...pictures.map((t) => t.index)) : null;
 }
 
@@ -343,11 +343,16 @@ function mapThrough(ms: number, track: number, shifts: readonly Shift[]): number
 
 /** Cut a clip in two at `ms`: the right half is a new clip (`<id>~b`) right after it. */
 function cutAt(d: Draft, track: EditTrack, c: EditClip, ms: number): EditClip | null {
-  if (!(ms > c.startMs + TOUCH_MS && ms < c.endMs - TOUCH_MS) || d.cut.has(c.id)) return null;
-  const right: EditClip = { ...c, id: `${c.id}~b` };
+  if (!(ms > c.startMs + TOUCH_MS && ms < c.endMs - TOUCH_MS)) return null;
+  let id = `${c.id}~b`;
+  const taken = new Set([...d.before.keys(), ...[...d.cut.values()].map((clip) => clip.id)]);
+  for (let n = 2; taken.has(id); n++) id = `${c.id}~b${n}`;
+  const right: EditClip = { ...c, id };
   setStart(right, ms);
   c.endMs = ms;
   track.clips.push(right);
+  const next = d.cut.get(c.id);
+  if (next) d.cut.set(right.id, next);
   d.cut.set(c.id, right);
   return right;
 }
@@ -583,8 +588,41 @@ function planOf(d: Draft): EditPlan {
   });
   const openEdits: { clip: string; prop: string; value: PropValue }[] = [];
   const joinEdits: { clip: string; prop: string; value: PropValue }[] = [];
+  const splitIds = new Set(d.before.keys());
   for (const [id, was] of d.before) {
-    const cur = now.get(id);
+    /* Multiple disjoint overwrites can cut one source into more than two surviving pieces. Emit the
+       whole chain, giving each right half a real id so subsequent splits address that half. */
+    const firstRight = d.cut.get(id);
+    if (firstRight && d.cut.has(firstRight.id)) {
+      const pieces = [];
+      for (let part: EditClip | undefined = now.get(id)?.clip ?? was.clip; part; part = d.cut.get(part.id)) {
+        const live = now.get(part.id);
+        if (live) pieces.push(live);
+      }
+      if (pieces.length) {
+        let parent = was.clip;
+        let parentId = id;
+        for (let i = 0; i < pieces.length - 1; i++) {
+          const cur = pieces[i]!;
+          const next = pieces[i + 1]!.clip;
+          const remainder = { ...next, endMs: pieces.at(-1)!.clip.endMs };
+          let rightId = `${id}-b`;
+          for (let n = 2; splitIds.has(rightId); n++) rightId = `${id}-b-${n}`;
+          splitIds.add(rightId);
+          ops.push({ op: 'split', clip: parentId, left: changedFields(parent, cur.clip), right: changedFields(parent, remainder), rightId });
+          placed.set(cur.clip.id, { startMs: cur.clip.startMs, endMs: cur.clip.endMs, track: cur.track });
+          parent = remainder;
+          parentId = rightId;
+        }
+        const last = pieces.at(-1)!;
+        for (const [prop, value] of Object.entries(changedFields(parent, last.clip))) edits.push({ clip: parentId, prop, value });
+        placed.set(last.clip.id, { startMs: last.clip.startMs, endMs: last.clip.endMs, track: last.track });
+        continue;
+      }
+    }
+    /* A later overwrite may remove the left half of an earlier cut. Keep its surviving right half
+       under the original id instead of deleting the whole source. */
+    const cur = now.get(id) ?? (firstRight && !d.cut.has(firstRight.id) ? now.get(firstRight.id) : undefined);
     if (!cur) {
       removes.push({ op: 'remove', clip: id });
       placed.set(id, null);
@@ -593,7 +631,7 @@ function planOf(d: Draft): EditPlan {
     const fields = changedFields(was.clip, cur.clip);
     const dest = destOf(id, cur.track);
     const right = d.cut.get(id);
-    if (right && now.has(right.id)) {
+    if (right && now.has(id) && now.has(right.id)) {
       const rightFields = changedFields(was.clip, right);
       ops.push({ op: 'split', clip: id, left: fields, right: rightFields });
       placed.set(id, { startMs: cur.clip.startMs, endMs: cur.clip.endMs, track: dest });
@@ -753,6 +791,25 @@ export function planCloseMainGaps(model: EditModel, sw: Switches): EditPlan {
   return main == null ? emptyPlan() : planCloseTrackGaps(model, main, sw);
 }
 
+/**
+ * The gaps after these clips filled: each one's end drawn out to where the next clip on its track starts, nothing
+ * moving (captions read through a pause). The last on its track stays, as does one with no more of its source to show
+ * (it goes as far as it can) or on a locked track.
+ */
+export function planFillGaps(model: EditModel, ids: readonly string[]): EditPlan {
+  const d = draftOf(model);
+  const picked = new Set(ids);
+  for (const track of d.tracks) {
+    if (track.locked) continue;
+    track.clips.forEach((clip, i) => {
+      const next = track.clips[i + 1];
+      if (!picked.has(clip.id) || !next || next.startMs - clip.endMs <= TOUCH_MS) return;
+      clip.endMs += Math.min(next.startMs - clip.endMs, tailRoomOf(clip));
+    });
+  }
+  return planOf(d);
+}
+
 /* ── delete ── */
 
 /**
@@ -889,7 +946,12 @@ export function planMove(model: EditModel, spec: MoveSpec): (EditPlan & { landMs
     if (typeof dest === 'number' ? Boolean(trackAt(d, dest)!.captions) !== cue : cue) return null;
   }
   const main = mainTrackOf(model);
-  const magnet = Boolean(spec.magnet) && magnetOn(model, main, true);
+  /* A horizontal selection across tracks is one translation: repacking its main-track clips would reset the
+     whole selection's landing (including captions), or change the distance between it and the captions. */
+  const translatingGroup = spec.mode === 'place'
+    && new Set(ids.map(id => d.before.get(id)!.track)).size > 1
+    && ids.every(id => destOf(id) === d.before.get(id)!.track);
+  const magnet = !translatingGroup && Boolean(spec.magnet) && magnetOn(model, main, true);
   const rides = spec.linkage ? ridesOf(d, main, hand) : new Map<string, Ride>();
   /* take them off their tracks */
   const lifted = new Map<string, EditClip>();

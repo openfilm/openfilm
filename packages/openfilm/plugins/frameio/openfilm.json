@@ -1,0 +1,224 @@
+{
+  "order": 21,
+  "icon": "plug",
+  "title": {
+    "en": "Frame.io",
+    "zh-CN": "Frame.io",
+    "ja": "Frame.io",
+    "ko": "Frame.io",
+    "es": "Frame.io"
+  },
+  "summary": {
+    "en": "Review with Frame.io: the agent reads your team's comments, uploads cuts and fetches media.",
+    "zh-CN": "用 Frame.io 审片：智能体能读团队的批注、上传版本、取回素材。",
+    "ja": "Frame.io でレビュー：チームのコメントを読み、カットをアップロードし、素材を取得します。",
+    "ko": "Frame.io로 검토: 팀의 코멘트를 읽고, 컷을 올리고, 소스를 가져옵니다.",
+    "es": "Revisión con Frame.io: el agente lee los comentarios del equipo, sube montajes y trae material."
+  },
+  "details": {
+    "en": "When to use it: you share cuts for review in Frame.io (V4 accounts).\nHow: Connect and sign in once in your browser, then just ask in the chat, for example \"Read every comment on this film in Frame.io and make a new cut that answers them\". The agent asks you before it changes anything in Frame.io.",
+    "zh-CN": "什么时候用：你在 Frame.io 上发版本给别人审（V4 账号）。\n怎么用：点「连接」在浏览器里登录一次，之后在对话里直接说，比如「读一下 Frame.io 上这条片子的所有批注，按批注改一版」。智能体改动 Frame.io 里的东西前会先问你。",
+    "ja": "使うとき：Frame.io でカットをレビューに出しているとき（V4 アカウント）。\n使い方：「接続」でブラウザから一度サインインし、あとはチャットで頼むだけ。例：「Frame.io のこの映像へのコメントをすべて読んで、それに沿って直して」。Frame.io の中を変える前には確認されます。",
+    "ko": "언제: Frame.io에서 컷을 검토받을 때(V4 계정).\n사용법: 「연결」을 눌러 브라우저에서 한 번 로그인한 뒤 대화에서 바로 말하면 됩니다. 예: \"Frame.io에 달린 이 영상의 모든 코멘트를 읽고 그대로 고친 버전을 만들어 줘\". Frame.io의 내용을 바꾸기 전에는 먼저 묻습니다.",
+    "es": "Cuándo: compartes montajes para revisión en Frame.io (cuentas V4).\nCómo: conecta e inicia sesión una vez en el navegador; luego pídelo en el chat, por ejemplo «Lee todos los comentarios de esta película en Frame.io y haz una versión que los resuelva». El agente te pregunta antes de cambiar algo en Frame.io."
+  },
+  "examples": {
+    "zh-CN": [
+      {
+        "say": "读一下 Frame.io 上这条片子的所有批注，按批注改一版",
+        "does": "逐条读批注和时间点，按要求改时间线，出一版新剪辑。"
+      },
+      {
+        "say": "把这一版上传到 Frame.io 的「客户审片」项目",
+        "does": "导出这一版，作为新版本上传到那个项目，旧版本留着对比。"
+      },
+      {
+        "say": "把 Frame.io 上客户标出的问题列成清单，告诉我哪些已经改了",
+        "does": "把客户的批注列成清单，对照时间线标出哪些改好了、哪些还没改。"
+      }
+    ],
+    "en": [
+      {
+        "say": "Read every comment on this film in Frame.io and make a new cut that answers them",
+        "does": "Reads each comment and its timecode, changes the timeline as asked and makes a new cut."
+      },
+      {
+        "say": "Upload this version to the \"Client review\" project in Frame.io",
+        "does": "Exports this cut and uploads it to that project as a new version, the old one kept to compare."
+      },
+      {
+        "say": "List the issues the client marked in Frame.io and tell me which are fixed",
+        "does": "Lists the client's notes and marks against the timeline which are done and which are not."
+      }
+    ],
+    "ja": [
+      {
+        "say": "Frame.io のこの映像へのコメントをすべて読んで、それに沿って直して",
+        "does": "コメントとタイムコードを一つずつ読み、指示どおりに直して新しい版を作ります。"
+      },
+      {
+        "say": "このバージョンを Frame.io の「クライアント確認」プロジェクトにアップロードして",
+        "does": "この版を書き出し、そのプロジェクトに新しいバージョンとして上げます。旧版は比較用に残ります。"
+      },
+      {
+        "say": "Frame.io でクライアントが指摘した点を一覧にして、直した所を教えて",
+        "does": "クライアントの指摘を一覧にし、タイムラインと照らして対応済みかを示します。"
+      }
+    ],
+    "ko": [
+      {
+        "say": "Frame.io에 달린 이 영상의 모든 코멘트를 읽고 그대로 고친 버전을 만들어 줘",
+        "does": "코멘트와 타임코드를 하나씩 읽고 요청대로 고쳐 새 버전을 만듭니다."
+      },
+      {
+        "say": "이 버전을 Frame.io의 「클라이언트 검수」 프로젝트에 올려 줘",
+        "does": "이 버전을 내보내 그 프로젝트에 새 버전으로 올리고 이전 버전은 비교용으로 남깁니다."
+      },
+      {
+        "say": "Frame.io에서 클라이언트가 지적한 점을 목록으로 만들고 어떤 게 고쳐졌는지 알려 줘",
+        "does": "클라이언트 코멘트를 목록으로 만들고 타임라인과 대조해 고친 것과 아닌 것을 표시합니다."
+      }
+    ],
+    "es": [
+      {
+        "say": "Lee todos los comentarios de esta película en Frame.io y haz una versión que los resuelva",
+        "does": "Lee cada comentario con su código de tiempo, cambia la línea de tiempo y hace un nuevo montaje."
+      },
+      {
+        "say": "Sube esta versión al proyecto «Revisión cliente» de Frame.io",
+        "does": "Exporta este montaje y lo sube a ese proyecto como nueva versión; la anterior queda para comparar."
+      },
+      {
+        "say": "Haz una lista de lo que marcó el cliente en Frame.io y dime qué está corregido",
+        "does": "Enumera las notas del cliente y marca, frente a la línea de tiempo, cuáles están hechas."
+      }
+    ]
+  },
+  "showcase": {
+    "highlights": {
+      "zh-CN": [
+        {
+          "icon": "message",
+          "title": "读审片批注",
+          "text": "带时间点的批注一条条读，知道改哪里。"
+        },
+        {
+          "icon": "upload",
+          "title": "上传新版本",
+          "text": "导出后作为新版本上传，团队接着看。"
+        },
+        {
+          "icon": "list",
+          "title": "改到哪了",
+          "text": "对照批注列出改好的和没改的。"
+        },
+        {
+          "icon": "folder",
+          "title": "取回素材",
+          "text": "从 Frame.io 项目里取素材放进片子。"
+        }
+      ],
+      "en": [
+        {
+          "icon": "message",
+          "title": "Read review notes",
+          "text": "Timecoded comments read one by one, so it knows where to change."
+        },
+        {
+          "icon": "upload",
+          "title": "Upload versions",
+          "text": "Exports and uploads as a new version for the team to review."
+        },
+        {
+          "icon": "list",
+          "title": "What is fixed",
+          "text": "A list of which notes are done and which are not."
+        },
+        {
+          "icon": "folder",
+          "title": "Fetch media",
+          "text": "Brings media from a Frame.io project into the film."
+        }
+      ],
+      "ja": [
+        {
+          "icon": "message",
+          "title": "レビューを読む",
+          "text": "タイムコード付きのコメントを一つずつ読み、直す場所を把握します。"
+        },
+        {
+          "icon": "upload",
+          "title": "新しい版をアップ",
+          "text": "書き出して新しい版として上げ、チームがそのまま確認できます。"
+        },
+        {
+          "icon": "list",
+          "title": "対応状況",
+          "text": "どの指摘が対応済みかを一覧にします。"
+        },
+        {
+          "icon": "folder",
+          "title": "素材を取得",
+          "text": "Frame.io のプロジェクトから素材を映像に取り込みます。"
+        }
+      ],
+      "ko": [
+        {
+          "icon": "message",
+          "title": "리뷰 코멘트 읽기",
+          "text": "타임코드가 붙은 코멘트를 하나씩 읽어 고칠 곳을 압니다."
+        },
+        {
+          "icon": "upload",
+          "title": "새 버전 올리기",
+          "text": "내보내서 새 버전으로 올리면 팀이 이어서 봅니다."
+        },
+        {
+          "icon": "list",
+          "title": "반영 현황",
+          "text": "어떤 코멘트를 반영했는지 목록으로 보여 줍니다."
+        },
+        {
+          "icon": "folder",
+          "title": "소재 가져오기",
+          "text": "Frame.io 프로젝트의 소재를 영상으로 가져옵니다."
+        }
+      ],
+      "es": [
+        {
+          "icon": "message",
+          "title": "Lee las notas",
+          "text": "Comentarios con código de tiempo leídos uno a uno, para saber dónde cambiar."
+        },
+        {
+          "icon": "upload",
+          "title": "Sube versiones",
+          "text": "Exporta y sube como nueva versión para que el equipo la revise."
+        },
+        {
+          "icon": "list",
+          "title": "Qué está arreglado",
+          "text": "Una lista de qué notas están hechas y cuáles no."
+        },
+        {
+          "icon": "folder",
+          "title": "Trae material",
+          "text": "Trae material de un proyecto de Frame.io a la película."
+        }
+      ]
+    }
+  },
+  "about": "reads review comments, uploads versions and fetches media in Frame.io (Frame.io's own MCP server)",
+  "category": "edit",
+  "difficulty": 1,
+  "ease": 5,
+  "cost": "free",
+  "audience": {
+    "en": "Editors and teams who review cuts in Frame.io",
+    "zh-CN": "在 Frame.io 上审片的剪辑师和团队",
+    "ja": "Frame.io でカットをレビューする編集者やチーム",
+    "ko": "Frame.io에서 컷을 검토하는 편집자와 팀",
+    "es": "Montadores y equipos que revisan en Frame.io"
+  },
+  "on": false
+}

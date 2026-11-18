@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { IMAGE_BUDGET, KEEP_PICTURE_RESULTS, THINKING, TOO_LARGE, contextLength, contextUsed, effortOption, failureText, fitImages, modelEffort, modelOption, modelsJson, outOfBalance, providerOf, retryNotice, stopReason, toolCall, toolContent } from './pi-config.mjs';
+import { IMAGE_BUDGET, THINKING, TOO_LARGE, agentTools, contextLength, contextUsed, effortOption, failureText, fitImages, modelEffort, modelOption, modelsJson, outOfBalance, providerOf, retryNotice, stopReason, toolCall, toolContent } from './pi-config.mjs';
 
 /** One of the person's own models, as the roster's harness gives it. */
 const own = (id, over = {}) => ({ id, name: id.toUpperCase(), api: 'openai-completions', baseUrl: `https://${id}.test/v1`, keyEnv: `K_${id}`, model: `${id}-model`, levels: ['auto'], effort: 'auto', ...over });
@@ -34,6 +34,11 @@ test("a model's context length is its window in Pi, and a quarter of it its answ
   assert.deepEqual([32_000, 10_000_000, 31_999, 4_000, 10_000_001, 150_000.5, '200000', null].map(contextLength), [32_000, 10_000_000, null, null, null, null, null, null]);
 });
 
+test('the app\'s own agent runs its commands in PowerShell on Windows, which has no bash of its own, and in bash elsewhere', () => {
+  assert.deepEqual(agentTools('win32'), ['read', 'powershell', 'edit', 'write', 'ask']);
+  for (const platform of ['darwin', 'linux']) assert.deepEqual(agentTools(platform), ['read', 'bash', 'edit', 'write', 'ask']);
+});
+
 test("the chat's menu reads the person's models by their names, each picked by its id", () => {
   assert.deepEqual(modelOption([own('a'), own('b')], 'b'), {
     id: 'model', name: 'Model', category: 'model', type: 'select', currentValue: 'b',
@@ -43,6 +48,7 @@ test("the chat's menu reads the person's models by their names, each picked by i
 
 test('what Pi does reads in the chat as Codex\'s did: a command\'s kind and title, a file\'s path, the result\'s text and pictures', () => {
   assert.deepEqual(toolCall('bash', { command: 'openfilm look' }), { kind: 'execute', title: 'openfilm look', rawInput: { command: 'openfilm look' } });
+  assert.deepEqual(toolCall('powershell', { command: 'openfilm look' }), { kind: 'execute', title: 'openfilm look', rawInput: { command: 'openfilm look' } });
   assert.deepEqual(toolCall('read', { path: 'film.html' }), { kind: 'read', title: 'Read film.html', rawInput: { path: 'film.html' } });
   assert.equal(toolCall('write', { path: 'a.html' }).kind, 'edit');
   assert.deepEqual(toolContent({ content: [{ type: 'text', text: 'ok' }, { type: 'image', data: 'AA', mimeType: 'image/png' }] }), [
@@ -53,7 +59,7 @@ test('what Pi does reads in the chat as Codex\'s did: a command\'s kind and titl
   assert.equal(stopReason({ stopReason: 'aborted' }), 'cancelled');
   assert.throws(() => stopReason({ stopReason: 'error', errorMessage: '400 bad' }), /400 bad/);
   assert.throws(() => stopReason({ stopReason: 'error', errorMessage: 'Request timed out.' }),
-    (e) => e.message.startsWith("The model service didn't answer for 15 minutes") && e.details === 'Request timed out.');
+    (e) => e.message.startsWith('The model request timed out.') && e.details === 'Request timed out.');
   assert.deepEqual(contextUsed({ usage: { input: 100, cacheRead: 900, cacheWrite: 0, output: 50 } }, { contextWindow: 10_000 }), { used: 1050, size: 10_000 });
 });
 
@@ -97,7 +103,7 @@ test('the effort option: for a model offering more than one, its levels named', 
 });
 
 test('why a turn failed, in plain words: a service that sent nothing in time, a conversation too long for the model; else as Pi said it', () => {
-  const timedOut = "The model service didn't answer for 15 minutes, even after trying again. Check that the service is running and reachable, then try again.";
+  const timedOut = 'The model request timed out. Check the connection to the service, then try again.';
   assert.equal(failureText('Request timed out.'), timedOut, "the OpenAI and Anthropic clients' own timeout");
   assert.equal(failureText('Headers Timeout Error'), timedOut);
   assert.equal(failureText('Body Timeout Error'), timedOut);
@@ -113,7 +119,7 @@ test('why a turn failed, in plain words: a service that sent nothing in time, a 
 
 test('a model service tried again, as a notice: one that sent nothing in time in plain words, else with what Pi said', () => {
   assert.deepEqual(retryNotice({ type: 'auto_retry_start', attempt: 1, maxAttempts: 1, delayMs: 2000, errorMessage: 'Request timed out.' }), {
-    sessionUpdate: 'notice', severity: 'warning', title: "The model service didn't answer for 15 minutes; trying again (1 of 1).",
+    sessionUpdate: 'notice', severity: 'warning', title: 'The model request timed out; trying again (1 of 1).', description: 'Request timed out.',
   });
   assert.deepEqual(retryNotice({ type: 'auto_retry_start', attempt: 1, maxAttempts: 2, delayMs: 2000, errorMessage: '503 Service Unavailable' }), {
     sessionUpdate: 'notice', severity: 'warning', title: 'The model service failed; trying again (1 of 2).', description: '503 Service Unavailable',
@@ -126,7 +132,7 @@ test("each of the person's models reads pictures as Pi does (2000 px, 4.5 MB at 
   assert.equal(IMAGE_BUDGET, 32 * 1024 * 1024);
 });
 
-test("a request's pictures within its budget: the newest kept, the older ones a line naming their file", () => {
+test('pictures stay unchanged within the budget; a batch is removed when it overflows, with room for more', () => {
   const pic = (n) => ({ type: 'image', mimeType: 'image/png', data: 'x'.repeat(n) });
   const messages = [
     { role: 'user', content: [{ type: 'text', text: 'look' }, pic(40)] },
@@ -135,16 +141,18 @@ test("a request's pictures within its budget: the newest kept, the older ones a 
     { role: 'assistant', content: [{ type: 'toolCall', id: 't2', name: 'read', arguments: { path: '.film/look/00.07.png' } }] },
     { role: 'toolResult', toolCallId: 't2', toolName: 'read', content: [pic(60)] },
   ];
-  assert.deepEqual(fitImages(messages, 150), { messages, kept: 150 }, 'within it: the same messages');
+  assert.deepEqual(fitImages(messages, 150), { messages, kept: 150, removed: 0, pruned: [], reason: null }, 'within it: the same messages');
   assert.equal(fitImages(messages, 150).messages, messages);
-  const { messages: fitted, kept } = fitImages(messages, 120);
-  assert.equal(kept, 110);
+  const { messages: fitted, kept, removed } = fitImages(messages, 120);
+  assert.equal(removed, 2);
+  assert.equal(kept, 60);
   assert.deepEqual(fitted[4].content, [pic(60)], 'the newest kept');
-  assert.deepEqual(fitted[2].content[1], pic(50));
+  assert.equal(fitted[2].content[1].type, 'text', 'clear a batch, not just enough to fit this one request');
   assert.match(fitted[0].content[1].text, /^\[A picture was left out of this request/, 'the oldest left out');
   const tighter = fitImages(messages, 100).messages;
   assert.equal(tighter[2].content[1].text, '[A picture (.film/look/00.03.png) was left out of this request to keep it small. Read it again to see it.]');
   assert.equal(messages[2].content[1].type, 'image', 'the conversation itself is left as it was');
+  assert.equal(tighter[4].content[0].type, 'image', 'keep the newest picture when it fits, even above the half-budget target');
 });
 
 test('a request refused as too large is told apart from other failures, and said in plain words', () => {
@@ -157,18 +165,61 @@ test('a request refused as too large is told apart from other failures, and said
     'The request was too large for the model service; trying again (1 of 1) with half of the older pictures left out.');
 });
 
-test("pictures only in the latest five tool results that hold one; an older one's a line naming its file", () => {
-  assert.equal(KEEP_PICTURE_RESULTS, 5);
+test('reading a sixth and seventh picture preserves the earlier request prefix', () => {
   const pic = { type: 'image', mimeType: 'image/png', data: 'x' };
   const messages = [{ role: 'user', content: [{ type: 'text', text: 'look' }, pic] }];
   for (let n = 1; n <= 7; n++) {
     messages.push({ role: 'assistant', content: [{ type: 'toolCall', id: `t${n}`, name: 'read', arguments: { path: `f${n}.png` } }] });
     messages.push({ role: 'toolResult', toolCallId: `t${n}`, toolName: 'read', content: [{ type: 'text', text: 'Read image file [image/png]' }, pic] });
   }
-  const { messages: fitted, kept } = fitImages(messages, Infinity);
-  const shown = fitted.filter((m) => m.role === 'toolResult').map((m) => m.content[1].type);
-  assert.deepEqual(shown, ['text', 'text', 'image', 'image', 'image', 'image', 'image'], 'the latest five keep theirs');
-  assert.equal(fitted[2].content[1].text, '[A picture (f1.png) was left out of this request to keep it small. Read it again to see it.]');
-  assert.equal(fitted[0].content[1].type, 'image', 'a picture the person attached is not a tool result');
-  assert.equal(kept, 6);
+  const before = fitImages(messages.slice(0, -2), Infinity);
+  const fitted = fitImages(messages, Infinity);
+  assert.equal(fitted.removed, 0);
+  assert.equal(fitted.kept, 8);
+  assert.deepEqual(fitted.messages.slice(0, before.messages.length), before.messages);
+  assert.equal(fitted.messages, messages, 'no rewriting below the actual request guard');
+});
+
+const pictureHistory = (n) => Array.from({ length: n }, (_, i) => ({ role: 'toolResult', toolCallId: `read-${i}`, content: [{ type: 'image', mimeType: 'image/png', data: 'x'.repeat(20) }] }));
+
+test('count limits clear a batch once, and subsequent screenshots leave the existing prefix untouched', () => {
+  const messages = pictureHistory(7);
+  const omitted = new Set();
+  const first = fitImages(messages, Infinity, { omitted, maxImages: 6 });
+  assert.equal(first.reason, 'count');
+  assert.equal(first.pruned.length, 4);
+  assert.equal(first.kept, 60);
+  assert.equal(first.removed, 4);
+  for (let n = 8; n <= 10; n++) {
+    const next = fitImages(pictureHistory(n), Infinity, { omitted, maxImages: 6 });
+    assert.deepEqual(next.messages.slice(0, first.messages.length), first.messages);
+    assert.equal(next.pruned.length, 0, 'use the room cleared by the previous batch');
+  }
+  const nextBatch = fitImages(pictureHistory(11), Infinity, { omitted, maxImages: 6 });
+  assert.equal(nextBatch.pruned.length, 4);
+  assert.equal(nextBatch.removed, 8);
+});
+
+test('omissions survive JSON restoration, compaction, and a larger budget; rereading the same file is a new occurrence', () => {
+  const messages = pictureHistory(7);
+  const first = fitImages(messages, Infinity, { maxImages: 6 });
+  const omitted = new Set(JSON.parse(JSON.stringify(first.pruned)));
+  const restored = fitImages(JSON.parse(JSON.stringify(messages)), Infinity, { omitted });
+  assert.deepEqual(restored.messages, first.messages);
+  const compacted = fitImages([messages[2], messages[6]], Infinity, { omitted });
+  assert.equal(compacted.messages[0].content[0].type, 'text', 'a retained old picture is not resurrected after compaction');
+  const reread = { ...messages[2], toolCallId: 'read-again' };
+  const next = fitImages([...messages, reread], Infinity, { omitted });
+  assert.equal(next.messages.at(-1).content[0].type, 'image', 'a new read can show the original picture again');
+  assert.equal(messages[2].content[0].type, 'image', 'the transcript still has the original');
+});
+
+test('the byte guard includes UTF-8 text, system and tools, and leaves space for provider serialization', () => {
+  const messages = [{ role: 'system', content: '画面描述'.repeat(100_000), tools: [{ name: 'read', description: '文件'.repeat(1000) }] }, ...pictureHistory(4)];
+  const bytes = Buffer.byteLength(JSON.stringify(messages));
+  const fitted = fitImages(messages, Infinity, { maxRequestBytes: bytes + 1024 * 1024 - 10 });
+  assert.equal(fitted.reason, 'bytes');
+  assert.ok(fitted.pruned.length >= 2, 'text leaves room for only part of the pictures');
+  assert.equal(fitted.messages[0], messages[0], 'system and tools are left intact');
+  assert.equal(fitImages([{ role: 'user', content: [{ type: 'image', data: 'x'.repeat(20) }] }], 0).kept, 0, 'a picture too large by itself is omitted');
 });

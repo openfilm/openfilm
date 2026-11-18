@@ -1,0 +1,12 @@
+{
+  "name": "openfilm-color",
+  "private": true,
+  "browser": "ui.js",
+  "bin": {
+    "look": "bin/look.mjs",
+    "input": "bin/input.mjs",
+    "balance": "bin/balance.mjs",
+    "match": "bin/match.mjs",
+    "filter": "bin/filter.mjs"
+  }
+}

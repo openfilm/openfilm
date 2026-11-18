@@ -8,7 +8,7 @@
  * the model asked for and its reasoning efforts: pi-config.mjs OwnModel; `model` the id of the one a session starts
  * on; the chat switches between them with the session's `model` option, and a model's efforts with `effort`, for one
  * offering more than one; `auto` sends none), and its whole system prompt (agents.mjs ownAgentPrompt), in place of Pi's. Of the project's instructions only its own AGENTS.md (or CLAUDE.md) is read, not
- * the folders above it; no SYSTEM.md; of skills only OpenFilm's (`skills`: their folder and names, agent-skills.mjs). Besides Pi's read, bash, edit and write it has `ask`: questions for
+ * the folders above it; no SYSTEM.md; of skills only OpenFilm's (`skills`: their folder and names, agent-skills.mjs). Besides Pi's read, bash (PowerShell on Windows: pi-config.mjs agentTools), edit and write it has `ask`: questions for
  * the person, with options, shown in the chat as Claude Code's and Codex's are (an ACP form).
  *
  * A conversation's session is kept with the project it is about (chat-store.mjs: `.film/chat/agent/`), so it goes
@@ -16,23 +16,24 @@
  * context, as Pi sends it, and the answer) is written there (chat-store.mjs's `<turn>.model.jsonl`), only what is new
  * since the request before.
  *
- * Pictures are kept within the model services' size limits (pi-config.mjs): a request carries those of the latest
- * KEEP_PICTURE_RESULTS tool results that hold one, and at most IMAGE_BUDGET of them, the oldest left out of the request
- * first (never out of the session). A service refusing a request as too large (HTTP 413, a proxy's page included) is
+ * Pictures stay unchanged until a request reaches its size/count limit, then a batch of the oldest is left out with
+ * room for more (Claude Code's strategy, pi-config.mjs). Pi's custom session entries remember the omissions, including
+ * across restoration and compaction. Tool pictures are reduced before Pi saves them. A service refusing a request as too large (HTTP 413, a proxy's page included) is
  * tried again once with half of those pictures, as Pi tries a busy one; that half stays the conversation's limit. A
  * request with no pictures in it is not tried again: its own words are too large, and the turn says so.
  *
  * What Pi does goes to the chat as ACP session updates: its words and thinking as they stream, each tool call (its
  * kind, title and input) and its result, after each answer how full the context is, and a model service tried again.
  */
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { createReadStream, mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { Readable, Writable } from 'node:stream';
 import * as acp from '@agentclientprotocol/sdk';
-import { DefaultResourceLoader, ModelRuntime, SessionManager, SettingsManager, createAgentSession } from '@earendil-works/pi-coding-agent';
-import { Agent, install, setGlobalDispatcher } from 'undici';
+import { DefaultResourceLoader, ModelRuntime, SessionManager, SettingsManager, createAgentSession, formatDimensionNote, resizeImage } from '@earendil-works/pi-coding-agent';
+import { EnvHttpProxyAgent, install, setGlobalDispatcher } from 'undici';
 import { agentSessionsDir, openLog } from './chat-store.mjs';
-import { IMAGE_BUDGET, THINKING, TOO_LARGE, WAIT_MINUTES, contextUsed, effortOption, fitImages, modelOption, modelsJson, providerOf, retryNotice, stopReason, toolCall, toolContent } from './pi-config.mjs';
+import { connectorTools } from './pi-connectors.mjs';
+import { IMAGE_BUDGET, THINKING, TOO_LARGE, WAIT_MINUTES, agentTools, contextUsed, effortOption, fitImages, modelOption, modelsJson, providerOf, retryNotice, stopReason, toolCall, toolContent } from './pi-config.mjs';
 
 /* stdout is the protocol's: anything else Pi or a library prints goes to stderr */
 console.log = console.info = console.warn = console.debug = (...args) => process.stderr.write(`${args.map(String).join(' ')}\n`);
@@ -40,7 +41,14 @@ console.log = console.info = console.warn = console.debug = (...args) => process
 /* some services think quietly for minutes before they answer: wait that long for a byte (Node's fetch stops at 5
    minutes), with fetch and its connections from one undici, as Pi's own command line sets them */
 const WAIT_MS = WAIT_MINUTES * 60_000;
-setGlobalDispatcher(new Agent({ headersTimeout: WAIT_MS, bodyTimeout: WAIT_MS }));
+const PROGRESS_MS = 2 * 60_000;
+const TOOL_IMAGE_SIDE = 768;
+const TOOL_IMAGE_BYTES = 96 * 1024;
+/* environment.mjs passes on the person's proxy; a plain Agent would silently bypass it. */
+setGlobalDispatcher(new EnvHttpProxyAgent({
+  headersTimeout: WAIT_MS, bodyTimeout: WAIT_MS, proxyTunnel: true,
+  connect: { autoSelectFamilyAttemptTimeout: 2000 },
+}));
 install();
 
 const config = JSON.parse(process.env.OPENFILM_PI ?? '{}');
@@ -56,6 +64,24 @@ mkdirSync(config.agentDir, { recursive: true });
 const modelsPath = join(config.agentDir, 'models.json');
 writeFileSync(modelsPath, JSON.stringify(modelsJson(models), null, 2));
 const modelRuntime = await ModelRuntime.create({ authPath: join(config.agentDir, 'auth.json'), modelsPath });
+
+/* The models' keys, in this process's memory only: they come on a pipe of their own (fd 3, agents.mjs KEYS_FD), not
+   the environment, which every command Pi runs (bash) inherits. One still in the environment (Pi started by hand) is
+   taken out of it. */
+const keys = await new Promise((resolve) => {
+  const chunks = [];
+  const pipe = createReadStream('', { fd: 3 });
+  pipe.on('data', (chunk) => chunks.push(chunk));
+  pipe.on('end', () => { try { resolve(JSON.parse(Buffer.concat(chunks).toString('utf8'))); } catch { resolve({}); } });
+  pipe.on('error', () => resolve({}));
+});
+for (const m of models) {
+  const key = typeof keys[m.keyEnv] === 'string' && keys[m.keyEnv] ? keys[m.keyEnv] : process.env[m.keyEnv];
+  delete process.env[m.keyEnv];
+  if (!key) continue;
+  await modelRuntime.setRuntimeApiKey(providerOf(m.id), key);
+  if (m.levels.some((l) => l !== 'auto')) await modelRuntime.setRuntimeApiKey(THINKING(providerOf(m.id)), key);
+}
 
 /** Each open session: Pi's, the turn being logged, and its model (the id) and effort as the chat names them. */
 const sessions = new Map();
@@ -95,7 +121,7 @@ function modelLog(cwd, turnId) {
   let system = 'null';
   let tools = 'null';
   return {
-    write({ startedAt, messages, toolsNow, answer }) {
+    write({ startedAt, messages, imageContext, toolsNow, answer }) {
       const all = messages.map((m) => JSON.stringify(m));
       let prefix = 0;
       while (prefix < keys.length && prefix < all.length && keys[prefix] === all[prefix]) prefix += 1;
@@ -103,6 +129,7 @@ function modelLog(cwd, turnId) {
       const systemKey = JSON.stringify(answer?.systemPrompt ?? null);
       file.write('call', {
         startedAt, ms: Date.now() - startedAt, prefix, messages: messages.slice(prefix),
+        ...(imageContext?.removed ? { imageContext } : {}),
         ...(toolsKey !== tools ? { tools: toolsNow } : {}), ...(systemKey !== system ? { systemPrompt: answer?.systemPrompt ?? null } : {}),
         answer: answer?.message ?? null,
       });
@@ -114,7 +141,7 @@ function modelLog(cwd, turnId) {
   };
 }
 
-async function open(client, cwd, resumeId) {
+async function open(client, cwd, resumeId, mcpServers = []) {
   const sessionDir = agentSessionsDir(cwd);
   const file = resumeId ? SessionManager.findById(cwd, resumeId, sessionDir) : null;
   if (resumeId && !file) throw new Error('That conversation is not here any more.');
@@ -127,7 +154,30 @@ async function open(client, cwd, resumeId) {
   let sessionId = null;
   /* the pictures a request carries at most (pi-config.mjs IMAGE_BUDGET), and those the last one carried (bytes) */
   let imageBudget = IMAGE_BUDGET;
+  const omittedImages = new Set();
+  const imageContextType = 'openfilm-image-context';
+  for (const entry of sessionManager.getBranch()) {
+    if (entry.type !== 'custom' || entry.customType !== imageContextType) continue;
+    for (const key of Array.isArray(entry.data?.omitted) ? entry.data.omitted : []) if (typeof key === 'string') omittedImages.add(key);
+    if (Number.isInteger(entry.data?.budget) && entry.data.budget >= 0) imageBudget = Math.min(imageBudget, entry.data.budget);
+  }
+  const saveImageContext = (omitted = []) => sessionManager.appendCustomEntry(imageContextType, { omitted, budget: imageBudget });
+  /* A 413 already halves the budget; that recovery need not halve it a second time for headroom. */
+  let imageHeadroom = 0.5;
   let imagesSent = 0;
+  let imagesRemoved = 0;
+  let imagesPruned = 0;
+  let imagePruneReason = null;
+  let toldAboutImages = false;
+  let awaitingAnswer = false;
+  let lastVisible = Date.now();
+  const send = (update) => {
+    if (update.sessionUpdate === 'agent_message_chunk' || update.sessionUpdate === 'notice') lastVisible = Date.now();
+    void client.sessionUpdate({ sessionId, update }).catch(() => {});
+  };
+  /* the connectors given (connectors.mjs doors): their tools Pi's (pi-connectors.mjs); one that changes things is asked
+     of the person at the door, as for every agent */
+  const connectors = await connectorTools(mcpServers, { log: (line) => process.stderr.write(`${line}\n`) });
   const resourceLoader = new DefaultResourceLoader({
     cwd, agentDir: config.agentDir, settingsManager, noExtensions: true, noPromptTemplates: true, noThemes: true,
     /* OpenFilm's skills, and no other Pi would find (in the project, or its own folders), listed in the order named */
@@ -138,18 +188,53 @@ async function open(client, cwd, resumeId) {
     appendSystemPromptOverride: () => [],
     agentsFilesOverride: ({ agentsFiles }) => ({ agentsFiles: agentsFiles.filter((f) => dirname(resolve(f.path)) === resolve(cwd)) }),
     extensionFactories: [
-      /* each request's pictures within the budget, the oldest left out first: the request only, never the session */
+      /* Check the complete context, including its system/tools, before logging it. Keep history stable between batches. */
       { name: 'openfilm-images', hidden: true, factory: (pi) => {
-        pi.on('context', (event) => {
-          const fitted = fitImages(event.messages, imageBudget);
+        pi.on('context_with_system', (event, ctx) => {
+          const model = ctx.model;
+          const fitted = fitImages(event.messages, imageBudget, {
+            omitted: omittedImages, headroom: imageHeadroom,
+            maxRequestBytes: Math.min(IMAGE_BUDGET, model?.inputLimits?.maxRequestBytes ?? IMAGE_BUDGET),
+            // Claude's API accepts 600 on long-context models, 100 on 200K models. Unknown gateways use the lower guard.
+            maxImages: model?.inputLimits?.images?.maxPerRequest ?? (/claude/i.test(model?.id ?? '') && model.contextWindow > 200_000 ? 600 : 100),
+          });
+          imageHeadroom = 0.5;
           imagesSent = fitted.kept;
+          imagesRemoved = fitted.removed;
+          imagesPruned = fitted.pruned.length;
+          imagePruneReason = fitted.reason;
+          if (imagesPruned) saveImageContext(fitted.pruned);
+          if (imagesPruned && !toldAboutImages) {
+            toldAboutImages = true;
+            send({ sessionUpdate: 'notice', severity: 'info', title: 'Older pictures were left out of the model’s context.' });
+          }
           return fitted.messages === event.messages ? undefined : { messages: fitted.messages };
+        });
+        pi.on('tool_result', async (event) => {
+          if (!event.content.some(block => block.type === 'image')) return;
+          const content = [];
+          for (const block of event.content) {
+            if (block.type !== 'image') { content.push(block); continue; }
+            const preview = await resizeImage(Buffer.from(block.data, 'base64'), block.mimeType, {
+              maxWidth: TOOL_IMAGE_SIDE, maxHeight: TOOL_IMAGE_SIDE, maxBytes: TOOL_IMAGE_BYTES,
+            }).catch(() => null);
+            if (!preview) {
+              content.push({ type: 'text', text: '[The picture was omitted to keep this turn small. The original is still on disk.]' });
+              continue;
+            }
+            content.push({ type: 'image', mimeType: preview.mimeType, data: preview.data });
+            const dimensions = formatDimensionNote(preview);
+            if (dimensions) content.push({ type: 'text', text: dimensions });
+          }
+          return { content, details: event.details };
         });
       } },
       { name: 'openfilm-log', hidden: true, factory: (pi) => {
-        pi.on('context_with_system', (event) => { pending = { startedAt: Date.now(), messages: event.messages }; });
+        pi.on('context_with_system', (event) => { pending = { startedAt: Date.now(), messages: event.messages,
+          imageContext: { keptBytes: imagesSent, removed: imagesRemoved, pruned: imagesPruned, reason: imagePruneReason } }; });
       } },
-      { name: 'openfilm-ask', hidden: true, factory: (pi) => pi.registerTool(askTool(client, () => sessionId)) },
+      { name: 'openfilm-ask', hidden: true, factory: (pi) => pi.registerTool(askTool(client, () => sessionId, (waiting) => { awaitingAnswer = waiting; })) },
+      { name: 'openfilm-connectors', hidden: true, factory: (pi) => { for (const tool of connectors.tools) pi.registerTool(tool); } },
     ],
   });
   await resourceLoader.reload();
@@ -157,7 +242,7 @@ async function open(client, cwd, resumeId) {
   const { session } = await createAgentSession({
     cwd, agentDir: config.agentDir, modelRuntime, model: piModel(startModel, startEffort),
     ...(startEffort !== 'auto' ? { thinkingLevel: startEffort } : {}),
-    resourceLoader, sessionManager, settingsManager, tools: ['read', 'bash', 'edit', 'write', 'ask'],
+    resourceLoader, sessionManager, settingsManager, tools: [...agentTools(), ...connectors.tools.map((tool) => tool.name)],
   });
   /* a request refused as too large is one Pi tries again (its retry: once, the failed attempt left out of what is sent)
      when it held pictures to leave out; Pi neither retries a 413 nor, but for Anthropic's own words, compacts for it */
@@ -167,12 +252,20 @@ async function open(client, cwd, resumeId) {
   const now = ownOf(session.model);
   const onModel = now.id ?? startModel;
   const levels = byId.get(onModel)?.levels ?? ['auto'];
-  const entry = { session, log: null, answer: null, overflow: null, model: onModel,
+  const entry = { session, connectors, log: null, answer: null, overflow: null, model: onModel,
     effort: now.thinking && levels.includes(session.thinkingLevel) ? session.thinkingLevel : !now.thinking && levels.includes('auto') ? 'auto' : byId.get(onModel)?.effort ?? 'auto' };
   /* a conversation taken up again on a model no longer set up: on the one a session starts on */
   if (!now.id) await use(entry, onModel, entry.effort);
   sessionId = session.sessionId;
-  const send = (update) => { void client.sessionUpdate({ sessionId, update }).catch(() => {}); };
+  entry.startProgress = () => {
+    lastVisible = Date.now();
+    toldAboutImages = false;
+    return setInterval(() => {
+      if (!awaitingAnswer && Date.now() - lastVisible >= PROGRESS_MS) {
+        send({ sessionUpdate: 'notice', severity: 'info', title: 'Still working on this turn.' });
+      }
+    }, 15_000);
+  };
 
   session.subscribe((event) => {
     switch (event.type) {
@@ -188,10 +281,14 @@ async function open(client, cwd, resumeId) {
         /* the turn's last answer: Pi drops one too long for the model from the conversation as it tries to recover */
         entry.answer = message;
         /* refused as too large: the request tried again (see below) carries half of its pictures */
-        if (message.stopReason === 'error' && TOO_LARGE.test(String(message.errorMessage ?? '')) && imagesSent > 0) imageBudget = Math.floor(imagesSent / 2);
+        if (message.stopReason === 'error' && TOO_LARGE.test(String(message.errorMessage ?? '')) && imagesSent > 0) {
+          imageBudget = Math.floor(imagesSent / 2);
+          imageHeadroom = 1;
+          saveImageContext();
+        }
         if (pending && entry.log) {
           const toolsNow = (session.agent?.state?.tools ?? []).map((t) => ({ name: t.name, description: t.description, parameters: t.parameters }));
-          entry.log.write({ startedAt: pending.startedAt, messages: pending.messages, toolsNow, answer: { message, systemPrompt: session.systemPrompt } });
+          entry.log.write({ ...pending, toolsNow, answer: { message, systemPrompt: session.systemPrompt } });
         }
         pending = null;
         const used = contextUsed(message, session.model);
@@ -199,7 +296,7 @@ async function open(client, cwd, resumeId) {
         break;
       }
       case 'tool_execution_start':
-        send({ sessionUpdate: 'tool_call', toolCallId: event.toolCallId, status: 'in_progress', ...toolCall(event.toolName, event.args) });
+        send({ sessionUpdate: 'tool_call', toolCallId: event.toolCallId, status: 'in_progress', ...toolCall(event.toolName, event.args, connectors.labels) });
         break;
       case 'tool_execution_update': {
         const content = toolContent(event.partialResult);
@@ -230,7 +327,7 @@ async function open(client, cwd, resumeId) {
  * shape agents.mjs formQuestions reads: a field per question, a choice a `oneOf`, beside it a field for the person's own
  * words). Resolves with what they answered, or that they skipped it.
  */
-function askTool(client, sessionOf) {
+function askTool(client, sessionOf, setAwaitingAnswer) {
   return {
     name: 'ask',
     label: 'Ask',
@@ -268,10 +365,11 @@ function askTool(client, sessionOf) {
           : { type: 'string', title: q.header ?? '', description: q.question, oneOf: choices };
         properties[`q${i}_own`] = { type: 'string', title: 'In your own words', _meta: { _askUserQuestionCustomAnswer: { questionId: `q${i}` } } };
       });
+      setAwaitingAnswer(true);
       const reply = await client.createElicitation({
         sessionId: sessionOf(), toolCallId, mode: 'form', message: questions[0]?.question ?? '',
         requestedSchema: { type: 'object', properties },
-      }).catch(() => ({ action: 'cancel' }));
+      }).catch(() => ({ action: 'cancel' })).finally(() => setAwaitingAnswer(false));
       const said = reply.action === 'accept' ? questions.map((q, i) => {
         const own = reply.content?.[`q${i}_own`];
         const chosen = reply.content?.[`q${i}`];
@@ -315,14 +413,15 @@ const connection = new acp.AgentSideConnection((client) => ({
   async initialize() {
     return {
       protocolVersion: acp.PROTOCOL_VERSION,
-      agentCapabilities: { loadSession: false, promptCapabilities: { image: true, embeddedContext: true }, sessionCapabilities: { resume: {} } },
+      /* remote MCP servers taken: the connectors' doors (pi-connectors.mjs) */
+      agentCapabilities: { loadSession: false, promptCapabilities: { image: true, embeddedContext: true }, mcpCapabilities: { http: true, sse: false }, sessionCapabilities: { resume: {} } },
       agentInfo: { name: 'pi', title: 'Pi', version: VERSION },
       authMethods: [],
     };
   },
   async authenticate() { return {}; },
-  newSession: said((params) => open(client, params.cwd, null)),
-  resumeSession: said((params) => open(client, params.cwd, params.sessionId)),
+  newSession: said((params) => open(client, params.cwd, null, params.mcpServers)),
+  resumeSession: said((params) => open(client, params.cwd, params.sessionId, params.mcpServers)),
   prompt: said(async (params) => {
     const entry = sessions.get(params.sessionId);
     if (!entry) throw new Error('This conversation has ended.');
@@ -331,12 +430,14 @@ const connection = new acp.AgentSideConnection((client) => ({
     entry.log = typeof meta.turnId === 'string' && typeof meta.cwd === 'string' ? modelLog(meta.cwd, meta.turnId) : null;
     entry.answer = null;
     entry.overflow = null;
+    const progress = entry.startProgress();
     try {
       const { text, images } = promptOf(params.prompt);
       await session.prompt(text, images.length ? { images } : undefined);
       const last = entry.answer ?? [...session.messages].reverse().find((m) => m.role === 'assistant');
       return { stopReason: stopReason(entry.overflow && last?.stopReason !== 'aborted' ? { stopReason: 'error', errorMessage: entry.overflow } : last) };
     } finally {
+      clearInterval(progress);
       entry.log?.end();
       entry.log = null;
     }
@@ -359,7 +460,9 @@ const connection = new acp.AgentSideConnection((client) => ({
   }),
   async cancel(params) { await sessions.get(params.sessionId)?.session.abort(); },
   async closeSession(params) {
-    sessions.get(params.sessionId)?.session.dispose();
+    const entry = sessions.get(params.sessionId);
+    entry?.session.dispose();
+    void entry?.connectors.close();
     sessions.delete(params.sessionId);
   },
 }), acp.ndJsonStream(Writable.toWeb(process.stdout), Readable.toWeb(process.stdin)));

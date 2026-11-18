@@ -38,7 +38,7 @@ test('the turn log has what the agent was started with and each message as it go
     agent: 'qwen',
     cwd: mkdtempSync(join(tmpdir(), 'of-project-')),
     binDir: '/app/bin',
-    env: { OPENFILM_HOME: '/data', SOME_API_KEY: 'sk-secret' },
+    env: { OPENFILM_HOME: '/data', SOME_API_KEY: 'sk-secret', OPENFILM_AGENT: 'app:c1' },
     onSend: (message) => sent.push(message),
   });
   const told = agentInstructions(openfilmCommand('/app/bin'));
@@ -47,7 +47,12 @@ test('the turn log has what the agent was started with and each message as it go
     const opened = session.opened;
     assert.deepEqual(opened.command.slice(-3), ['--acp', '--approval-mode', 'yolo'], 'started as the registry starts it');
     assert.equal(opened.firstMessage, told, 'an agent with no place for them is told in its first message');
-    if (process.platform !== 'win32') assert.ok(told.includes("`'/app/bin/openfilm' look`"), "the app's openfilm by its whole path");
+    if (process.platform !== 'win32') {
+      assert.ok(told.includes("run `'/app/bin/openfilm'` with no arguments"), "the app's openfilm by its whole path");
+      assert.equal(opened.env.OPENFILM_RUN, "'/app/bin/openfilm'", 'which the CLI prints it as');
+    }
+    assert.equal(opened.env.OPENFILM_AGENT, 'app:c1', 'in the app, as the chat said: `openfilm` prints the system prompt for the app');
+    assert.equal(opened.env.OPENFILM_AGENT_NAME, 'Qwen Code', 'its name, for what it puts on the canvas');
     assert.equal(opened.env.OPENFILM_HOME, '/data');
     assert.equal(opened.env.SOME_API_KEY, '(hidden)', 'a key is named, never its value');
     assert.ok(!JSON.stringify(opened).includes('sk-secret'));

@@ -1,0 +1,67 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Ellipse</title>
+<style>
+/*
+ * An ellipse in the middle of the picture, --width by --height. A layer of OpenFilm's library (CC0), as big as the picture: still on its own; how it moves is the film's (its
+ * keyframes in Motion). Repeated as an animation
+ * editor's repeater does: --copies of it (up to 48; a fraction shows the last one partly), --copy-offset further
+ * along, each one moved by --copy-x and --copy-y, turned by --copy-turn and scaled by --copy-scale percent from the
+ * one before, the first on top, the copies' opacity going from --copy-opacity-start to --copy-opacity-end. Each property is its clip's to change, and registered, so keyframes ease it;
+ * CSS alone draws it, so a frame shows its own second.
+ */
+@property --width { syntax: '<length>'; inherits: true; initial-value: 432px; }
+@property --height { syntax: '<length>'; inherits: true; initial-value: 432px; }
+@property --fill { syntax: '<color>'; inherits: true; initial-value: #ffffff; }
+@property --stroke { syntax: '<color>'; inherits: true; initial-value: #ffffff; }
+@property --stroke-width { syntax: '<length>'; inherits: true; initial-value: 0px; }
+@property --trim { syntax: '<number>'; inherits: true; initial-value: 100; }
+@property --trim-start { syntax: '<number>'; inherits: true; initial-value: 0; }
+@property --trim-offset { syntax: '<number>'; inherits: true; initial-value: 0; }
+@property --copies { syntax: '<number>'; inherits: true; initial-value: 1; }
+@property --copy-offset { syntax: '<number>'; inherits: true; initial-value: 0; }
+@property --copy-x { syntax: '<length>'; inherits: true; initial-value: 0px; }
+@property --copy-y { syntax: '<length>'; inherits: true; initial-value: 0px; }
+@property --copy-turn { syntax: '<angle>'; inherits: true; initial-value: 0deg; }
+@property --copy-scale { syntax: '<number>'; inherits: true; initial-value: 100; }
+@property --copy-opacity-start { syntax: '<number>'; inherits: true; initial-value: 100; }
+@property --copy-opacity-end { syntax: '<number>'; inherits: true; initial-value: 100; }
+:root { --width: 40vh; --height: 40vh; --fill: #ffffff; --stroke: #ffffff; --stroke-width: 0px; --trim: 100; --trim-start: 0; --trim-offset: 0; --copies: 1; --copy-offset: 0; --copy-x: 0px; --copy-y: 0px; --copy-turn: 0deg; --copy-scale: 100; --copy-opacity-start: 100; --copy-opacity-end: 100; }
+html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+svg { position: fixed; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.copy { transform-box: view-box; transform-origin: 50% 50%; }
+.s {
+  fill: var(--fill); stroke: var(--stroke); stroke-width: var(--stroke-width);
+  /* trimmed as an animation editor trims a path: the outline drawn from --trim-start to --trim (percent of its
+     whole length, pathLength 100), both moved round it by --trim-offset (degrees: 360 is all of it); the dash repeats
+     every 100, so a part moved past the end comes round from the start */
+  stroke-dasharray: calc(max(var(--trim) - var(--trim-start), 0)) calc(100 - max(var(--trim) - var(--trim-start), 0));
+  stroke-dashoffset: calc(-1 * (var(--trim-start) + var(--trim-offset) / 3.6));
+  stroke-linejoin: miter; stroke-linecap: butt;
+}
+.s { cx: 50%; cy: 50%; rx: calc(var(--width) / 2); ry: calc(var(--height) / 2); }
+/* a copy, k from 0 (the first, on top): as far along as k and the offset say, each step moved, turned and scaled
+   by a copy's own; one past the count shows as much of it as the count's fraction */
+.copy {
+  --j: calc(var(--k) + var(--copy-offset));
+  translate: calc(var(--j) * var(--copy-x)) calc(var(--j) * var(--copy-y));
+  rotate: calc(var(--j) * var(--copy-turn));
+  scale: pow(calc(var(--copy-scale) / 100), var(--j));
+  /* from the first's opacity to the last's (percent), as far between them as it is among the copies */
+  opacity: calc(clamp(0, var(--copies) - var(--k), 1) * (var(--copy-opacity-start) + (var(--copy-opacity-end) - var(--copy-opacity-start)) * min(var(--k) / max(var(--copies) - 1, 1), 1)) / 100);
+}
+</style>
+</head>
+<body>
+<svg><g class="copy"><ellipse class="s" pathLength="100"/></g></svg>
+<script>
+/* its copies, made once as it loads (CSS draws each from its number): the last first, so the first is on top */
+const one = document.querySelector('.copy');
+for (let k = 1; k < 48; k++) { const c = one.cloneNode(true); c.style.setProperty('--k', k); one.before(c); }
+one.style.setProperty('--k', 0);
+window.film = { frame() {} };
+</script>
+</body>
+</html>

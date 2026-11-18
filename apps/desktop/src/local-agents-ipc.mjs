@@ -46,12 +46,13 @@
  */
 import { randomUUID } from 'node:crypto';
 import { join, resolve } from 'node:path';
+import { Worker } from 'node:worker_threads';
 import { recordProblem, problemsFile } from 'openfilm/problems';
 import { LOG_SETTLE_MS } from './agent-logs.mjs';
-import { RECORDED_AGENTS, agentRecordCalls, compactCalls, recordedModel } from './agent-records.mjs';
+import { RECORDED_AGENTS, recordedModel } from './agent-records.mjs';
 import { skillStore } from './agent-skills.mjs';
 import { AGENTS, AgentSession, HARNESS_AGENTS, isAgentId, isChatAgent, listAgents, openAgentSignIn, optionsForModel, probeFolder } from './agents.mjs';
-import { loggedBlocks, logsDir, openLog, writeModelLog } from './chat-store.mjs';
+import { loggedBlocks, logsDir, openLog } from './chat-store.mjs';
 import { loginShellVariables } from './environment.mjs';
 import { turnOutcome } from './turn-notices.mjs';
 
@@ -72,18 +73,26 @@ const IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 
 /** how long after a turn the agent's own record is read: its last lines may still be on their way to the file */
 const RECORD_SETTLE_MS = 800;
+/** where a record is read (agent-record-worker.mjs), and the most memory that may take */
+const RECORD_WORKER = new URL('./agent-record-worker.mjs', import.meta.url);
+const RECORD_WORKER_MB = 2048;
 
 /**
  * The agent's requests to its model from `from` to `to` (ms), read from its own record (or `agentLog`, the log it was
- * started with) into the turn's model log. Never throws: a record that cannot be read leaves the turn without one.
+ * started with) into the turn's model log, in a worker thread, so a long record never holds up the window. Never
+ * throws: a record that cannot be read leaves the turn without one, and the reason is logged.
  */
-export async function keepAgentRecord({ agent, sessionId, cwd, turnId, from, to, agentLog = null, log = () => {}, settleMs = LOG_SETTLE_MS[agent] ?? RECORD_SETTLE_MS }) {
+export async function keepAgentRecord({ agent, sessionId, cwd, turnId, from, to, agentLog = null, log = () => {}, settleMs = LOG_SETTLE_MS[agent] ?? RECORD_SETTLE_MS, env = null }) {
   if (!RECORDED_AGENTS.includes(agent) || !sessionId || !turnId) return;
   try {
     await new Promise((done) => setTimeout(done, settleMs));
-    const env = await loginShellVariables({ staleOk: true });
-    const found = agentRecordCalls({ agent, sessionId, cwd, from, to, env, log: agentLog });
-    if (found?.calls.length) writeModelLog(cwd, turnId, compactCalls(found.calls));
+    const workerData = { agent, sessionId, cwd, turnId, from, to, env: env ?? await loginShellVariables({ staleOk: true }), agentLog };
+    await new Promise((done, fail) => {
+      const worker = new Worker(RECORD_WORKER, { workerData, resourceLimits: { maxOldGenerationSizeMb: RECORD_WORKER_MB } });
+      worker.once('message', (m) => (m?.error ? fail(new Error(m.error)) : done(undefined)));
+      worker.once('error', fail);
+      worker.once('exit', (code) => (code ? fail(new Error(`the record's reader stopped (${code})`)) : done(undefined)));
+    });
   } catch (e) {
     log(`agent record ${turnId}: ${e instanceof Error ? e.message : String(e)}\n`);
   }
@@ -152,9 +161,9 @@ export function agentProblem(entry, step, e, turnId = null) {
  * in (agent-skills.mjs).
  * @param {{ trusted: (event: any) => boolean, binDir?: string | null, fallbackDir?: string | null, env?: Record<string, string>,
  *           harness?: (id: string) => Promise<any>, onWorking?: (folders: string[]) => void, onAsking?: (folders: string[]) => void, onTurn?: (turn: { kind: 'done' | 'failed' | 'asking', agent: string, cwd: string, meta: any, error?: string }) => void, onConnectionResult?: (id: string, error: unknown | null) => void, logDir?: () => string | null,
- *           skills?: { dataDir: string, mine: string } | null }} opts
+ *           skills?: { dataDir: string, mine: string } | null, isAgentUpdating?: (id: string) => boolean }} opts
  */
-export function registerLocalAgentIpc(ipcMain, { trusted, binDir = null, fallbackDir = null, env = {}, harness = async () => null, log = () => {}, onWorking = () => {}, onAsking = () => {}, onTurn = (_turn) => {}, onConnectionResult = (_agent, _error) => {}, logDir = () => null, skills = null }) {
+export function registerLocalAgentIpc(ipcMain, { trusted, binDir = null, fallbackDir = null, env = {}, harness = async () => null, log = () => {}, onWorking = () => {}, onAsking = () => {}, onTurn = (_turn) => {}, onConnectionResult = (_agent, _error) => {}, logDir = () => null, skills = null, isAgentUpdating = () => false }) {
   const harnessFor = async (agent) => (HARNESS_AGENTS.includes(agent) ? harness(agent) : undefined);
   const skillRecord = skills ? skillStore(skills.dataDir) : null;
   /* what went wrong, kept in Studio's home with Studio's own problems (openfilm's problems.mjs), for its report */
@@ -233,7 +242,7 @@ export function registerLocalAgentIpc(ipcMain, { trusted, binDir = null, fallbac
     let session;
     try {
       let options = null;
-      session = new AgentSession({ agent, cwd: probeFolder(), binDir, fallbackDir, env, harness: await harnessFor(agent),
+      session = new AgentSession({ agent, cwd: probeFolder(), binDir, fallbackDir, env, harness: await harnessFor(agent), forget: true,
         onUpdate: (update) => { if (update?.sessionUpdate === 'config_option_update') options = update.configOptions ?? null; } });
       let info = await session.start();
       if (options) info = { ...info, configOptions: options };
@@ -259,10 +268,11 @@ export function registerLocalAgentIpc(ipcMain, { trusted, binDir = null, fallbac
     /* the turn it starts for: a start that fails is written in that turn's log, as a prompt that fails is */
     const meta = opts?.meta && typeof opts.meta === 'object' ? opts.meta : null;
     if (!isChatAgent(agent)) return { ok: false, error: `Unknown agent: ${String(agent)}` };
+    if (isAgentUpdating(agent)) return { ok: false, code: 'agent-updating', error: 'This agent is updating. Wait for it to finish, then try again.' };
     if (typeof cwd !== 'string' || !cwd) return { ok: false, error: 'Missing project folder.' };
     lastAgent = agent;
     /* the conversation still open here (the page was reloaded): taken up as it is, no second process */
-    const open = resume ? [...sessions].find(([, e]) => e.agent === agent && e.cwd === cwd && e.info?.sessionId === resume && e.sender === event.sender) : null;
+    const open = resume ? [...sessions].find(([, e]) => !e.stale && e.agent === agent && e.cwd === cwd && e.info?.sessionId === resume && e.sender === event.sender) : null;
     if (open) {
       open[1].lastUsed = Date.now();
       return { ok: true, key: open[0], info: { ...open[1].info, resumed: true, authMethods: [], mcp: false } };
@@ -335,6 +345,7 @@ export function registerLocalAgentIpc(ipcMain, { trusted, binDir = null, fallbac
     const key = opts?.key;
     const entry = sessions.get(key);
     if (!entry) return { ok: false, error: 'This session has ended.' };
+    if (isAgentUpdating(entry.agent)) return { ok: false, code: 'agent-updating', error: 'This agent is updating. Wait for it to finish, then try again.' };
     const meta = opts?.meta && typeof opts.meta === 'object' ? opts.meta : null;
     const file = meta ? openLog(entry.cwd, meta.turnId, (e) => log(`turn log ${meta.turnId}: ${e.message}\n`)) : null;
     const turn = meta ? { meta, log: [], done: null, file } : null;
@@ -488,6 +499,11 @@ export function registerLocalAgentIpc(ipcMain, { trusted, binDir = null, fallbac
   idle.unref?.();
 
   return {
+    /** Quiet sessions for the shared background catalog; never reused by a conversation. */
+    openProbeSession: async (agent, onOptions) => new AgentSession({
+      agent, cwd: probeFolder(), binDir, fallbackDir, env, harness: await harnessFor(agent), forget: true,
+      onUpdate: (update) => { if (update?.sessionUpdate === 'config_option_update') onOptions(update.configOptions); },
+    }),
     isBusy: () => activePrompts > 0,
     working,
     /** the agent the chat last started a conversation with, or null */
@@ -495,17 +511,23 @@ export function registerLocalAgentIpc(ipcMain, { trusted, binDir = null, fallbac
     /**
      * One question answered by `agent`'s own model, with no chat: Studio's own work that needs a model (translating
      * subtitles). A session of its own in an empty folder, where the agent may do nothing but answer (`answerOnly`: every
-     * permission refused; every question skipped); its words, whole. `signal` stops it.
+     * permission refused; every question skipped); its words, whole, and each piece as it comes to `onText`. `signal`
+     * stops it.
      * @param {string} agent @param {string} text @param {AbortSignal} [signal]
      * @param {Record<string, string | number | boolean>} [options]
-     * @param {import('./studio.mjs').WritingImage[]} [images] @returns {Promise<string>}
+     * @param {import('./studio.mjs').WritingImage[]} [images] @param {(piece: string) => void} [onText]
+     * @returns {Promise<string>}
      */
-    ask: async (agent, text, signal, options = {}, images = []) => {
+    ask: async (agent, text, signal, options = {}, images = [], onText) => {
       if (!isChatAgent(agent)) throw new Error(`Unknown agent: ${String(agent)}`);
       let said = '';
       const session = new AgentSession({
-        agent, cwd: probeFolder(), binDir, fallbackDir, env, harness: await harnessFor(agent), answerOnly: true,
-        onUpdate: (update) => { if (update?.sessionUpdate === 'agent_message_chunk' && update.content?.type === 'text') said += update.content.text ?? ''; },
+        agent, cwd: probeFolder(), binDir, fallbackDir, env, harness: await harnessFor(agent), answerOnly: true, forget: true,
+        onUpdate: (update) => {
+          if (update?.sessionUpdate !== 'agent_message_chunk' || update.content?.type !== 'text' || !update.content.text) return;
+          said += update.content.text;
+          onText?.(update.content.text);
+        },
         onQuestion: async () => null,
       });
       const stop = () => { void session.cancel().catch(() => {}); session.close(); };
@@ -540,6 +562,7 @@ export function registerLocalAgentIpc(ipcMain, { trusted, binDir = null, fallbac
       }
     },
     closeAll: () => [...sessions.keys()].forEach(close),
+    isAgentBusy: (agent) => [...sessions.values()].some((entry) => entry.agent === agent && entry.running > 0),
     /**
      * A project folder about to be renamed: its sessions between turns close (each agent's process works in the
      * folder, and Windows will not rename it under that), and their processes are waited for. A session mid-turn or

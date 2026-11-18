@@ -31,12 +31,13 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { clipKind, declarations, pictureRect, soundRole } from '../../src/film-doc.mjs';
 import { exactRate } from '../../src/rate.mjs';
+import { cssRules } from '../../src/captions.mjs';
 
 /**
  * @typedef {import('../../src/film-doc.mjs').FilmBox} FilmBox
  * @typedef {{ w?: number, h?: number, duration?: number, fps?: number, hasVideo?: boolean, hasAudio?: boolean,
  *   channels?: number, sampleRate?: number, alpha?: boolean, timecode?: NleTimecode }} SourceFacts
- * @typedef {{ opacity: number, rotation: number, rectangle?: { left: number, top: number, right: number, bottom: number } }} DraftClipLook
+ * @typedef {{ opacity: number, rotation: number, exactPixels?: boolean, rectangle?: { left: number, top: number, right: number, bottom: number } }} DraftClipLook
  * @typedef {{ id: string, kind: 'page' | 'video' | 'still', src: string, path: string, at: number, end: number,
  *   from: number, speed: number, box?: FilmBox, track: number, hidden: boolean, styled?: boolean, faded?: boolean,
  *   facts: SourceFacts | null, draftLook?: DraftClipLook, animationTiming?: { durations: number[], delays: number[] },
@@ -52,11 +53,11 @@ import { exactRate } from '../../src/rate.mjs';
  *   the sound of; `fade`: its fades in and out, film seconds (fitted to its length)
  * @typedef {{ stage: { w: number, h: number }, duration: number, pictures: NlePicture[], sounds: NleSound[] }} NleFilm
  * @typedef {{ title: string, fps: number, audio: 'clips' | 'stems', media: 'copy' | 'link', mediaDir: string,
- *   stems?: SoundRole[], audioTracks?: 'roles' | 'source', alpha?: NleAlpha, editable?: boolean, footage?: 'auto' | 'source' | 'render' }} NlePlanOptions
+ *   stems?: SoundRole[], audioTracks?: 'roles' | 'source', alpha?: NleAlpha, editable?: boolean, embeddedAudio?: boolean, footage?: 'auto' | 'source' | 'render' }} NlePlanOptions
  * @typedef {'png' | 'prores4444'} NleAlpha How a picture with alpha is written, in a MOV (default ProRes 4444)
  * @typedef {{ timebase: number, ntsc: boolean, fps: number }} NleRate
  * @typedef {{ value: string, rate: NleRate }} NleTimecode
- * @typedef {{ kind: 'render', clip: string, frames: number, fullSource?: boolean }
+ * @typedef {{ kind: 'render', clip: string, frames: number, fullSource?: boolean, audio?: { path: string, from: number, to: number, speed: number } }
  *   | { kind: 'copy', from: string }
  *   | { kind: 'link', from: string }
  *   | { kind: 'raster', from: string, src: string, w: number, h: number }
@@ -69,7 +70,7 @@ import { exactRate } from '../../src/rate.mjs';
  *   nativeRate?: NleRate }} NleFile
  * @typedef {{ id: string, name: string, fileId: string, start: number, end: number, in: number, out: number, enabled: boolean,
  *   motion?: { scale: number, center: { h: number, v: number } }, draftLook?: DraftClipLook, gain?: number, speed?: number,
- *   levels?: { when: number, value: number }[], linkGroup?: string, sourceRow?: string }} NleClip
+ *   levels?: { when: number, value: number }[], linkGroup?: string, sourceRow?: string, rasterCrop?: {x:number,y:number,w:number,h:number} }} NleClip
  *   Sequence frames [start, end), file frames [in, out); `gain` linear; `levels` its gain's keyframes (its fades),
  *   frames from the clip's first
  * @typedef {{ name: string, enabled: boolean, clips: NleClip[], sourceTrack?: number, role?: SoundRole }} NleTrack
@@ -209,6 +210,35 @@ export function ownLook(style) {
   });
 }
 
+/** Static, direct CSS that changes only placement or an opaque video's covered background. The caller must also
+ * verify the computed surface and full picture coverage. Unknown selectors, scripts, external CSS and effects bake.
+ * @param {string} markup @param {{id:string,class?:string,style?:string}} clip */
+export function plainFootageCss(markup, clip) {
+  if (/<script\b|<link\b[^>]*\brel\s*=\s*["']?stylesheet|<(?:html|body|section)\b[^>]*\b(?:style|class|id)\s*=/i.test(markup)) return false;
+  const classes = new Set((clip.class ?? '').split(/\s+/).filter(Boolean));
+  const neutral = (/** @type {string} */ style) => ownLook(declarations(style).filter(([key]) => !['background', 'background-color'].includes(key))
+    .map(([key, value]) => `${key}:${value}`).join(';')).length === 0;
+  if (!neutral(clip.style ?? '')) return false;
+  for (const match of markup.matchAll(/<style\b[^>]*>([\s\S]*?)<\/style\s*>/gi)) {
+    if (/@/.test(match[1].replace(/\/\*[\s\S]*?\*\//g, ''))) return false;
+    for (const rule of cssRules(match[1])) for (const selector of rule.prelude.split(',').map((s) => s.trim())) {
+      if (!/^(?:[a-z][\w-]*)?(?:[.#][\w-]+)*$/i.test(selector) || !selector) return false;
+      const tag = /^[a-z][\w-]*/i.exec(selector)?.[0]?.toLowerCase();
+      if (tag === 'html' || tag === 'body' || tag === 'section') {
+        if (declarations(rule.block).some(([key, value]) => !['background', 'background-color'].includes(key)
+          && !(['margin', 'padding'].includes(key) && /^0(?:px)?$/.test(value)))) return false;
+        continue;
+      }
+      if (tag && tag !== 'video') continue;
+      const ids = [...selector.matchAll(/#([\w-]+)/g)].map((m) => m[1]);
+      const names = [...selector.matchAll(/\.([\w-]+)/g)].map((m) => m[1]);
+      if (ids.some((id) => id !== clip.id) || names.some((name) => !classes.has(name))) continue;
+      if (!neutral(rule.block)) return false;
+    }
+  }
+  return true;
+}
+
 /**
  * Which stem a sound of the film goes in: a video's own sound is its footage's (what was recorded with the picture, not
  * a voice-over); any other sound by film-doc's soundRole (its folder, its name, else a voice). An export's stems and an
@@ -259,6 +289,7 @@ export function planNleTimeline(film, opts) {
   const keepSources = originalFootage || opts.footage === 'auto';
   const editable = keepSources || opts.editable;
   const sourceTracks = opts.audioTracks === 'source';
+  const embeddedAudio = opts.embeddedAudio && opts.audio === 'clips';
   const { stage } = film;
   /** @type {NleFile[]} */
   const files = [];
@@ -331,7 +362,7 @@ export function planNleTimeline(film, opts) {
   /* ── pictures ── */
   /** @type {{ track: number, start: number, end: number, clip: NleClip }[]} */
   const visual = [];
-  /** footage clips placed as they are, by picture id: their sound links to them */
+  /** Footage with its original sound, including rendered footage when the draft keeps sound in its video. */
   /** @type {Map<string, { clip: NleClip, file: NleFile, picture: NlePicture }>} */
   const footage = new Map();
   for (const p of film.pictures) {
@@ -347,11 +378,19 @@ export function planNleTimeline(film, opts) {
         /* Keep the complete original even when the timeline uses a rendered picture. */
         sourceFile(p, 'video', toFrame(p.from, rate) + Math.round(len * p.speed));
       }
-      const file = addFile({ ...mediaPath(p.id, 'mov'), job: { kind: 'render', clip: p.id, frames, ...(full ? { fullSource: true } : {}) }, durationFrames: frames, video: { w: stage.w, h: stage.h, alpha: true, still: false } });
+      const sound = embeddedAudio && p.kind === 'video' ? film.sounds.find((s) => s.picture === p.id && s.path === p.path
+        && Math.abs(s.at - p.at) < 0.002 && Math.abs(s.from - p.from) < 0.002 && Math.abs(s.speed - p.speed) < 1e-6
+        && Math.abs((s.to - s.from) / s.speed - (p.end - p.at)) < 0.002) : undefined;
+      const audio = sound ? { path: sound.path, from: full ? 0 : sound.from, to: full ? frames / rate.fps : sound.to, speed: full ? 1 : sound.speed } : undefined;
+      const file = addFile({ ...mediaPath(p.id, 'mov'), job: { kind: 'render', clip: p.id, frames, ...(full ? { fullSource: true } : {}), ...(audio ? { audio } : {}) },
+        durationFrames: frames, video: { w: stage.w, h: stage.h, alpha: true, still: false },
+        ...(sound ? { audio: { channels: sound.facts?.channels ?? 2, sampleRate: 48_000 } } : {}) });
       const inside = full ? toFrame(p.from, rate) : 0;
-      visual.push({ track: p.track, ...span, clip: { id: clipId(), name: p.id, fileId: file.id, ...span, in: inside,
+      const clip = { id: clipId(), name: p.id, fileId: file.id, ...span, in: inside,
         out: full ? Math.min(frames, inside + Math.round(len * p.speed)) : len, enabled: !p.hidden,
-        ...(full && p.speed !== 1 ? { speed: p.speed } : {}), ...link } });
+        ...(full && p.speed !== 1 ? { speed: p.speed } : {}), ...link };
+      if (sound) footage.set(p.id, { clip, file, picture: p });
+      visual.push({ track: p.track, ...span, clip });
     };
     /* a clip with a look of its own (the film's CSS: a crop, round corners) is drawn as the film draws it */
     if (p.kind === 'page' || (p.styled && !p.draftLook) || p.faded || !p.facts || (!editable && p.kind === 'video' && Math.abs(p.speed - 1) > 1e-6)) { bake(); continue; }
@@ -410,11 +449,12 @@ export function planNleTimeline(film, opts) {
       if (len <= 0) continue;
       const linked = s.picture ? footage.get(s.picture) : undefined;
       const own = linked && Math.abs(s.speed - (editable ? linked.picture.speed : 1)) < 1e-6 && Math.abs(linked.picture.from - s.from) < 0.002 && Math.abs(linked.picture.at - s.at) < 0.002;
+      const renderedSound = own && linked.file.job.kind === 'render' && linked.file.job.audio;
       /** @type {NleFile} */
       let file;
       let inFrame;
       const faded = Boolean(s.fade && (s.fade[0] > 0 || s.fade[1] > 0));
-      if (!editable && (Math.abs(s.speed - 1) > 1e-6 || faded)) {
+      if (!renderedSound && !editable && (Math.abs(s.speed - 1) > 1e-6 || faded)) {
         /* another speed: an editor would play the source at its own speed, so the part played comes slowed or sped
            (its pitch kept), as the film plays it, as a WAV of its own exactly as long as its clip: the source seconds
            its frames take, as the picture of a clip at another speed is rendered. A sound that fades too: its
@@ -427,11 +467,11 @@ export function planNleTimeline(film, opts) {
         });
         inFrame = 0;
       } else {
-        inFrame = toFrame(s.from, rate);
+        inFrame = renderedSound ? linked.clip.in : toFrame(s.from, rate);
         file = own && linked ? linked.file : sourceFile(s, 'audio', inFrame + Math.round(len * (editable ? s.speed : 1)));
       }
       if (!file.audio) continue;
-      const speed = editable ? s.speed : 1;
+      const speed = renderedSound ? linked.clip.speed ?? 1 : editable ? s.speed : 1;
       const out = reach(file, inFrame + Math.round(len * speed));
       if (out <= inFrame) continue;
       /** @type {NleClip} */

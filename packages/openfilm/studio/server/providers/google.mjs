@@ -35,7 +35,7 @@ const ONE_K_ONLY = 'gemini-3.1-flash-lite-image';
 const IMAGE_REFS = (/** @type {string} */ model) => (model === ONE_K_ONLY ? 1 : 14);
 /* what each model makes, as the canvas offers it (contract.mjs ModelSpec) */
 for (const model of MODELS.image) Object.assign(model, { spec: { ratios: Object.keys(RATIO_SIZE), refs: IMAGE_REFS(model.id), sizes: model.id === ONE_K_ONLY ? ['1k'] : ['1k', '2k', '4k'] } });
-for (const model of MODELS.video) Object.assign(model, { spec: { ratios: ['16:9', '9:16'], seconds: [3, 15], refs: 6, frames: true, clip: true, sizes: ['360p', '720p', '1080p', '4K'] } });
+for (const model of MODELS.video) Object.assign(model, { spec: { ratios: ['16:9', '9:16'], seconds: [3, 15], refs: 6, frames: true, framedMaxSeconds: 10, clip: true, sizes: ['360p', '720p', '1080p', '4K'] } });
 
 /** The prebuilt voices (they speak every language), each with how Google describes it. */
 const VOICES = /** @type {[string, string][]} */ ([

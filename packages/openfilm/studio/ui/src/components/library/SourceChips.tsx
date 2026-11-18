@@ -29,10 +29,10 @@ export function SourceChips({ sources, value, onChange }: { sources: Source[]; v
   );
 }
 
-/** A thing's source on its corner (none for OpenFilm's own): its source's name, or who made it (`by`). */
-export function SourceBadge({ source, by }: { source: Source; by?: string }) {
+/** A thing's source on its corner (none for OpenFilm's own but where sources mix: `always`): its source's name, or who made it (`by`). */
+export function SourceBadge({ source, by, always = false }: { source: Source; by?: string; always?: boolean }) {
   const t = useT();
-  if (source === 'official') return null;
+  if (source === 'official' && !always) return null;
   return (
     <span className="pointer-events-none absolute left-1 top-1 max-w-[calc(100%-8px)] truncate rounded-[4px] bg-black/55 px-1.5 py-[1px] text-[10px] font-medium text-white">
       {by ?? t(`assetDrawer.source_${source}`)}

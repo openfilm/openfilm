@@ -37,7 +37,7 @@ test('the clip under the pointer, and it alone, has a fade dot just inside each 
       ],
     }));
     const project = await openProject(root);
-    studio = await startStudio({ port: 0, openBrowser: () => {} });
+    studio = await startStudio({ port: 0, openBrowser: () => {}, editorDir: process.env.OPENFILM_TEST_EDITOR_DIR });
     browser = await chromium.launch({ headless: true, args: ['--use-angle=swiftshader'] });
     const page = await browser.newPage({ viewport: { width: 1280, height: 900 }, locale: 'en-US', reducedMotion: 'reduce' });
     /* a timeline tall enough for both rows */

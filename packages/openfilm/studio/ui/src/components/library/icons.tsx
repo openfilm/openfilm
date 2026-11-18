@@ -55,6 +55,20 @@ const DRAWN: Record<string, Draw> = {
       <path d="M7 12.4h5.2M14.6 12.4H17M7 15.6h2.6M12 15.6h5" {...ink} />
     </>
   ),
+  /* a cover: a picture standing up, its title across its foot */
+  cover: ({ fill, ink }) => (
+    <>
+      <path d="M7.6 3h8.8A2.6 2.6 0 0 1 19 5.6v12.8a2.6 2.6 0 0 1-2.6 2.6H7.6A2.6 2.6 0 0 1 5 18.4V5.6A2.6 2.6 0 0 1 7.6 3Z" {...fill} />
+      <path d="M8.4 14.4h7.2M8.4 17.2h4.4" {...ink} />
+    </>
+  ),
+  /* a cover's picture: a frame, a hill and the sun in it */
+  coverPicture: ({ fill, ink }) => (
+    <>
+      <path d="M5.6 4.6h12.8A2.6 2.6 0 0 1 21 7.2v9.6a2.6 2.6 0 0 1-2.6 2.6H5.6A2.6 2.6 0 0 1 3 16.8V7.2a2.6 2.6 0 0 1 2.6-2.6Z" {...fill} />
+      <path d="M5.4 17l4.4-5 3.2 3.4 2-2 3.6 3.6M15.6 9.2h.01" {...ink} />
+    </>
+  ),
   /* a sticker: its corner peeling */
   sticker: ({ fill, ink }) => (
     <>
@@ -89,6 +103,10 @@ const DRAWN: Record<string, Draw> = {
   skill: ({ fill }) => (
     <path d="M13.4 3 5.6 13.2h5.6L10.4 21l8-10.4h-5.6Z" {...fill} />
   ),
+  /* a plugin: a piece that fits into the rest */
+  plugin: ({ fill }) => (
+    <path d="M9.2 4.6h2a2 2 0 1 1 3.6 0h3.4a1.6 1.6 0 0 1 1.6 1.6v3.4a2 2 0 1 0 0 3.6v5.2a1.6 1.6 0 0 1-1.6 1.6h-4a2 2 0 1 0-3.6 0H5.8a1.6 1.6 0 0 1-1.6-1.6v-4a2 2 0 1 1 0-3.6V6.2a1.6 1.6 0 0 1 1.6-1.6Z" {...fill} />
+  ),
   /* a template: a picture laid out, one big place and two small */
   template: ({ fill, ink }) => (
     <>
@@ -113,27 +131,34 @@ export function CategoryIcon({ id, on, size = 22 }: { id: string; on: boolean; s
 }
 
 /** What the drawer shows where it has nothing: a box with a star (no favorites), a record (no music yet), a lens (nothing found). */
-function EmptyIcon({ kind }: { kind: 'star' | 'music' | 'search' }) {
+function EmptyIcon({ kind }: { kind: 'star' | 'music' | 'search' | 'community' }) {
   return (
     <svg width="44" height="44" viewBox="0 0 48 48" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M8 14.5h32v22a3.5 3.5 0 0 1-3.5 3.5h-25A3.5 3.5 0 0 1 8 36.5Z" />
       <path d="M12 8.5h24" />
       {kind === 'star' ? <path d="m24 20.5 2.1 4.3 4.7.7-3.4 3.3.8 4.7-4.2-2.2-4.2 2.2.8-4.7-3.4-3.3 4.7-.7Z" fill="currentColor" stroke="none" />
         : kind === 'music' ? <><circle cx="24" cy="27" r="7" /><circle cx="24" cy="27" r="1.6" fill="currentColor" stroke="none" /></>
+          : kind === 'community' ? <><circle cx="24" cy="27" r="7" /><path d="m26.8 24.2-1.7 4.1-4.1 1.7 1.7-4.1Z" fill="currentColor" stroke="none" /></>
           : <><circle cx="22.5" cy="25.5" r="5.5" /><path d="m26.5 29.5 4 4" /></>}
     </svg>
   );
 }
 
 /** Where a list has nothing: why, and what to do instead. */
-export function Empty({ icon, text, action, onAction }: { icon: 'star' | 'music' | 'search'; text: string; action?: string; onAction?: () => void }) {
+export function Empty({ icon, text, action, onAction, block = false }: { icon: 'star' | 'music' | 'search' | 'community'; text: string; action?: string; onAction?: () => void;
+  /** its action a button of its own under the words, not a link after them */
+  block?: boolean }) {
   return (
     <div className="flex flex-col items-center gap-3 px-4 pt-16 text-center text-[var(--text-faint)]">
       <EmptyIcon kind={icon} />
       <p className="text-[12.5px] leading-relaxed">
         {text}
-        {action ? <> <button type="button" onClick={onAction} className="font-medium text-[var(--accent)] hover:underline">{action}</button></> : null}
+        {action && !block ? <> <button type="button" onClick={onAction} className="font-medium text-[var(--accent)] hover:underline">{action}</button></> : null}
       </p>
+      {action && block ? (
+        <button type="button" onClick={onAction} data-empty-action=""
+          className="h-8 rounded-md bg-[var(--bg-field)] px-3.5 text-[12px] font-semibold text-[var(--text)] transition hover:bg-[var(--bg-pressed)]">{action}</button>
+      ) : null}
     </div>
   );
 }

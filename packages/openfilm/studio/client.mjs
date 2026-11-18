@@ -10,14 +10,14 @@ import { existsSync, mkdirSync, openSync, readFileSync, writeFileSync } from 'no
 import { request } from 'node:http';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { studioHome, studioKey } from './server/projects.mjs';
+import { agentKeyOf, studioHome, studioKey } from './server/projects.mjs';
 
 const MAIN = fileURLToPath(new URL('./server/main.mjs', import.meta.url));
 const VERSION = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version;
 /** A source checkout (Studio's editor source is here): git pull updates it, not npm. */
 export const FROM_SOURCE = existsSync(new URL('./ui/src', import.meta.url));
 
-/** @typedef {{ pid?: number, supervisor?: number, origin: string, filmOrigin: string, key: string, version?: string, app?: boolean }} Running */
+/** @typedef {{ pid?: number, supervisor?: number, origin: string, filmOrigin: string, key: string, keyKind?: 'agent', version?: string, app?: boolean }} Running */
 
 /** What a Studio says about itself, or null when nothing (or something else) answers at `origin`. */
 async function health(/** @type {string} */ origin, ms = 1500) {
@@ -38,15 +38,19 @@ export async function running() {
   try { run = JSON.parse(readFileSync(join(studioHome(), 'run.json'), 'utf8')); } catch { /* none advertised */ }
   if (run) {
     const said = await health(run.origin);
-    if (said) return { ...run, version: said.version, ...(said.app ? { app: true } : {}) };
+    /* the app's Studio names only the agents' key (`keyKind: 'agent'`): sent as it is, by an agent or the person */
+    if (said) return { ...run, key: run.keyKind === 'agent' ? run.key : callerKey(run.key), version: said.version, ...(said.app ? { app: true } : {}) };
   }
   const given = Number(process.env.OPENFILM_STUDIO_PORT);
   const origin = `http://127.0.0.1:${Number.isInteger(given) && given > 0 ? given : 4747}`;
   const said = await health(origin);
   /* it says which home it serves as a hash of the path (the path itself is not told to anyone who asks) */
   if (said?.home !== createHash('sha256').update(studioHome()).digest('hex') || !said.filmOrigin) return null;
-  return { origin, filmOrigin: said.filmOrigin, key: studioKey(), version: said.version, ...(said.app ? { app: true } : {}) };
+  return { origin, filmOrigin: said.filmOrigin, key: callerKey(studioKey()), version: said.version, ...(said.app ? { app: true } : {}) };
 }
+
+/** The key this run reaches Studio with: an agent the app runs (OPENFILM_AGENT) its own, which leaves the person's say to them. @param {string} key */
+const callerKey = (key) => (process.env.OPENFILM_AGENT ? agentKeyOf(key) : key);
 
 /**
  * The Studio its supervisor is starting again after it ended (main.mjs): run.json names a supervisor still alive. It is
@@ -314,10 +318,22 @@ export async function keptNote(from = '.') {
 }
 
 /**
+ * Whose a node `openfilm canvas` adds is, as the board shows it: the agent by its name (OPENFILM_AGENT_NAME, which the
+ * desktop app sets; else OPENFILM_AGENT) and its conversation (OPENFILM_SESSION, else the app's `app:<conversation>`).
+ * None outside an agent. @param {Record<string, string | undefined>} [env]
+ */
+export function canvasBy(env = process.env) {
+  const agent = env.OPENFILM_AGENT_NAME || env.OPENFILM_AGENT;
+  if (!agent) return undefined;
+  const session = env.OPENFILM_SESSION || (env.OPENFILM_AGENT?.startsWith('app:') ? env.OPENFILM_AGENT.slice(4) : '');
+  return { agent, ...(session ? { session } : {}) };
+}
+
+/**
  * `openfilm canvas`: the canvas of the project around the current folder, as JSON; `openfilm canvas apply <steps>`
  * takes an agent's steps on it (a JSON list, a .json file, or - for standard input; see applyCanvasOps in
  * server/canvas.mjs), all or none, and Studio shows them on the board at once. What it adds is the agent's that runs it
- * (OPENFILM_AGENT, and OPENFILM_SESSION when it says which conversation).
+ * (canvasBy).
  * @param {string[]} args @param {(line: string) => void} [say] @returns {Promise<{ ok: boolean, usage?: boolean, lines: string[] }>}
  */
 export async function canvasCommand(args, say) {
@@ -332,8 +348,7 @@ export async function canvasCommand(args, say) {
     const text = given === '-' ? readFileSync(0, 'utf8') : given.trim().startsWith('[') ? given : readFileSync(given, 'utf8');
     try { ops = JSON.parse(text); } catch (e) { return { ok: false, usage: true, lines: [`openfilm canvas apply: the steps are not JSON: ${/** @type {Error} */ (e).message}`] }; }
   }
-  const agent = process.env.OPENFILM_AGENT;
-  const by = agent ? { agent, ...(process.env.OPENFILM_SESSION ? { session: process.env.OPENFILM_SESSION } : {}) } : undefined;
+  const by = canvasBy();
   const run = await ensureStudio(say);
   const answer = await post(run, '/api/canvas', { folder, ...(ops === undefined ? {} : { ops }), ...(by ? { by } : {}) });
   if (!answer?.ok) return { ok: false, usage: answer?.code === 2, lines: [`openfilm canvas: ${answer?.text ?? answer?.error ?? 'Studio did not say how it went'}`] };
@@ -383,6 +398,9 @@ export async function getMedia(argv, say) {
     if (Array.isArray(answer?.lines) && typeof answer.code === 'number') return { code: answer.code, lines: answer.lines };
     return library.libraryGet(verb, args);
   }
+  /* the person's own media library: searched here too, offline and free (studio/server/media-library-get.mjs) */
+  const { MY_MEDIA, myMediaGet, myMediaVerb } = await import('./server/media-library-get.mjs');
+  if (verb === MY_MEDIA && help === undefined) return myMediaGet(args, projectAround('.'));
   const listing = !verb || verb === 'help' || help !== undefined;
   const folder = projectAround('.');
   if (!folder && !listing) return { code: 2, lines: [`openfilm get: ${resolve('.')} is not in a project; \`openfilm open\` makes one`] };
@@ -395,7 +413,8 @@ export async function getMedia(argv, say) {
   }
   const one = verb && verb !== 'help' ? verb : null;
   /* the library's verbs, listed first: what is there for free comes before what is made */
-  const free = library.libraryVerbs(one ?? undefined);
+  const own = !one || one === MY_MEDIA ? [myMediaVerb()] : [];
+  const free = [...own, ...library.libraryVerbs(one ?? undefined)];
   /** @param {{ verb: string, help: string, dir?: string, options: Record<string, { value?: string, required?: boolean, choices?: string[] }> }[]} list @param {number} width */
   const lines = (list, width) => list.flatMap((v) => {
     const options = Object.entries(v.options).map(([name, o]) => {
@@ -422,8 +441,10 @@ export async function getMedia(argv, say) {
   const where = one || !services ? [] : ['', services];
   const width = Math.max(...[...free, ...verbs].map((v) => v.verb.length));
   const first = one ? [] : [
-    'Free, offline, from OpenFilm\'s own library (CC0): search it first, and make only what it does not have.',
-    ...lines(free, width), '',
+    'Free, offline, the person\'s own media: look here first.',
+    ...lines(own, width), '',
+    'Free, offline, from OpenFilm\'s own library (CC0): search it next, and make only what neither has.',
+    ...lines(free.slice(own.length), width), '',
   ];
   /* nothing connected: what to do instead, and which services there are */
   if (!verbs.length) return { code: 0, lines: [...first, ...(note ? [note] : []), ...where] };

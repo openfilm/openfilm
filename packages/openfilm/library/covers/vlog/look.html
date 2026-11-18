@@ -1,0 +1,28 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Vlog</title>
+<style>
+:root { --font: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Hiragino Sans GB', sans-serif; --paper: #fbfaf7; --ink: #2a2a2a; --accent: #ff7a1a; --script: 'Snell Roundhand', 'Bradley Hand', 'Kaiti SC', 'STKaiti', cursive; }
+html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+* { box-sizing: border-box; }
+.frame { position: fixed; inset: 0; border: solid var(--paper); border-width: 3.2vmin 3.2vmin 18vmin; box-shadow: inset 0 0 0 1px rgba(0,0,0,.08); }
+.t1 { position: fixed; left: 0; right: 0; bottom: 3.2vmin; height: 14.8vmin; display: flex; align-items: center; justify-content: center; font-family: var(--script); font-size: 9.5vmin; color: var(--ink); line-height: 1; }
+.t2 { position: fixed; right: 7vmin; top: 7vmin; font-family: 'Courier New', monospace; font-size: 3.4vmin; font-weight: 700; color: var(--accent); letter-spacing: .08em; text-shadow: 0 .05em .25em rgba(0,0,0,.6); }
+.t3 { position: fixed; left: 7vmin; top: 6vmin; font-family: var(--font); font-size: 2.6vmin; font-weight: 600; color: #fff; background: rgba(0,0,0,.35); padding: .35em .8em; border-radius: 99px; }
+@media (max-aspect-ratio: 1/1) { .frame { border-width: 4vmin 4vmin 22vmin; } .t1 { bottom: 4vmin; height: 18vmin; font-size: 12vmin; } }
+/* a full-screen feed: words kept clear of its caption, its buttons and its top bar */
+@media (max-aspect-ratio: 10/16) { .t2 { top: 9vh; } .t3 { top: 9vh; } }
+</style>
+</head>
+<body>
+<div class="frame"></div><span class="t3">VLOG 07</span><span class="t2">2026 11 17</span><span class="t1">a slow sunday</span>
+<script>
+/*
+ * A white photo border with a handwritten title and a date stamp: a vlog cover. A page of OpenFilm's library (CC0): a still, the same at every t.
+ */
+window.film = { frame() {} };
+</script>
+</body>
+</html>

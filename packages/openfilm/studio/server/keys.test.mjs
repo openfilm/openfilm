@@ -1,11 +1,12 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { chmodSync, mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { changeSettings, cleanKey, modelFor, providerKey, providersFile, readSettings } from './keys.mjs';
 import { listProviders } from './providers/index.mjs';
-import { startStudio } from './server.mjs';
+import { agentKeyOf } from './projects.mjs';
+import { personsSay, startStudio } from './server.mjs';
 
 /* OpenFilm's service is asked what it offers: nowhere here (a port that refuses at once) */
 process.env.OPENFILM_API_URL ??= 'http://127.0.0.1:9';
@@ -73,7 +74,7 @@ test('the providers API: keys go in and never come back out; choices for each ki
   assert.ok(!text.includes('sk-test-ABCDEFGH9876') && !text.includes(KEY));
   let state = JSON.parse(text);
   const openai = state.providers.find((p) => p.id === 'openai');
-  assert.deepEqual(openai, { id: 'openai', name: 'OpenAI', verbs: ['voice', 'tts', 'image', 'asr', 'translate'], models: listProviders().find((p) => p.id === 'openai').models, keysUrl: 'https://platform.openai.com/api-keys', pricingUrl: 'https://developers.openai.com/api/docs/pricing', env: 'OPENAI_API_KEY', envKey: false, source: 'file', last4: '9876', signIn: false, account: null });
+  assert.deepEqual(openai, { id: 'openai', name: 'OpenAI', verbs: ['image', 'asr', 'translate'], models: listProviders().find((p) => p.id === 'openai').models, keysUrl: 'https://platform.openai.com/api-keys', pricingUrl: 'https://developers.openai.com/api/docs/pricing', env: 'OPENAI_API_KEY', envKey: false, source: 'file', last4: '9876', signIn: false, account: null });
   /* a new key takes the kinds nothing serves yet, and only those it can do */
   assert.equal(state.use.image, 'openai');
   assert.equal(state.use['image-search'], null);
@@ -207,4 +208,41 @@ test('the library is searched by meaning at OpenFilm\'s service unless turned of
   assert.equal((await api('/api/providers/library-search', { method: 'PUT', body: { on: 'yes' } })).status, 400);
   state = await (await api('/api/providers/library-search', { method: 'PUT', body: { on: true } })).json();
   assert.equal(state.librarySearch, 'openfilm');
+});
+
+test("an agent's key reads the services but does not change them, Settings, or what is on", async () => {
+  const as = (path, method = 'GET', body) => fetch(`${studio.origin}${path}`, {
+    method, headers: { 'x-studio-key': agentKeyOf(studio.key), ...(body ? { 'content-type': 'application/json' } : {}) }, body: body ? JSON.stringify(body) : undefined,
+  });
+  assert.equal((await as('/api/providers')).status, 200);
+  const refused = await as('/api/providers/openai/key', 'PUT', { key: 'sk-test-agent' });
+  assert.equal(refused.status, 403);
+  assert.match((await refused.json()).error, /only the person/);
+  assert.equal((await as('/api/prefs', 'PATCH', {})).status, 403);
+  assert.equal((await as('/api/providers/use', 'PUT', { verb: 'image', provider: null })).status, 403);
+  /* a key it was not given is no key */
+  const wrong = await fetch(`${studio.origin}/api/providers`, { headers: { 'x-studio-key': agentKeyOf('nope') } });
+  assert.equal(wrong.status, 401);
+});
+
+test("what is the person's own say", () => {
+  assert.equal(personsSay(['providers', 'openai', 'key'], 'PUT'), true);
+  assert.equal(personsSay(['providers'], 'GET'), false);
+  assert.equal(personsSay(['prefs'], 'PATCH'), true);
+  assert.equal(personsSay(['plugins', 'sound'], 'PUT'), true);
+  assert.equal(personsSay(['plugins', 'canvas', 'boards'], 'POST'), false);
+  assert.equal(personsSay(['skills', 'catalog'], 'POST'), false);
+  assert.equal(personsSay(['skills', 'x', 'writes'], 'PUT'), true);
+  assert.equal(personsSay(['get'], 'POST'), false);
+  assert.equal(personsSay(['canvas'], 'POST'), false);
+});
+
+test('strict: a settings file that is there but cannot be read throws instead of reading as no keys; none yet is none', async () => {
+  const folder = mkdtempSync(join(tmpdir(), 'of-keys-strict-'));
+  /* a folder where the file should be: reading it fails as a held file would */
+  const held = join(folder, 'held.json');
+  mkdirSync(held);
+  assert.deepEqual((await readSettings(held)).keys, {});
+  await assert.rejects(readSettings(held, { strict: true }), { code: 'EISDIR' });
+  assert.deepEqual((await readSettings(join(folder, 'none.json'), { strict: true })).keys, {});
 });

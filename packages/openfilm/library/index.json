@@ -310,6 +310,18 @@
      "es": "Ambiente"
     }
    }
+  ],
+  "layer": [
+   {
+    "id": "basic",
+    "name": {
+     "en": "Layers",
+     "zh-CN": "图层",
+     "ja": "レイヤー",
+     "ko": "레이어",
+     "es": "Capas"
+    }
+   }
   ]
  },
  "items": [
@@ -3860,6 +3872,106 @@
    },
    "kind": "sound",
    "durationMs": 8000
+  },
+  {
+   "id": "layers/rectangle",
+   "cat": "layer",
+   "group": "basic",
+   "name": {
+    "en": "Rectangle",
+    "zh-CN": "矩形",
+    "ja": "長方形",
+    "ko": "사각형",
+    "es": "Rectángulo"
+   },
+   "kind": "page",
+   "durationMs": 5000,
+   "src": "rectangle.html",
+   "about": "A rectangle with a fill, a stroke and rounded corners, still: for cards, frames and bars to animate in Motion.",
+   "tags": [
+    "layer",
+    "shape"
+   ]
+  },
+  {
+   "id": "layers/ellipse",
+   "cat": "layer",
+   "group": "basic",
+   "name": {
+    "en": "Ellipse",
+    "zh-CN": "椭圆",
+    "ja": "楕円",
+    "ko": "타원",
+    "es": "Elipse"
+   },
+   "kind": "page",
+   "durationMs": 5000,
+   "src": "ellipse.html",
+   "about": "An ellipse with a fill and a stroke, still: for rings and dots to animate in Motion.",
+   "tags": [
+    "layer",
+    "shape"
+   ]
+  },
+  {
+   "id": "layers/polygon",
+   "cat": "layer",
+   "group": "basic",
+   "name": {
+    "en": "Polygon",
+    "zh-CN": "多边形",
+    "ja": "多角形",
+    "ko": "다각형",
+    "es": "Polígono"
+   },
+   "kind": "page",
+   "durationMs": 5000,
+   "src": "polygon.html",
+   "about": "A hexagon with a fill and a stroke, still, to animate in Motion.",
+   "tags": [
+    "layer",
+    "shape"
+   ]
+  },
+  {
+   "id": "layers/star",
+   "cat": "layer",
+   "group": "basic",
+   "name": {
+    "en": "Star",
+    "zh-CN": "星形",
+    "ja": "星形",
+    "ko": "별",
+    "es": "Estrella"
+   },
+   "kind": "page",
+   "durationMs": 5000,
+   "src": "star.html",
+   "about": "A five-pointed star with a fill and a stroke, still, to animate in Motion.",
+   "tags": [
+    "layer",
+    "shape"
+   ]
+  },
+  {
+   "id": "layers/solid",
+   "cat": "layer",
+   "group": "basic",
+   "name": {
+    "en": "Solid",
+    "zh-CN": "纯色",
+    "ja": "平面",
+    "ko": "단색",
+    "es": "Sólido"
+   },
+   "kind": "page",
+   "durationMs": 5000,
+   "src": "solid.html",
+   "about": "A plain color, still: a background, a card or a flash to animate in Motion.",
+   "tags": [
+    "layer",
+    "shape"
+   ]
   }
  ]
 }

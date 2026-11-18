@@ -1,0 +1,295 @@
+{
+  "order": 3,
+  "icon": "palette",
+  "title": {
+    "en": "Color",
+    "zh-CN": "调色",
+    "ja": "カラー",
+    "ko": "컬러",
+    "es": "Color"
+  },
+  "summary": {
+    "en": "Grade every shot, footage or code-made, with wheels, curves, looks and scopes, or hand it to your agent.",
+    "zh-CN": "一个个镜头调色，拍的和代码做的画面都行：色轮、曲线、风格和示波器，也能交给智能体。",
+    "ja": "撮影素材もコードで作った画面も、ショットごとにグレーディング。ホイール、カーブ、ルック、スコープ。エージェントにも任せられます。",
+    "ko": "촬영 소스도 코드로 만든 화면도 샷마다 색보정: 휠, 커브, 룩, 스코프. 에이전트에게 맡길 수도 있습니다.",
+    "es": "Gradúa cada plano, grabado o hecho con código, con ruedas, curvas, looks y scopes, o déjalo a tu agente."
+  },
+  "details": {
+    "en": "When to use it: footage looks grey (camera log), has a cast, shots don’t match, or you want a look for the whole film. Videos, stills and pictures made of web pages are all graded; pages and stills have no hue curves.\nHow to use it: click a shot in the strip; drag the sliders in Basic or push the Wheels, and watch the scopes and the picture; when one shot is right, Copy to… the others, or Match to… one you like.\nWith your agent: say “make every shot a little warmer” in the chat; it measures the picture before it changes it, and what it changed shows under Changes, for you to tune on.\nTurned off: grades still play and export (they are LUT files of the project).",
+    "zh-CN": "什么时候用：素材发灰（相机 Log）、偏色、几个镜头颜色对不上，或想给整部片子一种风格。视频、图片和网页做的画面都能调；网页和图片上没有色相曲线。\n怎么用：在镜头带里点一个镜头；在「基础」拖滑块或在「色轮」推颜色，对着示波器和画面看结果；调好一个，用「复制到…」用到其他镜头，或「匹配到…」对齐到喜欢的那个。\n和智能体一起：在对话里说「把所有镜头调暖一点」，它先测量画面再改；它改了什么会显示在「协作记录」里，你接着调。\n关掉后：调好的颜色照样播放和导出（保存在项目的 LUT 文件里）。",
+    "ja": "使うとき：素材が眠い（カメラのログ）、色かぶりがある、ショットの色がそろわない、映像全体にある雰囲気を与えたいとき。動画、静止画、ウェブページでできた画面のどれも調整できます。ページと静止画に色相カーブはありません。\n使い方：ストリップのショットをクリックし、「基本」のスライダーや「ホイール」で色を押して、スコープと画面で確かめます。一つ決まったら「コピー先…」で他のショットへ、「マッチ先…」で気に入ったショットにそろえます。\nエージェントと：チャットで「全部のショットを少し暖かく」と頼むと、画面を測ってから直します。直した内容は「変更履歴」に出るので、続けて調整できます。\nオフにすると：グレードはそのまま再生・書き出しされます（プロジェクトの LUT ファイル）。",
+    "ko": "언제 쓰나요: 소스가 흐리거나(카메라 로그) 색이 틀어졌거나, 샷끼리 색이 안 맞거나, 영상 전체에 특정 느낌을 주고 싶을 때. 동영상, 이미지, 웹 페이지로 만든 화면 모두 보정할 수 있습니다. 페이지와 이미지에는 색상 커브가 없습니다.\n쓰는 법: 스트립에서 샷을 클릭하고 「기본」 슬라이더나 「휠」로 색을 밀며 스코프와 화면으로 확인합니다. 한 샷이 맞으면 「복사…」로 다른 샷에 적용하거나 「매칭…」으로 마음에 드는 샷에 맞춥니다.\n에이전트와 함께: 채팅에 「모든 샷을 조금 따뜻하게」라고 말하면 화면을 측정한 뒤 고칩니다. 바꾼 내용은 「변경 기록」에 보이니 이어서 다듬으세요.\n끄면: 보정한 색은 그대로 재생·내보내기됩니다(프로젝트의 LUT 파일).",
+    "es": "Cuándo usarlo: el material se ve gris (log de cámara), tiene una dominante, los planos no casan o quieres un look para toda la película. Se gradúan vídeos, fotos e imágenes hechas con páginas web; las páginas y las fotos no tienen curvas de tono.\nCómo usarlo: haz clic en un plano de la tira; mueve los deslizadores de Básico o empuja las Ruedas, y mira los scopes y la imagen; cuando un plano esté bien, Copiar a… los demás, o Igualar a… uno que te guste.\nCon tu agente: di en el chat «haz todos los planos un poco más cálidos»; mide la imagen antes de cambiarla, y lo que cambió aparece en Cambios para que sigas ajustando.\nSi se desactiva: las gradaciones se siguen reproduciendo y exportando (son archivos LUT del proyecto)."
+  },
+  "examples": {
+    "zh-CN": [
+      {
+        "say": "把所有镜头调暖一点",
+        "does": "先测量每个镜头的画面再统一调暖；改了什么记在协作记录里，你接着调。"
+      },
+      {
+        "say": "这几个镜头颜色对不上，统一一下",
+        "does": "以你选的那个镜头为准，把其余镜头匹配过去。"
+      },
+      {
+        "say": "素材发灰，帮我还原正常颜色",
+        "does": "看出是相机 Log 素材，先做还原，再微调对比和饱和度。"
+      }
+    ],
+    "en": [
+      {
+        "say": "Make every shot a little warmer",
+        "does": "Measures each shot first, then warms them alike; what it changed is in the log for you to carry on."
+      },
+      {
+        "say": "These shots don't match, make them consistent",
+        "does": "Matches the others to the shot you picked."
+      },
+      {
+        "say": "The footage looks flat, bring back normal colour",
+        "does": "Sees it is camera Log, converts it, then fine-tunes contrast and saturation."
+      }
+    ],
+    "ja": [
+      {
+        "say": "全部のカットを少し暖かくして",
+        "does": "各カットを測ってからそろえて暖かく。変更は記録に残るので続きを調整できます。"
+      },
+      {
+        "say": "このカットたちの色が合わない、そろえて",
+        "does": "選んだカットを基準に、残りを合わせます。"
+      },
+      {
+        "say": "素材が眠い、普通の色に戻して",
+        "does": "カメラの Log 素材と判断して変換し、コントラストと彩度を微調整。"
+      }
+    ],
+    "ko": [
+      {
+        "say": "모든 샷을 조금 따뜻하게 해 줘",
+        "does": "샷마다 먼저 측정하고 똑같이 따뜻하게 합니다. 바뀐 내용은 기록에 남아 이어서 조절할 수 있어요."
+      },
+      {
+        "say": "이 샷들 색이 안 맞아, 맞춰 줘",
+        "does": "고른 샷을 기준으로 나머지를 맞춥니다."
+      },
+      {
+        "say": "소재가 밋밋해, 원래 색으로 돌려 줘",
+        "does": "카메라 Log 소재로 보고 변환한 뒤 대비와 채도를 다듬습니다."
+      }
+    ],
+    "es": [
+      {
+        "say": "Haz todos los planos un poco más cálidos",
+        "does": "Mide cada plano y luego los calienta por igual; lo que cambió queda en el registro para que sigas."
+      },
+      {
+        "say": "Estos planos no casan de color, iguálalos",
+        "does": "Iguala los demás al plano que elegiste."
+      },
+      {
+        "say": "El material se ve plano, devuélvele el color",
+        "does": "Ve que es Log de cámara, lo convierte y afina contraste y saturación."
+      }
+    ]
+  },
+  "showcase": {
+    "highlights": {
+      "zh-CN": [
+        {
+          "icon": "sliders",
+          "title": "基础调整",
+          "text": "曝光、对比、白平衡和饱和度，拖滑块就能调。"
+        },
+        {
+          "icon": "palette",
+          "title": "色轮和曲线",
+          "text": "暗部、中间调、高光分开推颜色，曲线再精细调。"
+        },
+        {
+          "icon": "copy",
+          "title": "复制和匹配",
+          "text": "调好一个镜头，复制到其他镜头，或匹配到喜欢的那个。"
+        },
+        {
+          "icon": "gauge",
+          "title": "示波器",
+          "text": "波形、矢量和直方图，看准了再调。"
+        }
+      ],
+      "en": [
+        {
+          "icon": "sliders",
+          "title": "The basics",
+          "text": "Exposure, contrast, white balance and saturation, on sliders."
+        },
+        {
+          "icon": "palette",
+          "title": "Wheels and curves",
+          "text": "Push colour into shadows, midtones and highlights apart; fine-tune with curves."
+        },
+        {
+          "icon": "copy",
+          "title": "Copy and match",
+          "text": "Grade one shot, copy it to others, or match them to the one you like."
+        },
+        {
+          "icon": "gauge",
+          "title": "Scopes",
+          "text": "Waveform, vectorscope and histogram, to see before you change."
+        }
+      ],
+      "ja": [
+        {
+          "icon": "sliders",
+          "title": "基本の調整",
+          "text": "露出・コントラスト・ホワイトバランス・彩度をスライダーで。"
+        },
+        {
+          "icon": "palette",
+          "title": "カラーホイールとカーブ",
+          "text": "シャドウ・中間・ハイライトを別々に色付けし、カーブで細かく。"
+        },
+        {
+          "icon": "copy",
+          "title": "コピーとマッチ",
+          "text": "1カット仕上げて他へコピー、または好きなカットに合わせます。"
+        },
+        {
+          "icon": "gauge",
+          "title": "スコープ",
+          "text": "波形・ベクトル・ヒストグラムで確かめてから調整。"
+        }
+      ],
+      "ko": [
+        {
+          "icon": "sliders",
+          "title": "기본 조정",
+          "text": "노출·대비·화이트 밸런스·채도를 슬라이더로 조절합니다."
+        },
+        {
+          "icon": "palette",
+          "title": "컬러 휠과 커브",
+          "text": "어두운 곳·중간·밝은 곳을 따로 색을 밀고 커브로 다듬습니다."
+        },
+        {
+          "icon": "copy",
+          "title": "복사와 맞추기",
+          "text": "한 샷을 맞추고 다른 샷에 복사하거나 마음에 드는 샷에 맞춥니다."
+        },
+        {
+          "icon": "gauge",
+          "title": "스코프",
+          "text": "파형·벡터·히스토그램으로 보고 나서 조절합니다."
+        }
+      ],
+      "es": [
+        {
+          "icon": "sliders",
+          "title": "Lo básico",
+          "text": "Exposición, contraste, balance de blancos y saturación, con deslizadores."
+        },
+        {
+          "icon": "palette",
+          "title": "Ruedas y curvas",
+          "text": "Lleva el color a sombras, medios y luces por separado; afina con curvas."
+        },
+        {
+          "icon": "copy",
+          "title": "Copiar e igualar",
+          "text": "Gradúa un plano, cópialo a otros o iguálalos al que te guste."
+        },
+        {
+          "icon": "gauge",
+          "title": "Monitores",
+          "text": "Forma de onda, vectorscopio e histograma para ver antes de cambiar."
+        }
+      ]
+    }
+  },
+  "about": "grading the film's color clip by clip: each clip's grade (a video, a page, a still) is a chain of color transform files of the project (--of-lut); a page's or a still's is drawn by the browser",
+  "category": "picture",
+  "difficulty": 4,
+  "ease": 3,
+  "cost": "free",
+  "audience": {
+    "en": "Creators, camera people and colorists after a cinematic picture",
+    "zh-CN": "想调出电影感画面的创作者、摄影师和调色师",
+    "ja": "映画のような画を作りたいクリエイター、撮影者、カラリスト",
+    "ko": "영화 같은 화면을 원하는 크리에이터, 촬영감독, 컬러리스트",
+    "es": "Creadores, operadores y coloristas que buscan una imagen de cine"
+  },
+  "workbench": "color",
+  "beta": true,
+  "blocks": [
+    "edit:viewer",
+    {
+      "id": "scopes",
+      "title": {
+        "en": "Scopes",
+        "zh-CN": "示波器",
+        "ja": "スコープ",
+        "ko": "스코프",
+        "es": "Scopes"
+      },
+      "edge": "right",
+      "size": 312,
+      "min": [
+        220,
+        200
+      ],
+      "range": [
+        240,
+        560
+      ]
+    },
+    {
+      "id": "shots",
+      "title": {
+        "en": "Shots",
+        "zh-CN": "镜头",
+        "ja": "ショット",
+        "ko": "샷",
+        "es": "Planos"
+      },
+      "edge": "bottom",
+      "size": 112,
+      "min": [
+        240,
+        88
+      ],
+      "range": [
+        88,
+        220
+      ]
+    },
+    {
+      "id": "tools",
+      "title": {
+        "en": "Grade",
+        "zh-CN": "调色",
+        "ja": "グレード",
+        "ko": "그레이드",
+        "es": "Gradación"
+      },
+      "edge": "bottom",
+      "size": 330,
+      "min": [
+        320,
+        220
+      ],
+      "range": [
+        220,
+        720
+      ]
+    }
+  ],
+  "on": false,
+  "skills": [
+    "color"
+  ],
+  "requires": [
+    "film"
+  ]
+}

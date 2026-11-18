@@ -6,15 +6,16 @@
  *
  * The first is wide, the others in a grid; cards are posters that play their preview under the pointer. One
  * opened is a page of two columns in place of the list: its preview on the left, what it is
- * and what to do with it on the right; Back (or Esc) returns to the list as it was. The title row is the projects
- * window's own, so switching views moves nothing.
+ * and what to do with it on the right; Back (or Esc) returns to the list as it was. Its top row is the same as the
+ * projects' beside the window's sidebar, so switching between them moves nothing.
  */
 import React from 'react';
-import { ArrowLeft, Clapperboard, ExternalLink, MessageCircleQuestion, Play, Workflow, X } from 'lucide-react';
+import { ArrowLeft, BadgeCheck, Clapperboard, ExternalLink, MessageCircleQuestion, Play, Workflow, X } from 'lucide-react';
 import { useT } from '@/i18n';
 import { seenExamples, sourcesApi, type Example } from '@/lib/project-sources';
 import { readCanvasDoc, type CanvasDoc } from '@/lib/canvas';
 import { Tooltip } from './Tooltip';
+import { byOpenFilm, makerName } from '@/lib/library';
 
 /* an example's canvas, only looked at: the board's code is loaded when one is shown */
 const CanvasPreview = React.lazy(() => import('./canvas/CanvasView').then((m) => ({ default: m.CanvasPreview })));
@@ -24,23 +25,10 @@ export type ExamplePart = { from: number; to: number; segment?: string } | null;
 
 const clock = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 
-/** Two titles in the title row, the one shown bright (the projects window's switch is the same). */
-export function TitleSwitch<T extends string>({ items, value, onChange }: { items: Array<{ id: T; label: string }>; value: T; onChange: (id: T) => void }) {
-  return (
-    <div role="tablist" className="mr-auto flex items-baseline gap-5">
-      {items.map((item) => (
-        <button key={item.id} type="button" role="tab" aria-selected={value === item.id} onClick={() => onChange(item.id)}
-          className={`text-[17px] font-semibold tracking-[-0.01em] transition ${value === item.id ? 'text-[var(--text)]' : 'text-[var(--text-faint)] hover:text-[var(--text-muted)]'}`}>
-          {item.label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-export function ExamplesGallery({ heading, initial, onClose, onStart, onReference, onUseCanvas, onExplain }: {
-  /** the title row's left (the projects window's switch) */
+export function ExamplesGallery({ heading, initial, onClose, onStart, onReference, onUseCanvas, onExplain, embedded = false }: {
+  /** the top row's left: what this is ("Examples") */
   heading: React.ReactNode;
+  embedded?: boolean;
   /** open on this example's page (its id: a pill of one clicked in the chat) */
   initial?: string;
   onClose?: () => void;
@@ -125,25 +113,25 @@ export function ExamplesGallery({ heading, initial, onClose, onStart, onReferenc
   }
 
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+    <div id={embedded ? 'resource-examples-panel' : undefined} role={embedded ? 'tabpanel' : undefined} aria-labelledby={embedded ? 'resource-examples-tab' : undefined} className="flex min-h-0 min-w-0 flex-1 flex-col">
       {/* the same row as the projects' (ProjectsView): switching between them moves nothing */}
-      <header className="flex shrink-0 flex-col px-6 pb-4 pt-5">
-        <div className="flex min-h-8 items-center gap-1">
+      {!embedded || opened ? <header className="flex shrink-0 flex-col border-b border-[var(--border)] px-[14px] py-[10px]">
+        <div className="flex min-h-[30px] items-center gap-1">
           {/* an example opened has its way back here, where the switch was */}
           {opened ? (
-            <button type="button" onClick={() => setOpened(null)} className="mr-auto flex h-8 items-center gap-1.5 rounded-lg pl-1 pr-2.5 text-[13.5px] font-medium text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]">
+            <button type="button" onClick={() => setOpened(null)} className="mr-auto flex h-[30px] items-center gap-1.5 rounded-lg pl-1 pr-2.5 text-[13.5px] font-medium text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]">
               <ArrowLeft size={16} strokeWidth={1.75} />{t('gallery.back')}
             </button>
           ) : heading}
           {onClose ? (
             <button type="button" onClick={onClose} aria-label={t('project.close')}
-              className="ml-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[var(--text-faint)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]">
-              <X size={16} strokeWidth={1.75} />
+              className="ml-1 flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-[5px] text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]">
+              <X size={17} />
             </button>
           ) : null}
         </div>
-      </header>
-      <div ref={scroller} className="min-h-0 min-w-0 flex-1 overflow-y-auto [scrollbar-gutter:stable]">{body}</div>
+      </header> : null}
+      <div ref={scroller} className="min-h-0 min-w-0 flex-1 overflow-y-auto pt-5 [scrollbar-gutter:stable]">{body}</div>
     </div>
   );
 }
@@ -195,6 +183,7 @@ function Hero({ example, onOpen, onStart, onReference }: { example: Example; onO
       <div className="absolute inset-x-0 bottom-0 flex items-end gap-6 p-6">
         <div className="min-w-0 flex-1">
           <div className="text-[22px] font-semibold leading-tight tracking-[-0.015em] text-white">{example.title}</div>
+          <Publisher owner={example.owner} className="mt-1 text-[12.5px] text-white/70" />
           {example.description ? <div className="mt-1.5 line-clamp-2 max-w-[520px] text-[13px] leading-[19px] text-white/80">{example.description}</div> : null}
           {example.duration ? <div className="mt-1.5 text-[12px] text-white/55">{clock(example.duration)}</div> : null}
         </div>
@@ -231,6 +220,7 @@ function ExampleCard({ example, label, onOpen }: { example: Example; label: stri
         <span className="min-w-0 flex-1 truncate text-[13.5px] font-medium text-[var(--text)]">{example.title}</span>
         {label ? <span className="shrink-0 text-[11.5px] text-[var(--text-faint)]">{label}</span> : null}
       </div>
+      <Publisher owner={example.owner} className="mt-0.5 text-[11.5px] text-[var(--text-faint)]" />
       {example.description ? <div className="mt-0.5 line-clamp-2 text-[12px] leading-[17px] text-[var(--text-muted)]">{example.description}</div> : null}
     </button>
   );
@@ -330,6 +320,7 @@ function ExampleDetail({ example, onStart, onReference, onUseCanvas, onExplain, 
         <div className="flex min-w-0 flex-col">
           {example.category ? <div className="mb-1 text-[11.5px] font-medium text-[var(--text-muted)]">{categoryLabel(example.category)}</div> : null}
           <h2 className="text-[20px] font-semibold leading-tight tracking-[-0.01em] text-[var(--text)]">{example.title}</h2>
+          <Publisher owner={example.owner} className="mt-1.5 text-[12.5px] text-[var(--text-muted)]" />
           {example.description ? <p className="mt-2 text-[13.5px] leading-[20px] text-[var(--text-muted)]">{example.description}</p> : null}
           {example.duration ? <p className="mt-2 text-[12px] text-[var(--text-faint)]">{clock(example.duration)}</p> : null}
           <div className="mt-5 flex flex-col gap-2">
@@ -359,6 +350,17 @@ function ExampleDetail({ example, onStart, onReference, onUseCanvas, onExplain, 
           <a href={example.url} target="_blank" rel="noreferrer" className="mt-auto flex items-center gap-1.5 pt-6 text-[12px] text-[var(--text-muted)] hover:text-[var(--text)]"><ExternalLink size={13} />{t('gallery.viewSource')}</a>
         </div>
       </div>
+    </div>
+  );
+}
+
+/** Who published an example: OpenFilm with its tick, else the publisher's GitHub name. */
+export function Publisher({ owner, className = '' }: { owner?: string; className?: string }) {
+  if (!owner) return null;
+  return (
+    <div data-example-publisher="" className={`flex min-w-0 items-center gap-1 ${className}`}>
+      <span className="truncate">{makerName(owner)}</span>
+      {byOpenFilm(owner) ? <BadgeCheck size={12} strokeWidth={2} aria-label="OpenFilm" className="shrink-0" /> : null}
     </div>
   );
 }

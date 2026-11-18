@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -260,4 +260,34 @@ test("the person's own proxy wins over the system's; with none, the system's is 
   assert.equal(withSystemProxy(mine, proxy), mine);
   assert.deepEqual(withSystemProxy({ PATH: '/usr/bin', NO_PROXY: 'corp' }, proxy), { ...proxy, PATH: '/usr/bin', NO_PROXY: 'corp' });
   assert.deepEqual(withSystemProxy({ PATH: '/usr/bin' }, {}), { PATH: '/usr/bin' });
+});
+
+test("Studio's Node takes the proxy it is given (it goes direct without NODE_USE_ENV_PROXY), never for this computer", async () => {
+  const { nodeProxyVariables } = await import('./environment.mjs');
+  assert.deepEqual(nodeProxyVariables({ PATH: '/usr/bin' }), {});
+  assert.deepEqual(nodeProxyVariables({ https_proxy: 'http://127.0.0.1:7890', NO_PROXY: '.corp.example, localhost' }), {
+    NODE_USE_ENV_PROXY: '1', NO_PROXY: '.corp.example,localhost,127.0.0.1,::1', no_proxy: '.corp.example,localhost,127.0.0.1,::1',
+  });
+
+  /* a proxy that only notes where it was asked to go; a page on this computer that answers */
+  const { createServer } = await import('node:http');
+  const asked = [];
+  const proxy = createServer().on('connect', (req, socket) => { asked.push(req.url); socket.end('HTTP/1.1 502 Bad Gateway\r\n\r\n'); });
+  const here = createServer((_req, res) => res.end('here'));
+  await Promise.all([proxy, here].map((s) => new Promise((ok) => s.listen(0, '127.0.0.1', ok))));
+  try {
+    const env = { PATH: process.env.PATH, HTTPS_PROXY: `http://127.0.0.1:${proxy.address().port}` };
+    const script = `fetch('https://service.example/v1').then(() => 'reached', (e) => 'refused').then(async (far) => console.log(far, await (await fetch('http://127.0.0.1:${here.address().port}/')).text()))`;
+    const run = (more) => new Promise((ok) => {
+      const child = spawn(process.execPath, ['-e', script], { env: { ...env, ...more } });
+      let out = '';
+      child.stdout.on('data', (d) => { out += d; });
+      child.on('close', () => ok(out.trim()));
+    });
+    assert.equal(await run(nodeProxyVariables(env)), 'refused here');
+    assert.deepEqual(asked, ['service.example:443']);
+  } finally {
+    proxy.close();
+    here.close();
+  }
 });

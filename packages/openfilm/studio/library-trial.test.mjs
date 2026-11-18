@@ -71,7 +71,10 @@ const clickTimeline = (page) => page.locator('[data-timeline]').click({ position
 
 test('a transition tried in the library plays once, leaves the film free, and plays again on another click', { timeout: 120_000 }, async () => {
   await withLibrary('Transitions', async ({ page, trial, watch }) => {
+    /* the transitions are in packs of their own: each found by its name */
+    const search = page.locator('[data-studio-library] input[placeholder^="Search"]');
     for (const name of ['Blinds', 'Cross dissolve', 'Push left']) {
+      await search.fill(name);
       const it = card(page, name);
       await it.scrollIntoViewIfNeeded();
       await it.click();
@@ -81,6 +84,7 @@ test('a transition tried in the library plays once, leaves the film free, and pl
       assert.equal(after.showing, false, `${name} has gone from the picture`);
       assert.equal(after.clickable, false, `the picture under ${name} takes clicks again`);
     }
+    await search.fill('Blinds');
     const again = card(page, 'Blinds');
     await again.scrollIntoViewIfNeeded();
     await again.click();
@@ -465,7 +469,7 @@ test('one click on an uncached Emoji prepares its bundle and opens the preview w
         await moving.locator('video[data-library-hover-preview]').waitFor({ state: 'detached' });
         assert.equal(await trial.count(), 0);
         assert.equal(downloads, 0);
-        await page.getByRole('button', { name: 'Still stickers', exact: true }).click();
+        await page.locator('[data-rail-line="pack:faces"]').click();
         const card = page.locator('[data-library-card="stickers/emoji/automatic"]');
         await card.locator('[data-library-download="missing"]').waitFor();
         assert.equal(await card.getByRole('button', { name: 'Download', exact: true }).count(), 0);

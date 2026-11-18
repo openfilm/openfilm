@@ -180,7 +180,7 @@ export async function skillCommand(args, run, opts = {}) {
   }
   const skill = named[0];
   if (!skill) return { ok: false, usage: true, lines: [`${run} skill: no skill ${first}. \`${run} skills\` lists them.`] };
-  /* its commands as the agent can type them here, as the manual's are */
+  /* its commands as the agent can type them here, as the system prompt's are */
   return { ok: true, lines: [asRun(skillText(skill), run)] };
 }
 

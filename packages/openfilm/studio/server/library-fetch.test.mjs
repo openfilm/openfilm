@@ -48,6 +48,45 @@ test('a published sound is fetched on first use, kept, and never asked for again
   assert.equal(asked.length, before, 'kept: no second fetch');
 });
 
+test('Doubao public recordings play through the same local cache without keys or a separately published mirror', async (t) => {
+  const sample = 'voices/doubao/zh_female_vv_uranus_bigtts.wav';
+  const source = 'https://lf3-static.bytednsdoc.com/obj/eden-cn/lm_hz_ihsph/ljhwZthlaukjlkulzlp/portal/bigtts/zh_female_vv_uranus_bigtts.wav';
+  writeFileSync(join(process.env.OPENFILM_BUILT_IN_LIBRARY, 'voices.json'), JSON.stringify({ providers: [], voices: [
+    { provider: 'doubao', id: 'zh_female_vv_uranus_bigtts', sample, sampleSource: source },
+  ] }));
+  const requests = [];
+  const originalFetch = globalThis.fetch;
+  t.mock.method(globalThis, 'fetch', async (url, init) => {
+    if (url !== source) return originalFetch(url, init);
+    requests.push(init);
+    return new Response('RIFF public preview', { headers: { 'content-type': 'audio/x-wav' } });
+  });
+  const at = await libraryFileFetched(sample);
+  assert.equal(at, join(libraryCache(), sample));
+  assert.equal(readFileSync(at, 'utf8'), 'RIFF public preview');
+  assert.equal(await libraryFileFetched(sample), at);
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].headers, undefined);
+  assert.equal(requests[0].redirect, 'error');
+});
+
+test('an unofficial sample address is never fetched, and a provider HTML error is not cached as audio', async (t) => {
+  const source = 'https://lf3-static.bytednsdoc.com/obj/eden-cn/lm_hz_ihsph/ljhwZthlaukjlkulzlp/portal/bigtts/failed.mp3';
+  const bad = 'voices/doubao/bad.mp3', failed = 'voices/doubao/failed.mp3';
+  writeFileSync(join(process.env.OPENFILM_BUILT_IN_LIBRARY, 'voices.json'), JSON.stringify({ providers: [], voices: [
+    { provider: 'doubao', sample: bad, sampleSource: 'http://127.0.0.1/private' },
+    { provider: 'doubao', sample: failed, sampleSource: source },
+  ] }));
+  const originalFetch = globalThis.fetch;
+  t.mock.method(globalThis, 'fetch', async (url, init) => {
+    assert.notEqual(url, 'http://127.0.0.1/private');
+    return url === source ? new Response('<html>unavailable</html>', { headers: { 'content-type': 'text/html' } }) : originalFetch(url, init);
+  });
+  assert.equal(await libraryFileFetched(bad), null);
+  assert.equal(await libraryFileFetched(failed), null);
+  assert.equal(libraryFile(failed), null);
+});
+
 test('checking preview files distinguishes a cached sample and an uncached example without downloading either', () => {
   const voice = 'voices/demo/cached.m4a';
   const example = 'examples/templates/uncached.mp4';

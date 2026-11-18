@@ -1,9 +1,11 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
 import { Check, Eye, EyeOff, GripVertical, Redo2, RotateCcw, Undo2, X } from 'lucide-react';
-import { useT } from '@/i18n';
-import type { WorkspaceLayout } from '@/lib/workspaces';
-import { dockDropAt, dockPanels, moveDock, panelFlag, resizeDock, setDockPanelVisible, setLibraryInsideChat, type DockNode, type DockPanel, type DockSeam, type dockFrames } from '@/lib/workspace-dock';
+import { useLanguage, useT } from '@/i18n';
+import { blockTitle } from '@/lib/blocks';
+import type { ArrangementSpec, WorkspaceLayout } from '@/lib/workspaces';
+import { dockDropAt, dockPanels, moveDock, panelHides, panelShown, resizeDock, setDockPanelVisible, setLibraryInsideChat, type DockNode, type DockPanel, type DockSeam, type dockFrames } from '@/lib/workspace-dock';
+import { useArrangementWords } from './ProjectLayoutMenu';
 import { SettingsSwitch } from './settings/ui';
 import styles from './WorkspaceEditor.module.css';
 
@@ -35,11 +37,13 @@ export function WorkspaceSeams({ tree, frames, editing = false, onChange, onChec
     }}/>)}</>,document.body);
 }
 
-export function WorkspaceEditor({ value, frames, hasChat, onChange, onDone, onCancel, onUndo, onRedo, canUndo, canRedo, onReset }: {
-  value: WorkspaceLayout; frames: Frames; hasChat: boolean; onChange:(layout:WorkspaceLayout)=>void;
+export function WorkspaceEditor({ value, spec, title, frames, hasChat, onChange, onDone, onCancel, onUndo, onRedo, canUndo, canRedo, onReset }: {
+  value: WorkspaceLayout; spec: ArrangementSpec; title?: Readonly<Record<string, string>>; frames: Frames; hasChat: boolean; onChange:(layout:WorkspaceLayout)=>void;
   onDone:()=>void; onCancel:()=>void; onUndo:()=>void; onRedo:()=>void; canUndo:boolean; canRedo:boolean; onReset:()=>void;
 }) {
   const t=useT();
+  const language=useLanguage();
+  const words=useArrangementWords(value.mode,title);
   const root=React.useRef<HTMLDivElement>(null);
   const [moving,setMoving]=React.useState<DockPanel|null>(null);
   const [drop,setDrop]=React.useState<ReturnType<typeof dockDropAt>>(null);
@@ -62,10 +66,13 @@ export function WorkspaceEditor({ value, frames, hasChat, onChange, onDone, onCa
     window.addEventListener('keydown',key,true);window.addEventListener('blur',cancelDrag);
     return()=>{window.removeEventListener('keydown',key,true);window.removeEventListener('blur',cancelDrag);queueMicrotask(()=>document.querySelector<HTMLButtonElement>('[data-layout-trigger]')?.focus());};
   },[]);
-  const label=(panel:DockPanel)=>t(panel==='library'?'layout.assets':panel==='viewer'?'layout.viewer':panel==='canvas'?'canvas.title':`layout.${panel}`);
+  const label=(panel:DockPanel)=>{const block=spec.blocks.find(b=>b.key===panel);return block?blockTitle(block,language):t(panel==='library'?'layout.assets':'layout.chat');};
   const toggle=(panel:DockPanel)=>{
-    const flag=panelFlag(panel);if(flag)onChange(setDockPanelVisible(value,panel,!value[flag]));
+    if(panelHides(panel,spec))onChange(setDockPanelVisible(value,panel,!panelShown(value,panel,spec),spec));
   };
+  /* moved: shown too (the library, then, docked on its own) */
+  const shownWith=(panel:DockPanel,tree:DockNode):WorkspaceLayout=>panel==='library'?{...value,tree,assets:true,libraryDock:'left'}:panel==='chat'?{...value,tree,chat:true}
+    :panelHides(panel,spec)?setDockPanelVisible({...value,tree},panel,true,spec):{...value,tree};
   const pointerGrip=(panel:DockPanel)=>({
     onPointerDown:(event:React.PointerEvent<HTMLDivElement>)=>{if(event.button!==0||(event.target as Element).closest('[data-layout-control]'))return;event.preventDefault();event.currentTarget.setPointerCapture(event.pointerId);drag.current={panel,x:event.clientX,y:event.clientY,active:false};},
     onPointerMove:(event:React.PointerEvent<HTMLDivElement>)=>{
@@ -77,25 +84,25 @@ export function WorkspaceEditor({ value, frames, hasChat, onChange, onDone, onCa
       const start=drag.current;
       const at=start?.active?dockDropAt(frames.panels,frames.root,event.clientX,event.clientY,panel):null;
       cancelDrag();
-      if(at&&value.tree){const flag=panelFlag(panel);onChange({...value,tree:moveDock(value.tree,panel,at.target,at.edge),...(flag?{[flag]:true}:{}),...(panel==='library'?{libraryDock:'left' as const}:{})});}
+      if(at&&value.tree)onChange(shownWith(panel,moveDock(value.tree,panel,at.target,at.edge)));
     },
     onPointerCancel:cancelDrag,onLostPointerCapture:cancelDrag,
   });
   const moveWithKeyboard=(panel:DockPanel)=>(event:React.KeyboardEvent<HTMLButtonElement>)=>{
     const edge=({ArrowLeft:'left',ArrowRight:'right',ArrowUp:'top',ArrowDown:'bottom'} as const)[event.key as 'ArrowLeft'];
     if(!edge||!value.tree)return;event.preventDefault();event.stopPropagation();
-    const flag=panelFlag(panel);onChange({...value,tree:moveDock(value.tree,panel,'root',edge),...(flag?{[flag]:true}:{}),...(panel==='library'?{libraryDock:'left' as const}:{})});
+    onChange(shownWith(panel,moveDock(value.tree,panel,'root',edge)));
   };
-  return createPortal(<div ref={root} data-workspace-editor role="dialog" aria-modal="true" tabIndex={-1} aria-label={t(value.mode==='edit'?'layout.editingEdit':'layout.editingCanvas')} className={`${styles.editor} ${moving?styles.moving:''}`}>
+  return createPortal(<div ref={root} data-workspace-editor role="dialog" aria-modal="true" tabIndex={-1} aria-label={words.editing} className={`${styles.editor} ${moving?styles.moving:''}`}>
     {(Object.entries(frames.panels) as [DockPanel,Frames['root']][]).map(([panel,rect])=><div key={panel} data-layout-panel={panel} className={styles.tile} {...pointerGrip(panel)} style={{...rect,left:rect.left+2,top:rect.top+2,width:Math.max(0,rect.width-4),height:Math.max(0,rect.height-4)}}>
       <button type="button" aria-label={t('layout.movePanel').replace('{name}',label(panel))} className={styles.handle} onKeyDown={moveWithKeyboard(panel)}><GripVertical size={14}/><span>{label(panel)}</span></button>
-      {panelFlag(panel)?<button type="button" data-layout-control className={styles.hide} aria-label={t('layout.hidePanel').replace('{name}',label(panel))} onClick={()=>toggle(panel)}><X size={14}/></button>:null}
+      {panelHides(panel,spec)?<button type="button" data-layout-control className={styles.hide} aria-label={t('layout.hidePanel').replace('{name}',label(panel))} onClick={()=>toggle(panel)}><X size={14}/></button>:null}
     </div>)}
     {drop?<div data-layout-drop={`${drop.target}:${drop.edge}`} className={styles.drop} style={drop.preview}><span>{t(drop.edge==='center'?'layout.swapPanels':'layout.placePanel').replace('{name}',moving?label(moving):'')}</span></div>:null}
     <div className={styles.tools}>
-      <div className={styles.instructions}><strong>{t(value.mode==='edit'?'layout.editingEdit':'layout.editingCanvas')}</strong><span>{t('layout.editHint')}</span></div>
+      <div className={styles.instructions}><strong>{words.editing}</strong><span>{t('layout.editHint')}</span></div>
       <div className={styles.palette} aria-label={t('layout.visiblePanels')}>
-        {dockPanels(value.mode).filter(panel=>panelFlag(panel)&& (panel!=='chat'||hasChat)).map(panel=>{const visible=!!value[panelFlag(panel)!];return <button key={panel} type="button" data-layout-palette={panel} aria-pressed={visible} className={styles.chip} onClick={()=>toggle(panel)} title={t('layout.paletteHint')}>
+        {dockPanels(spec).filter(panel=>panelHides(panel,spec)&& (panel!=='chat'||hasChat)).map(panel=>{const visible=panelShown(value,panel,spec);return <button key={panel} type="button" data-layout-palette={panel} aria-pressed={visible} className={styles.chip} onClick={()=>toggle(panel)} title={t('layout.paletteHint')}>
           {visible?<Eye size={12}/>:<EyeOff size={12}/>}<span>{label(panel)}</span>
         </button>;})}
       </div>

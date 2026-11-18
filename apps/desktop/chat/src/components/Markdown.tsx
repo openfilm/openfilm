@@ -7,11 +7,12 @@ import {
   type MarkdownBlock,
   type MarkdownScan,
 } from '@openfilm/shared/markdown';
-import type { StudioRef } from '../app-bridge';
+import { app, type StudioRef } from '../app-bridge';
+import { parseLink } from 'openfilm/studio-ui/lib/links.ts';
 import { audioLinkPath, projectAudioUrl } from '@/lib/audio-link';
 import { AttachmentPreview } from './AttachmentPreview';
 import { useT } from '@/i18n';
-import { agentRefPill, parseAgentRefs } from '@/lib/agent-refs';
+import { agentRefPill, parseAgentRefs, refOfLink } from '@/lib/agent-refs';
 import { ProjectFolderContext, useClipSrc } from '@/lib/studio-film';
 import { PromptPill, PromptPillRevealContext } from './prompt-editor';
 
@@ -142,6 +143,11 @@ function inline(text: string): React.ReactNode[] {
     if (piece.kind === 'strong') return <strong key={index} className="font-semibold">{withRefs(piece.text)}</strong>;
     if (piece.kind === 'em') return <em key={index} className="italic">{withRefs(piece.text)}</em>;
     if (piece.kind === 'link' && audioLinkPath(piece.href)) return <AudioLink key={index} href={piece.href} text={piece.text} />;
+    if (piece.kind === 'link' && parseLink(piece.href)) {
+      /* a place in the project: the pill a reference is, named by the agent's words; anything else a link */
+      const ref = refOfLink(piece.href);
+      return ref ? <AgentRefPill key={index} studioRef={ref} label={piece.text} /> : <ProjectLink key={index} href={piece.href} text={piece.text} />;
+    }
     if (piece.kind === 'link') {
       return (
         <a
@@ -173,14 +179,17 @@ function withRefs(text: string): React.ReactNode {
     : <AgentRefPill key={index} studioRef={segment.ref} />));
 }
 
-/** A thing an agent pointed at: read-only, its hover card as a sent pill's, a click shows it in Studio. */
-function AgentRefPill({ studioRef }: { studioRef: StudioRef }) {
+/** A thing an agent pointed at: read-only, its hover card as a sent pill's, a click shows it in Studio. `label`: the agent's words for it. */
+function AgentRefPill({ studioRef, label: words }: { studioRef: StudioRef; label?: string }) {
   const t = useT();
   const ctx = React.useContext(PromptPillRevealContext);
   const clipSrc = useClipSrc(studioRef.kind === 'clip' ? studioRef.id : null);
   const reference = React.useMemo(
-    () => agentRefPill(studioRef, { clipSrc, trackLabel: (n) => t('agentRef.track').replace('{n}', String(n)) }),
-    [studioRef, clipSrc, t],
+    () => {
+      const pill = agentRefPill(studioRef, { clipSrc, trackLabel: (n) => t('agentRef.track').replace('{n}', String(n)) });
+      return words?.trim() ? { ...pill, label: words.trim() } : pill;
+    },
+    [studioRef, clipSrc, t, words],
   );
   const reveal = ctx?.onReveal;
   const label = ctx?.revealLabel;
@@ -197,6 +206,19 @@ function AgentRefPill({ studioRef }: { studioRef: StudioRef }) {
         },
       } : {})}
     />
+  );
+}
+
+/** A link to a thing of the project (`film.html#<clip>`, `film.html#t=12.5`, a file): a click shows it in Studio. */
+function ProjectLink({ href, text }: { href: string; text: string }) {
+  return (
+    <a
+      href={href}
+      onClick={(event) => { event.preventDefault(); app?.openInStudio?.(href); }}
+      className="break-all text-[var(--accent)] underline underline-offset-2 hover:opacity-80"
+    >
+      {text}
+    </a>
   );
 }
 

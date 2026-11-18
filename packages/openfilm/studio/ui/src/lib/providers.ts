@@ -6,6 +6,7 @@
  */
 import React from 'react';
 import { studioHost } from './host.ts';
+import { lookup, useLanguage, type Language } from '../i18n/index.ts';
 
 export type ProviderVerb = 'voice' | 'tts' | 'sfx' | 'music' | 'asr' | 'cutout' | 'image-search' | 'video-search' | 'image' | 'video' | 'translate' | 'web-search' | 'web-fetch';
 
@@ -24,6 +25,10 @@ export interface OwnProvider {
   env: string;
   /** it works without a key: connected with one click, a key added for higher limits (then it has `last4`) */
   keyless?: boolean;
+  /** it takes no key at all (a local service): connected and disconnected with one click, never asked for a key */
+  noKey?: boolean;
+  /** one the person (or their agent) added on this computer, not built in */
+  added?: boolean;
   /** where its key comes from: kept by Studio, the environment, or none (not connected) */
   source: 'file' | 'env' | null;
   /** the environment has a key for it, connected or not: connecting can use that one */
@@ -33,6 +38,8 @@ export interface OwnProvider {
   signIn: boolean;
   /** signed in: the account's email */
   account: string | null;
+  /** signed in to OpenFilm: the account's name and picture as its website shows them (studio/server/account-profile.mjs) */
+  profile?: { name: string | null; avatar: string | null };
   /** The saved account credential was rejected by OpenFilm; reconnect in either Agents or Services. */
   connectionError?: string;
 }
@@ -114,7 +121,8 @@ export const SERVICE_VERBS: ProviderVerb[] = ['tts', 'music', 'sfx', 'asr', 'cut
 export const PROVIDER_SITES: Readonly<Record<string, string>> = {
   openfilm: 'openfilm.dev', openai: 'openai.com', google: 'ai.google.dev', azure: 'azure.microsoft.com', elevenlabs: 'elevenlabs.io',
   inworld: 'inworld.ai', cartesia: 'cartesia.ai', openrouter: 'openrouter.ai', fal: 'fal.ai', groq: 'groq.com', mimo: 'platform.xiaomimimo.com',
-  doubao: 'volcengine.com', pexels: 'pexels.com', pixabay: 'pixabay.com', brave: 'brave.com/search/api', tavily: 'tavily.com', keenable: 'keenable.ai',
+  doubao: 'volcengine.com', volcengine: 'volcengine.com', pexels: 'pexels.com', pixabay: 'pixabay.com',
+  brave: 'brave.com/search/api', tavily: 'tavily.com', keenable: 'keenable.ai',
 };
 
 async function call<T = ProvidersState>(path: string, init?: { method: string; json?: unknown }): Promise<T> {
@@ -230,9 +238,18 @@ export interface ProvidersHook {
   removeService: (id: string) => Promise<void>;
 }
 
+/** A provider's name as the language shown says it (Doubao is 豆包 in Chinese), else its own. */
+export function providerName(p: Pick<OwnProvider, 'id' | 'name'>, language?: Language): string {
+  const path = `providerNames.${p.id}`;
+  const said = lookup(path, language);
+  return said === path ? p.name : said;
+}
+
 /** The shared providers, with errors and changes in progress local to the control using them. */
 export function useProviders(): ProvidersHook {
-  const state = React.useSyncExternalStore(subscribe, current, current);
+  const shared = React.useSyncExternalStore(subscribe, current, current);
+  const language = useLanguage();
+  const state = React.useMemo(() => shared && { ...shared, providers: shared.providers.map((p) => ({ ...p, name: providerName(p, language) })) }, [shared, language]);
   const [problem, setProblem] = React.useState<string | null>(null);
   const [problemFor, setProblemFor] = React.useState<string | null>(null);
   const [busy, setBusy] = React.useState<string | null>(null);

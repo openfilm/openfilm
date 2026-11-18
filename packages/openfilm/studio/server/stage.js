@@ -127,6 +127,8 @@
   const SVG_NS = 'http://www.w3.org/2000/svg';
   const INLINE = new Set(['BR', 'WBR', 'EM', 'STRONG', 'B', 'I', 'U', 'S', 'SPAN', 'SMALL', 'SUP', 'SUB', 'A', 'MARK', 'CODE', 'ABBR', 'Q', 'TIME']);
   const EDITOR_ATTR = 'data-openfilm-text-editor';
+  /** A part of an element's words the film animates on its own (an override's split, src/overrides.mjs). */
+  const PART_ATTR = 'data-film-part';
   const LIMIT = 1500;
   /** At most this many custom properties, and as many words, as a page's template controls. */
   const CONTROLS = 40;
@@ -138,13 +140,21 @@
   const isGroup = (el) => Boolean(el?.hasAttribute?.('data-group'));
   const kebab = (key) => key.replace(/[A-Z]/g, (ch) => `-${ch.toLowerCase()}`);
 
+  /**
+   * A copy a page draws of its own words (letters coming in one by one over a line left see-through): hidden from
+   * reading and from the pointer. The line it copies is the layer; the copy follows it.
+   */
+  const drawnCopy = (el) => {
+    const copy = el.closest('[aria-hidden="true"]');
+    return Boolean(copy) && css(copy).pointerEvents === 'none';
+  };
   /** Every element of a page that can be a layer, in document order. */
   const layersOf = (doc) => {
     const out = [];
     if (!doc.body) return out;
     for (const el of doc.body.querySelectorAll('*')) {
       if (out.length >= LIMIT) break;
-      if (SKIP.has(el.localName.toLowerCase()) || el.hasAttribute(EDITOR_ATTR) || el.closest(`[${EDITOR_ATTR}]`)) continue;
+      if (SKIP.has(el.localName.toLowerCase()) || el.hasAttribute(EDITOR_ATTR) || el.closest(`[${EDITOR_ATTR}]`) || drawnCopy(el)) continue;
       out.push(el);
     }
     return out;
@@ -167,6 +177,8 @@
       if (node.nodeType === 3) { out += node.nodeValue ?? ''; return; }
       if (node.nodeType !== 1) return;
       if (node.localName === 'br') { out += '\n'; return; }
+      /* a part the film split its words into (src/overrides.mjs): still those words */
+      if (node.hasAttribute(PART_ATTR)) { out += node.textContent ?? ''; return; }
       const display = css(node).display;
       if (!display.startsWith('inline') && display !== 'contents' && out && !out.endsWith('\n')) out += '\n';
       out += stageText(node);
@@ -174,12 +186,13 @@
     return collapse(out);
   };
   /** An element's own words: all of them, or, when it holds inline parts (`<em>`, `<br>`…), those written in it. */
-  const ownWords = (el) => [...el.childNodes].filter((n) => n.nodeType === 3).map((n) => n.data).join('').replace(/\s+/g, ' ').trim();
+  const ownWords = (el) => [...el.childNodes].filter((n) => n.nodeType === 3 || (n.nodeType === 1 && n.hasAttribute(PART_ATTR)))
+    .map((n) => n.textContent).join('').replace(/\s+/g, ' ').trim();
   /* an icon beside the words (a badge's ✓, a button's arrow) does not stop them being the element's text: its own
      words are typed in place, and the icon stays (a text override changes the element's own words only) */
   const ICON = new Set(['svg', 'img']);
   /** Words alone, or lines between <br>s: a `text` override changes all of them, a <br> at each line break. */
-  const onlyBreaks = (el) => [...el.children].every((ch) => ch.localName === 'br');
+  const onlyBreaks = (el) => [...el.children].every((ch) => ch.localName === 'br' || ch.hasAttribute(PART_ATTR));
   /* words of its own beside blocks of their own (a title with its subtitle written inside it) are its text too: the
      blocks are layers of their own, and a text override changes its own words only */
   const textOf = (el) => (onlyBreaks(el) ? stageText(el) : ownWords(el));
@@ -366,8 +379,24 @@
     try { nodes = [...doc.querySelectorAll(o.at)]; } catch { return []; }
     return o.n ? nodes.slice(o.n - 1, o.n) : nodes;
   };
+  /**
+   * The selector of the clip's kept entry that finds this layer and only it (`.t1`, as the agent wrote it), last first:
+   * a layer named so takes every change into that one entry, never another one beside it. Null when none does.
+   */
+  const keptAt = (el) => {
+    const kept = clipOfNode(el)?.overrides ?? [];
+    for (let i = kept.length - 1; i >= 0; i -= 1) {
+      const o = kept[i];
+      if (typeof o?.at !== 'string' || o.n) continue;
+      const found = matches(el.ownerDocument, o);
+      if (found.length === 1 && found[0] === el) return o.at;
+    }
+    return null;
+  };
   /** Its selector, and which match it is when the selector finds several. */
   const locOf = (el) => {
+    const kept = keptAt(el);
+    if (kept) return { at: kept, loc: kept };
     const at = selectorOf(el);
     const all = matches(el.ownerDocument, { at });
     if (all.length <= 1) return { at, loc: at };
@@ -1766,6 +1795,20 @@
       const rect = (el) => { const r = el.getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height }; };
       return (hooks()?.captions?.() ?? []).map(({ el, ...cue }) => ({ ...cue, box: rect(el), text: rect(el.querySelector('.cue-text') ?? el) }));
     },
+    vision({ id }) { return hooks()?.vision?.(id) ?? { phase: 'idle' }; },
+    visionPreview(args) { hooks()?.visionPreview?.(args); },
+    async visionClear() { await hooks()?.visionClear?.(); return true; },
+    visionRetry({ id }) { hooks()?.visionRetry?.(id); },
+    /**
+     * Clip `id` (a video, a page, a still) shown graded as the inspector has it, not written yet: `draft` its grade's files (film-folder
+     * paths, in order) with `texts`, those it changed, in place of theirs; `{ written: true }` its grade as written now,
+     * the draft kept until that is ready; null as written.
+     */
+    grade({ id, draft }) { hooks()?.grade?.(id, draft ?? null); return true; },
+    /** Every graded clip shown as it is, its color grade left off (`off`), or graded again (`split`: right of that share of the picture only): a before and after. */
+    compare({ off, split }) { hooks()?.compare?.(Boolean(off), typeof split === "number" ? split : null); return true; },
+    /** Color files (film-folder paths) changed on disk: the clips they grade drawn through them again. */
+    regraded({ paths }) { hooks()?.regraded?.(paths); return true; },
     /**
      * Show cues of a caption track moved by (dx, dy) stage px and scaled by `k` about their middle, not kept yet (`ids`
      * null: every one; none of them: in place again).
@@ -2167,6 +2210,27 @@
       return shown().map((c) => ({ clip: c.id, kind: c.kind, layers: c.kind === 'page' && c.win?.document?.body ? rowsOf(c) : [] }));
     },
     /**
+     * How long a shape layer's stroke is (its longest path, in its own units): what drawing it on runs along
+     * (the motion timeline's Trim). Null: no path in it.
+     */
+    strokeLength({ handle }) {
+      const el = nodeOf(handle);
+      if (!el) return null;
+      const shapes = [el, ...el.querySelectorAll('*')].filter((n) => typeof n.getTotalLength === 'function');
+      const lengths = shapes.map((n) => { try { return n.getTotalLength(); } catch { return 0; } }).filter((n) => n > 0);
+      return lengths.length ? Math.ceil(Math.max(...lengths)) : null;
+    },
+    /** The elements' own sizes (px, before any transform): what a mask of one is drawn in (the motion timeline). */
+    sizes({ handles }) {
+      return (handles ?? []).map((handle) => {
+        const el = nodeOf(handle);
+        if (!el) return null;
+        if (el.offsetWidth || el.offsetHeight) return { w: el.offsetWidth, h: el.offsetHeight };
+        try { const b = el.getBBox?.(); if (b?.width || b?.height) return { w: b.width, h: b.height }; } catch { /* not drawn */ }
+        return null;
+      });
+    },
+    /**
      * Restack siblings in the order a person put them in (the Layers panel): `order` the handles of the elements
      * under one parent, the top one first, `moved` the one that was moved. Only the moved one is given a z-index when
      * a z-index between its new neighbors puts it there; else all of them are numbered, bottom to top. Answers the
@@ -2307,7 +2371,7 @@
       listenAll();
       /* the line being typed was drawn anew (an undo, the page rewritten): what was typed is kept, the box closes */
       if (editing && !editing.el.isConnected) finishText(true);
-      result = fn ? fn(args) ?? null : null;
+      result = fn ? (await fn(args)) ?? null : null;
     } catch (error) {
       post({ type: 'stage', seq, result: null, error: String(error?.message ?? error) });
       return;

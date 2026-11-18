@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "kind": "clip",
+  "clip": {
+    "src": "polygon.html",
+    "time": [
+      0,
+      5
+    ],
+    "attrs": {
+      "data-props": "[{\"name\": \"Size\", \"type\": \"var\", \"var\": \"--size\"}, {\"name\": \"Fill\", \"type\": \"var\", \"var\": \"--fill\"}, {\"name\": \"Points\", \"type\": \"var\", \"var\": \"--points\"}, {\"name\": \"Copies\", \"type\": \"var\", \"var\": \"--copies\"}, {\"name\": \"Copy offset\", \"type\": \"var\", \"var\": \"--copy-offset\"}, {\"name\": \"Copy shift X\", \"type\": \"var\", \"var\": \"--copy-x\"}, {\"name\": \"Copy shift Y\", \"type\": \"var\", \"var\": \"--copy-y\"}, {\"name\": \"Copy turn\", \"type\": \"var\", \"var\": \"--copy-turn\"}, {\"name\": \"Copy scale\", \"type\": \"var\", \"var\": \"--copy-scale\"}, {\"name\": \"Copy opacity start\", \"type\": \"var\", \"var\": \"--copy-opacity-start\"}, {\"name\": \"Copy opacity end\", \"type\": \"var\", \"var\": \"--copy-opacity-end\"}]"
+    }
+  },
+  "durationMs": 5000
+}

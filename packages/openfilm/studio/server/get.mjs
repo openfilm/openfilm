@@ -30,17 +30,23 @@ import { realpathSync } from 'node:fs';
 import { lstat, mkdir, mkdtemp, readFile, realpath, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, dirname, extname, join, relative, resolve, sep } from 'node:path';
+import { createHash } from 'node:crypto';
+import { mediaTransfer } from './media-transfer.mjs';
 import { fileURLToPath } from 'node:url';
 import { FILM_FILE, clipKind } from '../../src/film-doc.mjs';
 import { spokenLines } from './captions.mjs';
 import { dropTranscripts, readTranscript, transcriptIsCurrent, transcriptPath, writeTranscript } from './transcripts.mjs';
-import { inside } from './files.mjs';
+import { readable } from './files.mjs';
 import { HttpError, json, readJson } from './http.mjs';
 import { kindOf, modelFor, providerKey } from './keys.mjs';
 import { chooseProvider, freshProviders, listProviders, providerSettings } from './providers/index.mjs';
+import { noteMade } from './media-made.mjs';
 import { addedDir } from './providers/added.mjs';
-import { mediaSeconds, translatedLines, translationAsk } from './providers/common.mjs';
+import { isOutputName, mediaSeconds, translatedLines, translationAsk } from './providers/common.mjs';
 import { CALL_TIMEOUT_SEC, callService, servicesHelp } from './custom-services.mjs';
+import { privateVoiceForSpeech, SAMPLE_INPUT } from './voices.mjs';
+import { voiceFolder } from './voice-store.mjs';
+import { mediaInput } from './media-input.mjs';
 
 /**
  * @typedef {import('./http.mjs').Req} Req @typedef {import('./http.mjs').Res} Res
@@ -54,7 +60,7 @@ import { CALL_TIMEOUT_SEC, callService, servicesHelp } from './custom-services.m
 /**
  * An option: `value` names what it takes in the help (none: a switch). `path`: a project file it names, which must be
  * a recording (`speech`) or a picture.
- * @typedef {{ value?: string, required?: boolean, repeat?: boolean, choices?: string[], min?: number, max?: number,
+ * @typedef {{ value?: string, required?: boolean, repeat?: boolean | 'many', choices?: string[], min?: number, max?: number,
  *   integer?: boolean, default?: string | number, alias?: string, path?: 'speech' | 'picture' | 'clip' }} Option
  * @typedef {{ help: string, dir?: string, timeoutSec: number, options: Record<string, Option> }} VerbSpec
  */
@@ -71,9 +77,10 @@ export const VERBS = /** @type {Record<string, VerbSpec>} */ ({
       limit: { value: 'n', min: 1, max: 100, integer: true, default: 5, alias: 'n' } },
   },
   tts: {
-    help: 'Voice-over: one line spoken. Returns src, dur and its transcript: a WebVTT of the text in pause-separated cues, in source seconds. Its word timing is kept, so never run asr on it.',
-    dir: 'assets/audio/vo', timeoutSec: 300,
-    options: { out, text: { value: 'text', required: true }, voice: { value: 'voiceId', required: true } },
+    help: 'Voice-over: one line spoken. Returns src, dur and its transcript: a WebVTT of the text in pause-separated cues, in source seconds. Its word timing is kept, so never run asr on it. '
+      + 'Two voices (--voice twice, or "a+b") speak a dialogue, where a service has a model for it: each line of --text is one turn, the voices taking turns from the first, or a line starting "1:" or "2:" says whose; each turn is a cue.',
+    dir: 'assets/audio/vo', timeoutSec: 600,
+    options: { out, text: { value: 'text', required: true }, voice: { value: 'voiceId', required: true, repeat: 'many' } },
   },
   sfx: {
     help: 'A sound effect. Returns src, its measured dur and, when measured, attack (seconds into the file where the hit is) and peakDb. --sec is a request: the dur returned is what it is.',
@@ -117,14 +124,14 @@ export const VERBS = /** @type {Record<string, VerbSpec>} */ ({
       frames: { value: 'n', min: 2, max: 16, integer: true, default: 9 }, 'frame-ms': { value: 'ms', min: 20, max: 2000, integer: true, default: 200 } },
   },
   video: {
-    help: 'Make one video clip. --resolution 480p to 4K, as the model makes them (720p, or its nearest, when not asked): a bigger one costs more. Returns src, dur, its size and preview frames. It spends a lot: the person confirms it in Studio first (--yes when they already agreed). The same request again returns the same clip; --force makes a new one. A person who speaks on screen speaks in the clip, the voice and the lips made together, never a voice laid over a clip made without it: write the words in the prompt, in quotes, and keep the clip\'s own sound (--voice gives a recording of whose voice it is, the same across clips); or give a recording with --audio and the lips follow it word for word (at fal: omnihuman-v2 or kling-avatar-v2 from a picture of the person, --first-frame; sync-3 for a clip, --video). --video makes it from a clip in the project, trimmed to the part to make again (references/ is the place for another\'s footage); what it keeps is the model\'s way, chosen with --model: at fal, kling-o3-edit changes what the prompt names and keeps the rest; kling-o3-reference makes a new clip with its camera and motion; seedance-2.0 takes it as a reference (@Video1 in the prompt); luma-ray-3.2 redraws it, its performance kept; minimax-h3-max-recast puts the people of --input-reference in place of its own, one picture each; at OpenRouter, a Seedance model takes it as a reference too, given a web address (OpenFilm\'s service gives one; your own key cannot); at Google and OpenRouter, gemini-omni-1.2-flash edits it as the prompt says, or continues it when the prompt asks (a clip of 15 s at most to edit, 30 s in all once continued; --duration: the 3 to 10 s a continuation adds, else the clip\'s own length).',
+    help: 'Make one video clip. --resolution 480p to 4K, as the model makes them (720p, or its nearest, when not asked): a bigger one costs more. Returns src, dur, its size and preview frames. It spends a lot: the person confirms it in Studio first (--yes when they already agreed). The same request again returns the same clip; --force makes a new one. A person who speaks on screen speaks in the clip, the voice and the lips made together, never a voice laid over a clip made without it: write the words in the prompt, in quotes, and keep the clip\'s own sound (--voice gives a recording of whose voice it is, the same across clips); or give a recording with --audio and the lips follow it word for word (at fal: omnihuman-v2 or kling-avatar-v2 from a picture of the person, --first-frame; sync-3 for a clip, --video). --video makes it from a clip in the project, trimmed to the part to make again (references/ is the place for another\'s footage); what it keeps is the model\'s way, chosen with --model: at fal, kling-o3-edit changes what the prompt names and keeps the rest; kling-o3-reference makes a new clip with its camera and motion; seedance-2.0 takes it as a reference (@Video1 in the prompt); luma-ray-3.2 redraws it, its performance kept; minimax-h3-max-recast puts the people of --input-reference in place of its own, one picture each; at OpenRouter, Seedance and HeyGen Video take it as a reference too, given a web address (OpenFilm\'s service gives one; your own key cannot); at Google and OpenRouter, gemini-omni-1.2-flash edits it as the prompt says, or continues it when the prompt asks (a clip of 15 s at most to edit, 30 s in all once continued; --duration: the 3 to 10 s a continuation adds, else the clip\'s own length).',
     dir: 'assets/video', timeoutSec: 1200,
-    options: { out, prompt, force: {}, duration: { value: 'seconds', min: 2, max: 30, integer: true, default: 5 },
-      resolution: { value: 'size', choices: ['480p', '720p', '768p', '1080p', '2K', '4K'] },
+    options: { out, prompt, force: {}, duration: { value: 'seconds', min: 1, max: 30, integer: true, default: 5 },
+      resolution: { value: 'size', choices: ['360p', '480p', '720p', '768p', '1080p', '2K', '4K'] },
       'aspect-ratio': { value: 'ratio', choices: ['16:9', '9:16', '4:3', '3:4', '1:1', '21:9', '9:21', '3:2', '2:3', 'adaptive'] },
       'first-frame': { value: 'path', path: 'picture' }, 'last-frame': { value: 'path', path: 'picture' },
-      'input-reference': { value: 'path', path: 'picture', repeat: true }, video: { value: 'path', path: 'clip' },
-      audio: { value: 'path', path: 'speech' }, voice: { value: 'path', path: 'speech' } },
+      'input-reference': { value: 'path', path: 'picture', repeat: true }, video: { value: 'path', path: 'clip', repeat: 'many' },
+      audio: { value: 'path', path: 'speech' }, voice: { value: 'path', path: 'speech', repeat: 'many' } },
   },
   'web-search': {
     help: 'Search the web (up to 3 --query at once). Returns the pages that match: title, URL and an excerpt of each. web-fetch reads a whole page.',
@@ -157,6 +164,9 @@ const makers = (verb) => {
   const names = listProviders().filter((p) => /** @type {readonly string[]} */ (p.verbs).includes(verb)).map((p) => p.name).sort((a, b) => a.localeCompare(b));
   return names.length > 1 ? `${names.slice(0, -1).join(', ')} or ${names.at(-1)}` : names[0] ?? 'no service here makes it yet';
 };
+/* Starting another paid take while a matching request is pending is an explicit choice. */
+for (const kind of ['tts', 'sfx', 'music', 'image', 'video', 'cutout', 'asr']) VERBS[kind].options.fresh = {};
+
 /** What is not connected here, which services make each, and where the person connects one. @param {string[]} verbs */
 const notConnected = (verbs) => `Not connected here: ${verbs.map((v) => `${v} (${makers(v)})`).join(', ')}. `
   + `Each works only once the person connects a service that makes it. ${WHERE_TO_CONNECT}`;
@@ -249,14 +259,14 @@ export async function checkArgs(root, verb, given) {
       }
       return n;
     });
-    args[name] = option.repeat ? typed : typed[0];
+    args[name] = option.repeat === true || typed.length > 1 ? typed : typed[0];
   }
   for (const [name, option] of Object.entries(spec.options)) {
     if (args[name] === undefined && option.default !== undefined) args[name] = option.default;
     if (args[name] === undefined && option.required) throw usage(`${verb} needs ${flagHelp(name, option)}`);
   }
-  if (typeof args.out === 'string' && (!/^[\p{L}\p{N}][\p{L}\p{N}._-]{0,120}$/u.test(args.out) || /\.[a-z0-9]{2,4}$/i.test(args.out))) {
-    throw usage('--out is a simple name, without a folder or an extension (e.g. --out intro)');
+  if (args.out !== undefined && (!isOutputName(args.out) || /\.[a-z0-9]{2,4}$/i.test(args.out))) {
+    throw usage('--out is a name, without a folder or an extension, up to 120 characters valid on macOS, Windows and Linux (e.g. --out intro)');
   }
   for (const [name, option] of Object.entries(spec.options)) {
     if (!option.path || args[name] === undefined) continue;
@@ -270,7 +280,7 @@ export async function checkArgs(root, verb, given) {
 /** A file of the project the option names, of the kind it wants. @param {string} root @param {string} rel @param {string} name @param {'speech' | 'picture' | 'clip'} want */
 async function projectFile(root, rel, name, want) {
   let abs;
-  try { abs = inside(root, rel); } catch { throw usage(`--${name} ${rel} is not a path inside the project`); }
+  try { abs = readable(root, rel); } catch { throw usage(`--${name} ${rel} is not a path inside the project`); }
   if (!(await stat(abs).catch(() => null))?.isFile()) throw usage(`--${name} ${rel} is not in the project`);
   const kind = clipKind(rel);
   if (want === 'speech' ? kind !== 'sound' && kind !== 'video' : want === 'clip' ? kind !== 'video' : kind !== 'still') {
@@ -299,11 +309,13 @@ async function projectFile(root, rel, name, want) {
  * GetError (or a provider's own Error) saying why it did not run.
  * `model`: the provider's model for this run, instead of the person's choice for this kind of media.
  * @param {string} root @param {string} verb @param {Record<string, unknown>} given
- * `tell`: says a Notice to the person in Studio.
- * @param {{ via?: string, model?: string, yes?: boolean, ask?: Ask, tell?: (notice: Notice) => void, signal?: AbortSignal }} [options]
+ * `tell`: says a Notice to the person in Studio. `made`: told once how the files it landed were made is on record.
+ * @param {{ via?: string, model?: string, yes?: boolean, ask?: Ask, tell?: (notice: Notice) => void, made?: (root: string) => void, signal?: AbortSignal, recoverOnly?: boolean }} [options] `recoverOnly`: only collect a run already taken (pendingRuns), never start one
  */
-export async function runGet(root, verb, given, { via, model, yes = false, ask, tell, signal = new AbortController().signal } = {}) {
+export async function runGet(root, verb, given, { via, model, yes = false, ask, tell, made, signal = new AbortController().signal, recoverOnly = false } = {}) {
   const args = await checkArgs(root, verb, given);
+  const fresh = args.fresh === true;
+  delete args.fresh;
   if (verb === 'call') {
     const { custom } = await providerSettings();
     const service = custom.find((s) => s.id === args.service);
@@ -316,6 +328,18 @@ export async function runGet(root, verb, given, { via, model, yes = false, ask, 
     return show(await speechReceipt(root, 'asr', String(args.src), { skip: true, note: 'It has a transcript already, made since the file last changed (--force makes it again).' }));
   }
   const settings = await providerSettings();
+  /* a voice of OpenFilm's service is its recording, sent with the run under SAMPLE_INPUT; --voice keeps its name */
+  let sampleOf = '';
+  if (verb === 'tts' && typeof args.voice === 'string' && args.voice.startsWith('my:')) {
+    const voice = await privateVoiceForSpeech(args.voice, settings);
+    if (via && via !== voice.provider) throw usage('This private voice must use the service connection it belongs to.');
+    if (model && !voice.models.includes(model)) throw usage('This model does not support the selected private voice.');
+    via = voice.provider;
+    model ??= voice.models[0];
+    if (voice.provider === 'openfilm') { args['voice-sample'] = SAMPLE_INPUT; sampleOf = join(voiceFolder(voice.uid), 'sample.wav'); }
+    else args.voice = voice.voiceId;
+    args.language = voice.language;
+  }
   /* `--via` names one: when it cannot, it says why (no such provider, not this verb, no key) */
   const provider = await chooseProvider(/** @type {Verb} */ (verb), { via: via ?? null, settings }).catch((e) => { throw usage(e.message); });
   if (!provider) {
@@ -328,11 +352,36 @@ export async function runGet(root, verb, given, { via, model, yes = false, ask, 
   if (model !== undefined && !offered.some((m) => m.id === model)) {
     throw usage(offered.length ? `--model is one of ${offered.map((m) => m.id).join(', ')} with ${provider.name}` : `${provider.name} names no models for ${verb}`);
   }
-  const runModel = model ?? modelFor(settings, provider, verb);
+  let runModel = model ?? modelFor(settings, provider, verb);
+  /* two voices are a dialogue: spoken by the model that speaks one, and only it (one voice never is) */
+  if (verb === 'tts') {
+    const voices = (Array.isArray(args.voice) ? args.voice : [args.voice]).flatMap((v) => String(v ?? '').split('+')).filter(Boolean);
+    if (voices.length > 2) throw usage('--voice: one voice, or two for a dialogue.');
+    const dialogue = offered.find((m) => /** @type {{ dialogue?: boolean }} */ (m).dialogue);
+    if (voices.length === 2) {
+      if (!dialogue) throw usage(`${provider.name} speaks no dialogue of two voices: Doubao does (--via doubao, or OpenFilm).`);
+      args.voice = voices.join('+');
+      runModel = dialogue.id;
+    } else if (offered.find((m) => m.id === runModel && /** @type {{ dialogue?: boolean }} */ (m).dialogue)) {
+      const single = offered.find((m) => !/** @type {{ dialogue?: boolean }} */ (m).dialogue);
+      if (!single || model !== undefined) throw usage(`--model ${runModel} speaks a dialogue: give it two voices.`);
+      runModel = single.id;
+    }
+  }
+  if (verb === 'video') {
+    const videoSpec = (offered.find((m) => m.id === runModel) ?? offered[0])?.spec;
+    for (const [flag, count] of /** @type {const} */ ([['video', videoSpec?.clip], ['voice', videoSpec?.voice]])) {
+      const files = args[flag];
+      const max = typeof count === 'number' ? count : 1;
+      if (Array.isArray(files) && files.length > max) throw usage(`--${flag} accepts up to ${max} inputs with this model.`);
+    }
+  }
 
   const spec = VERBS[verb];
   const said = /** @type {string[]} */ ([]);
-  const clock = deadline(spec.timeoutSec + 60, signal);
+  /* OpenFilm's service may run a job up to 21 minutes, and its result is fetched after: wait longer than it can take */
+  const waitSec = provider.id === 'openfilm' ? 50 * 60 : spec.timeoutSec + 60;
+  const clock = deadline(waitSec, signal);
   /** @param {Spend} spend */
   const approve = async (spend) => {
     if (yes) return;
@@ -345,8 +394,32 @@ export async function runGet(root, verb, given, { via, model, yes = false, ask, 
     root,
     signal: clock.signal,
     say: (/** @type {string} */ line) => { said.push(line); },
-    read: (/** @type {string} */ path) => readInput(root, path, verb === 'asr' && path === args.src, clock.signal, provider.speechFormat),
+    read: (/** @type {string} */ path) => sampleOf && path === SAMPLE_INPUT ? readFile(sampleOf).then((b) => new Uint8Array(b))
+      : readInput(root, path, verb === 'asr' && path === args.src, clock.signal, provider.speechFormat),
+    /* what was asked, kept with a paid run's saved request: asked again from the project to recover it (pendingRuns) */
+    about: { verb, args: Object.fromEntries(Object.entries(given).filter(([name]) => name !== 'fresh')), via: provider.id, model: runModel ?? null },
+    /* only what was already taken is collected: a run never taken is not started (and paid) from here */
+    ...(recoverOnly ? { recoverOnly: true } : {}),
+    ...(provider.id === 'openfilm' ? { fresh, openInput: async (/** @type {string} */ path) => {
+      if (!sampleOf || path !== SAMPLE_INPUT) return mediaInput(root, path, { speech: verb === 'asr' && path === args.src, signal: clock.signal });
+      const bytes = new Uint8Array(await readFile(sampleOf));
+      return { bytes, size: bytes.byteLength, version: createHash('sha256').update(bytes).digest('hex'), stream: () => new Blob([bytes]).stream() };
+    } } : {}),
   };
+  /* a job a provider takes on the person's own key (fal, OpenRouter, Volcengine) is kept as it is taken, and waited for
+     again when the same run starts again after a restart: never submitted and paid twice (media-transfer.mjs) */
+  let journal = null;
+  if (RESUMABLE.has(provider.id)) {
+    const identity = { verb, args: { ...args, fresh: undefined }, model: runModel ?? null, inputs: await inputVersions(root, spec, args) };
+    journal = await mediaTransfer(root, clock.signal).then((t) => t?.request(`${provider.id}\0${keyTag(ctx.key)}`, identity, fresh, ctx.about) ?? null).catch(() => null);
+  }
+  if (journal) Object.assign(ctx, { resume: journal.reply?.job, checkpoint: (/** @type {unknown} */ job) => journal.remember({ job }) });
+  if (recoverOnly && RESUMABLE.has(provider.id) && !journal?.reply?.job) {
+    await journal?.finish(); await journal?.release(); clock.clear();
+    throw new GetError(`${provider.name} never took this run, so there is nothing to collect and nothing was paid. Make it again to have it.`);
+  }
+  /** @type {RunResult | undefined} */
+  let result;
   try {
     if (verb === 'video' && !yes) {
       const words = typeof args.prompt === 'string' ? args.prompt : '';
@@ -356,11 +429,25 @@ export async function runGet(root, verb, given, { via, model, yes = false, ask, 
       await approve({ kind: 'video', provider: provider.name, ...(named ? { model: named } : {}), seconds: from !== null ? Math.round(from) : Number(args.duration),
         ...(words ? { prompt: words.length > 200 ? `${words.slice(0, 199).trimEnd()}…` : words } : {}) });
     }
-    const result = await provider.run(/** @type {Verb} */ (verb), args, ctx);
-    await land(root, verb, args, result);
-    return [...said, show(await receiptFor(root, verb, args, result.receipt))].join('\n');
+    result = await provider.run(/** @type {Verb} */ (verb), args, ctx);
+    const files = await land(root, verb, args, result);
+    /* how each was made, kept with the project (media-made.mjs): a generated file's name says nothing of it */
+    const noted = await noteMade(root, { verb, args, paths: Object.keys(spec.options).filter((name) => spec.options[name].path), via: provider.id, by: provider.name,
+      model: runModel, files, index: result.index });
+    if (noted) made?.(root);
+    const receipt = await receiptFor(root, verb, args, result.receipt);
+    await result.complete?.();
+    await journal?.finish();
+    const other = madeWith(provider, runModel, offered, settings, kind, verb);
+    return [...said, show(other ? { ...receipt, madeWith: other } : receipt)].join('\n');
   } catch (e) {
-    if (clock.timedOut()) throw new GetError(`${provider.name} did not finish within ${spec.timeoutSec + 60} s, so Studio stopped waiting. Nothing landed in the project; try again later.`);
+    /* a job known to be over (refused, or failed at the provider) is let go; one cut off or never reached is kept */
+    const unknown = clock.signal.aborted || /** @type {{ unreached?: boolean, mediaUncertain?: boolean }} */ (e)?.unreached
+      || /** @type {{ mediaUncertain?: boolean }} */ (e)?.mediaUncertain || /** @type {Error} */ (e)?.name === 'AbortError';
+    if (journal && !unknown) await journal.finish().catch(() => {});
+    if (clock.timedOut()) throw new GetError(provider.id === 'openfilm'
+      ? `OpenFilm did not deliver this within ${waitSec} s. The task may already be complete and paid. Run the same command to recover its original result; use --fresh only when the person intentionally wants another paid take.`
+      : `${provider.name} did not finish within ${waitSec} s, so Studio stopped waiting. Nothing landed in the project; try again later.`);
     if (/** @type {{ code?: string, limit?: boolean }} */ (e)?.code === 'balance' && /** @type {{ limit?: boolean }} */ (e).limit) {
       throw new GetError(`This did not run: the ${provider.name} key reached the spending limit set on it. The person can raise or remove that limit where `
         + `the key was made (${provider.keysUrl}), or use another key. Nothing was made. Stop and tell them; do not run it again until they say so.`, 1, 'balance');
@@ -372,8 +459,75 @@ export async function runGet(root, verb, given, { via, model, yes = false, ask, 
     }
     throw e;
   } finally {
+    await result?.cleanup?.();
+    await journal?.release();
     clock.clear();
   }
+}
+
+/**
+ * The paid runs of a project left pending (asked, never saved in it: Studio closed, the network gone), newest first:
+ * what was asked, to say to the person and to ask again (recoverRuns) without paying again.
+ * @param {string} root @returns {Promise<{ verb: string, out: string | null, via: string, created: number }[]>}
+ */
+export async function pendingRuns(root) {
+  const transfer = await mediaTransfer(root, new AbortController().signal);
+  return (await transfer?.pending() ?? []).map(({ about, created }) => ({
+    verb: String(about.verb ?? ''), out: typeof (/** @type {any} */ (about.args))?.out === 'string' ? /** @type {any} */ (about.args).out : null,
+    via: String(about.via ?? ''), created,
+  }));
+}
+
+/**
+ * Ask each pending paid run again, as it was asked: the service (or the provider, on the person's key) gives back what
+ * it made, never makes and charges it again. → what came back, and what did not (with why).
+ * @param {string} root @param {{ made?: (root: string) => void, signal?: AbortSignal }} [options]
+ */
+export async function recoverRuns(root, { made, signal } = {}) {
+  const transfer = await mediaTransfer(root, signal ?? new AbortController().signal);
+  const recovered = [], failed = [];
+  for (const { about } of await transfer?.pending() ?? []) {
+    const args = /** @type {Record<string, unknown>} */ (about.args ?? {});
+    try {
+      await runGet(root, String(about.verb), /** @type {any} */ (args), { via: String(about.via), ...(typeof about.model === 'string' ? { model: about.model } : {}), yes: true, recoverOnly: true, ...(made ? { made } : {}), ...(signal ? { signal } : {}) });
+      recovered.push(typeof args.out === 'string' ? args.out : String(about.verb));
+    } catch (e) {
+      failed.push({ out: typeof args.out === 'string' ? args.out : String(about.verb), why: e instanceof Error ? e.message : String(e) });
+    }
+  }
+  return { recovered, failed };
+}
+
+/** The providers that take a job on the person's own key and can be given it back (`resume`) after a restart. */
+const RESUMABLE = new Set(['fal', 'openrouter', 'volcengine']);
+
+/** A key's short, one-way tag: a record is the key's, without the key written anywhere. @param {string} key */
+const keyTag = (key) => createHash('sha256').update(key).digest('hex').slice(0, 16);
+
+/**
+ * The project files a run reads, as they are now (size and time): the same run on changed files is another run.
+ * @param {string} root @param {VerbSpec} spec @param {Record<string, unknown>} args
+ */
+async function inputVersions(root, spec, args) {
+  const paths = Object.keys(spec.options).filter((name) => spec.options[name].path).flatMap((name) => [args[name]].flat())
+    .filter((p) => typeof p === 'string');
+  return Promise.all(paths.map(async (p) => {
+    const info = await stat(join(root, String(p))).catch(() => null);
+    return [p, info ? `${info.size}:${Math.round(info.mtimeMs)}` : null];
+  }));
+}
+
+/**
+ * When what made it is not the person's choice for this kind of media (Settings → Services: an agent's --via or
+ * --model), the service and model that made it, said in its receipt (`madeWith`) for the agent to tell them; else null.
+ * @param {import('./providers/contract.mjs').Provider} provider @param {string | undefined} model @param {{ id: string, name?: string }[]} offered
+ * @param {import('./keys.mjs').ProviderSettings} settings @param {string} kind @param {string} verb
+ */
+function madeWith(provider, model, offered, settings, kind, verb) {
+  const nameOf = (/** @type {string | undefined} */ id) => offered.find((m) => m.id === id)?.name ?? id;
+  const theirs = /** @type {Record<string, string | null | undefined>} */ (settings.use)[kind];
+  if (theirs === provider.id && modelFor(settings, provider, verb) === model) return null;
+  return `Made by ${provider.name}${model ? ` with ${nameOf(model)}` : ''}, which is not the person's choice for this in Studio's Settings${theirs ? '' : ' (none is chosen)'}: say in your reply which model you used, and why.`;
 }
 
 /** Go on when the person said yes; otherwise say what the agent does now. @param {Spend} spend @param {'allow' | 'deny' | 'timeout' | null} answer */
@@ -410,7 +564,7 @@ function deadline(seconds, outer) {
 
 /** A project file for a provider: as it is, or (`speech`) the sound alone, small. @param {string} root @param {string} rel @param {boolean} speech @param {AbortSignal} signal @param {'mp3'} [speechFormat] */
 async function readInput(root, rel, speech, signal, speechFormat) {
-  const abs = inside(root, rel);
+  const abs = readable(root, rel);
   const bytes = speech ? await speechOf(abs, signal, speechFormat) : await readFile(abs);
   if (bytes.length > MAX_INPUT_BYTES) {
     throw new GetError(speech
@@ -491,19 +645,25 @@ function wordsOf(raw) {
  * @param {string} root @param {string} verb @param {Record<string, unknown>} args @param {RunResult} result
  */
 async function land(root, verb, args, result) {
+  /** @type {string[]} */
+  const landed = [];
   for (const file of result.files ?? []) {
-    if (!landable(file?.path) || file.path.endsWith('.vtt')) continue;
+    /* a file handed off by its address is the service's to fetch (RunContext.handOff): Studio never asks for one */
+    if ((!('bytes' in file) && !('commit' in file)) || !landable(file?.path) || file.path.endsWith('.vtt')) continue;
     const abs = join(root, file.path);
     /* a link the project brings under assets/ is not written through to wherever it leads */
     if (!(await landsInside(root, abs))) continue;
     if ((await lstat(abs).catch(() => null))?.isSymbolicLink()) await rm(abs);
     await mkdir(dirname(abs), { recursive: true });
-    await writeFile(abs, file.bytes);
+    if ('commit' in file) await file.commit(abs);
+    else if ('bytes' in file) await writeFile(abs, file.bytes);
+    landed.push(file.path);
     /* a sound or video made again under its name: the old take's subtitles go (its own are written below) */
     const kind = clipKind(file.path);
     if (kind === 'sound' || kind === 'video') await dropTranscripts(root, file.path);
   }
-  if (verb !== 'tts' && verb !== 'asr') return;
+  if (result.files?.length && !landed.length) throw new Error('No generated file could be saved safely. The original request can be recovered; do not generate again.');
+  if (verb !== 'tts' && verb !== 'asr') return landed;
   for (const row of result.index ?? []) {
     /* asr: beside the recording --src names, checked already (in the project, not the tools'); tts: beside the
        provider's file, under assets/ */
@@ -519,6 +679,7 @@ async function land(root, verb, args, result) {
     await writeTranscript(root, src, { lines, ...(speaker ? { speaker } : {}) });
     if (verb === 'asr') break;
   }
+  return landed;
 }
 
 /**
@@ -592,7 +753,7 @@ export async function catalog(only, { web = false } = {}) {
  * its words, whole. Throws `code: 'no-agent'` when no agent is ready.
  * @typedef {{ agent: string, options: Record<string, string | number | boolean> }} WritingModel
  * @typedef {{ mimeType: string, data: string }} WritingImage
- * @typedef {(text: string, signal?: AbortSignal, model?: WritingModel, images?: WritingImage[]) => Promise<string>} AskAgent
+ * @typedef {(text: string, signal?: AbortSignal, model?: WritingModel, images?: WritingImage[], onText?: (piece: string) => void) => Promise<string>} AskAgent
  */
 
 /** The JSON in an agent's answer: all of it, or from its first `{` to its last `}` when the agent wrapped it in words. */
@@ -727,8 +888,9 @@ export function createAsks(pages) {
  *   POST /api/get/library   { verb, args } → { code, lines }: a search of OpenFilm's own library (src/library-search.mjs),
  *                           answered with the library and its model kept loaded here, so it takes milliseconds
  * @param {Req} req @param {Res} res @param {string[]} parts the path after /api/get @param {ReturnType<typeof createAsks>} asks
+ * @param {(root: string) => void} [made] told once how the files a run landed were made is on record (media-made.mjs)
  */
-export async function getRoute(req, res, parts, asks) {
+export async function getRoute(req, res, parts, asks, made) {
   if (!parts.length && req.method === 'GET') {
     const query = new URL(req.url ?? '', 'http://studio').searchParams;
     return json(res, 200, await catalog(query.get('verb') ?? undefined, { web: query.get('web') === '1' }));
@@ -743,6 +905,13 @@ export async function getRoute(req, res, parts, asks) {
     const given = args && typeof args === 'object' && !Array.isArray(args) ? /** @type {Record<string, string | true>} */ (args) : {};
     if (typeof verb !== 'string' || !(verb in LIBRARY_VERBS) || 'take' in given) throw new HttpError(400, 'a search of the library, please');
     return json(res, 200, await libraryGet(verb, given));
+  }
+  /* the project's paid runs left pending ({ folder }): listed, or collected again (never made and paid again) */
+  if ((parts[0] === 'pending' || parts[0] === 'recover') && parts.length === 1 && req.method === 'POST') {
+    const folder = /** @type {{ folder?: unknown }} */ (await readJson(req) ?? {}).folder;
+    const root = resolve(String(folder ?? ''));
+    if (!(await stat(join(root, FILM_FILE)).catch(() => null))?.isFile()) throw new HttpError(400, 'folder: a project');
+    return json(res, 200, parts[0] === 'pending' ? { runs: await pendingRuns(root) } : await recoverRuns(root, made ? { made } : {}));
   }
   if (parts.length || req.method !== 'POST') throw new HttpError(404, 'no such API');
   const body = /** @type {{ folder?: unknown, verb?: unknown, args?: unknown, via?: unknown, model?: unknown, yes?: unknown }} */ (await readJson(req));
@@ -759,6 +928,7 @@ export async function getRoute(req, res, parts, asks) {
       yes: body.yes === true,
       ask: (spend) => asks.ask(root, spend, controller.signal),
       tell: (notice) => asks.tell(root, notice),
+      ...(made ? { made } : {}),
       signal: controller.signal,
     });
     json(res, 200, { ok: true, text });

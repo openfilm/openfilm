@@ -18,7 +18,7 @@ const settings = (keys = {}, use = {}) => ({ keys, use, model: {} });
 const id = async (promise) => (await promise)?.id ?? null;
 
 test('the own-key providers, then Local services, in the order Settings lists them', () => {
-  assert.deepEqual(listProviders().map((p) => p.id), ['elevenlabs', 'inworld', 'cartesia', 'openai', 'google', 'fal', 'openrouter', 'pexels', 'pixabay', 'brave', 'tavily', 'groq', 'azure', 'doubao', 'mimo', 'keenable', 'openfilm', 'local']);
+  assert.deepEqual(listProviders().map((p) => p.id), ['elevenlabs', 'inworld', 'cartesia', 'openai', 'google', 'fal', 'openrouter', 'volcengine', 'pexels', 'pixabay', 'brave', 'tavily', 'groq', 'azure', 'doubao', 'mimo', 'keenable', 'openfilm', 'local']);
 });
 
 test('each provider paid with a key of its own links its own pricing page; OpenFilm\'s service and Local services none', () => {
@@ -43,11 +43,11 @@ test('the person\'s choice serves while it can; a key gone serves nothing', asyn
 });
 
 test('voices always come from the provider that does voice-over, whatever else can list them', async () => {
-  const keys = { elevenlabs: 'xi-0123456789', openai: 'sk-0123456789' };
-  for (const use of [{ tts: 'openai' }, { tts: 'elevenlabs' }]) {
+  const keys = { elevenlabs: 'xi-0123456789', google: 'AIza-0123456789' };
+  for (const use of [{ tts: 'google' }, { tts: 'elevenlabs' }]) {
     assert.equal(await id(chooseProvider('voice', { settings: settings(keys, use) })), await id(chooseProvider('tts', { settings: settings(keys, use) })));
   }
-  assert.equal(await id(chooseProvider('voice', { via: 'openai', settings: settings(keys) })), 'openai');
+  assert.equal(await id(chooseProvider('voice', { via: 'google', settings: settings(keys) })), 'google');
 });
 
 test('--via names one: it must exist, do the verb and have a key, or it says why', async () => {

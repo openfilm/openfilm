@@ -88,6 +88,7 @@ export function LocalModelsDialog({ hook, onClose }: { hook: LocalModelsHook; on
                   {!m.installed && !m.installing
                     ? <SettingsButton onClick={(e) => { e.stopPropagation(); void hook.install(m.id); }}>{t('settings.local.install')}</SettingsButton>
                     : <Status model={m} />}
+                  {m.installing ? <SettingsButton onClick={(e) => { e.stopPropagation(); void hook.remove(m.id); }}>{t('settings.local.cancel')}</SettingsButton> : null}
                   <ChevronRight size={16} className="shrink-0 text-[var(--text-faint)]" aria-hidden />
                 </div>
               ))}
@@ -128,8 +129,11 @@ function ModelPage({ model, hook, onBack }: { model: LocalModel; hook: LocalMode
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-2 pt-1">
-          {model.installed ? <SettingsSwitch checked={model.on} onChange={(on) => void hook.turn(model.id, on)} label={t('settings.local.enabled')} />
-            : model.installing ? null
+          {model.installed ? <>
+            {model.builtIn ? null : <SettingsButton onClick={() => void hook.remove(model.id)}>{t('settings.local.remove')}</SettingsButton>}
+            <SettingsSwitch checked={model.on} onChange={(on) => void hook.turn(model.id, on)} label={t('settings.local.enabled')} />
+          </>
+            : model.installing ? <SettingsButton onClick={() => void hook.remove(model.id)}>{t('settings.local.cancel')}</SettingsButton>
               : <SettingsButton variant="primary" onClick={() => void hook.install(model.id)}>{t(model.failed ? 'settings.local.retry' : 'settings.local.installSize').replace('{size}', sizeText(model.bytes))}</SettingsButton>}
         </div>
       </div>
@@ -139,6 +143,7 @@ function ModelPage({ model, hook, onBack }: { model: LocalModel; hook: LocalMode
           <p className="mt-1.5 text-[12.5px] text-[var(--text-faint)]">{t('settings.local.downloaded').replace('{done}', sizeText(model.installing.bytes)).replace('{size}', sizeText(model.bytes))}</p>
         </div>
       ) : null}
+      {model.failed && model.error ? <p role="alert" className={`${settingsError} break-words`}>{model.error}</p> : null}
       <p className="mt-5 text-[14.5px] leading-relaxed text-[var(--text-muted)]">{t(`settings.local.about.${model.id}`)}</p>
       <div className="mt-6 flex flex-col divide-y divide-[var(--border)] border-y border-[var(--border)]">
         {facts.map(([label, value]) => (
@@ -148,13 +153,7 @@ function ModelPage({ model, hook, onBack }: { model: LocalModel; hook: LocalMode
           </div>
         ))}
       </div>
-      {model.installed ? (
-        <div className="mt-5 flex items-center justify-between gap-3">
-          {model.builtIn ? <p className="text-[13px] text-[var(--text-faint)]">{t('settings.local.builtIn')}</p> : (
-            <SettingsButton variant="quiet" className="-ml-3.5 !text-[var(--err)]" onClick={() => void hook.remove(model.id)}>{t('settings.local.remove')}</SettingsButton>
-          )}
-        </div>
-      ) : null}
+      {model.installed && model.builtIn ? <p className="mt-5 text-[13px] text-[var(--text-faint)]">{t('settings.local.builtIn')}</p> : null}
       {hook.problem ? <p className={settingsError}>{hook.problem}</p> : null}
     </>
   );

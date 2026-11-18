@@ -35,12 +35,16 @@
  */
 
 /**
- * What a run gives back. Files go under `assets/` only (no `..`); `index` says what is in them.
+ * What a run gives back. Files go under `assets/` only (no `..`); `index` says what is in them. A file is its bytes,
+ * or, when the run was asked to hand results off (`RunContext.handOff`), the web address it can be fetched from without
+ * any key, for whoever ran it to fetch (`type`, its media type, when known).
  * @typedef {{
- *   files: { path: string, bytes: Uint8Array }[],
+ *   files: ({ path: string, bytes: Uint8Array } | { path: string, url: string, type?: string } | {path:string,commit:(target:string)=>Promise<void>})[],
  *   index: IndexRow[],
  *   receipt: Record<string, unknown>,
  *   cost?: { note?: string },
+ *   complete?: () => Promise<void>,
+ *   cleanup?: () => Promise<void>,
  * }} RunResult
  */
 
@@ -61,15 +65,30 @@
  * `link`: a temporary web (https) address of a project file, for a service that fetches what it is given from an
  * address only; there only when the run can make one (OpenFilm's service: kept until the run ends, then deleted).
  * `model`: the id of the model, one of the provider's `models` for the verb, the person chose (a provider uses its first
- * when there is none).
+ * when there is none). `handOff`: whoever ran it fetches a made file itself from a web address that needs no key (a
+ * signed address of the service's own storage), so the file need not pass through the run (OpenFilm's service: the
+ * person's computer fetches it straight from there). `checkpoint`: told the job a provider took (its own answer), right
+ * after it is taken, so whoever ran it can keep it; `resume`: that job, given back when the same run starts again (a
+ * restart): the provider waits for it instead of submitting it again and charging twice. `scope`: whose run it is, where
+ * one key runs for many people (OpenFilm's service): a voice cloned from a run's recording is kept apart by it.
  * @typedef {{
  *   key: string,
  *   model?: string,
  *   root: string,
  *   signal: AbortSignal,
+ *   networkTimeoutMs?: number,
  *   say: (line: string) => void,
  *   read: (path: string) => Promise<Uint8Array>,
  *   link?: (path: string) => Promise<string>,
+ *   handOff?: boolean,
+ *   keep?: (path: string, response: Response) => Promise<{ path: string, url: string, type?: string, bytes: number }>,
+ *   openInput?: (path:string) => Promise<{size:number,version:string,stream:()=>ReadableStream,verify?:()=>Promise<void>,dispose?:()=>Promise<void>}>,
+ *   fresh?: boolean,
+ *   about?: Record<string, unknown>,
+ *   recoverOnly?: boolean,
+ *   resume?: any,
+ *   checkpoint?: (job: any) => Promise<void>,
+ *   scope?: string,
  * }} RunContext
  */
 
@@ -91,8 +110,11 @@
  *   frames?: boolean | 'first' | 'first-required',
  *   qualities?: string[],
  *   needs?: 'clip' | 'audio',
- *   voice?: boolean,
- *   clip?: boolean,
+ *   voice?: boolean | number,
+ *   voiceNeedsVisual?: boolean,
+ *   clip?: boolean | number,
+ *   framedMaxSeconds?: number,
+ *   referenceMaxSeconds?: number,
  *   sizes?: string[],
  *   transparent?: boolean,
  *   formats?: string[],
@@ -110,7 +132,7 @@
  *   billingUrl: string,
  *   pricingUrl?: string,
  *   verbs: Verb[],
- *   models?: Partial<Record<Verb, { id: string, name: string, spec?: ModelSpec }[]>>,
+ *   models?: Partial<Record<Verb, { id: string, name: string, spec?: ModelSpec, dialogue?: boolean }[]>>,
  *   checkKey?: (key: string) => void,
  *   signIn?: import('../sign-in.mjs').SignIn,
  *   refresh?: (options?: { force?: boolean }) => Promise<void>,
@@ -118,11 +140,12 @@
  *   ready?: () => boolean,
  *   speechFormat?: 'mp3',
  *   run: (verb: Verb, args: Record<string, unknown>, ctx: RunContext) => Promise<RunResult>,
+ *   clones?: import('./common.mjs').VoiceClones,
  *   added?: boolean,
  * }} Provider
  * `models`: the models it can make each kind of media with, its default first, each with the name people know it by
  * (Settings → Services shows "ElevenLabs · Eleven v4") and, for pictures and clips, what it makes (`spec`), so the
- * canvas offers only that.
+ * canvas offers only that. A voice-over model with `dialogue` speaks two voices taking turns, and only so.
  * `checkKey`: throws a sentence when a pasted key cannot work as it is (Azure's must carry its region), shown where it
  * is pasted instead of at the first run. Only for what the provider knows without calling anyone: it must not fetch.
  * `signIn`: connected by signing in on the provider's website instead of pasting a key (sign-in.mjs); the key it
@@ -133,6 +156,7 @@
  * `keyless`: it also works with no key (a free tier), so the person can connect it with one click and add a key for
  * higher limits. Connected without one, its `key` is ''. Like every provider, it serves nothing until it is connected.
  * `ready`: it takes no key at all (Local services): connected while it can run, which it says.
+ * `clones`: it clones voices (Studio's own voices, and `tts --voice-sample`, a voice from a recording).
  * `added`: one the person added in their shared home (added.mjs), not built in; set when it is read.
  * `pricingUrl`: the provider's own pricing page, linked as "Pricing" in Settings → Providers. Only the link: what is free
  * and what is paid changes on the provider's side. None for OpenFilm's own service (no price is shown in the app) and for
