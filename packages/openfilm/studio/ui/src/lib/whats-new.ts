@@ -18,297 +18,477 @@ export interface ReleaseNote { kind: NoteKind; text: string }
 export interface ReleaseNotes { version: string; date: string; notes: Record<Language, ReleaseNote[]> }
 
 export const RELEASE: ReleaseNotes = {
-  "version": "0.3.2",
-  "date": "2026-11-09",
+  "version": "0.4.0",
+  "date": "2026-11-18",
   "notes": {
     "en": [
       {
-        "kind": "fixed",
-        "text": "Switch projects reliably in the Windows desktop app, including when opening a project from the tab bar."
+        "kind": "new",
+        "text": "Plugins: Edit, Canvas and the new Screening editor are plugins you turn on or off, and anyone can make one."
       },
       {
         "kind": "new",
-        "text": "Duplicate a project into an independent copy in the same group."
-      },
-      {
-        "kind": "fixed",
-        "text": "Link media from Windows network shares that refuse system links. Preview and export use the original files."
-      },
-      {
-        "kind": "fixed",
-        "text": "Open editors refresh the timeline after missed file notifications and keep newer edits when requests finish out of order."
-      },
-      {
-        "kind": "improved",
-        "text": "Canvas videos show a first frame at rest, play on hover, and support frame capture and in-place renaming."
+        "text": "The Community (early testing): find, add and publish plugins, skills, library packs and examples. A project's own skills reach your agent only after you allow them."
       },
       {
         "kind": "new",
-        "text": "Add text, image and video references to writing nodes on the canvas."
-      },
-      {
-        "kind": "improved",
-        "text": "Use Alt and Shift to select layers, organize compatible timeline tracks with undo, and view mixed audio waveforms on compound clips."
-      },
-      {
-        "kind": "improved",
-        "text": "Editing-project exports keep the look automatically. Supported settings stay editable, and you can link or copy the source media."
-      },
-      {
-        "kind": "improved",
-        "text": "Jianying and CapCut drafts retain editable subtitle styling and supported clip settings. Renaming a draft keeps copied and rendered media linked."
-      },
-      {
-        "kind": "improved",
-        "text": "Visible thumbnails load first, paused previews refresh when images arrive, and export progress is accessible from the project title bar."
+        "text": "Clips and the elements of a page move by keyframes, with masks, text animated letter by letter or word by word, and 3D placement."
       },
       {
         "kind": "new",
-        "text": "Generate video with TBC mischief 1 and Grok Imagine Video 1.5 Lite through OpenRouter in Studio and the CLI."
+        "text": "Animate effects: blur, glow, brightness, contrast, saturation, grayscale, hue and invert, around an anchor point you choose."
+      },
+      {
+        "kind": "new",
+        "text": "Grade footage with .cube, OpenColorIO and ASC color files at its own bit depth, and try the Color editor (beta)."
+      },
+      {
+        "kind": "new",
+        "text": "Connectors let your agent reach Dropbox, Frame.io, Notion, Vimeo, Adobe and Canva."
+      },
+      {
+        "kind": "new",
+        "text": "Links to a clip, a moment, a stretch or a canvas node open in Studio wherever they come from."
+      },
+      {
+        "kind": "new",
+        "text": "Export to a bitrate or a file size. Sound is brought to -14 LUFS by default and kept from clipping."
+      },
+      {
+        "kind": "new",
+        "text": "My voices: make a voice from your own recording. Voice-over can be a dialogue in two voices."
+      },
+      {
+        "kind": "new",
+        "text": "Remove a video's background and retouch faces on your computer, in preview and in export."
+      },
+      {
+        "kind": "new",
+        "text": "Preview the timeline by moving the mouse (S), and zoom it with + and -."
+      },
+      {
+        "kind": "new",
+        "text": "Projects work like a file browser: folders, grid and detail views, drag and drop, and batch moves."
+      },
+      {
+        "kind": "new",
+        "text": "New models: Seedance 2.5 Flash and Seedream 5.5, Doubao's full voice list and speech recognition 2.0, and Google pictures from reference images."
+      },
+      {
+        "kind": "improved",
+        "text": "Exports of footage are several times faster, and exports on the graphics chip are smaller and sharper."
+      },
+      {
+        "kind": "improved",
+        "text": "Media from this computer no longer takes room twice, and moved or renamed media is found again."
+      },
+      {
+        "kind": "improved",
+        "text": "A picture, clip or voice a service made shows its prompt, model and service."
+      },
+      {
+        "kind": "improved",
+        "text": "Agents get a short system prompt and the skills of the plugins you have on. Model lists and agent updates are checked in the background."
+      },
+      {
+        "kind": "improved",
+        "text": "Service keys are sealed with your system's keychain, and Studio uses your proxy."
+      },
+      {
+        "kind": "improved",
+        "text": "A paid generation is not lost or paid twice when the app restarts."
       },
       {
         "kind": "fixed",
-        "text": "Recover Windows exports when an encoder briefly holds a file after a browser crash, and mark transparent HEVC as straight alpha."
+        "text": "Drafts for other editing apps keep subtitle styles, separate audio rows and a talking head's own sound."
       },
       {
         "kind": "fixed",
-        "text": "Reconnect OpenFilm when credentials expire. Chat history deduplicates sessions, keeps attachment types and extensions, and can undo a same-size text rewrite."
+        "text": "Local models install and run in the desktop app, on Windows too."
       },
       {
         "kind": "fixed",
-        "text": "Fix duplicate library categories, narrow layout previews, long example durations, size units, prerelease ordering and MCP tool labels."
+        "text": "Recordings of hours open, play and show their waveform. Caption tracks survive the agent's writes, and a corrected caption word keeps its timing."
+      },
+      {
+        "kind": "fixed",
+        "text": "Many smaller fixes. The changelog on GitHub lists every change."
       }
     ],
     "zh-CN": [
       {
-        "kind": "fixed",
-        "text": "修复 Windows 桌面版切换项目和从标签栏打开项目时卡住的问题。"
+        "kind": "new",
+        "text": "插件：剪辑、画布和新的放映都是插件，可以单独打开或关闭；任何人都能做插件。"
       },
       {
         "kind": "new",
-        "text": "可以在同一分组中复制项目，打开独立副本继续编辑。"
-      },
-      {
-        "kind": "fixed",
-        "text": "Windows 网络共享不允许创建系统链接时，仍可引用原素材进行预览和导出。"
-      },
-      {
-        "kind": "fixed",
-        "text": "打开的工程会在文件通知漏报后刷新时间轴，避免迟到的旧结果覆盖新编辑。"
-      },
-      {
-        "kind": "improved",
-        "text": "画布视频静止时显示首帧，悬停播放，可截取画面并直接改名。"
+        "text": "社区（测试版）：查找、添加和发布插件、技能、素材包和示例。项目自带的技能要你允许后，智能体才会读到。"
       },
       {
         "kind": "new",
-        "text": "画布写作节点可以添加文本、图片和视频作为参考。"
-      },
-      {
-        "kind": "improved",
-        "text": "图层可用 Alt 和 Shift 多选。时间轴可整理兼容轨道并撤销，复合片段显示混合音频波形。"
-      },
-      {
-        "kind": "improved",
-        "text": "导出剪辑工程时自动保留画面效果。目标软件支持的参数仍可编辑，素材可引用或复制。"
-      },
-      {
-        "kind": "improved",
-        "text": "剪映和 CapCut 草稿保留可编辑字幕样式及受支持的片段参数。草稿改名后，复制和渲染的素材仍能找到。"
-      },
-      {
-        "kind": "improved",
-        "text": "优先加载可见缩略图，图片加载后刷新暂停预览，项目顶栏可查看导出进度。"
+        "text": "片段和页面里的元素可以用关键帧动起来，支持蒙版、按字或按词的文字动画，以及 3D 摆放。"
       },
       {
         "kind": "new",
-        "text": "Studio 和命令行的 OpenRouter 服务新增 TBC mischief 1 和 Grok Imagine Video 1.5 Lite 视频模型。"
+        "text": "效果可以做动画：模糊、发光、亮度、对比度、饱和度、灰度、色相和反相，并可选择变换中心点。"
+      },
+      {
+        "kind": "new",
+        "text": "用 .cube、OpenColorIO 和 ASC 色彩文件按素材原有位深调色，也可以试用调色编辑器（测试版）。"
+      },
+      {
+        "kind": "new",
+        "text": "连接器让智能体能用上 Dropbox、Frame.io、Notion、Vimeo、Adobe 和 Canva。"
+      },
+      {
+        "kind": "new",
+        "text": "指向某个片段、某一时刻、某一段或画布节点的链接，无论从哪里点开都会在 Studio 里打开。"
+      },
+      {
+        "kind": "new",
+        "text": "导出可以指定码率或文件大小；声音默认调到 -14 LUFS，并防止爆音。"
+      },
+      {
+        "kind": "new",
+        "text": "我的声音：用你自己的录音做一个声音。配音也可以是两个声音的对话。"
+      },
+      {
+        "kind": "new",
+        "text": "在本机去除视频背景、修饰人脸，预览和导出都生效。"
+      },
+      {
+        "kind": "new",
+        "text": "移动鼠标即可预览时间线（S 键开关），用 + 和 - 缩放时间线。"
+      },
+      {
+        "kind": "new",
+        "text": "项目管理像文件浏览器：文件夹、大图和详细列表、拖放和批量移动。"
+      },
+      {
+        "kind": "new",
+        "text": "新模型：Seedance 2.5 Flash 和 Seedream 5.5，豆包完整音色列表和语音识别 2.0，Google 按参考图生成图片。"
+      },
+      {
+        "kind": "improved",
+        "text": "以素材为主的片子导出快好几倍；用显卡导出的文件更小、画面更清晰。"
+      },
+      {
+        "kind": "improved",
+        "text": "从本机导入的素材不再占两份空间，移动或改名的素材也能自动找回。"
+      },
+      {
+        "kind": "improved",
+        "text": "服务生成的图片、视频或配音会显示它的提示词、模型和服务商。"
+      },
+      {
+        "kind": "improved",
+        "text": "智能体拿到的是一份简短的系统提示，加上已打开插件自带的技能；模型列表和智能体更新在后台检查。"
+      },
+      {
+        "kind": "improved",
+        "text": "服务的密钥用系统钥匙串加密保存，Studio 也会走你设置的代理。"
+      },
+      {
+        "kind": "improved",
+        "text": "付费生成在应用重启后不会丢失，也不会重复扣费。"
       },
       {
         "kind": "fixed",
-        "text": "修复 Windows 导出时浏览器崩溃后编码器短暂占用文件导致的续跑失败。透明 HEVC 会标记为直通 Alpha。"
+        "text": "导出给其他剪辑软件的草稿保留字幕样式、独立的音频轨，以及口播视频自带的声音。"
       },
       {
         "kind": "fixed",
-        "text": "OpenFilm 凭据失效时提示重新登录。修复对话重复、附件类型或扩展名丢失，以及等长文本改写撤销漏掉的问题。"
+        "text": "桌面端可以安装和运行本地模型，Windows 上也可以。"
       },
       {
         "kind": "fixed",
-        "text": "修复素材分类重复、窄窗口布局预览、长示例时长、大小单位、预发布版本排序和 MCP 工具名称显示。"
+        "text": "几个小时的录音也能打开、播放并显示波形；智能体写入后字幕轨不会丢失；改正字幕里的词会保留它的时间。"
+      },
+      {
+        "kind": "fixed",
+        "text": "还有许多小修复，GitHub 上的更新日志列出了全部改动。"
       }
     ],
     "ja": [
       {
-        "kind": "fixed",
-        "text": "Windows デスクトップ版でプロジェクトの切り替えやタブバーからの起動が止まる問題を修正しました。"
+        "kind": "new",
+        "text": "プラグイン：編集、キャンバス、新しい試写はプラグインになり、個別にオン・オフできます。誰でもプラグインを作れます。"
       },
       {
         "kind": "new",
-        "text": "同じグループにプロジェクトを複製し、独立したコピーを編集できます。"
-      },
-      {
-        "kind": "fixed",
-        "text": "システムリンクを作れない Windows の共有フォルダでも、元の素材を参照してプレビューと書き出しができます。"
-      },
-      {
-        "kind": "fixed",
-        "text": "ファイル変更通知を逃してもタイムラインを更新し、遅い応答で新しい編集が上書きされないようにしました。"
-      },
-      {
-        "kind": "improved",
-        "text": "キャンバスの動画は停止時に先頭フレームを表示し、ホバーで再生します。フレームの保存とその場での名前変更にも対応します。"
+        "text": "コミュニティ（テスト版）：プラグイン、スキル、素材パック、サンプルを探して追加・公開できます。プロジェクト付属のスキルは、許可するまでエージェントに読まれません。"
       },
       {
         "kind": "new",
-        "text": "キャンバスの文章ノードにテキスト、画像、動画の参照を追加できます。"
-      },
-      {
-        "kind": "improved",
-        "text": "Alt と Shift でレイヤーを選択し、互換性のあるトラックを整理して取り消せます。複合クリップにはミックス音声の波形が表示されます。"
-      },
-      {
-        "kind": "improved",
-        "text": "編集プロジェクトの書き出しでは効果が自動で保持されます。対応する設定は編集でき、素材は参照またはコピーできます。"
-      },
-      {
-        "kind": "improved",
-        "text": "剪映と CapCut の下書きに編集可能な字幕スタイルと対応するクリップ設定を残します。名前を変えてもコピー済み素材とレンダリング素材の参照を保持します。"
-      },
-      {
-        "kind": "improved",
-        "text": "表示中のサムネイルを優先し、画像の読み込み後に停止中のプレビューを更新します。書き出しの進捗はプロジェクトのタイトルバーから確認できます。"
+        "text": "クリップやページ内の要素をキーフレームで動かせます。マスク、文字・単語単位のテキストアニメーション、3D 配置にも対応。"
       },
       {
         "kind": "new",
-        "text": "Studio と CLI の OpenRouter で、TBC mischief 1 と Grok Imagine Video 1.5 Lite による動画生成に対応しました。"
+        "text": "エフェクトをアニメーションできます：ぼかし、グロー、明るさ、コントラスト、彩度、グレースケール、色相、反転。基準点も選べます。"
+      },
+      {
+        "kind": "new",
+        "text": ".cube、OpenColorIO、ASC のカラーファイルで素材本来のビット深度のままグレーディングでき、カラーエディター（ベータ）も試せます。"
+      },
+      {
+        "kind": "new",
+        "text": "コネクタで、エージェントが Dropbox、Frame.io、Notion、Vimeo、Adobe、Canva を使えます。"
+      },
+      {
+        "kind": "new",
+        "text": "クリップ、時刻、区間、キャンバスのノードへのリンクは、どこから開いても Studio で開きます。"
+      },
+      {
+        "kind": "new",
+        "text": "ビットレートやファイルサイズを指定して書き出せます。音声は既定で -14 LUFS に整え、音割れを防ぎます。"
+      },
+      {
+        "kind": "new",
+        "text": "マイボイス：自分の録音から声を作れます。ナレーションを 2 人の声の対話にもできます。"
+      },
+      {
+        "kind": "new",
+        "text": "動画の背景除去と顔のレタッチをこのコンピューターで行い、プレビューと書き出しの両方に反映します。"
+      },
+      {
+        "kind": "new",
+        "text": "マウスを動かしてタイムラインをプレビュー（S キー）、+ と - でズームできます。"
+      },
+      {
+        "kind": "new",
+        "text": "プロジェクト管理がファイルブラウザーのようになりました：フォルダー、アイコン・詳細表示、ドラッグ＆ドロップ、一括移動。"
+      },
+      {
+        "kind": "new",
+        "text": "新しいモデル：Seedance 2.5 Flash と Seedream 5.5、Doubao の全ボイスと音声認識 2.0、参照画像からの Google 画像生成。"
+      },
+      {
+        "kind": "improved",
+        "text": "素材中心の書き出しが数倍速くなり、グラフィックチップでの書き出しは小さく、画質も向上しました。"
+      },
+      {
+        "kind": "improved",
+        "text": "このコンピューターから取り込んだ素材が容量を二重に使わなくなり、移動・名前変更した素材も自動で見つけ直します。"
+      },
+      {
+        "kind": "improved",
+        "text": "サービスが作った画像、クリップ、音声は、プロンプト、モデル、サービスを表示します。"
+      },
+      {
+        "kind": "improved",
+        "text": "エージェントには短いシステムプロンプトと、オンのプラグインのスキルが渡ります。モデル一覧とエージェントの更新はバックグラウンドで確認します。"
+      },
+      {
+        "kind": "improved",
+        "text": "サービスのキーはシステムのキーチェーンで保護され、Studio はプロキシ設定に従います。"
+      },
+      {
+        "kind": "improved",
+        "text": "有料の生成は、アプリを再起動しても失われず、二重に課金されません。"
       },
       {
         "kind": "fixed",
-        "text": "Windows でブラウザーがクラッシュした後にエンコーダーがファイルを一時的に保持しても書き出しを再開できます。透明 HEVC をストレートアルファとして記録します。"
+        "text": "他の編集アプリ向けの下書きで、字幕スタイル、別々の音声トラック、トーキングヘッドの音声が保たれます。"
       },
       {
         "kind": "fixed",
-        "text": "OpenFilm の資格情報が失効した場合は再ログインを案内します。会話の重複、添付ファイルの種類と拡張子、同じ長さの書き換えの取り消しを修正しました。"
+        "text": "デスクトップアプリでローカルモデルをインストール・実行できます。Windows でも動きます。"
       },
       {
         "kind": "fixed",
-        "text": "素材カテゴリの重複、狭いウィンドウのレイアウト、長いサンプルの時間表示、サイズ単位、プレリリースの順序と MCP ツール名を修正しました。"
+        "text": "数時間の録音も開いて再生でき、波形も表示されます。エージェントが書き込んでも字幕トラックは消えず、修正した字幕の単語はタイミングを保ちます。"
+      },
+      {
+        "kind": "fixed",
+        "text": "その他多数の修正。GitHub の変更履歴にすべての変更があります。"
       }
     ],
     "ko": [
       {
-        "kind": "fixed",
-        "text": "Windows 데스크톱 앱에서 프로젝트를 전환하거나 탭 표시줄에서 열 때 멈추는 문제를 수정했습니다."
+        "kind": "new",
+        "text": "플러그인: 편집, 캔버스, 새로운 시사는 각각 켜고 끌 수 있는 플러그인입니다. 누구나 플러그인을 만들 수 있습니다."
       },
       {
         "kind": "new",
-        "text": "같은 그룹에 프로젝트를 복제해 독립적으로 편집할 수 있습니다."
-      },
-      {
-        "kind": "fixed",
-        "text": "시스템 링크를 허용하지 않는 Windows 네트워크 공유의 원본을 참조해 미리 보고 내보낼 수 있습니다."
-      },
-      {
-        "kind": "fixed",
-        "text": "파일 변경 알림을 놓쳐도 타임라인을 새로 고치며, 늦게 도착한 응답이 최신 편집을 덮어쓰지 않습니다."
-      },
-      {
-        "kind": "improved",
-        "text": "캔버스 동영상은 정지 시 첫 프레임을 표시하고 마우스를 올리면 재생됩니다. 프레임을 캡처하고 이름을 바로 바꿀 수 있습니다."
+        "text": "커뮤니티(테스트 버전): 플러그인, 스킬, 소재 팩, 예제를 찾아 추가하고 게시할 수 있습니다. 프로젝트에 딸린 스킬은 허용해야만 에이전트가 읽습니다."
       },
       {
         "kind": "new",
-        "text": "캔버스의 글쓰기 노드에 텍스트, 이미지, 동영상 참고 자료를 추가할 수 있습니다."
-      },
-      {
-        "kind": "improved",
-        "text": "Alt와 Shift로 레이어를 선택하고 호환되는 트랙을 정리한 뒤 실행 취소할 수 있습니다. 복합 클립에는 믹스 파형이 표시됩니다."
-      },
-      {
-        "kind": "improved",
-        "text": "편집 프로젝트를 내보낼 때 효과를 자동으로 유지합니다. 지원되는 설정은 편집할 수 있고 원본 미디어는 연결하거나 복사할 수 있습니다."
-      },
-      {
-        "kind": "improved",
-        "text": "剪映과 CapCut 초안에 편집 가능한 자막 스타일과 지원되는 클립 설정이 유지됩니다. 초안 이름을 바꿔도 복사 및 렌더링한 미디어 연결을 유지합니다."
-      },
-      {
-        "kind": "improved",
-        "text": "보이는 썸네일부터 불러오고 이미지가 준비되면 일시 정지된 미리 보기를 갱신합니다. 프로젝트 제목 표시줄에서 내보내기 진행 상황을 확인할 수 있습니다."
+        "text": "클립과 페이지 요소를 키프레임으로 움직일 수 있습니다. 마스크, 글자·단어 단위 텍스트 애니메이션, 3D 배치도 지원합니다."
       },
       {
         "kind": "new",
-        "text": "Studio와 CLI의 OpenRouter에서 TBC mischief 1 및 Grok Imagine Video 1.5 Lite 동영상 모델을 사용할 수 있습니다."
+        "text": "효과를 애니메이션할 수 있습니다: 흐림, 글로우, 밝기, 대비, 채도, 흑백, 색조, 반전. 기준점도 고를 수 있습니다."
+      },
+      {
+        "kind": "new",
+        "text": ".cube, OpenColorIO, ASC 색상 파일로 소재 본래의 비트 심도 그대로 색 보정하고, 컬러 편집기(베타)도 써 볼 수 있습니다."
+      },
+      {
+        "kind": "new",
+        "text": "커넥터로 에이전트가 Dropbox, Frame.io, Notion, Vimeo, Adobe, Canva를 쓸 수 있습니다."
+      },
+      {
+        "kind": "new",
+        "text": "클립, 시점, 구간, 캔버스 노드로 가는 링크는 어디서 열어도 Studio에서 열립니다."
+      },
+      {
+        "kind": "new",
+        "text": "비트레이트나 파일 크기를 정해 내보낼 수 있습니다. 소리는 기본으로 -14 LUFS에 맞추고 클리핑을 막습니다."
+      },
+      {
+        "kind": "new",
+        "text": "내 목소리: 내 녹음으로 목소리를 만들 수 있습니다. 내레이션을 두 목소리의 대화로도 만들 수 있습니다."
+      },
+      {
+        "kind": "new",
+        "text": "영상 배경 제거와 얼굴 보정을 이 컴퓨터에서 처리하고, 미리보기와 내보내기에 모두 적용합니다."
+      },
+      {
+        "kind": "new",
+        "text": "마우스를 움직여 타임라인을 미리 보고(S 키), + 와 - 로 확대·축소할 수 있습니다."
+      },
+      {
+        "kind": "new",
+        "text": "프로젝트 관리가 파일 탐색기처럼 바뀌었습니다: 폴더, 아이콘·자세히 보기, 끌어 놓기, 일괄 이동."
+      },
+      {
+        "kind": "new",
+        "text": "새 모델: Seedance 2.5 Flash와 Seedream 5.5, Doubao 전체 음성 목록과 음성 인식 2.0, 참조 이미지로 만드는 Google 그림."
+      },
+      {
+        "kind": "improved",
+        "text": "소재 위주의 내보내기가 몇 배 빨라졌고, 그래픽 칩으로 내보낸 파일은 더 작고 선명합니다."
+      },
+      {
+        "kind": "improved",
+        "text": "이 컴퓨터에서 가져온 소재가 공간을 두 번 차지하지 않고, 옮기거나 이름을 바꾼 소재도 다시 찾아냅니다."
+      },
+      {
+        "kind": "improved",
+        "text": "서비스가 만든 그림, 클립, 음성은 프롬프트, 모델, 서비스를 보여 줍니다."
+      },
+      {
+        "kind": "improved",
+        "text": "에이전트는 짧은 시스템 프롬프트와 켜 둔 플러그인의 스킬을 받습니다. 모델 목록과 에이전트 업데이트는 백그라운드에서 확인합니다."
+      },
+      {
+        "kind": "improved",
+        "text": "서비스 키는 시스템 키체인으로 보호되고, Studio는 프록시 설정을 따릅니다."
+      },
+      {
+        "kind": "improved",
+        "text": "유료 생성은 앱을 다시 시작해도 사라지거나 두 번 결제되지 않습니다."
       },
       {
         "kind": "fixed",
-        "text": "Windows에서 브라우저 충돌 후 인코더가 잠시 파일을 잡고 있어도 내보내기를 재개합니다. 투명 HEVC에는 스트레이트 알파를 표시합니다."
+        "text": "다른 편집 앱용 초안에서 자막 스타일, 분리된 오디오 트랙, 토킹 헤드의 소리가 유지됩니다."
       },
       {
         "kind": "fixed",
-        "text": "OpenFilm 자격 증명이 만료되면 다시 로그인하도록 안내합니다. 대화 중복과 첨부 파일 유형 및 확장자, 같은 길이의 텍스트 수정 실행 취소를 바로잡았습니다."
+        "text": "데스크톱 앱에서 로컬 모델을 설치하고 실행할 수 있습니다. Windows에서도 됩니다."
       },
       {
         "kind": "fixed",
-        "text": "라이브러리 분류 중복, 좁은 창 레이아웃, 긴 예제의 시간 표시, 크기 단위, 시험판 정렬과 MCP 도구 이름 표시를 수정했습니다."
+        "text": "몇 시간짜리 녹음도 열고 재생하며 파형을 보여 줍니다. 에이전트가 써도 자막 트랙이 사라지지 않고, 고친 자막 단어는 타이밍을 유지합니다."
+      },
+      {
+        "kind": "fixed",
+        "text": "그 밖의 많은 수정. GitHub 변경 기록에 모든 변경이 있습니다."
       }
     ],
     "es": [
       {
-        "kind": "fixed",
-        "text": "Corrige el bloqueo al cambiar de proyecto o abrirlo desde las pestañas en Windows."
+        "kind": "new",
+        "text": "Plugins: Edición, Lienzo y la nueva Proyección son plugins que activas o desactivas, y cualquiera puede crear uno."
       },
       {
         "kind": "new",
-        "text": "Duplica un proyecto dentro del mismo grupo y edita la copia de forma independiente."
-      },
-      {
-        "kind": "fixed",
-        "text": "Vincula los originales de carpetas de red de Windows que rechazan enlaces del sistema y úsalos al previsualizar o exportar."
-      },
-      {
-        "kind": "fixed",
-        "text": "La línea de tiempo se actualiza aunque falte un aviso del sistema y las respuestas atrasadas no sobrescriben ediciones recientes."
-      },
-      {
-        "kind": "improved",
-        "text": "Los videos del lienzo muestran el primer fotograma en reposo, se reproducen al pasar el cursor y permiten capturar fotogramas y cambiar el nombre."
+        "text": "La Comunidad (en pruebas): busca, añade y publica plugins, habilidades, paquetes de la biblioteca y ejemplos. Las habilidades propias de un proyecto solo llegan a tu agente cuando las permites."
       },
       {
         "kind": "new",
-        "text": "Añade texto, imágenes y videos de referencia a los nodos de escritura del lienzo."
-      },
-      {
-        "kind": "improved",
-        "text": "Selecciona capas con Alt y Shift, organiza pistas compatibles con opción de deshacer y consulta la forma de onda mezclada de los clips compuestos."
-      },
-      {
-        "kind": "improved",
-        "text": "Al exportar un proyecto de edición, los efectos se conservan automáticamente. Los ajustes compatibles siguen siendo editables y puedes vincular o copiar los medios originales."
-      },
-      {
-        "kind": "improved",
-        "text": "Los borradores de Jianying y CapCut conservan el estilo editable de los subtítulos y los ajustes compatibles de clips. Los medios siguen vinculados al renombrar el borrador."
-      },
-      {
-        "kind": "improved",
-        "text": "Carga primero las miniaturas visibles, actualiza la vista en pausa al cargar imágenes y consulta el progreso de exportación desde la barra del proyecto."
+        "text": "Los clips y los elementos de una página se mueven con fotogramas clave, con máscaras, texto animado por letras o palabras y colocación en 3D."
       },
       {
         "kind": "new",
-        "text": "Genera video con TBC mischief 1 y Grok Imagine Video 1.5 Lite mediante OpenRouter en Studio y la CLI."
+        "text": "Anima efectos: desenfoque, brillo difuso, luminosidad, contraste, saturación, escala de grises, tono e inversión, alrededor del punto de anclaje que elijas."
+      },
+      {
+        "kind": "new",
+        "text": "Etalona con archivos de color .cube, OpenColorIO y ASC a la profundidad de bits original, y prueba el editor de Color (beta)."
+      },
+      {
+        "kind": "new",
+        "text": "Los conectores dejan que tu agente use Dropbox, Frame.io, Notion, Vimeo, Adobe y Canva."
+      },
+      {
+        "kind": "new",
+        "text": "Los enlaces a un clip, un momento, un tramo o un nodo del lienzo se abren en Studio vengan de donde vengan."
+      },
+      {
+        "kind": "new",
+        "text": "Exporta a una tasa de bits o un tamaño de archivo. El sonido se lleva a -14 LUFS por defecto y se evita que sature."
+      },
+      {
+        "kind": "new",
+        "text": "Mis voces: crea una voz a partir de tu propia grabación. La locución puede ser un diálogo a dos voces."
+      },
+      {
+        "kind": "new",
+        "text": "Quita el fondo de un vídeo y retoca caras en tu ordenador, en la vista previa y al exportar."
+      },
+      {
+        "kind": "new",
+        "text": "Previsualiza la línea de tiempo moviendo el ratón (S) y haz zoom con + y -."
+      },
+      {
+        "kind": "new",
+        "text": "Los proyectos funcionan como un explorador de archivos: carpetas, vistas de iconos y detalles, arrastrar y soltar, y movimientos por lotes."
+      },
+      {
+        "kind": "new",
+        "text": "Modelos nuevos: Seedance 2.5 Flash y Seedream 5.5, la lista completa de voces de Doubao y su reconocimiento de voz 2.0, e imágenes de Google a partir de imágenes de referencia."
+      },
+      {
+        "kind": "improved",
+        "text": "Las exportaciones de metraje son varias veces más rápidas, y las del chip gráfico ocupan menos y se ven mejor."
+      },
+      {
+        "kind": "improved",
+        "text": "El material de este ordenador ya no ocupa el doble, y el material movido o renombrado se vuelve a encontrar."
+      },
+      {
+        "kind": "improved",
+        "text": "Una imagen, un clip o una voz que hizo un servicio muestran su prompt, su modelo y su servicio."
+      },
+      {
+        "kind": "improved",
+        "text": "Los agentes reciben un prompt de sistema breve y las habilidades de los plugins activos. Las listas de modelos y las actualizaciones de agentes se comprueban en segundo plano."
+      },
+      {
+        "kind": "improved",
+        "text": "Las claves de los servicios se guardan selladas con el llavero del sistema, y Studio usa tu proxy."
+      },
+      {
+        "kind": "improved",
+        "text": "Una generación de pago no se pierde ni se cobra dos veces si la app se reinicia."
       },
       {
         "kind": "fixed",
-        "text": "Reanuda la exportación en Windows cuando el codificador retiene un archivo tras un fallo del navegador y marca HEVC transparente con alfa recto."
+        "text": "Los borradores para otras apps de edición conservan el estilo de los subtítulos, las pistas de audio separadas y el sonido propio de una persona hablando a cámara."
       },
       {
         "kind": "fixed",
-        "text": "Vuelve a conectar OpenFilm cuando caducan las credenciales. El chat evita sesiones duplicadas, conserva tipos y extensiones de adjuntos y deshace cambios de texto del mismo tamaño."
+        "text": "Los modelos locales se instalan y funcionan en la app de escritorio, también en Windows."
       },
       {
         "kind": "fixed",
-        "text": "Corrige categorías repetidas, vistas de diseño estrechas, duraciones largas, unidades de tamaño, orden de versiones previas y etiquetas de herramientas MCP."
+        "text": "Las grabaciones de horas se abren, se reproducen y muestran su forma de onda. Las pistas de subtítulos sobreviven a lo que escribe el agente, y una palabra corregida conserva su tiempo."
+      },
+      {
+        "kind": "fixed",
+        "text": "Muchas correcciones menores. El registro de cambios en GitHub recoge cada cambio."
       }
     ]
   }
