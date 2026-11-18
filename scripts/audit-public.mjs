@@ -40,7 +40,7 @@ const { values: opts } = parseArgs({
 const ROOT = resolve(opts.dir ?? join(import.meta.dirname, '..'));
 
 const SKIP_DIR = /(^|\/)(node_modules|dist|\.dev|\.release|\.git)\//;
-const LOCALE = /(^|\/)(i18n|locales)\/|\/whats-new\.ts$|\.(zh-CN|ja|ko|es)\.md$|(^|\/)(skills|manual)\/[^/]+\/openfilm\.json$|(^|\/)library\/(index|voices|audio|stickers|tags|search|catalogs\/[^/]+)\.json$|\/scripts\/library-(voice-lines|text-names|sticker-groups|templates)\.json$|\/src\/zh-script\.json$/;
+const LOCALE = /(^|\/)(i18n|locales)\/|\/whats-new\.ts$|\.(zh-CN|zh-TW|ja|ko|es)\.md$|(^|\/)(skills|manual)\/[^/]+\/openfilm\.json$|(^|\/)library\/(index|voices|audio|stickers|tags|search|catalogs\/[^/]+)\.json$|\/scripts\/library-(voice-lines|text-names|sticker-groups|templates)\.json$|\/src\/zh-script\.json$/;
 const TESTISH = /(\.test\.[cm]?[jt]sx?$|(^|\/)(test|tests|fixtures?|__fixtures__)\/)/;
 
 /** A home folder with a real name in it; the placeholders docs and tests use are fine. */

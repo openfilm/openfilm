@@ -1,196 +1,154 @@
 <p align="center">
-  <br>
-  <img src="docs/logo-light.svg#gh-light-mode-only" alt="OpenFilm" height="72">
-  <img src="docs/logo-dark.svg#gh-dark-mode-only" alt="OpenFilm" height="72">
+  <a href="https://openfilm.dev">
+    <img src="docs/logo-light.svg#gh-light-mode-only" alt="OpenFilm" height="48">
+    <img src="docs/logo-dark.svg#gh-dark-mode-only" alt="OpenFilm" height="48">
+  </a>
+</p>
+<p align="center">The open source AI video agent.</p>
+<p align="center">
+  <a href="https://www.npmjs.com/package/openfilm"><img alt="npm" src="https://img.shields.io/npm/v/openfilm?style=flat-square" /></a>
+  <a href="https://github.com/openfilm/openfilm/actions/workflows/ci.yml"><img alt="Build status" src="https://img.shields.io/github/actions/workflow/status/openfilm/openfilm/ci.yml?style=flat-square&branch=main&label=build" /></a>
+  <a href="LICENSE"><img alt="License" src="https://img.shields.io/github/license/openfilm/openfilm?style=flat-square" /></a>
 </p>
 
-<h3 align="center">The open source AI video agent.</h3>
+<p align="center">
+  <a href="README.md">English</a> |
+  <a href="README.zh-CN.md">简体中文</a> |
+  <a href="README.zh-TW.md">繁體中文</a> |
+  <a href="README.ko.md">한국어</a> |
+  <a href="README.de.md">Deutsch</a> |
+  <a href="README.es.md">Español</a> |
+  <a href="README.fr.md">Français</a> |
+  <a href="README.it.md">Italiano</a> |
+  <a href="README.da.md">Dansk</a> |
+  <a href="README.ja.md">日本語</a> |
+  <a href="README.pl.md">Polski</a> |
+  <a href="README.ru.md">Русский</a> |
+  <a href="README.bs.md">Bosanski</a> |
+  <a href="README.ar.md">العربية</a> |
+  <a href="README.no.md">Norsk</a> |
+  <a href="README.pt-BR.md">Português (Brasil)</a> |
+  <a href="README.th.md">ไทย</a> |
+  <a href="README.tr.md">Türkçe</a> |
+  <a href="README.uk.md">Українська</a> |
+  <a href="README.bn.md">বাংলা</a> |
+  <a href="README.el.md">Ελληνικά</a> |
+  <a href="README.vi.md">Tiếng Việt</a>
+</p>
 
-<p align="center">One HTML file, one function, one real editor.</p>
+<p align="center">
+  <a href="https://openfilm.dev"><picture><source media="(prefers-color-scheme: dark)" srcset="https://img.shields.io/badge/-VISIT_OUR_WEBSITE-f0f0f0?style=for-the-badge&logo=data:image/svg%2bxml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjEwIDggODAgODgiPjxtYXNrIGlkPSJnIiBtYXNrVW5pdHM9InVzZXJTcGFjZU9uVXNlIiB4PSIwIiB5PSIwIiB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCI+PHJlY3Qgd2lkdGg9IjEwMCIgaGVpZ2h0PSIxMDAiIGZpbGw9IiNmZmYiLz48cGF0aCBkPSJNMTcgMTJIMzdRNDAgMTIgNDAgMTVWMjdRNDAgMjkgMzguNSAzMC41TDMxIDM3Vjg4UTMxIDkyIDI3IDkyUTIzIDkyIDIzIDg4VjM3TDE1LjUgMzAuNVExNCAyOSAxNCAyN1YxNVExNCAxMiAxNyAxMloiIHN0cm9rZT0iIzAwMCIgc3Ryb2tlLXdpZHRoPSI3IiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+PC9tYXNrPjxnIGZpbGw9IiMxMTEiIG1hc2s9InVybCgjZykiPjxyZWN0IHg9IjIyIiB5PSIxMiIgd2lkdGg9IjY0IiBoZWlnaHQ9IjIwIiByeD0iNSIvPjxyZWN0IHg9IjI1IiB5PSI0NCIgd2lkdGg9IjQ3IiBoZWlnaHQ9IjE5IiByeD0iNSIvPjwvZz48cGF0aCBmaWxsPSIjMTExIiBkPSJNMTcgMTJIMzdRNDAgMTIgNDAgMTVWMjdRNDAgMjkgMzguNSAzMC41TDMxIDM3Vjg4UTMxIDkyIDI3IDkyUTIzIDkyIDIzIDg4VjM3TDE1LjUgMzAuNVExNCAyOSAxNCAyN1YxNVExNCAxMiAxNyAxMloiLz48L3N2Zz4K&logoColor=111111"><img alt="Visit our website" src="https://img.shields.io/badge/-VISIT_OUR_WEBSITE-111111?style=for-the-badge&logo=data:image/svg%2bxml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjEwIDggODAgODgiPjxtYXNrIGlkPSJnIiBtYXNrVW5pdHM9InVzZXJTcGFjZU9uVXNlIiB4PSIwIiB5PSIwIiB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCI+PHJlY3Qgd2lkdGg9IjEwMCIgaGVpZ2h0PSIxMDAiIGZpbGw9IiNmZmYiLz48cGF0aCBkPSJNMTcgMTJIMzdRNDAgMTIgNDAgMTVWMjdRNDAgMjkgMzguNSAzMC41TDMxIDM3Vjg4UTMxIDkyIDI3IDkyUTIzIDkyIDIzIDg4VjM3TDE1LjUgMzAuNVExNCAyOSAxNCAyN1YxNVExNCAxMiAxNyAxMloiIHN0cm9rZT0iIzAwMCIgc3Ryb2tlLXdpZHRoPSI3IiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+PC9tYXNrPjxnIGZpbGw9IiNmZmYiIG1hc2s9InVybCgjZykiPjxyZWN0IHg9IjIyIiB5PSIxMiIgd2lkdGg9IjY0IiBoZWlnaHQ9IjIwIiByeD0iNSIvPjxyZWN0IHg9IjI1IiB5PSI0NCIgd2lkdGg9IjQ3IiBoZWlnaHQ9IjE5IiByeD0iNSIvPjwvZz48cGF0aCBmaWxsPSIjZmZmIiBkPSJNMTcgMTJIMzdRNDAgMTIgNDAgMTVWMjdRNDAgMjkgMzguNSAzMC41TDMxIDM3Vjg4UTMxIDkyIDI3IDkyUTIzIDkyIDIzIDg4VjM3TDE1LjUgMzAuNVExNCAyOSAxNCAyN1YxNVExNCAxMiAxNyAxMloiLz48L3N2Zz4K&logoColor=white"></picture></a>
+  <a href="https://discord.gg/a462Rs88hF"><picture><source media="(prefers-color-scheme: dark)" srcset="https://img.shields.io/badge/-JOIN_OUR_DISCORD-f0f0f0?style=for-the-badge&logo=discord&logoColor=111111"><img alt="Join our Discord" src="https://img.shields.io/badge/-JOIN_OUR_DISCORD-111111?style=for-the-badge&logo=discord&logoColor=white"></picture></a>
+  <a href="https://www.youtube.com/@riverisbuilding"><picture><source media="(prefers-color-scheme: dark)" srcset="https://img.shields.io/badge/-WATCH_ON_YOUTUBE-f0f0f0?style=for-the-badge&logo=youtube&logoColor=111111"><img alt="Watch on YouTube" src="https://img.shields.io/badge/-WATCH_ON_YOUTUBE-111111?style=for-the-badge&logo=youtube&logoColor=white"></picture></a>
+</p>
 
-<p align="center"><b>English</b> · <a href="README.zh-CN.md">简体中文</a> · <a href="README.ja.md">日本語</a> · <a href="README.tr.md">Türkçe</a></p>
+[![OpenFilm: an agent makes a film while you watch, then you change it by hand](docs/openfilm.webp)](https://openfilm.dev)
 
-## About
+---
 
-OpenFilm lets your coding agent make videos, and lets you edit them.
+### About
 
-Ask Codex, Claude Code or any coding agent to make a film. It writes the film as web pages, and Studio, a local
-editor that runs in your browser, shows it taking shape. Then change anything you like, by hand or by asking.
+OpenFilm turns any coding agent into a video agent, with editors to change anything it makes.
 
-- **One HTML file.** `film.html` cuts animated web pages, footage, pictures and sound together on tracks, styled
-  with CSS. Nothing new to learn: your agent already knows the web.
-- **One function.** Each shot is a web page that draws any moment with `frame(t)`, using anything a browser can
-  draw: three.js, WebGL, canvas, SVG, CSS, GSAP, video and more. No framework (like Remotion or HyperFrames): one
-  function is enough.
-- **One real editor.** Move, scale and rotate any element inside a page, change its text, color and style; place,
-  crop and restyle every clip, trim and cut them on the timeline.
+You and the agent work on the same film, together and live. Whatever the agent changes, you see as it happens; whatever
+you change, the agent sees too. The agent does most of the work; you point at anything and ask for a change, or make it
+yourself.
 
-<p align="center"><img src="docs/openfilm.webp" alt="An agent makes a film with OpenFilm; it is then changed by hand in Studio" width="900"><br>
-<sub>▶ <a href="https://www.youtube.com/watch?v=Qea7v6dtNM0">Watch the 1:42 launch video</a>, made with OpenFilm from start to finish.</sub></p>
+- **The agent makes the film.** Use Claude Code, Codex, any other coding agent, or the one built into the desktop
+  app. It finds footage, music and voices, writes each shot and cuts them together while you watch.
+- **Point at anything.** A clip, a moment, a stretch of the timeline, a spot in the frame, a line of subtitles, a card
+  on the canvas. Point at it, say what you want, and the agent knows exactly what you mean.
+- **Change it by hand.** Inside any shot, move, scale and rotate any element, retype its text, restyle its color, font
+  and size, and animate it, even word by word. On the timeline, trim, split and reorder clips, change their speed,
+  volume and fades, crop, grade and cut out the background, and edit subtitles and voice-over. Your edits land in the
+  same files, and the agent builds on them.
 
-## Install
+### Installation
 
-Requires Node 22.2+ and ffmpeg, on macOS, Windows or Linux (git too, for Studio's saved versions); the first run
-downloads a headless Chromium (about 100 MB).
+**Desktop app.** [Download it for macOS or Windows](https://github.com/openfilm/openfilm/releases/latest). Everything
+you need comes with it, down to a built-in agent, and it works with Claude Code or Codex if you already use them.
 
-```sh
+**Your own coding agent.** Add the skill (needs Node 22.2+ and ffmpeg), then ask for a film:
+
+```bash
 npx skills add openfilm/openfilm
 ```
 
-Then ask your agent for a film:
-
 > Make a 20-second launch video for my CLI, with music.
 
-It opens the film in Studio and you watch it take shape. If your agent has no skills, tell it: "Run
-`npx -y openfilm@latest` and follow what it prints."
+### Editors
 
-Or download the desktop app for macOS or Windows from [openfilm.dev](https://openfilm.dev) or
-[Releases](https://github.com/openfilm/openfilm/releases): Studio with a chat beside it for the agents you have. It
-comes with ffmpeg and the headless browser, so there is nothing else to install.
+Each editor is a different way to work on the same film, and in every one you and the agent work together. OpenFilm
+comes with four, and more official editors are in development for different kinds of people: simple enough for anyone
+to pick up, and professional workbenches for those who want them. Editors follow the Community's open standard, so
+anyone can build one and share it.
 
-Making, editing and rendering films needs no account, and OpenFilm's library of music, sounds, voices, stickers,
-transitions, effects and templates is free to use. For generated voice, music, images and video, connect the services
-you use (ElevenLabs, OpenAI, Google, OpenRouter, fal and others) with your own keys in Studio's Settings → Services,
-or sign in to OpenFilm there to make them without keys of your own.
+- **Screening**: watch the film full size. Click a moment, drag across a stretch or circle part of the frame, and the
+  agent knows what you are pointing at.
+- **Edit**: a full timeline of clips, text, captions, voice-over and sound. Move, scale and restyle anything inside a
+  shot. Export a video, or take the timeline to Final Cut Pro, Premiere Pro or DaVinci Resolve.
+- **Canvas**: a board for planning, with notes, images, clips and voices side by side. Generate each with your
+  services, then send them to the timeline in order.
+- **Color**: grade every clip with scopes, color wheels and curves, from camera log footage or with `.cube` LUTs. What
+  you preview is what you export.
 
-To start from a finished film, open one of the [examples](https://github.com/openfilm/examples):
+All four share one library: your own footage in folders, linked rather than copied and found again when you move it,
+alongside OpenFilm's free music, sound effects, voices and stickers.
 
-```sh
-npx -y openfilm@latest open https://github.com/openfilm/examples/tree/main/one-prompt
-```
+### Community
 
-## Commands
+The Community is an open standard for everything you can add to OpenFilm, and anyone can build for it.
 
-Your agent runs them; so can you, with `npx -y openfilm@latest <command>` or `npm i -g openfilm`.
+- **Plugins** extend OpenFilm itself with new editors and connectors to outside services. OpenFilm's own editors are
+  plugins, built the same way as anyone's.
+- **Skills** teach the agent a way of making a kind of film.
+- **Assets** are music, sound effects, transitions, effects, text styles, stickers and templates.
+- **Examples** are complete projects to learn from and remix.
 
-```sh
-openfilm                          # what a film is, and OpenFilm's own skills: where an agent starts
-openfilm open   [folder | url]    # show a film in Studio: a new one, an existing one, one from GitHub, else this one or the last
-openfilm look   [what] [t | a-b]  # check the film, a page or a media file: a contact sheet, one frame, or a range
-openfilm render [a-b]             # the MP4; --4k, --blur (motion blur), --alpha (.webm / .mov), --loudness=-14
-openfilm get    [what]            # media: free from OpenFilm's library first, else made by a connected service
-openfilm canvas [apply <steps>]   # the canvas beside the edit: read it, or lay out notes, files and what to make
-openfilm skills                   # the skills a film can be made with; `openfilm skill <name>` prints one
-openfilm doctor                   # what this computer has for OpenFilm, to paste into an issue
-```
+Each is a plain folder. Add one from the Community window in OpenFilm, or build your own:
+[make a plugin](packages/openfilm/plugins/README.md), [write a skill](https://github.com/openfilm/community/blob/main/SPEC.md),
+[share assets](https://github.com/openfilm/community/blob/main/assets/CONTRIBUTING.md), or share a finished film as an
+example, then list it in [openfilm/community](https://github.com/openfilm/community).
 
-`openfilm <command> --help` lists a command's options; `openfilm get` alone lists what can be made, what the library
-has, and how to connect a service in Studio.
+### How it works
 
-## Studio
-
-Studio runs on your machine, in your browser: use one built on Chromium (Chrome, Edge), the engine films are drawn
-and exported with, so the preview is what you export. Everything in the film can be changed: text and layers in the
-picture, clips on the timeline, their place, look, volume and speed, and the subtitles. Your edits are saved to the
-film's files, so the agent sees and keeps them, and you can save named versions to go back to. Export a video, a GIF,
-the sound or its stems, subtitles, stills, slides, a transparent video, or the timeline itself for Final Cut Pro,
-Premiere Pro and DaVinci Resolve.
-
-Beside the edit is the canvas (⌘E switches between them): a board where you and the agent lay out notes, pictures,
-clips, voice-over, music and sound, wire them into each other, make each with your services, and send what you made
-to the timeline in order. A project can have several, each also seen as a storyboard. The library, in the assets
-drawer, holds footage, voices, sounds, music, text, stickers, filters, effects, transitions and templates, and the
-skills.
-
-The desktop app ([apps/desktop](apps/desktop)) is Studio with a chat beside it, for Claude Code, Codex and the other
-agents, or its own agent with your own key.
-
-## Skills
-
-How a film is made lives in skills, not in the tool. `openfilm` prints one page: what a film is, and OpenFilm's own
-skills, which hold the rest: `edit` (the project, film.html and pages, and checking them), `media` (the library and
-the services) and `canvas`. An agent reads the one a task needs with `openfilm skill <name>`.
-
-Every other skill is a way of making a kind of film, known by its full name, `owner/name`. Studio's library lists
-OpenFilm's and the community's under Discover, from [openfilm/skills](https://github.com/openfilm/skills), which also
-says how to write one; install one there, try it in a conversation without installing it, or add your own from a link
-or a folder (`openfilm skill add <link>`). An installed skill is offered to every agent.
-
-## How it works
-
-A film is a folder with a `film.html`: tracks of clips cut together.
+A film is a folder with a `film.html`: tracks of clips, styled with CSS.
 
 ```html
 <meta name="viewport" content="width=1920, height=1080">
-<style>
-  .card { object-fit: cover; border-radius: 24px; }
-</style>
 <section>
-  <iframe src="title.html#t=0,4"></iframe>
+  <iframe src="title.html#t=0,4"
+          overrides='[{"at":"h1","text":"Aura Pods","style":{"color":"#7fd4ff"}}]'></iframe>
 </section>
 <section>
-  <video src="assets/footage.mp4#t=12,18" at="4" speed="0.5" class="card" style="left: 160px; top: 90px; width: 1600px; height: 700px"></video>
+  <video src="assets/footage.mp4#t=12,18" at="4" style="left: 160px; top: 90px; width: 1600px; height: 700px"></video>
 </section>
 <section>
   <audio src="assets/music.mp3" volume="0.6"></audio>
 </section>
 ```
 
-Each `<section>` is a track, in the order the timeline shows them: the first on top. A clip is an element: a page,
-a video, a still picture or a sound. Which part of its file plays is a media fragment (`#t=12,18`), where it starts
-is `at`, where it sits is its style's `left`, `top`, `width` and `height`, and how it looks is CSS. Every sound is a
-clip of its own. `overrides` hold your changes to elements of a page, and agents keep them when they edit.
+Each shot is a web page whose one function, `frame(t)`, draws any moment with anything a browser can draw (three.js,
+WebGL, canvas, SVG, CSS, GSAP, video) and always the same picture for the same `t`, so it renders the same on any
+machine, the agent can check every frame, and no framework such as Remotion or HyperFrames is needed.
 
-A page is a web page that draws any moment of itself, and that is the whole contract:
-
-```html
-<script type="module">
+```js
 window.film = {
-  frame(t) { /* draw the complete picture at t seconds, with anything */ },
-  duration: 4,               // optional: its own length, in seconds
-  ready: loadFonts(),        // optional: a Promise for fonts, images, models, data
-  width: 480, height: 320,   // optional: a page that is only a part of the picture
+  frame(t) { /* draw the complete picture at t seconds */ },
 };
-</script>
 ```
 
-**The one rule:** the same `t` always draws the same picture, whatever was drawn before. Frames are asked for out of
-order, in parallel and between frames (for motion blur), so a page that keeps the rule renders the same at any size,
-on any machine. Anything else that makes pictures (Python, Blender, a video model) comes in as video or images.
+**Your changes stay yours.** When you change something inside a shot by hand, such as its text, color, position or
+size, OpenFilm saves it in the clip's `overrides` rather than in the page's code. The agent can rewrite the page and
+your changes still apply. The full format is in [SPEC.md](packages/openfilm/SPEC.md).
 
-OpenFilm spends its effort where models fail: checking the film. `look` draws every frame of its sheet twice, in two
-shuffled orders, and names any that changed, along with page errors, fonts that failed to load, missing sound files,
-and text cut off by the frame.
+### Contributing
 
-[MANUAL.md](packages/openfilm/MANUAL.md) is the page `openfilm` prints, and
-[packages/openfilm/manual](packages/openfilm/manual) holds OpenFilm's own skills; [SPEC.md](packages/openfilm/SPEC.md)
-is for anyone building a player, renderer or editor.
+To run OpenFilm from source or send a pull request, read [CONTRIBUTING.md](CONTRIBUTING.md). Report bugs in
+[Issues](https://github.com/openfilm/openfilm/issues) with the report from Settings → Developer → Copy report, and
+security issues as [SECURITY.md](SECURITY.md) describes.
 
-## From source
-
-You need Node 22.18 or later, pnpm 9 (`corepack enable` gives you the version this repository names), ffmpeg on the
-PATH, and git.
-
-```sh
-git clone https://github.com/openfilm/openfilm && cd openfilm
-pnpm install
-pnpm dev            # Studio from this checkout, with a sample film, beside an installed OpenFilm
-pnpm test
-```
-
-Tell your coding agent to run `packages/openfilm/.dev/bin/openfilm` and it makes films with your checkout, in that
-Studio. Every OpenFilm, installed or from source, keeps its projects in the same library.
-
-`pnpm dev:desktop` runs the desktop app from source, and `pnpm typecheck`, `pnpm build` and `pnpm audit:public` do
-what they say.
-[CONTRIBUTING.md](CONTRIBUTING.md) has the details of each package.
-
-## Community
-
-Questions, ideas and films you made go to [Discussions](https://github.com/openfilm/openfilm/discussions): ask in
-Q&A, share your film in Show and tell. Bugs go to [Issues](https://github.com/openfilm/openfilm/issues), with the
-report from Studio's Settings → Developer → Copy report (or `npx openfilm doctor`).
-
-## Contributing
-
-See [CONTRIBUTING.md](CONTRIBUTING.md). To report a security issue, see [SECURITY.md](SECURITY.md).
-
-## License
-
-The format, the CLI, Studio and the desktop app are [MIT](LICENSE). The OpenFilm name and logo are trademarks: see
-[TRADEMARK.md](TRADEMARK.md).
-
-## Star History
+### Star History
 
 <a href="https://www.star-history.com/#openfilm/openfilm&Date">
   <picture>
