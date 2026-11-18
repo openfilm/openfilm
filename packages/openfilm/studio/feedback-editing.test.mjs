@@ -176,6 +176,8 @@ test('editing feedback: nested video sound, overlapping group move, vertical sel
       for (const value of ['80', '60']) {
         await size.fill(value);
         await size.press('Enter');
+        /* the text refits after each commit: a slow machine takes longer than 400 ms to show the size kept */
+        await until(async () => (await size.inputValue()) === value);
         await page.waitForTimeout(400);
         assert.equal(await size.inputValue(), value);
       }
