@@ -1,8 +1,6 @@
 <p align="center">
-  <a href="https://openfilm.dev">
-    <img src="docs/logo-light.svg#gh-light-mode-only" alt="OpenFilm" height="48">
-    <img src="docs/logo-dark.svg#gh-dark-mode-only" alt="OpenFilm" height="48">
-  </a>
+  <img src="docs/logo-light.svg#gh-light-mode-only" alt="OpenFilm" height="48">
+  <img src="docs/logo-dark.svg#gh-dark-mode-only" alt="OpenFilm" height="48">
 </p>
 <p align="center">开源的 AI 视频智能体。</p>
 <p align="center">
@@ -37,12 +35,12 @@
 </p>
 
 <p align="center">
-  <a href="https://openfilm.dev"><picture><source media="(prefers-color-scheme: dark)" srcset="https://img.shields.io/badge/-访问官网-f0f0f0?style=for-the-badge&logo=data:image/svg%2bxml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjEwIDggODAgODgiPjxtYXNrIGlkPSJnIiBtYXNrVW5pdHM9InVzZXJTcGFjZU9uVXNlIiB4PSIwIiB5PSIwIiB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCI+PHJlY3Qgd2lkdGg9IjEwMCIgaGVpZ2h0PSIxMDAiIGZpbGw9IiNmZmYiLz48cGF0aCBkPSJNMTcgMTJIMzdRNDAgMTIgNDAgMTVWMjdRNDAgMjkgMzguNSAzMC41TDMxIDM3Vjg4UTMxIDkyIDI3IDkyUTIzIDkyIDIzIDg4VjM3TDE1LjUgMzAuNVExNCAyOSAxNCAyN1YxNVExNCAxMiAxNyAxMloiIHN0cm9rZT0iIzAwMCIgc3Ryb2tlLXdpZHRoPSI3IiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+PC9tYXNrPjxnIGZpbGw9IiMxMTEiIG1hc2s9InVybCgjZykiPjxyZWN0IHg9IjIyIiB5PSIxMiIgd2lkdGg9IjY0IiBoZWlnaHQ9IjIwIiByeD0iNSIvPjxyZWN0IHg9IjI1IiB5PSI0NCIgd2lkdGg9IjQ3IiBoZWlnaHQ9IjE5IiByeD0iNSIvPjwvZz48cGF0aCBmaWxsPSIjMTExIiBkPSJNMTcgMTJIMzdRNDAgMTIgNDAgMTVWMjdRNDAgMjkgMzguNSAzMC41TDMxIDM3Vjg4UTMxIDkyIDI3IDkyUTIzIDkyIDIzIDg4VjM3TDE1LjUgMzAuNVExNCAyOSAxNCAyN1YxNVExNCAxMiAxNyAxMloiLz48L3N2Zz4K&logoColor=111111"><img alt="访问官网" src="https://img.shields.io/badge/-访问官网-111111?style=for-the-badge&logo=data:image/svg%2bxml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjEwIDggODAgODgiPjxtYXNrIGlkPSJnIiBtYXNrVW5pdHM9InVzZXJTcGFjZU9uVXNlIiB4PSIwIiB5PSIwIiB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCI+PHJlY3Qgd2lkdGg9IjEwMCIgaGVpZ2h0PSIxMDAiIGZpbGw9IiNmZmYiLz48cGF0aCBkPSJNMTcgMTJIMzdRNDAgMTIgNDAgMTVWMjdRNDAgMjkgMzguNSAzMC41TDMxIDM3Vjg4UTMxIDkyIDI3IDkyUTIzIDkyIDIzIDg4VjM3TDE1LjUgMzAuNVExNCAyOSAxNCAyN1YxNVExNCAxMiAxNyAxMloiIHN0cm9rZT0iIzAwMCIgc3Ryb2tlLXdpZHRoPSI3IiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+PC9tYXNrPjxnIGZpbGw9IiNmZmYiIG1hc2s9InVybCgjZykiPjxyZWN0IHg9IjIyIiB5PSIxMiIgd2lkdGg9IjY0IiBoZWlnaHQ9IjIwIiByeD0iNSIvPjxyZWN0IHg9IjI1IiB5PSI0NCIgd2lkdGg9IjQ3IiBoZWlnaHQ9IjE5IiByeD0iNSIvPjwvZz48cGF0aCBmaWxsPSIjZmZmIiBkPSJNMTcgMTJIMzdRNDAgMTIgNDAgMTVWMjdRNDAgMjkgMzguNSAzMC41TDMxIDM3Vjg4UTMxIDkyIDI3IDkyUTIzIDkyIDIzIDg4VjM3TDE1LjUgMzAuNVExNCAyOSAxNCAyN1YxNVExNCAxMiAxNyAxMloiLz48L3N2Zz4K&logoColor=white"></picture></a>
-  <a href="https://discord.gg/dgk4MtNWFZ"><picture><source media="(prefers-color-scheme: dark)" srcset="https://img.shields.io/badge/-DISCORD_中文社区-f0f0f0?style=for-the-badge&logo=discord&logoColor=111111"><img alt="Discord 中文社区" src="https://img.shields.io/badge/-DISCORD_中文社区-111111?style=for-the-badge&logo=discord&logoColor=white"></picture></a>
-  <picture><source media="(prefers-color-scheme: dark)" srcset="docs/wechat-dark.svg"><img alt="微信 riverisbuilding，加好友进群" src="docs/wechat-light.svg"></picture>
-  <a href="https://space.bilibili.com/1229893183"><picture><source media="(prefers-color-scheme: dark)" srcset="https://img.shields.io/badge/-B_站-f0f0f0?style=for-the-badge&logo=bilibili&logoColor=111111"><img alt="B 站" src="https://img.shields.io/badge/-B_站-111111?style=for-the-badge&logo=bilibili&logoColor=white"></picture></a>
-  <a href="https://www.douyin.com/user/MS4wLjABAAAALPQoqnSDKNMQsR5GNnnx_nwq-rI1MsAyqcZRNuOzKjs"><picture><source media="(prefers-color-scheme: dark)" srcset="https://img.shields.io/badge/-抖音-f0f0f0?style=for-the-badge&logo=tiktok&logoColor=111111"><img alt="抖音" src="https://img.shields.io/badge/-抖音-111111?style=for-the-badge&logo=tiktok&logoColor=white"></picture></a>
-  <a href="https://www.xiaohongshu.com/user/profile/695bfa62000000003700029d"><picture><source media="(prefers-color-scheme: dark)" srcset="https://img.shields.io/badge/-小红书-f0f0f0?style=for-the-badge&logo=xiaohongshu&logoColor=111111"><img alt="小红书" src="https://img.shields.io/badge/-小红书-111111?style=for-the-badge&logo=xiaohongshu&logoColor=white"></picture></a>
+  <a href="https://openfilm.dev"><img alt="访问官网" src="docs/buttons/website.zh-CN.svg" /></a>
+  <a href="https://discord.gg/dgk4MtNWFZ"><img alt="Discord 中文社区" src="docs/buttons/discord.zh-CN.svg" /></a>
+  <img alt="微信 riverisbuilding，加好友进群" src="docs/buttons/wechat.zh-CN.svg" />
+  <a href="https://space.bilibili.com/1229893183"><img alt="B 站" src="docs/buttons/bilibili.zh-CN.svg" /></a>
+  <a href="https://www.douyin.com/user/MS4wLjABAAAALPQoqnSDKNMQsR5GNnnx_nwq-rI1MsAyqcZRNuOzKjs"><img alt="抖音" src="docs/buttons/douyin.zh-CN.svg" /></a>
+  <a href="https://www.xiaohongshu.com/user/profile/695bfa62000000003700029d"><img alt="小红书" src="docs/buttons/xiaohongshu.zh-CN.svg" /></a>
 </p>
 
 [![OpenFilm：智能体做片子，你在旁边看着，再亲手修改](docs/openfilm.webp)](https://openfilm.dev)
