@@ -6,11 +6,11 @@ title = "openfilm"
 useDefault = true
 
 [[allowlists]]
-description = "made-up provider keys Studio's tests set and read back, and RFC 6455's sample Sec-WebSocket-Key"
+description = "made-up provider keys Studio's tests set and read back (Inworld's as the base64 of inworld-test:…), and RFC 6455's sample Sec-WebSocket-Key"
 condition = "AND"
-paths = ['''(^|/)packages/openfilm/studio/server/(providers/)?[\w-]+\.test\.mjs$''']
+paths = ['''(^|/)packages/openfilm/studio/(server/(providers/)?[\w-]+\.test\.mjs|ui/src/lib/[\w-]+\.test\.ts)$''']
 regexTarget = "secret"
-regexes = ['''0123456789|12345678|123456|abcdef1234|ABCDEFGH9876''', '''^dGhlIHNhbXBsZSBub25jZQ==$''']
+regexes = ['''0123456789|12345678|123456|abcdef1234|ABCDEFGH9876''', '''^dGhlIHNhbXBsZSBub25jZQ==$''', '''^aW53b3JsZC10ZXN0''']
 
 [[allowlists]]
 description = "the library's ids in the order of its vectors, and numbers: nothing else is in the file (the emoji keycap-… reads as a key)"
