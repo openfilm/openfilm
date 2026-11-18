@@ -17,7 +17,7 @@ process.env.OPENFILM_HOME = testHome;
 process.on('exit', () => rmSync(testHome, { recursive: true, force: true }));
 const hasFfmpeg = (() => { try { execFileSync('ffmpeg', ['-version'], { stdio: 'ignore' }); return true; } catch { return false; } })();
 
-test('real person segmentation is shared by exact frames, backward seeks, preview, compare and reset', { timeout: 120000, skip: !cached ? 'vision model not cached (enable cutout once to run the real-model test offline)' : !hasFfmpeg && 'no ffmpeg' }, async () => {
+test('real person segmentation is shared by exact frames, backward seeks, preview, compare and reset', { timeout: 120000, skip: !cached ? 'vision model not cached (enable cutout once to run the real-model test offline)' : !hasFfmpeg ? 'no ffmpeg' : process.env.CI ? 'the real model is not reliable on CI runners without a GPU (#499)' : false }, async () => {
   const root = mkdtempSync(join(tmpdir(), 'of-video-effects-'));
   let site, browser, film;
   try {
