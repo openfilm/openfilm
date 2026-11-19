@@ -1,6 +1,6 @@
 {
   "name": "openfilm",
-  "version": "0.3.2",
+  "version": "0.4.0",
   "description": "The open source AI video agent: films as web pages, the skills that teach your coding agent to make them, the `openfilm` command, and Studio, the editor to change anything in them.",
   "license": "MIT",
   "homepage": "https://openfilm.dev",
@@ -48,6 +48,8 @@
     "bin",
     "manual",
     "plugins",
+    "!plugins/**/*.test.mjs",
+    "!plugins/*/test",
     "library",
     "!library/voices",
     "!library/audio",
@@ -81,7 +83,7 @@
   },
   "scripts": {
     "dev": "node scripts/dev.mjs",
-    "test": "node --test --test-concurrency=1 --test-timeout=600000 src/*.test.mjs src/color/*.test.mjs scripts/*.test.mjs studio/*.test.mjs studio/server/*.test.mjs studio/server/providers/*.test.mjs studio/ui/src/editor/*.test.ts studio/ui/src/lib/*.test.ts studio/ui/src/components/*.test.ts",
+    "test": "node --test --test-concurrency=1 --test-timeout=600000 src/*.test.mjs src/color/*.test.mjs scripts/*.test.mjs studio/*.test.mjs studio/server/*.test.mjs studio/server/providers/*.test.mjs plugins/*/*.test.mjs plugins/*/test/*.test.mjs studio/ui/src/editor/*.test.ts studio/ui/src/lib/*.test.ts studio/ui/src/components/*.test.ts",
     "typecheck": "tsc -p studio/server && tsc -p studio/ui",
     "build:ui": "vite build --config studio/ui/vite.config.ts",
     "prepare": "npm run build:ui",

@@ -30,8 +30,9 @@ function media(path, seed, size = 300_000) {
   writeFileSync(path, bytes);
   return path;
 }
-/** A place of its own, as a disk is: what is around it is looked through too, and must hold nothing of another test. */
-const elsewhere = () => { const at = join(realpathSync(mkdtempSync(join(tmpdir(), 'of-reconnect-elsewhere-'))), 'disk'); mkdirSync(at); return at; };
+/** A place of its own, as a disk is: what is around it is looked through too, and must hold nothing of another test.
+ * Where it really is: on Windows the temp folder may be named in its short form, which the native call spells out. */
+const elsewhere = () => { const at = join(realpathSync.native(mkdtempSync(join(tmpdir(), 'of-reconnect-elsewhere-'))), 'disk'); mkdirSync(at); return at; };
 const film = (root, ...srcs) => writeFileSync(join(root, 'film.html'), `<meta name="viewport" content="width=1920, height=1080">
 <section>
 ${srcs.map((src, i) => `  <video id="v${i}" src="${src}#t=0,4" at="${i * 4}"></video>`).join('\n')}

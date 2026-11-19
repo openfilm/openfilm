@@ -26,6 +26,14 @@ import { SettingsSwitch } from './settings/ui';
 import { DetailShell, Facts, PageButton } from './library/Store';
 
 /** OpenFilm's own by their order, then the community's as Discover's index lists them (an author's own order is not theirs to set). */
+/** `/owner/repo` of a GitHub address, said after its host; nothing for another site. */
+function githubRepoOf(source: string): string {
+  try {
+    const url = new URL(source);
+    return url.hostname === 'github.com' ? `/${url.pathname.split('/').filter(Boolean).slice(0, 2).join('/')}` : '';
+  } catch { return ''; }
+}
+
 export const byOrder = (a: SkillEntry, b: SkillEntry) => {
   const ca = communityOf(a), cb = communityOf(b);
   if (ca !== cb) return ca ? 1 : -1;
@@ -219,7 +227,7 @@ export function SkillPage({ skill, setSkills, projectId, onBack, onTry, onOn, on
       installs ? { key: 'installs', name: t('assetDrawer.factInstalls'), value: installs.toLocaleString() } : null,
       skill.version ? { key: 'version', name: t('assetDrawer.factVersion'), value: <>v{skill.version}{skill.update ? <span className="block text-[12px] text-[var(--text-faint)]">{t('assetDrawer.factNewer').replace('{version}', skill.update.version)}</span> : null}</> } : null,
       !skill.core ? { key: 'scripts', name: t('assetDrawer.factScripts'), value: skill.scripts ? t(skill.scripts === 1 ? 'gallery.scriptsOne' : 'gallery.scriptsMany').replace('{n}', String(skill.scripts)) : t('assetDrawer.factScriptsNone') } : null,
-      source ? { key: 'source', name: t('assetDrawer.factSource'), value: <a href={source} target="_blank" rel="noreferrer" className="break-all text-[var(--text-muted)] underline-offset-2 hover:text-[var(--text)] hover:underline">{hostOf(source)}{source.includes('github.com/') ? `/${source.split('github.com/')[1]?.split('/').slice(0, 2).join('/')}` : ''}</a> } : null,
+      source ? { key: 'source', name: t('assetDrawer.factSource'), value: <a href={source} target="_blank" rel="noreferrer" className="break-all text-[var(--text-muted)] underline-offset-2 hover:text-[var(--text)] hover:underline">{hostOf(source)}{githubRepoOf(source)}</a> } : null,
     ]} />
   );
   return (

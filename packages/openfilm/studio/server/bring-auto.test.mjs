@@ -13,7 +13,8 @@ beforeEach(() => {
 afterEach(() => { if (before === undefined) delete process.env.OPENFILM_HOME; else process.env.OPENFILM_HOME = before; });
 
 const project = () => { const root = realpathSync(mkdtempSync(join(tmpdir(), 'of-bring-'))); mkdirSync(join(root, 'assets')); return root; };
-const outside = () => realpathSync(mkdtempSync(join(tmpdir(), 'of-bring-from-')));
+/* where it really is: on Windows the temp folder may be named in its short form, which the native call spells out */
+const outside = () => realpathSync.native(mkdtempSync(join(tmpdir(), 'of-bring-from-')));
 const file = (path, size) => { writeFileSync(path, Buffer.alloc(size, 7)); return path; };
 /* a disk that makes no clones, and one that also gives a file no second name (another disk) */
 const noClone = async () => { throw Object.assign(new Error('no clones here'), { code: 'ENOTSUP' }); };

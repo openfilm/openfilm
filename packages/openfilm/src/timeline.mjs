@@ -8,10 +8,13 @@ import { CAPTION_BASE_CSS, cueCss, cueLayout, cueNodes, readVtt, regionBox } fro
 import { clearVideoEffects, drawVideoEffects, hideVideoEffects, suspendVideoEffects, retryVideoEffects, videoEffectsOn, videoEffectsState, setVideoPreview, clearVideoAnalysisCache } from './video-effects.mjs';
 import { clearVideoLut, drawVideoLut, setVideoSplit, hideVideoLut } from './video-lut.mjs';
 
-/* the file as written (without what the host puts in it), read as every reader reads it */
+/* the file as written (without what the host puts in it), read as every reader reads it. A load Studio drops while it
+   reads (the film loaded again behind the picture) has the read cut: it reads again a moment later, which a page
+   that is gone never does, so a dropped load says nothing */
 const own = new URL(location.href);
 own.searchParams.set('film-host', '0');
-const ownText = await (await fetch(own, { cache: 'no-store' })).text();
+const readOwn = () => fetch(own, { cache: 'no-store' }).then((r) => r.text());
+const ownText = await readOwn().catch(() => new Promise((done) => setTimeout(done, 500)).then(readOwn));
 const read = readFilmFile(ownText);
 /* what the tracks and the stage are not (the styles, the fonts): changed, the film is loaded again, not changed in
    place. The stage is the viewport's size, and the keyframes its clips move by are a value of the film's: both change

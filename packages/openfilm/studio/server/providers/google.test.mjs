@@ -90,6 +90,27 @@ test('a picture: the ratio and size asked, the extension from what came back, tr
   await assert.rejects(google.run('image', { out: 'x', prompt: 'y' }, ctx()), /no image \(SAFETY\)/);
 });
 
+test('a picture from reference pictures: each sent inline after the prompt, as many as the model takes', async () => {
+  const png = Buffer.from('89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c489', 'hex');
+  reply = () => [200, inline('image/png', png)];
+  const files = { 'assets/image/duck.png': Buffer.from('duck'), 'assets/image/cup.jpg': Buffer.from('cup'), 'assets/image/sun.webp': Buffer.from('sun') };
+  await google.run('image', { out: 'x', prompt: 'the three together', ref: Object.keys(files) }, ctx(files));
+  const parts = JSON.parse(seen.at(-1).body).contents[0].parts;
+  assert.deepEqual(parts[0], { text: 'the three together' });
+  assert.deepEqual(parts.slice(1).map((p) => p.inline_data.mime_type), ['image/png', 'image/jpeg', 'image/webp']);
+  assert.deepEqual(parts.slice(1).map((p) => Buffer.from(p.inline_data.data, 'base64').toString()), ['duck', 'cup', 'sun']);
+
+  /* the canvas offers as many as each model takes */
+  assert.deepEqual(google.models.image.map((m) => [m.id, m.spec.refs]), [['gemini-3.1-flash-image', 14], ['gemini-3-pro-image', 14], ['gemini-3.1-flash-lite-image', 1]]);
+  const many = Object.fromEntries(Array.from({ length: 15 }, (_, i) => [`assets/image/r${i}.png`, Buffer.from('r')]));
+  await assert.rejects(google.run('image', { out: 'x', prompt: 'y', ref: Object.keys(many) }, ctx(many)), /at most 14 pictures/);
+  await assert.rejects(google.run('image', { out: 'x', prompt: 'y', ref: Object.keys(files) }, { ...ctx(files), model: 'gemini-3.1-flash-lite-image' }), /Flash-Lite Image is made from at most 1 picture\./);
+
+  /* a picture from the prompt alone sends the prompt alone */
+  await google.run('image', { out: 'x', prompt: 'y' }, ctx());
+  assert.deepEqual(JSON.parse(seen.at(-1).body).contents[0].parts, [{ text: 'y' }]);
+});
+
 test('a video: asked through the Interactions API, its file asked after until ready, downloaded with the key', async () => {
   let asks = 0;
   reply = (call) => {

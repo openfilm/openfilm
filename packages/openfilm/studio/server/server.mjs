@@ -295,6 +295,17 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
       at.searchParams.set('key', k);
       return at.pathname + at.search;
     };
+    /* Opened as localhost or [::1] (ownHost lets both in): go to Studio's own address, which its cookie, its writes'
+       Origin and its film origin's CORS are all of. A key the caller showed travels along; one it did not is not added. */
+    const canonical = new URL(origin);
+    if (!path.startsWith('/api/') && String(req.headers.host ?? '').toLowerCase() !== canonical.host.toLowerCase() && ownHost(req, Number(canonical.port || 80))) {
+      const here = `${path}${url.search}`;
+      const cookie = cookieKey(req);
+      const shown = signingIn ?? (sameKey(cookie) || matches(cookie, agentKey) ? cookie : null);
+      const to = shown ? `${origin}${keyed(here, shown)}` : `${origin}${here}`;
+      res.writeHead(302, { location: to, 'referrer-policy': 'no-referrer' });
+      return res.end();
+    }
     if (path === '/open') {
       if (!signingIn) throw new HttpError(403, 'this link is from another Studio launch; use the one `openfilm open` printed');
       const to = url.searchParams.get('to') ?? '/';

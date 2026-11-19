@@ -30,10 +30,11 @@ const MODELS = {
 };
 /** the image model that makes 1K pictures only */
 const ONE_K_ONLY = 'gemini-3.1-flash-lite-image';
+/** the most pictures each image model is made from (--ref): up to 14, Flash-Lite Image is not made for several
+    (https://ai.google.dev/gemini-api/docs/image-generation) */
+const IMAGE_REFS = (/** @type {string} */ model) => (model === ONE_K_ONLY ? 1 : 14);
 /* what each model makes, as the canvas offers it (contract.mjs ModelSpec) */
-/** the most pictures a Gemini picture is made from */
-const IMAGE_REFS = 14;
-for (const model of MODELS.image) Object.assign(model, { spec: { ratios: Object.keys(RATIO_SIZE), refs: IMAGE_REFS, sizes: model.id === ONE_K_ONLY ? ['1k'] : ['1k', '2k', '4k'] } });
+for (const model of MODELS.image) Object.assign(model, { spec: { ratios: Object.keys(RATIO_SIZE), refs: IMAGE_REFS(model.id), sizes: model.id === ONE_K_ONLY ? ['1k'] : ['1k', '2k', '4k'] } });
 for (const model of MODELS.video) Object.assign(model, { spec: { ratios: ['16:9', '9:16'], seconds: [3, 15], refs: 6, frames: true, framedMaxSeconds: 10, clip: true, sizes: ['360p', '720p', '1080p', '4K'] } });
 
 /** The prebuilt voices (they speak every language), each with how Google describes it. */
@@ -138,16 +139,18 @@ export default {
       const fine = ['high', 'xhigh', 'max'].includes(text(args.quality));
       const wanted = size !== '1k' ? size.toUpperCase() : fine ? '2K' : '1K';
       const resolution = model === ONE_K_ONLY ? '1K' : wanted;
+      const refs = list(args.ref);
+      const most = IMAGE_REFS(model);
+      if (refs.length > most) throw new Error(`--ref: ${MODELS.image.find((m) => m.id === model)?.name ?? model} is made from at most ${most} picture${most === 1 ? '' : 's'}.`);
       const said = [
         ...(args.transparent ? ['--transparent: Gemini makes opaque pictures'] : []),
         ...(resolution !== wanted ? [`--size ${size}, --quality ${text(args.quality) || 'low'}: Flash-Lite Image makes 1K pictures only`] : []),
-        ...(text(args.mask) || text(args.markup) ? ['--mask, --markup: Gemini here redraws no part of a picture: the whole was made'] : []),
-        ...(list(args.ref).length > IMAGE_REFS ? [`--ref: Gemini takes ${IMAGE_REFS} pictures: the rest were left out`] : []),
+        ...(text(args.mask) || text(args.markup) ? ['--mask, --markup: Gemini redraws from the prompt and the --ref pictures, not a marked part'] : []),
       ];
-      /* the pictures it is made from, then the words */
-      const refs = await Promise.all(list(args.ref).slice(0, IMAGE_REFS).map(async (file) => ({ inlineData: { mimeType: mimeOf(file), data: Buffer.from(await ctx.read(file)).toString('base64') } })));
+      /* the pictures it is made from, after the prompt, as Google's examples send them */
+      const pictures = await Promise.all(refs.map(async (ref) => ({ inline_data: { mime_type: mimeOf(ref), data: Buffer.from(await ctx.read(ref)).toString('base64') } })));
       const body = await generate(model, {
-        contents: [{ parts: [...refs, { text: prompt }] }],
+        contents: [{ parts: [{ text: prompt }, ...pictures] }],
         generationConfig: { responseModalities: ['IMAGE'], imageConfig: { aspectRatio: ratio, imageSize: resolution } },
       });
       const picture = inline(body, 'image');

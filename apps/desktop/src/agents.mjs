@@ -32,7 +32,7 @@ import { randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { arch, homedir, release, tmpdir } from 'node:os';
 import { createRequire } from 'node:module';
-import { dirname, isAbsolute, join, win32 } from 'node:path';
+import { dirname, isAbsolute, join, posix, win32 } from 'node:path';
 import { Readable, Writable } from 'node:stream';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import * as acp from '@agentclientprotocol/sdk';
@@ -165,7 +165,7 @@ export const KEYS_FD = 3;
 export function keyFileRules(homes, platform = process.platform) {
   /* an absolute path is `//` and the path (`//c/Users/…` on Windows) */
   const absolute = (path) => `/${platform === 'win32' ? path.replace(/\\/g, '/').replace(/^([A-Za-z]):/, (_, d) => `/${d.toLowerCase()}`) : path}`;
-  return [...new Set(homes.filter(Boolean))].flatMap((home) => ['providers.json', 'key', 'run.json'].map((name) => `Read(${absolute(join(home, name))})`));
+  return [...new Set(homes.filter(Boolean))].flatMap((home) => ['providers.json', 'key', 'run.json'].map((name) => `Read(${absolute((platform === 'win32' ? win32 : posix).join(home, name))})`));
 }
 
 /**

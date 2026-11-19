@@ -268,8 +268,8 @@ test('a service with no balance left is named for the model the turn was on, not
 
 test("the app's own agent's key goes to its model's service, never to a command it runs: not in its environment, nor Pi's", { timeout: 60_000, skip: process.platform === 'win32' }, async () => {
   const KEY = `sk-hidden-${randomBytes(8).toString('hex')}`;
-  /* what a command sees: its own environment, and Pi's as another program of this user reads it (ps) */
-  const svc = await service({ bash: 'env > seen.txt; ps -wwE -p $PPID >> seen.txt 2>&1; echo done >> seen.txt' });
+  /* what a command sees: its own environment, and Pi's as another program of this user reads it (ps; the BSD form, read on Linux too) */
+  const svc = await service({ bash: 'env > seen.txt; ps ewwp $PPID >> seen.txt 2>&1; echo done >> seen.txt' });
   const cwd = mkdtempSync(join(tmpdir(), 'of-pi-env-'));
   const session = new AgentSession({
     agent: 'byok', cwd,
@@ -398,6 +398,8 @@ test('38 screenshot reads keep small previews and preserve each earlier request 
   } finally {
     session.close();
     svc.close();
+    /* Windows will not remove a folder a process still works in */
+    await session.ended();
     rmSync(root, { recursive: true, force: true });
   }
 });
@@ -432,6 +434,7 @@ test('batch omissions are stored outside model context and survive restarting th
     first.close();
     resumed?.close();
     svc.close();
+    await Promise.all([first.ended(), resumed?.ended()]);
     rmSync(root, { recursive: true, force: true });
   }
 });

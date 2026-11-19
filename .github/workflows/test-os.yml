@@ -1,0 +1,104 @@
+name: test-os
+# One system's tests, split into shards that run at once (called by ci.yml). Each shard runs the files node's
+# --test-shard gives it, from every package.
+on:
+  workflow_call:
+    inputs:
+      os:
+        type: string
+        required: true
+permissions:
+  contents: read
+jobs:
+  shard:
+    name: shard ${{ matrix.shard }}/3
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    # Match the signed desktop build runner. The macOS 26 pool repeatedly stalled browser and FFmpeg tests.
+    runs-on: ${{ inputs.os == 'macos-latest' && 'macos-15' || inputs.os }}
+    # a test that hangs ends the job, not hours later
+    timeout-minutes: 45
+    env:
+      # the tests never start Electron: no need for its 100 MB download
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+    steps:
+      - uses: actions/checkout@v4
+      # the pnpm version package.json names (packageManager)
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # Ubuntu's packages (Playwright's system libraries and fonts, ffmpeg) come through apt, whose mirror at times took
+      # 20 to 40 minutes for them. The .deb files are kept in the Actions cache, by runner image: apt fetches only what
+      # changed since. A stalled mirror is left for the next one after 30 s (not 120), a failed download is tried
+      # again, and a step that is still slow ends the job there, not at its limit with the tests unrun
+      - id: apt
+        if: runner.os == 'Linux'
+        run: |
+          printf 'Acquire::Retries "3";\nAcquire::http::Timeout "30";\nAcquire::https::Timeout "30";\nAPT::Keep-Downloaded-Packages "true";\n' | sudo tee /etc/apt/apt.conf.d/80-ci
+          echo "prefix=apt-$ImageOS-" >> "$GITHUB_OUTPUT"
+          echo "key=apt-$ImageOS-$ImageVersion" >> "$GITHUB_OUTPUT"
+      - id: apt-cache
+        if: runner.os == 'Linux'
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/apt-archives
+          key: ${{ steps.apt.outputs.key }}
+          restore-keys: ${{ steps.apt.outputs.prefix }}
+      - if: runner.os == 'Linux'
+        run: |
+          mkdir -p ~/apt-archives
+          sudo cp ~/apt-archives/*.deb /var/cache/apt/archives/ 2>/dev/null || true
+          echo "$(ls ~/apt-archives | wc -l) packages from the cache"
+      # the headless browser, kept in the Actions cache by OS and lockfile (Windows took 3 minutes to download it)
+      - uses: actions/cache@v4
+        with:
+          path: ${{ runner.os == 'Windows' && '~\AppData\Local\ms-playwright' || runner.os == 'macOS' && '~/Library/Caches/ms-playwright' || '~/.cache/ms-playwright' }}
+          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: playwright-${{ runner.os }}-
+      # on Ubuntu its apt-get update is the only one: ffmpeg's install below uses it
+      - run: pnpm --filter openfilm exec playwright-core install --with-deps chromium-headless-shell
+        timeout-minutes: 15
+      - if: runner.os == 'Linux'
+        timeout-minutes: 10
+        run: |
+          sudo apt-get install -y --no-install-recommends ffmpeg
+          ffmpeg -hide_banner -version | head -n 1
+          # what the cache keeps: the packages as they are now, none an update replaced
+          sudo apt-get autoclean -y > /dev/null
+          rm -f ~/apt-archives/*.deb
+          cp /var/cache/apt/archives/*.deb ~/apt-archives/
+      - if: runner.os == 'Linux' && steps.apt-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ~/apt-archives
+          key: ${{ steps.apt.outputs.key }}
+      - run: brew install ffmpeg
+        if: runner.os == 'macOS'
+      # Chocolatey reports success when its feed times out and nothing is installed: tried three times, then the step
+      # fails if there is still no ffmpeg, instead of every test that needs it failing later
+      - run: |
+          for ($i = 1; $i -le 3 -and -not (Get-Command ffmpeg -ErrorAction SilentlyContinue); $i++) {
+            choco install ffmpeg --no-progress -y
+            if (-not (Get-Command ffmpeg -ErrorAction SilentlyContinue)) { Start-Sleep -Seconds (20 * $i) }
+          }
+          if (-not (Get-Command ffmpeg -ErrorAction SilentlyContinue)) { Write-Error 'ffmpeg did not install'; exit 1 }
+          ffmpeg -version | Select-Object -First 1
+        shell: pwsh
+        if: runner.os == 'Windows'
+      # this shard of every package's tests; a file that failed runs once more on its own (scripts/ci-test.mjs)
+      - run: node scripts/ci-test.mjs ${{ matrix.shard }}/3
+        env:
+          # what a failing test keeps to be looked at (look's two pictures of a t that differed)
+          OPENFILM_TEST_ARTIFACTS: ${{ runner.temp }}/test-artifacts
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: test-artifacts-${{ inputs.os }}-${{ matrix.shard }}
+          path: ${{ runner.temp }}/test-artifacts
+          if-no-files-found: ignore
+          retention-days: 14

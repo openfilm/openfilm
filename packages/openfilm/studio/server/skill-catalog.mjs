@@ -137,7 +137,7 @@ export function indexEntries(index) {
  * reviewed by it, and always asks before it is installed; it never takes the place of one of OpenFilm's (its uid), and
  * only OpenFilm's own index withdraws anything (`revoked`).
  */
-const SOURCE_ADDRESS = /^(https:\/\/\S{4,500}|\/\S{1,500})$/;
+const SOURCE_ADDRESS = /^(https:\/\/\S{4,500}|\/\S{1,500}|[A-Za-z]:[\\/]\S{1,500})$/;
 export function communitySources(/** @type {string} */ home = sharedHome()) {
   const kept = sharedPref('communitySources', home);
   return Array.isArray(kept) ? [...new Set(kept.filter((a) => typeof a === 'string' && SOURCE_ADDRESS.test(a)))].slice(0, 10) : [];

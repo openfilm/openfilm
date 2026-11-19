@@ -370,6 +370,29 @@ test('a film that cannot load says why when its host awaits `ready`, and is no u
   }
 });
 
+test('a film whose read of its own file is cut (a load Studio drops) reads it again, and is no uncaught error', { timeout: 60_000 }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'of-cut-read-'));
+  writeFileSync(join(dir, 'card.html'), page('card', 2));
+  writeFileSync(join(dir, 'film.html'), filmHtml({ stage: { w: 320, h: 180 }, tracks: [{ clips: [{ src: 'card.html', id: 'card' }] }] }));
+  const site = await serve(dir);
+  const browser = await launch();
+  try {
+    const tab = await browser.newPage();
+    const uncaught = [];
+    tab.on('pageerror', (e) => uncaught.push(e.message));
+    let cut = 0;
+    await tab.route(/film\.html\?film-host=0$/, (route) => (cut++ ? route.continue() : route.abort()));
+    await tab.goto(`${site.url}/film.html`);
+    await tab.waitForFunction(() => Boolean(window.film));
+    assert.equal(await tab.evaluate(() => window.film.ready.then(() => window.film.duration)), 2);
+    assert.equal(cut, 2, 'read again once');
+    assert.deepEqual(uncaught, []);
+  } finally {
+    await browser.close();
+    await site.close();
+  }
+});
+
 
 test('a missing file stops a film, said by its name; an editor\'s preview (film-missing=skip) plays on past it', { timeout: 60_000 }, async () => {
   const dir = mkdtempSync(join(tmpdir(), 'of-missing-'));

@@ -86,6 +86,14 @@ test('a src written by hand: its escapes are read, a bare % is a %, an address i
   assert.equal(srcHref('https://x.test/a.mp4?v=1#x'), 'https://x.test/a.mp4?v=1#x');
 });
 
+test('a numeric character reference outside Unicode is U+FFFD, as a browser reads it, not a crash', () => {
+  const { doc, problems: found } = readFilmFile(page([
+    ['<video src="a.mp4" class="x&#x110000;y&#0;z&#xD800;w"></video>'],
+  ]));
+  assert.deepEqual(found, []);
+  assert.equal(doc.tracks[0].clips[0].class, 'x\uFFFDy\uFFFDz\uFFFDw');
+});
+
 test('a new film is a whole page; a box at 0, 0 is written as one', () => {
   const out = filmHtml({ stage: { w: 1080, h: 1920 }, tracks: [{ clips: [{ src: 'a.mp4', id: 'a', box: { x: 0, y: 0 }, time: [0, 2] }] }] });
   assert.equal(out, '<!doctype html>\n<html>\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=1080, height=1920">\n</head>\n<body>\n'

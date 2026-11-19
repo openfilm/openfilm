@@ -21,7 +21,10 @@ export function cuesOf(text: string): Cue[] {
     if (at < 0) continue;
     const [a, b] = lines[at]!.split('-->');
     const start = secondsOf(a!), end = secondsOf((b ?? '').trim().split(/\s+/)[0] ?? '');
-    const words = lines.slice(at + 1).join(' ').replace(/<[^>]*>/g, '').trim();
+    let words = lines.slice(at + 1).join(' ');
+    /* tags taken out until none is left (one could hide inside another) */
+    for (let was = ''; was !== words;) { was = words; words = words.replace(/<[^>]*>/g, ''); }
+    words = words.trim();
     if (!words || !(end > start)) continue;
     out.push({ start, end, text: words, index: out.length + 1 });
   }

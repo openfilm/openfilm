@@ -390,7 +390,7 @@ test('preset thumbnail panel bounds match actual panels at the current window si
           const svg=button.locator('[data-workspace-preview]');
           assert.equal(await svg.getAttribute('viewBox'),`0 0 ${viewport.width} ${viewport.height}`);
           const bounds=await svg.locator('[data-preview-panel]').evaluateAll(items=>items.map(el=>({panel:el.dataset.previewPanel,x:Number(el.getAttribute('x')),y:Number(el.getAttribute('y')),width:Number(el.getAttribute('width')),height:Number(el.getAttribute('height'))})));
-          assert.equal(bounds.some(r=>r.panel==='chat'),hasChat&&preset==='Default');
+          assert.equal(bounds.some(r=>r.panel==='chat'),hasChat&&preset!=='Focus',`${mode}/${preset}/${hasChat}/${viewport.width}`);
           const selectors={chat:'#test-chat',viewer:'[data-viewer-pane]',canvas:'[data-studio-canvas]',library:'[data-workspace-library]',inspector:'[data-workspace-inspector]',layers:'[data-workspace-layers]',timeline:'[data-workspace-timeline]'};
           for(const expected of bounds){
             const actual=await rect(page.locator(selectors[expected.panel]));

@@ -778,7 +778,13 @@ export async function relink(root, rel, to) {
   }
   const part = `${abs}.${process.pid}.linking`;
   await symlink(from, part, info.isDirectory() ? (process.platform === 'win32' ? 'junction' : 'dir') : 'file');
-  await rename(part, abs);
+  try { await rename(part, abs); }
+  catch (e) {
+    /* Windows puts no link to a folder in the place of another: the old link is taken away first */
+    if (process.platform !== 'win32' || !['EPERM', 'EACCES'].includes(/** @type {NodeJS.ErrnoException} */ (e).code ?? '')) throw e;
+    await unlink(abs);
+    await rename(part, abs);
+  }
   return rel;
 }
 

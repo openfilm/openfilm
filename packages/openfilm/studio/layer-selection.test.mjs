@@ -169,7 +169,8 @@ test('Shift-click on the picture, ⌘ / Ctrl-click in Layers, adds a layer to wh
     await page.mouse.move(title.x, title.y);
     await page.mouse.down();
     await page.mouse.up();
-    await page.waitForTimeout(120);
+    /* the first click's selection is in before the second one comes: on a slow machine 120 ms was not always enough */
+    await is(['Parcel'], 'a Shift-click on the title adds it');
     await page.mouse.down({ clickCount: 2 });
     await page.mouse.up({ clickCount: 2 });
     await page.keyboard.up('Shift');

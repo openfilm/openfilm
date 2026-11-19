@@ -10,21 +10,38 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 jobs:
-  test:
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-    # Match the signed desktop build runner. The macOS 26 pool repeatedly stalled browser and FFmpeg tests.
-    runs-on: ${{ matrix.os == 'macos-latest' && 'macos-15' || matrix.os }}
-    # a test that hangs ends the job, not hours later
-    timeout-minutes: 45
+  # Whether a pull request changes more than words: one that only touches Markdown at the top, docs/, changesets or
+  # issue templates needs no tests (their checks below then pass at once). Pushes to main always test.
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      code: ${{ steps.diff.outputs.code }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: diff
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if [ "$EVENT" != pull_request ]; then echo code=true >> "$GITHUB_OUTPUT"; exit 0; fi
+          git diff --name-only "$BASE" HEAD | tee "$RUNNER_TEMP/changed"
+          if grep -qvE '^(docs/|\.changeset/|[^/]+\.md$|LICENSE$|\.github/ISSUE_TEMPLATE/|\.github/[^/]+\.md$)' "$RUNNER_TEMP/changed"; then
+            echo code=true >> "$GITHUB_OUTPUT"
+          else
+            echo "words only: no tests needed"
+            echo code=false >> "$GITHUB_OUTPUT"
+          fi
+
+  typecheck:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
     env:
-      # the tests never start Electron: no need for its 100 MB download
       ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
     steps:
       - uses: actions/checkout@v4
-      # the pnpm version package.json names (packageManager)
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
@@ -32,69 +49,47 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
-      # Ubuntu's packages (Playwright's system libraries and fonts, ffmpeg) come through apt, whose mirror at times took
-      # 20 to 40 minutes for them. The .deb files are kept in the Actions cache, by runner image: apt fetches only what
-      # changed since. A stalled mirror is left for the next one after 30 s (not 120), a failed download is tried
-      # again, and a step that is still slow ends the job there, not at its limit with the tests unrun
-      - id: apt
-        if: runner.os == 'Linux'
+
+  # each system's tests in three shards at once (test-os.yml)
+  ubuntu:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    uses: ./.github/workflows/test-os.yml
+    with:
+      os: ubuntu-latest
+  macos:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    uses: ./.github/workflows/test-os.yml
+    with:
+      os: macos-latest
+  windows:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    uses: ./.github/workflows/test-os.yml
+    with:
+      os: windows-latest
+
+  # The checks a merge waits for, one per system, as before the shards: its shards and the typecheck passed, or the
+  # pull request changes only words.
+  test:
+    if: always()
+    needs: [changes, typecheck, ubuntu, macos, windows]
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          CHANGES: ${{ needs.changes.result }}
+          CODE: ${{ needs.changes.outputs.code }}
+          TYPES: ${{ needs.typecheck.result }}
+          SHARDS: ${{ matrix.os == 'ubuntu-latest' && needs.ubuntu.result || matrix.os == 'macos-latest' && needs.macos.result || needs.windows.result }}
         run: |
-          printf 'Acquire::Retries "3";\nAcquire::http::Timeout "30";\nAcquire::https::Timeout "30";\nAPT::Keep-Downloaded-Packages "true";\n' | sudo tee /etc/apt/apt.conf.d/80-ci
-          echo "prefix=apt-$ImageOS-" >> "$GITHUB_OUTPUT"
-          echo "key=apt-$ImageOS-$ImageVersion" >> "$GITHUB_OUTPUT"
-      - id: apt-cache
-        if: runner.os == 'Linux'
-        uses: actions/cache/restore@v4
-        with:
-          path: ~/apt-archives
-          key: ${{ steps.apt.outputs.key }}
-          restore-keys: ${{ steps.apt.outputs.prefix }}
-      - if: runner.os == 'Linux'
-        run: |
-          mkdir -p ~/apt-archives
-          sudo cp ~/apt-archives/*.deb /var/cache/apt/archives/ 2>/dev/null || true
-          echo "$(ls ~/apt-archives | wc -l) packages from the cache"
-      # on Ubuntu its apt-get update is the only one: ffmpeg's install below uses it
-      - run: pnpm --filter openfilm exec playwright-core install --with-deps chromium-headless-shell
-        timeout-minutes: 15
-      - if: runner.os == 'Linux'
-        timeout-minutes: 10
-        run: |
-          sudo apt-get install -y --no-install-recommends ffmpeg
-          ffmpeg -hide_banner -version | head -n 1
-          # what the cache keeps: the packages as they are now, none an update replaced
-          sudo apt-get autoclean -y > /dev/null
-          rm -f ~/apt-archives/*.deb
-          cp /var/cache/apt/archives/*.deb ~/apt-archives/
-      - if: runner.os == 'Linux' && steps.apt-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
-        with:
-          path: ~/apt-archives
-          key: ${{ steps.apt.outputs.key }}
-      - run: brew install ffmpeg
-        if: runner.os == 'macOS'
-      # Chocolatey reports success when its feed times out and nothing is installed: tried three times, then the step
-      # fails if there is still no ffmpeg, instead of every test that needs it failing later
-      - run: |
-          for ($i = 1; $i -le 3 -and -not (Get-Command ffmpeg -ErrorAction SilentlyContinue); $i++) {
-            choco install ffmpeg --no-progress -y
-            if (-not (Get-Command ffmpeg -ErrorAction SilentlyContinue)) { Start-Sleep -Seconds (20 * $i) }
-          }
-          if (-not (Get-Command ffmpeg -ErrorAction SilentlyContinue)) { Write-Error 'ffmpeg did not install'; exit 1 }
-          ffmpeg -version | Select-Object -First 1
-        shell: pwsh
-        if: runner.os == 'Windows'
-      - run: pnpm test
-        env:
-          # what a failing test keeps to be looked at (look's two pictures of a t that differed)
-          OPENFILM_TEST_ARTIFACTS: ${{ runner.temp }}/test-artifacts
-      - uses: actions/upload-artifact@v4
-        if: failure()
-        with:
-          name: test-artifacts-${{ matrix.os }}
-          path: ${{ runner.temp }}/test-artifacts
-          if-no-files-found: ignore
-          retention-days: 14
+          echo "changes: $CHANGES (code: $CODE), typecheck: $TYPES, shards: $SHARDS"
+          [ "$CHANGES" = success ] || exit 1
+          [ "$CODE" = true ] || exit 0
+          [ "$TYPES" = success ] && [ "$SHARDS" = success ]
 
   # what npm would get: the tarball of openfilm, listed in the log and checked (no tests, fixtures or dev files; the
   # official product.json)
