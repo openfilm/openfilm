@@ -37,7 +37,7 @@ export interface EditClip {
   id: string;
   startMs: number;
   endMs: number;
-  /** The source millisecond it starts at (its in point); 0 for a still. */
+  /** The source millisecond written as its in point. A trim keeps this fixed for a still. */
   inMs: number;
   /** Source ms per film ms (`speed`); 1 without one. */
   speed: number;
@@ -142,7 +142,7 @@ export function editModelOf(tracks: readonly TimelineTrack[], links?: ReadonlyMa
       if (!b.clipId || (!b.loc && !b.cue)) continue;
       const speed = b.speed && b.speed > 0 ? b.speed : 1;
       const still = Boolean(b.anchor?.still || b.cue);
-      const inMs = still ? 0 : b.inMs ?? Math.round((b.anchor?.trimFrom ?? 0) * 1000);
+      const inMs = b.inMs ?? Math.round((b.anchor?.trimFrom ?? 0) * 1000);
       const srcEnd = inMs + (b.endMs - b.startMs) * speed;
       const sourceMs = still ? Infinity
         : b.sourceDurMs != null ? b.sourceDurMs
@@ -225,7 +225,7 @@ function find(d: Draft, id: string): { track: EditTrack; clip: EditClip } | null
   return null;
 }
 
-/** The head moved to `ms`: the in point follows (a still keeps 0, its moment moves: `vin`). */
+/** The head moved to `ms`: the in point follows (for a still only the linkage moment `vin` moves). */
 function setStart(c: EditClip, ms: number): void {
   if (!c.still) c.inMs = Math.max(0, c.inMs + (ms - c.startMs) * c.speed);
   else c.vin = (c.vin ?? 0) + (ms - c.startMs);
@@ -545,8 +545,8 @@ function relocate(d: Draft, from: EditTrack, c: EditClip, main: number | null): 
 
 const sec = (ms: number): number => Math.round(ms) / 1000;
 
-/** The source end film.html writes (`#t=in,end`); a still's is its length. */
-const writtenEnd = (c: EditClip): number => (c.still ? lenOf(c) : Math.min(srcEndOf(c), c.sourceMs));
+/** The source end film.html writes (`#t=in,end`). A still can have a nonzero in point after a split. */
+const writtenEnd = (c: EditClip): number => (c.still ? c.inMs + lenOf(c) : Math.min(srcEndOf(c), c.sourceMs));
 
 /** The fields of a clip that changed from `was` to `now`, as ops.mjs's props take them. */
 function changedFields(was: EditClip, now: EditClip): Record<string, PropValue> {
