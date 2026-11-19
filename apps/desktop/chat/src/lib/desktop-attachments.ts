@@ -132,13 +132,14 @@ export function useDesktopAttachments(project: string) {
    */
   const current = React.useRef(files);
   current.current = files;
-  const take = React.useCallback((ids: readonly string[]): DesktopAttachment[] => {
+  const take = React.useCallback((ids: readonly string[], keepOtherDrafts: ReadonlySet<string>): DesktopAttachment[] => {
     const byId = new Map(current.current.map((f) => [f.id, f]));
     const taken = ids.flatMap((id) => byId.get(id) ?? []);
     /* sent: the message keeps their thumbnails, the agent their paths */
-    for (const f of current.current) if (f.previewUrl) URL.revokeObjectURL(f.previewUrl);
-    current.current = [];
-    setFiles([]);
+    const kept = current.current.filter((f) => keepOtherDrafts.has(f.id) && !ids.includes(f.id));
+    for (const f of current.current) if (!kept.includes(f) && f.previewUrl) URL.revokeObjectURL(f.previewUrl);
+    current.current = kept;
+    setFiles(kept);
     return taken;
   }, []);
 
@@ -159,8 +160,13 @@ export function attachmentBlocker(files: readonly DesktopAttachment[], t: (path:
  * rest go by their path only). Read now, as the message goes: a folder's worth of photos would not all be sent anyway.
  */
 export async function attachedPictures(files: readonly DesktopAttachment[], room: number): Promise<PromptImage[]> {
-  const wanted = files.filter((f) => f.kind === 'image' && f.file).slice(0, Math.max(0, room));
-  const made = await Promise.all(wanted.map((f) => attachedPicture(f.file!)));
+  const wanted = files.filter((f) => f.kind === 'image' && (f.file || f.thumb)).slice(0, Math.max(0, room));
+  const made = await Promise.all(wanted.map((f) => {
+    if (f.file) return attachedPicture(f.file);
+    // A message stopped before sending and reopened after a restart still has its thumbnail and the original file's path.
+    const parts = /^data:(image\/(?:jpeg|png|webp));base64,([\w+/=]+)$/.exec(f.thumb ?? '');
+    return parts ? { mimeType: parts[1]!, data: parts[2]! } : null;
+  }));
   return made.filter((picture): picture is PromptImage => picture !== null);
 }
 

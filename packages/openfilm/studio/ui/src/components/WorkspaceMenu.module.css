@@ -36,9 +36,7 @@
 .row.active { color:var(--accent); font-weight:500; }
 .active .rowIcon { color:var(--accent); }
 .rowActions { display:none; flex-shrink:0; align-items:center; }
-.rowStatus { display:flex; flex-shrink:0; margin-right:8px; }
 .row:hover .rowActions,.row:has(:focus-visible) .rowActions { display:flex; }
-.row:hover .rowStatus,.row:has(:focus-visible) .rowStatus { display:none; }
 .editing { box-shadow:inset 0 0 0 1px var(--border-strong); }
 .chatMenu { width:300px; }
 .chatTop { display:flex; flex-direction:column; gap:2px; flex-shrink:0; padding:8px 8px 6px; border-bottom:1px solid var(--border); }

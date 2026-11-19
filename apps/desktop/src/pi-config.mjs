@@ -221,13 +221,13 @@ export function toolContent(result) {
  * How a run ended, as ACP says it, from Pi's last answer; an error is thrown (the chat shows it), in plain words
  * (`failureText`), with Pi's own words as its `details`.
  */
-export function stopReason(message) {
+export function stopReason(message, modelConnection = null) {
   switch (message?.stopReason) {
     case 'length': return 'max_tokens';
     case 'aborted': return 'cancelled';
     case 'error': {
       const said = String(message.errorMessage || 'The model did not answer.');
-      throw Object.assign(new Error(failureText(said)), { details: said });
+      throw Object.assign(new Error(failureText(said)), { details: said, ...(modelConnection ? { modelConnection } : {}) });
     }
     default: return 'end_turn';
   }
@@ -240,6 +240,12 @@ export const WAIT_MINUTES = 15;
 const TIMED_OUT = /request timed out|headers timeout|body timeout/i;
 const GATEWAY_TIMEOUT = /^\s*(?:504|524)\b|origin_response_timeout|upstream_timeout|timed out waiting for Volcengine|error 524: a timeout occurred/i;
 const GATEWAY_TIMEOUT_HINT = 'The model service took too long to respond. Try again or switch models.';
+const CONNECTION_LOST = /^(?:connection error|network error|fetch failed|terminated|socket hang up)\.?$|^(?:read )?ECONNRESET\b|^other side closed\b/i;
+const CONNECTION_LOST_HINT = 'The connection to the model service was interrupted. Continue to pick up this task.';
+
+export function isModelConnectionError(said) {
+  return CONNECTION_LOST.test(String(said ?? '').trim());
+}
 /* a conversation longer than the model takes: as Pi says it, then as services commonly do */
 const PI_OVERFLOW = /^context overflow recovery failed/i;
 const OVERFLOW = /context (?:length|window|size)|prompt (?:is )?too long/i;
@@ -250,6 +256,7 @@ export function failureText(said) {
   const text = String(said ?? '').trim();
   if (GATEWAY_TIMEOUT.test(text)) return GATEWAY_TIMEOUT_HINT;
   if (TIMED_OUT.test(text)) return 'The model request timed out. Check the connection to the service, then try again.';
+  if (isModelConnectionError(text)) return CONNECTION_LOST_HINT;
   if (PI_OVERFLOW.test(text)) return `${text} ${CONTEXT_HINT}`;
   if (OVERFLOW.test(text)) return `The conversation is too long for the model. ${CONTEXT_HINT}`;
   if (TOO_LARGE.test(text)) return 'The request is too large for the model service, even with older pictures left out. Send your message again to go on with fewer, or start a new conversation.';
@@ -263,6 +270,7 @@ export function failureText(said) {
 export function retryNotice(event) {
   const said = String(event?.errorMessage ?? '').trim();
   const again = `trying again (${event?.attempt ?? 1} of ${event?.maxAttempts ?? 1}).`;
+  if (isModelConnectionError(said)) return { sessionUpdate: 'notice', severity: 'warning', title: `Connection to the model service was interrupted; ${again}`, _meta: { openfilm: { noticeKey: 'composer.modelConnectionRetry' } } };
   if (GATEWAY_TIMEOUT.test(said)) return { sessionUpdate: 'notice', severity: 'warning', title: `The model service took too long to respond; ${again}`, _meta: { openfilm: { noticeKey: 'composer.modelTimeoutRetry' } } };
   if (TOO_LARGE.test(said)) return { sessionUpdate: 'notice', severity: 'warning', title: `The request was too large for the model service; ${again.replace(/\.$/, '')} with half of the older pictures left out.` };
   if (TIMED_OUT.test(said)) return { sessionUpdate: 'notice', severity: 'warning', title: `The model request timed out; ${again}`, description: said };

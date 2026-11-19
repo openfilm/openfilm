@@ -331,8 +331,10 @@ export function InPanesPlace({ frame }: { frame: ReturnType<typeof useProjectFra
     surface, surfaceArrangement, benchPlugins, noBench, away, canvasOpen, canvasKept, arranged, placed, pluginsRead,
     places,
   } = frame;
-  /* the plugin's surface shown: one left is let go (a page hidden could go on playing), and loaded again when shown */
-  const surfacePlugin = surface != null ? benchPlugins.find((p) => p.workbench === surface) : undefined;
+  const [visited, setVisited] = React.useState<{ project: string; names: string[] }>({ project: projectId, names: [] });
+  const names = visited.project === projectId ? visited.names : [];
+  const currentSurface = surface != null && surfaceArrangement == null ? surface : null;
+  if (currentSurface && !names.includes(currentSurface)) setVisited({ project: projectId, names: [...names, currentSurface] });
   if (!loaded || failure) return null;
   /* how the window is laid out round these: the room the layout keeps round the panes with the arrangement among them
      shown, or the canvas (none where the panels float), and the canvas's own frame where they float */
@@ -341,14 +343,20 @@ export function InPanesPlace({ frame }: { frame: ReturnType<typeof useProjectFra
     <>
       {/* a plugin's own surface in the panes' place, as the canvas is: they stay laid out as they were, hidden under it.
           One with an arrangement of its own is laid out among the panels instead (shell/arrangement) */}
-      {surface != null && surfaceArrangement == null ? (
-        <div key={surface} data-workspace-surface={surface} className="relative z-[3] flex min-h-0 min-w-0 bg-[var(--dock-line)]"
-          style={{ gridArea: 'main', paddingTop: DOCK_GAP, ...room }}>
-          <div className="relative flex min-h-0 min-w-0 flex-1 bg-[var(--bg-panel)]">
-            <PluginSurface id={surface} page={surfacePlugin?.page} files={surfacePlugin?.files} program={surfacePlugin?.program} runs={surfacePlugin?.runs} inApp={surfacePlugin?.inApp} element={surfacePlugin?.element} projectId={projectId} folder={loaded?.project.path ?? ''} />
+      {names.map((id) => {
+        const plugin = benchPlugins.find((item) => item.workbench === id);
+        if (!plugin) return null;
+        const shown = currentSurface === id;
+        return (
+          <div key={id} data-workspace-surface={id} aria-hidden={!shown} inert={!shown}
+            className="relative z-[3] flex min-h-0 min-w-0 bg-[var(--dock-line)]"
+            style={{ gridArea: 'main', paddingTop: DOCK_GAP, ...room, ...(shown ? null : { display: 'none' }) }}>
+            <div className="relative flex min-h-0 min-w-0 flex-1 bg-[var(--bg-panel)]">
+              <PluginSurface id={id} page={plugin.page} files={plugin.files} program={plugin.program} runs={plugin.runs} inApp={plugin.inApp} element={plugin.element} projectId={projectId} folder={loaded.project.path} />
+            </div>
           </div>
-        </div>
-      ) : null}
+        );
+      })}
       {/* no workbench on: where one would be says so, over the panes (and the canvas), which stay as they were */}
       {noBench ? (
         <div data-workspace-empty className="relative z-[3] flex min-h-0 min-w-0 items-center justify-center bg-[var(--bg-panel)] px-8 text-center text-[13px] leading-relaxed text-[var(--text-muted)]"

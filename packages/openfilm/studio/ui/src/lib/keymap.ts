@@ -85,6 +85,7 @@ export const ACTIONS = [
   { id: 'copy-attrs', tab: 'basic', keys: ['mod+shift+c'] },
   { id: 'paste-attrs', tab: 'basic', keys: ['mod+shift+v'] },
   /* the rest */
+  { id: 'export', tab: 'other', keys: ['mod+m'] },
   { id: 'refer', tab: 'other', keys: ['mod+l'] },
   { id: 'work-mode', tab: 'other', keys: ['mod+e'] },
 ] as const satisfies readonly { id: string; tab: KeyTab; keys: readonly string[] }[];

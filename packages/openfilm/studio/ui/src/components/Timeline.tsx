@@ -35,8 +35,10 @@ import {
   Play,
   Redo2,
   SplitSquareHorizontal,
+  SquareDashed,
   Trash2,
   Undo2,
+  Upload,
   X,
   ZoomIn,
   ZoomOut,
@@ -632,6 +634,9 @@ export interface TimelineProps {
   onHoverBlock?: (block: TimelineBlock | null) => void;
   /** With it, ⇧-dragging along the ruler marks a range. */
   onRangeChange?: (range: FilmRange | null) => void;
+  onMarkRange?: (point: 'in' | 'out', atMs?: number) => void;
+  onRangeFromClips?: () => void;
+  onExportRange?: () => void;
   /** With it, the range's label can be dragged into the app's chat (STUDIO_REF_TYPE), and says the key that refers it. */
   rangeRef?: (range: FilmRange) => StudioRef;
   /**
@@ -748,6 +753,7 @@ export interface TimelineProps {
   /** Selection, when owned outside (the Inspector). Kept internally without it. */
   selected?: readonly string[];
   onSelectedChange?: (ids: readonly string[]) => void;
+  onTargetChange?: (track: number | null) => void;
   /** Solo (Studio's playback only): the tracks soloed (film.html indexes), and a click on a head's S (⌥: alone). */
   solo?: { tracks: ReadonlySet<number>; onToggle: (docIndex: number, only: boolean) => void };
   /** The markers' row under the ruler, while there are any. */
@@ -1024,6 +1030,9 @@ export const Timeline = React.memo(function Timeline({
   chat,
   onHoverBlock,
   onRangeChange,
+  onMarkRange,
+  onRangeFromClips,
+  onExportRange,
   rangeRef,
   onReferRuler,
   onDuplicate,
@@ -1067,6 +1076,7 @@ export const Timeline = React.memo(function Timeline({
   history,
   selected: selectedProp,
   onSelectedChange,
+  onTargetChange,
   solo,
   markerLane,
   onAddMarker,
@@ -2018,6 +2028,8 @@ export const Timeline = React.memo(function Timeline({
   const [targetLane, setTargetLane] = React.useState<string | null>(null);
   const targetLaneRef = React.useRef(targetLane);
   targetLaneRef.current = targetLane;
+  const targetTrack = tracks.find((tr) => tr.lane === targetLane)?.docIndex ?? null;
+  React.useEffect(() => { onTargetChange?.(targetTrack); }, [onTargetChange, targetTrack]);
   React.useEffect(() => {
     if (targetLane && !tracks.some((tr) => tr.lane === targetLane)) setTargetLane(null);
   }, [tracks, targetLane]);
@@ -2160,19 +2172,38 @@ export const Timeline = React.memo(function Timeline({
   const [rulerHoverMs, setRulerHoverMs] = React.useState<number | null>(null);
   /* the pointer's x over the ruler, so ⌘ pressed or let go there shows or hides that moment without a move */
   const rulerPointerX = React.useRef<number | null>(null);
-  /* the ruler's own menu, open (rulerMenu) */
-  const [rulerMenuAt, setRulerMenuAt] = React.useState<{ x: number; y: number; items: ContextMenuEntry[] } | null>(null);
-  /** The ruler's menu: the range marked (play it, clear it) first, then the editor's (rulerMenu). */
-  const rulerItems = (atMs: number): ContextMenuEntry[] => {
+  const rangeTool = React.useRef<HTMLSpanElement>(null);
+  const [rulerMenuAt, setRulerMenuAt] = React.useState<{ x: number; y: number; flipTo?: number; items: ContextMenuEntry[] } | null>(null);
+  const rangeItems = (atMs?: number): ContextMenuEntry[] => {
     const marked: ContextMenuEntry[] = [];
+    if (onMarkRange) {
+      marked.push(
+        { id: 'mark-in', label: t('settings.shortcuts.actions.mark-in'), icon: <ArrowRightToLine size={14} />, shortcut: keyHint('mark-in'), onSelect: () => onMarkRange('in', atMs) },
+        { id: 'mark-out', label: t('settings.shortcuts.actions.mark-out'), icon: <ArrowLeftToLine size={14} />, shortcut: keyHint('mark-out'), onSelect: () => onMarkRange('out', atMs) },
+      );
+    }
+    if (onRangeFromClips) {
+      marked.push({ id: 'range-clip', label: t('settings.shortcuts.actions.range-clip'), icon: <SquareDashed size={14} />, shortcut: keyHint('range-clip'),
+        disabled: !selectedBlocks.length, hint: t('clipAttrs.selectFirst'), onSelect: onRangeFromClips });
+    }
+    if (marked.length && range) marked.push({ id: 'range-actions-sep', separator: true });
+    if (range && onExportRange) {
+      marked.push({ id: 'export-range', label: t('timeline.menuExportRange'), icon: <Upload size={14} />, shortcut: keyHint('export'), onSelect: onExportRange });
+    }
     if (range && onPlayRange) {
       marked.push({ id: 'play-range', label: t('timeline.menuPlayRange'), icon: <Play size={14} />, shortcut: keyHint('play-range'), onSelect: () => onPlayRange(range) });
     }
     if (range && onRangeChange) {
       marked.push({ id: 'clear-range', label: t('timeline.menuClearRange'), icon: <X size={14} />, shortcut: keyHint('clear-range'), onSelect: () => onRangeChange(null) });
     }
+    return marked;
+  };
+  const rulerItems = (atMs: number): ContextMenuEntry[] => {
     const own = withSkimming(rulerMenu?.(atMs) ?? []);
-    return marked.length && own.length ? [...marked, { id: 'range-sep', separator: true }, ...own] : [...marked, ...own];
+    const submenu = playable ? rangeItems(atMs) : [];
+    if (!submenu.length) return own;
+    const rangeMenu = { id: 'time-range', label: t('timeline.menuTimeRange'), icon: <SquareDashed size={14} />, submenu };
+    return own.length ? [rangeMenu, { id: 'range-sep', separator: true }, ...own] : [rangeMenu];
   };
   const hoverRuler = React.useCallback((e: React.PointerEvent) => {
     if (!onReferRuler || !playable) return;
@@ -3403,6 +3434,19 @@ export const Timeline = React.memo(function Timeline({
             /* while dragging, drawn where the preview says (film.html only updates after the write); a clip the edit
                takes out is drawn faint where it is */
             const clipHeight = h - 2 * CLIP_INSET_Y;
+            if (block.generation) {
+              const state = t(block.generation === 'running' ? 'assetGeneration.running' : 'assetGeneration.failed');
+              return (
+                <div key={block.id} data-generation-slot={block.generation}
+                  className="pointer-events-none absolute z-[14] flex min-w-0 items-center gap-1.5 overflow-hidden rounded-[4px] border border-dashed bg-[var(--bg-field)] px-1.5 text-[10px] text-[var(--text-muted)]"
+                  style={{ left: Math.round(block.startMs * pxPerMs), top: CLIP_INSET_Y, width: Math.max(16, Math.round((block.endMs - block.startMs) * pxPerMs)), height: clipHeight,
+                    borderColor: block.generation === 'running' ? 'var(--accent)' : 'var(--border-strong)' }}
+                  aria-label={`${state} · ${block.title}`}>
+                  <span className="shrink-0 text-[var(--accent)]" aria-hidden>✦</span>
+                  <span className="truncate">{state}</span>
+                </div>
+              );
+            }
             const placed = placedOf(block.id);
             const gone = Boolean(placed?.gone);
             const live = placed && !gone ? placed : null;
@@ -4541,6 +4585,23 @@ export const Timeline = React.memo(function Timeline({
             <SplitGlyph size={16} />
           </ToolButton>
         ) : null}
+        {onMarkRange ? (
+          <span ref={rangeTool}>
+            <ToolButton
+              label={t('timeline.menuTimeRange')}
+              disabled={!playable}
+              active={Boolean(range)}
+              menuOpen={rulerMenuAt?.flipTo != null}
+              onClick={(event) => {
+                if (rulerMenuAt?.flipTo != null) { setRulerMenuAt(null); return; }
+                const at = event.currentTarget.getBoundingClientRect();
+                setRulerMenuAt({ x: at.left, y: at.bottom + 4, flipTo: at.top - 4, items: rangeItems() });
+              }}
+            >
+              <SquareDashed size={16} />
+            </ToolButton>
+          </span>
+        ) : null}
         {/* the middle is for status: "Editing source…" and errors (not among the tools, where it would look like one) */}
         <div className="flex min-w-0 flex-1 items-center justify-center">
           {crumb && !(dropBusy || drag.saving || dropError || drag.error || notice) ? (
@@ -4735,7 +4796,7 @@ export const Timeline = React.memo(function Timeline({
               onKeyDown={onKeyDown}
               onPointerMove={hoverRuler}
               onPointerLeave={() => { rulerPointerX.current = null; setRulerHoverMs(null); }}
-              onContextMenu={rulerMenu || range || onSkimPreview ? (e) => {
+              onContextMenu={rulerMenu || onMarkRange || range || onSkimPreview ? (e) => {
                 e.preventDefault();
                 const items = rulerItems(Math.max(0, Math.min(totalMs, msAtClientX(e.clientX))));
                 if (items.length) setRulerMenuAt({ x: e.clientX, y: e.clientY, items });
@@ -5041,6 +5102,16 @@ export const Timeline = React.memo(function Timeline({
                     style={{ left: Math.max(4, fromX + 4), background: 'var(--accent)' }}
                   >
                     <span>{label}</span>
+                    {range && !rangeDraft && onExportRange ? (
+                      <button type="button" draggable={false} aria-label={t('timeline.menuExportRange')}
+                        title={[t('timeline.menuExportRange'), keyHint('export')].filter(Boolean).join(' · ')}
+                        className="pointer-events-auto flex h-[15px] w-[15px] cursor-pointer items-center justify-center rounded-sm hover:bg-black/15 focus-visible:outline focus-visible:outline-1"
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onDragStart={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                        onClick={(e) => { e.stopPropagation(); onExportRange(); }}>
+                        <Upload size={11} />
+                      </button>
+                    ) : null}
                     {range && !rangeDraft && onRangeChange ? (
                       <button type="button" draggable={false} aria-label={t('timeline.menuClearRange')}
                         title={`${t('timeline.menuClearRange')} · Esc`}
@@ -5063,7 +5134,10 @@ export const Timeline = React.memo(function Timeline({
       {menu && menuItems.length ? (
         <ContextMenu x={menu.x} y={menu.y} items={menuItems} onClose={closeMenu} />
       ) : null}
-      {rulerMenuAt ? <ContextMenu x={rulerMenuAt.x} y={rulerMenuAt.y} items={rulerMenuAt.items} onClose={() => setRulerMenuAt(null)} /> : null}
+      {rulerMenuAt ? (
+        <ContextMenu x={rulerMenuAt.x} y={rulerMenuAt.y} items={rulerMenuAt.items} onClose={() => setRulerMenuAt(null)}
+          flipTo={rulerMenuAt.flipTo} trigger={rulerMenuAt.flipTo == null ? undefined : rangeTool} />
+      ) : null}
       {replaceRequest ? (
         <ConfirmDialog
           open
@@ -5207,16 +5281,18 @@ function ToolButton({
   hint,
   action,
   note,
+  menuOpen,
   active = false,
   children,
 }: {
-  onClick: () => void;
+  onClick: (event: React.MouseEvent<HTMLButtonElement>) => void;
   disabled?: boolean;
   label: string;
   /** The shortcut, already formatted by shortcutHint (⌘ on Mac, Ctrl elsewhere); shown as `Label (⌘Z)`. */
   hint?: string;
   action?: ActionId;
   note?: string;
+  menuOpen?: boolean;
   /** Pressed state: a toggle that is on. */
   active?: boolean;
   children: React.ReactNode;
@@ -5229,7 +5305,7 @@ function ToolButton({
     <Tooltip side="bottom" label={label} action={action} wrap={Boolean(note)} {...(hint ? { shortcut: hint } : {})}>
       <button
         type="button"
-        onClick={() => { if (!disabled) onClick(); }}
+        onClick={(event) => { if (!disabled) onClick(event); }}
         /* a mouse click leaves no focus: otherwise the next Space presses this button (and shows a focus ring)
            instead of playing. Keyboard focus is unaffected. */
         onMouseDown={(e) => e.preventDefault()}
@@ -5237,7 +5313,9 @@ function ToolButton({
            button's tooltip ("why can't I") is the one most needed */
         aria-disabled={disabled}
         aria-label={title}
-        aria-pressed={active}
+        aria-pressed={menuOpen === undefined ? active : undefined}
+        aria-haspopup={menuOpen === undefined ? undefined : 'menu'}
+        aria-expanded={menuOpen}
         /* no focus outline after a click; focus-visible still shows for keyboard users */
         className={`flex h-[28px] w-[28px] shrink-0 items-center justify-center rounded-[6px] outline-none transition focus-visible:ring-1 focus-visible:ring-[var(--accent)] aria-disabled:opacity-100 ${
           disabled ? 'cursor-default' : ''

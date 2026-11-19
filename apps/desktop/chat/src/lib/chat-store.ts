@@ -62,15 +62,24 @@ const record = (project: string): ProjectChat => {
 
 /* the conversations are written a moment after the last change: renaming one, or a turn touching it, is a burst */
 const sessionWrites = new Map<string, ReturnType<typeof setTimeout>>();
+function flushSessions(project: string) {
+  clearTimeout(sessionWrites.get(project));
+  sessionWrites.delete(project);
+  const write = () => {
+    const chat = record(project);
+    return app.chat.saveSessions(project, chat.sessions, chat.last);
+  };
+  void (unread.has(project) ? readAgain(project).then(write) : write()).catch(() => { /* written next time */ });
+}
+
+// Switching workbenches and closing a tab can happen just before a reload.
+if (typeof window !== 'undefined') window.addEventListener('pagehide', () => {
+  for (const project of sessionWrites.keys()) flushSessions(project);
+});
+
 function writeSessions(project: string) {
   clearTimeout(sessionWrites.get(project));
-  sessionWrites.set(project, setTimeout(() => {
-    sessionWrites.delete(project);
-    void readAgain(project).then(() => {
-      const chat = record(project);
-      return app.chat.saveSessions(project, chat.sessions, chat.last);
-    }).catch(() => { /* written next time */ });
-  }, 150));
+  sessionWrites.set(project, setTimeout(() => flushSessions(project), 150));
 }
 
 /** a record that could not be read, read now: what it holds joins what this launch added (failing: nothing written) */

@@ -333,6 +333,10 @@ export function useProjectFrame(projectId: string) {
      whoever listens (openfilm/studio onCommand: the edit) ── */
   const appCommand = React.useRef<(command: StudioCommand) => void>(() => {});
   appCommand.current = (command) => {
+    if (command.type === 'show-workbench') {
+      if (command.projectId === projectId && shown.workModes.includes(command.workbench) && shown.nowShown !== command.workbench) shown.showWorkbench(command.workbench);
+      return;
+    }
     if (command.type === 'open') { if (typeof command.link === 'string') openLink.current(command.link); return; }
     const link = linkOfCommand(command);
     if (link) { openLink.current(link); return; }
@@ -348,6 +352,11 @@ export function useProjectFrame(projectId: string) {
     tellCommand(command);
   };
   React.useEffect(() => { studioHost?.onCommand?.((command) => appCommand.current(command)); }, []);
+  React.useEffect(() => {
+    if (shown.pluginsRead && loaded?.project.id === projectId) {
+      studioHost?.workbenchChanged?.({ projectId, current: shown.nowShown, available: shown.workModes });
+    }
+  }, [projectId, loaded?.project.id, shown.pluginsRead, shown.nowShown, shown.workModes]);
   /* an example opened in the Community: its page in the projects window */
   React.useEffect(() => { setExampleOpener((id) => windows.setProjectsOpen({ example: id })); return () => setExampleOpener(null); }, [windows.setProjectsOpen]);
   /* what was asked of a workbench that was not there yet (studio/hub) is not given to one of the next project */

@@ -145,7 +145,9 @@ const AgentActivityRow = React.memo(function AgentActivityRow({
     return (
       <div className="flex items-center gap-2.5 py-1.5">
         <span className="h-px flex-1 bg-[var(--border)]" />
-        <span className="shrink-0 text-[11px] text-[var(--text-faint)]">{t(item.label)}</span>
+        <span className="min-w-0 truncate text-[11px] text-[var(--text-faint)]" title={item.detail}>
+          {t(item.label).replace('{agent}', () => item.detail ?? '')}
+        </span>
         <span className="h-px flex-1 bg-[var(--border)]" />
       </div>
     );
@@ -349,27 +351,29 @@ function ActGroup({ items }: { items: AgentActivityItem[] }) {
   const live = running.map(row);
   if (!done.length) return <div ref={rootRef} className="min-w-0">{live}</div>;
   return (
-    <div ref={rootRef} className="min-w-0 py-1">
+    <div ref={rootRef} className="min-w-0">
       {/* The chevron follows the text and shows on hover: a dozen groups with a column of chevrons read like a table */}
-      <button
-        type="button"
-        aria-expanded={open}
-        onClick={toggle}
-        title={full}
-        data-activity-header=""
-        data-activity-id={items[0]?.id}
-        className="group/act flex h-6 w-full min-w-0 items-center gap-2 text-left text-[14px] leading-6 text-[var(--text-faint)] hover:text-[var(--text)]"
-      >
-        <Icon size={13} aria-hidden className="shrink-0" />
-        <span data-activity-label="" className="min-w-0 truncate">{summary}</span>
-        {rest ? <span className="shrink-0 tabular-nums opacity-80">+{rest}</span> : null}
-        <span className="ml-auto w-12 shrink-0" />
-        <ChevronRight
-          size={13}
-          aria-hidden
-          className={`shrink-0 transition-[transform,opacity] ${open ? 'rotate-90 opacity-100' : 'opacity-0 group-hover/act:opacity-100 group-focus-visible/act:opacity-100'}`}
-        />
-      </button>
+      <div className="py-1">
+        <button
+          type="button"
+          aria-expanded={open}
+          onClick={toggle}
+          title={full}
+          data-activity-header=""
+          data-activity-id={items[0]?.id}
+          className="group/act flex h-6 w-full min-w-0 items-center gap-2 text-left text-[14px] leading-6 text-[var(--text-faint)] hover:text-[var(--text)]"
+        >
+          <Icon size={13} aria-hidden className="shrink-0" />
+          <span data-activity-label="" className="min-w-0 truncate">{summary}</span>
+          {rest ? <span className="shrink-0 tabular-nums opacity-80">+{rest}</span> : null}
+          <span className="ml-auto w-12 shrink-0" />
+          <ChevronRight
+            size={13}
+            aria-hidden
+            className={`shrink-0 transition-[transform,opacity] ${open ? 'rotate-90 opacity-100' : 'opacity-0 group-hover/act:opacity-100 group-focus-visible/act:opacity-100'}`}
+          />
+        </button>
+      </div>
       {open ? (
         <div className="ml-[6px] mt-0.5 border-l border-[var(--border)] pl-3">
           {done.map(row)}
@@ -395,50 +399,47 @@ function ActGroup({ items }: { items: AgentActivityItem[] }) {
  * on click.
  */
 function ActRow({ item }: { item: AgentActivityItem }) {
-  const Icon = ACT_ICONS[item.label];
+  const t = useT();
   return (
-    <div className="flex min-w-0 items-start gap-2 py-1 text-[14px] leading-6">
-      {Icon ? (
-        <Icon size={13} aria-hidden className="mt-[5px] shrink-0 text-[var(--text-faint)]" />
-      ) : null}
-      <div className="min-w-0 flex-1">
-        <div
-          data-activity-header=""
-          data-activity-id={item.id}
-          aria-busy={!!item.pending}
-          className="flex h-6 max-w-full min-w-0 items-center gap-1.5 text-left"
-        >
-          <ActivityLabel label={item.label} pending={!!item.pending} />
-          {item.query ? (
-            <span className="min-w-0 truncate text-[var(--text-faint)] opacity-80" title={item.query}>
-              “{item.query}”
-            </span>
-          ) : null}
-          {/* File name or command: not film content, so no quotes, monospace */}
-          {item.detail ? (
-            <span className="min-w-0 truncate font-mono text-[12.5px] text-[var(--text-faint)] opacity-80" title={item.detail}>
-              {item.detail}
-            </span>
-          ) : null}
-          {/* Reserve the clock's width after completion so long commands keep the same truncation. */}
-          <span className="ml-auto flex w-12 shrink-0 justify-end">
-            {item.pending ? <PendingElapsed startedAt={item.startedAt} /> : null}
-          </span>
+    <div className="min-w-0 py-1">
+      <ActivityLine Icon={ACT_ICONS[item.label]} label={t(actCopyKey(item.label, item.pending))} query={item.query}
+        detail={item.detail} since={item.pending ? item.startedAt : undefined} activity={item} />
+      {item.asset || item.ask?.status ? (
+        <div className="ml-[21px]">
+          {item.asset ? <AssetPreview asset={item.asset} /> : null}
+          {item.ask?.status ? <AskOutcome ask={item.ask} /> : null}
         </div>
-        {item.asset ? <AssetPreview asset={item.asset} /> : null}
-        {item.ask?.status ? <AskOutcome ask={item.ask} /> : null}
-      </div>
+      ) : null}
     </div>
   );
 }
 
-/** Keep both states in the same type style, using only the visible words' width. */
-function ActivityLabel({ label, pending }: { label: string; pending: boolean }) {
-  const t = useT();
+/** Keep the baseline and clock steady. An icon, when present, starts at the left edge. */
+function ActivityLine({ Icon, label, query, detail, since, activity, shimmer = false }: {
+  Icon?: LucideIcon;
+  label: string;
+  query?: string;
+  detail?: string;
+  since?: number;
+  activity?: AgentActivityItem;
+  shimmer?: boolean;
+}) {
   return (
-    <span data-activity-label="" className="min-w-0 shrink-0 truncate text-[var(--text-faint)]">
-      {t(actCopyKey(label, pending))}
-    </span>
+    <div role={activity ? undefined : 'status'} data-activity-header={activity ? '' : undefined}
+      data-activity-id={activity?.id} aria-busy={activity ? Boolean(activity.pending) : undefined}
+      className="flex h-6 min-w-0 items-center gap-2 text-[14px] leading-6 text-[var(--text-faint)]">
+      {Icon ? <Icon size={13} className="shrink-0" aria-hidden /> : null}
+      <div className="flex min-w-0 flex-1 items-center gap-1.5">
+        <span data-activity-label="" className={`min-w-0 truncate ${query || detail ? 'max-w-[75%] shrink-0' : ''} ${shimmer ? 'text-sweep' : ''}`}>
+          {label}
+        </span>
+        {query ? <span className="min-w-0 truncate opacity-80" title={query}>{activity ? `“${query}”` : query}</span> : null}
+        {detail ? <span className="min-w-0 truncate font-mono text-[12.5px] opacity-80" title={detail}>{detail}</span> : null}
+      </div>
+      <span className="flex w-12 shrink-0 justify-end">
+        {since != null ? <PendingElapsed startedAt={since} /> : null}
+      </span>
+    </div>
   );
 }
 
@@ -624,8 +625,7 @@ function togglePlayer(url: string, owner: string): void {
 /**
  * While a turn runs, the single row underneath: what is happening now.
  *
- * A visible status has its own row above the hover actions. When there is nothing to say, render nothing
- * rather than an empty row separating the reply from its copy button and model name.
+ * Idle status follows the tool list in the same layout and only takes space while visible.
  *
  *   · work running: nothing, because the tool already has its row in the conversation;
  *   · thinking: "Thinking";
@@ -680,22 +680,13 @@ function IdleStatus({ since, quietFirst = false, ownAgent = false }: { since: nu
   const idle = (tick ?? Date.now()) - since;
   if (quietFirst && idle < AFTER_TEXT_MS) return null;
   const label = idleStatus(idle, ownAgent);
-  return <StatusShell label={t(label)} extra={label === 'act.waitingForModel' ? t('act.waitingForModelHint') : undefined} plain since={since} />;
+  return <StatusShell label={t(label)} hint={label === 'act.waitingForModel' ? t('act.waitingForModelHint') : undefined} since={since} />;
 }
 
-/* Status row: the act's icon while an act runs; thinking / working is text only, flush left. The shimmer
-   already says "in progress", so no spinner and no empty slot pushing the text right. */
-function StatusShell({ Icon, label, extra, plain = false, since, waiting = false }: { Icon?: LucideIcon | undefined; label: string; extra?: string | undefined; plain?: boolean; since: number; waiting?: boolean }) {
+function StatusShell({ Icon, label, hint, since, waiting = false }: { Icon?: LucideIcon; label: string; hint?: string; since: number; waiting?: boolean }) {
   return (
-    <div role="status" className="flex h-6 min-w-0 items-center gap-2 text-[14px]">
-      {Icon ? <Icon size={13} aria-hidden className="shrink-0 text-[var(--text-faint)]" /> : null}
-      <span className={`${waiting ? '' : 'text-sweep '}min-w-0 truncate ${extra ? 'max-w-[60%] shrink-0' : ''}`}>{label}</span>
-      {extra ? (
-        <span className={`min-w-0 truncate text-[var(--text-faint)] opacity-80 ${plain || extra.startsWith('“') ? '' : 'font-mono text-[12.5px]'}`} title={extra}>
-          {extra}
-        </span>
-      ) : null}
-      {waiting ? null : <PendingElapsed startedAt={since} />}
+    <div className="min-w-0 py-1">
+      <ActivityLine Icon={Icon} label={label} query={hint} since={waiting ? undefined : since} shimmer={!waiting} />
     </div>
   );
 }

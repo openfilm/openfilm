@@ -237,7 +237,7 @@ function plan() {
     g.beginPath(); pts.forEach(([x, z], i) => { const [px, py] = at(x, z); if (i) g.lineTo(px, py); else g.moveTo(px, py); }); g.stroke(); g.setLineDash([]);
   };
   for (const f of paths.figures) line(f.points, f.color, false);
-  line(paths.camera, '#e6e6e6', true);
+  line(paths.camera, '#f0f0f0', true);
   const placed = (kind, n) => (state.live && state.live.kind === kind && state.live.name === n ? state.live
     : state.playing ? null : state.moved.find((m) => m.kind === kind && m.name === n && near(m.t, state.time)));
   g.font = '11px -apple-system, system-ui, sans-serif';

@@ -42,7 +42,7 @@ export function CoverTile({ thumb, size, leftGap, onOpen, menu }: {
         onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setAt({ x: e.clientX, y: e.clientY }); }}
         title={thumb ? t('covers.tileTip') : t('covers.tileNewTip')}
         className={`group absolute top-1/2 z-10 flex -translate-y-1/2 flex-col items-center justify-center overflow-hidden rounded-[5px] text-[10px] leading-none transition ${thumb
-          ? 'bg-black text-[#e6e6e6] shadow-[0_0_0_1px_var(--border-strong)] hover:shadow-[0_0_0_1.5px_var(--accent)]'
+          ? 'bg-black text-[#f0f0f0] shadow-[0_0_0_1px_var(--border-strong)] hover:shadow-[0_0_0_1.5px_var(--accent)]'
           : 'gap-0.5 border border-dashed border-[var(--border-strong)] bg-[var(--bg-field)] text-[var(--editor-control)] hover:border-[var(--accent)]'}`}
         style={{ width: size, height: size, left: leftGap }}>
         {thumb ? (

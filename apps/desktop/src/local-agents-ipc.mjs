@@ -66,6 +66,8 @@ const IDLE_MS = 20 * 60_000;
 const IDLE_CHECK_MS = 60_000;
 /** how long after its turn a session whose skills changed closes: the page has settled the turn by then */
 const STALE_CLOSE_MS = 3000;
+/** Give an adapter time to acknowledge cancellation before closing its session. */
+const STOP_GRACE_MS = 1200;
 /** the pictures one message may carry (the page's PROMPT_PICTURES_MAX), and how big each (base64, at most 2000 px a side) */
 const PROMPT_IMAGES_MAX = 20;
 const PROMPT_IMAGE_MAX_CHARS = 8 * 1024 * 1024;
@@ -141,9 +143,12 @@ export function sentError(e) {
 export function agentProblem(entry, step, e, turnId = null) {
   const failure = entry.session?.failure?.() ?? {};
   const stderr = String(failure.stderr ?? entry.session?.stderr ?? '').trim().split(/\r?\n/).slice(-5).join('\n');
+  const connection = HARNESS_AGENTS.includes(entry.agent) ? sentError(e)?.data?.modelConnection : null;
+  const what = e instanceof Error ? e.message : String(e);
   return {
     area: 'agent', agent: AGENTS[entry.agent]?.label ?? (entry.agent === 'byok' ? 'Own key' : entry.agent), agentId: entry.agent,
-    what: e instanceof Error ? e.message : String(e), step: failure.step ?? e?.step ?? step, ...(e?.code != null ? { code: String(e.code) } : {}),
+    what: connection ? `${what} ${JSON.stringify(connection)}` : what,
+    step: failure.step ?? e?.step ?? step, ...(connection?.code || e?.code != null ? { code: connection?.code ?? String(e.code) } : {}),
     project: entry.cwd, ...(turnId ? { log: join(logsDir(entry.cwd), `${turnId.replace(/:/g, '-')}.jsonl`) } : {}),
     ...(failure.program ? { program: failure.program } : {}), ...(stderr ? { stderr } : {}), ...(failure.ownLogs ? { ownLogs: failure.ownLogs } : {}),
   };
@@ -186,6 +191,7 @@ export function registerLocalAgentIpc(ipcMain, { trusted, binDir = null, fallbac
   });
 
   const send = (entry, key, payload) => {
+    if (entry.turn?.stopRequested && !entry.turn.done && payload.kind !== 'exit') return;
     /* anything it says counts as use: a session working on its own is not idle */
     entry.lastUsed = Date.now();
     if (entry.turn && !entry.turn.done) { const { kind, ...fields } = payload; entry.turn.file.write(kind, fields); }
@@ -293,8 +299,14 @@ export function registerLocalAgentIpc(ipcMain, { trusted, binDir = null, fallbac
         logDir: logDir(),
         skills: skillsFor(agent),
         harness: await harnessFor(agent),
-        onUpdate: (update) => send(entry, key, { kind: 'update', update }),
+        onUpdate: (update) => {
+          if (entry.info && update.sessionUpdate === 'config_option_update' && Array.isArray(update.configOptions)) {
+            entry.info.configOptions = update.configOptions;
+          }
+          send(entry, key, { kind: 'update', update });
+        },
         onPermission: (params) => new Promise((resolve) => {
+          if (entry.turn?.stopRequested && !entry.turn.done) { resolve(null); return; }
           const requestId = randomUUID();
           pending.set(requestId, (optionId) => { pending.delete(requestId); tellAsking(); resolve(optionId); });
           send(entry, key, { kind: 'permission', requestId, params });
@@ -302,6 +314,7 @@ export function registerLocalAgentIpc(ipcMain, { trusted, binDir = null, fallbac
           noticeAsking(entry, requestId);
         }),
         onQuestion: (ask) => new Promise((resolve) => {
+          if (entry.turn?.stopRequested && !entry.turn.done) { resolve(null); return; }
           const requestId = randomUUID();
           pending.set(requestId, (answers) => { pending.delete(requestId); tellAsking(); resolve(answers); });
           send(entry, key, { kind: 'question', requestId, ...ask });
@@ -347,15 +360,20 @@ export function registerLocalAgentIpc(ipcMain, { trusted, binDir = null, fallbac
     if (!entry) return { ok: false, error: 'This session has ended.' };
     if (isAgentUpdating(entry.agent)) return { ok: false, code: 'agent-updating', error: 'This agent is updating. Wait for it to finish, then try again.' };
     const meta = opts?.meta && typeof opts.meta === 'object' ? opts.meta : null;
+    const recovering = meta?.recovery === true;
+    const recover = recovering && !meta?.handoff;
+    if (recovering && entry.running > 0) {
+      return { ok: false, error: 'This agent cannot resume the task in its current state.' };
+    }
     const file = meta ? openLog(entry.cwd, meta.turnId, (e) => log(`turn log ${meta.turnId}: ${e.message}\n`)) : null;
-    const turn = meta ? { meta, log: [], done: null, file } : null;
+    const turn = meta ? { meta, log: [], done: null, file, stopRequested: false, stopTimer: null } : null;
     const text = String(opts?.text ?? '');
     /* an agent that takes no pictures is given none: the text names each one's file, which it can open itself */
     const images = entry.info?.promptCapabilities?.image ? imageBlocks(opts?.images) : [];
     entry.between = [];
     if (turn) {
       entry.turn = turn;
-      file.write('prompt', { agent: entry.agent, cwd: entry.cwd, session: entry.info ?? null, opened: entry.session.opened ?? null, meta, text, images: images.length });
+      file.write(recovering ? 'resume' : 'prompt', { agent: entry.agent, cwd: entry.cwd, session: entry.info ?? null, opened: entry.session.opened ?? null, meta, text, images: images.length });
     }
     const from = Date.now();
     activePrompts++;
@@ -366,18 +384,28 @@ export function registerLocalAgentIpc(ipcMain, { trusted, binDir = null, fallbac
     /* the error as the agent sent it (ACP's code, message and data), for the turn log */
     let raw = null;
     try {
-      result = { ok: true, stopReason: await entry.session.prompt([{ type: 'text', text }, ...images], { turnId: meta?.turnId }) };
+      const blocks = recover && HARNESS_AGENTS.includes(entry.agent) ? [] : [{ type: 'text', text }, ...images];
+      const stopReason = await entry.session.prompt(blocks, { turnId: meta?.turnId, recover });
+      result = { ok: true, stopReason: turn?.stopRequested ? 'cancelled' : stopReason };
     } catch (e) {
-      connectionError = e;
-      /* `balance`: the service the app's own agent runs on has no balance left (agents.mjs), and where to top it up */
-      result = { ok: false, error: e instanceof Error ? e.message : String(e), ...(e?.balance ? { balance: e.balance } : {}) };
-      raw = sentError(e);
-      if (!e?.balance) noteProblem(entry, 'prompt', e, meta?.turnId ?? null);
+      if (turn?.stopRequested) {
+        result = { ok: true, stopReason: 'cancelled' };
+      } else {
+        connectionError = e;
+        /* `balance`: the service the app's own agent runs on has no balance left (agents.mjs), and where to top it up */
+        raw = sentError(e);
+        const modelConnection = HARNESS_AGENTS.includes(entry.agent) ? raw?.data?.modelConnection : null;
+        result = { ok: false, error: e instanceof Error ? e.message : String(e), ...(e?.balance ? { balance: e.balance } : {}),
+          ...(modelConnection ? { modelConnection } : {}) };
+        if (!e?.balance) noteProblem(entry, 'prompt', e, meta?.turnId ?? null);
+      }
     } finally {
+      clearTimeout(turn?.stopTimer);
       activePrompts--;
       entry.running -= 1;
       onWorking(working());
     }
+    if (turn?.stopRequested && sessions.get(key) !== entry) result = { ...result, sessionClosed: true };
     if (!result.ok || (result.stopReason?.stopReason !== 'cancelled' && result.stopReason !== 'cancelled')) onConnectionResult(entry.agent, connectionError);
     /* GitHub Copilot, its session naming no model (on some accounts): the one that answered, as its own record says,
        for the turn's footer */
@@ -408,7 +436,8 @@ export function registerLocalAgentIpc(ipcMain, { trusted, binDir = null, fallbac
   /* the turns a (reloaded) page should put back: still running, or finished and not yet taken */
   handle('desktop:local-agents:running', () => [...sessions]
     .filter(([, entry]) => entry.turn)
-    .map(([key, entry]) => ({ key, agent: entry.agent, cwd: entry.cwd, meta: entry.turn.meta, done: entry.turn.done, events: entry.turn.log })));
+    .map(([key, entry]) => ({ key, agent: entry.agent, cwd: entry.cwd, meta: entry.turn.meta, info: entry.info,
+      stopping: entry.turn.stopRequested, done: entry.turn.done, events: entry.turn.log })));
 
   handle('desktop:local-agents:ack', (_event, opts) => {
     const entry = sessions.get(opts?.key);
@@ -454,8 +483,23 @@ export function registerLocalAgentIpc(ipcMain, { trusted, binDir = null, fallbac
   });
 
   handle('desktop:local-agents:cancel', async (_event, opts) => {
+    const key = opts?.key;
+    const entry = sessions.get(key);
+    if (!entry) return { ok: true };
+    if (opts?.turnId && entry.turn?.meta.turnId !== opts.turnId && entry.adopted?.turnId !== opts.turnId) return { ok: true };
+    const turn = entry.turn;
+    if (entry.running > 0 && turn && !turn.done) {
+      if (turn.stopRequested) return { ok: true };
+      turn.stopRequested = true;
+      turn.stopTimer = setTimeout(() => {
+        if (sessions.get(key) === entry && entry.turn === turn && entry.running > 0) close(key);
+      }, STOP_GRACE_MS);
+      turn.stopTimer.unref?.();
+    }
     noted(opts, 'cancel', {});
-    await sessions.get(opts?.key)?.session.cancel();
+    const cancel = entry.session.cancel();
+    for (const answer of entry.pending.values()) answer(null);
+    await cancel;
     return { ok: true };
   });
 
@@ -464,7 +508,9 @@ export function registerLocalAgentIpc(ipcMain, { trusted, binDir = null, fallbac
     const entry = sessions.get(opts?.key);
     if (!entry) return { ok: false, error: 'This session has ended.' };
     try {
-      return { ok: true, result: await entry.session.setConfigOption(String(opts.configId), opts.value) };
+      const result = await entry.session.setConfigOption(String(opts.configId), opts.value);
+      if (entry.info && Array.isArray(result?.configOptions)) entry.info.configOptions = result.configOptions;
+      return { ok: true, result };
     } catch (e) {
       return { ok: false, error: e instanceof Error ? e.message : String(e) };
     }

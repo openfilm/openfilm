@@ -20,7 +20,8 @@ import { useLanguage, useT } from '@/i18n';
 import { studioHost } from '@/lib/host';
 import { MenuSelect } from '@/components/MenuSelect';
 import { CustomFrame } from '@/components/FramePicker';
-import { FRAME_RATES } from '@/lib/timecode';
+import { FRAME_RATES, formatTimecode } from '@/lib/timecode';
+import type { FilmRange } from '@/lib/studio-refs';
 import { applyRangeDelivery, readExportRanges, requestDurationMs, type ExportRangeDraft, type RangeDelivery } from '@/lib/export-range';
 import { api } from '@/api';
 import { DEFAULT_VIDEO_EXPORT, legacySocialVideo, patchVideoExport, readVideoExport, videoExportPreset, type VideoExportSettings } from '@/lib/video-export-preset';
@@ -69,6 +70,10 @@ import { RangePicker } from './RangePicker';
 import { LARGE_DIALOG, LARGE_DIALOG_BACKDROP, LARGE_DIALOG_SIDE } from '../dialog-chrome';
 
 type Dest = 'video' | 'alpha' | 'nle' | 'gif' | 'audio' | 'subtitles' | 'images' | 'project';
+type ExportScope = 'all' | 'timeline' | 'custom';
+function supportsRange(dest: Dest, alphaClip: boolean): boolean {
+  return dest === 'video' || dest === 'gif' || dest === 'audio' || dest === 'subtitles' || (dest === 'alpha' && !alphaClip);
+}
 type ImageOutput = 'files' | 'zip' | 'pdf' | 'pptx';
 const IMAGE_OUTPUTS: readonly ImageOutput[] = ['files', 'zip', 'pdf', 'pptx'];
 
@@ -260,6 +265,8 @@ export interface ExportCenterProps {
   mgBlocks?: readonly { clipId: string; label: string; startMs: number; durMs: number }[];
   /** From a block's "Export this clip": opens on transparent assets with that block chosen. */
   focusClipId?: string;
+  /** The marked timeline range when this export was opened. */
+  timelineRange?: FilmRange | null;
   /** The exports were queued (the tray shows them). */
   onQueued?: (jobs: ExportJob[]) => void;
   /** The film's covers (lib/covers): shown with a video, the ticked ones exported as pictures beside it; `edit` opens the cover studio. */
@@ -274,7 +281,7 @@ export interface ExportCenterProps {
 const PICTURE_EXPORTS: ReadonlySet<Dest> = new Set(['video', 'alpha', 'gif', 'images']);
 
 export function ExportCenter(props: ExportCenterProps) {
-  const { open, onClose } = props;
+  const { open, onClose, timelineRange, durationMs: totalMs } = props;
   const t = useT();
   const language = useLanguage();
   /** the platforms offered in this language (a platform picked in another and not offered here is not exported) */
@@ -285,7 +292,11 @@ export function ExportCenter(props: ExportCenterProps) {
   const [draftApps, setDraftApps] = React.useState<{ jianying: boolean; capcut: boolean }>({ jianying: false, capcut: false });
   const [s, setS] = React.useState<Settings>(DEFAULTS);
   const [hydrated, setHydrated] = React.useState(false);
-  const [range, setRange] = React.useState(false);
+  const [scope, setScope] = React.useState<ExportScope>('all');
+  const range = scope !== 'all';
+  const timelineDraft: ExportRangeDraft | null = timelineRange
+    ? { id: 'timeline', from: String(timelineRange.startMs / 1000), to: String(timelineRange.endMs / 1000) }
+    : null;
   const [rangeParts, setRangeParts] = React.useState<ExportRangeDraft[]>([]);
   const [rangeDelivery, setRangeDelivery] = React.useState<RangeDelivery>('separate');
   const [working, setWorking] = React.useState<string | null>(null);
@@ -310,13 +321,24 @@ export function ExportCenter(props: ExportCenterProps) {
   const [exportName, setExportName] = React.useState<string>('');
   /** Whether that name was typed over: only then is it sent, so a dialog left alone exports as it always did. */
   const [nameTyped, setNameTyped] = React.useState(false);
+  const dialogRef = React.useRef<HTMLDivElement>(null);
+
+  React.useLayoutEffect(() => {
+    if (!open) return;
+    const previous = document.activeElement;
+    dialogRef.current?.focus({ preventScroll: true });
+    return () => {
+      if (previous instanceof HTMLElement && previous.isConnected) previous.focus({ preventScroll: true });
+    };
+  }, [open]);
 
   React.useEffect(() => {
     if (!open) return;
     const loaded = loadSettings(language, props.projectFps ?? 30);
+    const loadedAlphaClip = props.mgBlocks?.some((b) => b.clipId === loaded.alpha.source) ?? false;
     setS(props.focusClipId
       ? { ...loaded, dest: 'alpha', alpha: { ...loaded.alpha, source: props.focusClipId } }
-      : loaded);
+      : timelineRange && !supportsRange(loaded.dest, loadedAlphaClip) ? { ...loaded, dest: 'video' } : loaded);
     setHydrated(true);
     setResult(null);
     setWorking(null);
@@ -324,7 +346,9 @@ export function ExportCenter(props: ExportCenterProps) {
     /* a name is this export's, not a setting: each visit starts from the project's own */
     setExportName(props.title);
     setNameTyped(false);
-    setRange(false);
+    setScope(timelineDraft ? 'timeline' : 'all');
+    setRangeParts([timelineDraft ?? { id: 'initial', from: '0', to: String(Math.min(3000, totalMs) / 1000) }]);
+    setRangeDelivery('separate');
     setCaptionCount(null);
     setCaptionTracks(false);
     setProjectSizes(null);
@@ -357,7 +381,6 @@ export function ExportCenter(props: ExportCenterProps) {
   }, [open, onClose, working]);
 
   const stage = props.stage;
-  const totalMs = props.durationMs;
   const film = props.film ?? null;
   const soundKinds = React.useMemo(
     () => new Set<StemKind>((film?.sounds ?? []).filter((x) => x.durMs > 0).map((x) => (x.src && VIDEO_SRC.test(x.src) ? 'footage' : x.kind))),
@@ -387,12 +410,10 @@ export function ExportCenter(props: ExportCenterProps) {
 
   /* Clip edges remain shortcuts; the time fields can name any point in the film. */
   const boundaries = React.useMemo(() => rangeMarks(film?.scenes ?? [], totalMs), [film, totalMs]);
-  React.useEffect(() => {
-    setRangeParts([{ id: 'initial', from: '0', to: String(Math.min(3000, totalMs) / 1000) }]);
-  }, [totalMs, props.projectId]);
 
   const projectFps = props.projectFps ?? 30;
-  const parsedRanges = readExportRanges(rangeParts, totalMs, projectFps);
+  const activeParts = scope === 'timeline' ? (timelineDraft ? [timelineDraft] : []) : rangeParts;
+  const parsedRanges = range ? readExportRanges(activeParts, totalMs, projectFps) : null;
   const rangeMs = range && parsedRanges ? parsedRanges.reduce((n, [from, to]) => n + (to - from) * 1000, 0) : totalMs;
 
   const resolveFrame = (f: FrameChoice): FilmFrameId => (f === 'current' ? props.frame : f);
@@ -435,9 +456,10 @@ export function ExportCenter(props: ExportCenterProps) {
   }, [open, dest, props.projectId]);
   const imageDocument = s.images.as === 'pdf' || s.images.as === 'pptx';
   const alphaBlock = blocks.find((b) => b.clipId === s.alpha.source);
-  const canRange = totalMs > 0 && (dest === 'video' || dest === 'gif' || dest === 'audio' || dest === 'subtitles' || (dest === 'alpha' && !alphaBlock));
+  const canRange = totalMs > 0 && supportsRange(dest, Boolean(alphaBlock));
+  const scopeUnavailable = !canRange && range;
   const rangeInvalid = canRange && range && !parsedRanges;
-  const rangeError = rangeParts.length ? t('exportCenter.rangeInvalid').replace('{end}', String(totalMs / 1000)) : t('exportCenter.rangePickOne');
+  const rangeError = activeParts.length ? t('exportCenter.rangeInvalid').replace('{end}', String(totalMs / 1000)) : t('exportCenter.rangePickOne');
   /* how long what comes out is: one element alone is its own length, not the film's */
   const outMs = dest === 'alpha' && alphaBlock ? alphaBlock.durMs : rangeMs;
   const selectedVideoPreset = exportPreset(s.video.preset);
@@ -494,7 +516,7 @@ export function ExportCenter(props: ExportCenterProps) {
           ...(selectedVideoPreset ? { preset: selectedVideoPreset.name } : {}),
           ...((captionCount == null || captions > 0) && v.sidecar !== 'none' && videoCodec !== 'png' ? { sidecar: v.sidecar } : {}),
           ...(v.audio && v.loudness != null && videoCodec !== 'png' ? { loudness: v.loudness } : {}),
-          ...(coverFirst && firstCover && (videoCodec === 'h264' || videoCodec === 'hevc') ? { cover: firstCover } : {}),
+          ...(scope !== 'timeline' && coverFirst && firstCover && (videoCodec === 'h264' || videoCodec === 'hevc') ? { cover: firstCover } : {}),
         }];
       }
       case 'alpha': {
@@ -533,7 +555,7 @@ export function ExportCenter(props: ExportCenterProps) {
         }];
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dest, s, can, nleApp, nleAlpha, draftApp, props.frame, blocks, nleSourceFps, captions, captionCount, captionTracks, projectParts, moments, coverFirst, firstCover]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [dest, s, can, nleApp, nleAlpha, draftApp, props.frame, blocks, nleSourceFps, captions, captionCount, captionTracks, projectParts, moments, coverFirst, firstCover, scope]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* the sound a video's size target leaves room for: none when the film is known to have none */
   const targetAudio = (r: ExportRequest) => (r.kind === 'video' && r.audio && !knownSilent ? targetAudioBps(r.codec) : 0);
@@ -610,6 +632,7 @@ export function ExportCenter(props: ExportCenterProps) {
     : null;
   const emptyReason = ((): string | null => {
     if (!totalMs && dest !== 'project') return t('exportCenter.emptyFilm');
+    if (scopeUnavailable) return t('exportCenter.rangeUnavailable');
     if (rangeInvalid) return rangeError;
     if (dest === 'video' && videoTarget) {
       const mbps = videoTarget === 'bitrate' ? s.video.targetMbps : Math.min(...requests.map((r) => (r.kind === 'video' ? r.bitrate ?? 0 : Infinity))) / 1e6;
@@ -628,7 +651,7 @@ export function ExportCenter(props: ExportCenterProps) {
 
   /* ── doing it ── */
   const queue = async (jobs: ExportRequest[]) => {
-    if (working || rangeInvalid) return;
+    if (working || rangeInvalid || scopeUnavailable) return;
     setResult(null);
     setWorking(t('exportCenter.queueing'));
     try {
@@ -640,7 +663,7 @@ export function ExportCenter(props: ExportCenterProps) {
       const queued = await startExports(props.projectId, named, s.folder || undefined, revision);
       props.onQueued?.(queued);
       /* the ticked covers, as pictures beside the video */
-      if (dest === 'video' && props.covers && coversTicked.length) {
+      if (dest === 'video' && scope !== 'timeline' && props.covers && coversTicked.length) {
         void coversApi.draw(props.covers.projectId, [...coversTicked], 'jpg', { folder: folder || undefined, reveal: false }).catch(() => {});
       }
       onClose();
@@ -695,10 +718,12 @@ export function ExportCenter(props: ExportCenterProps) {
       onClick={() => { if (!working) onClose(); }}
     >
       <div
+        ref={dialogRef}
         role="dialog"
+        tabIndex={-1}
         aria-modal="true"
         aria-label={t('exportCenter.title')}
-        className={LARGE_DIALOG}
+        className={`${LARGE_DIALOG} outline-none`}
         style={{ animation: 'openfilm-rise 0.16s ease-out both' }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -755,7 +780,39 @@ export function ExportCenter(props: ExportCenterProps) {
 
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-4 pt-3">
             <div className="flex flex-col gap-5">
-              {dest === 'video' && props.covers ? (
+              {(canRange || timelineRange || range) && (
+                <Field label={t('exportCenter.range')}>
+                  <Segmented<ExportScope>
+                    value={scope}
+                    options={[
+                      { value: 'all', label: `${t('exportCenter.rangeAll')} · ${formatFilmTime(totalMs)}` },
+                      ...(timelineRange ? [{ value: 'timeline' as const, label: t('exportCenter.rangeTimeline') }] : []),
+                      { value: 'custom', label: t('exportCenter.rangePart') },
+                    ]}
+                    onChange={(next) => { setScope(next); setResult(null); }}
+                  />
+                  {scope === 'timeline' && timelineRange ? (
+                    <p className="text-[12px] text-[var(--text-muted)] tabular-nums">
+                      {formatTimecode(timelineRange.startMs, { fps: projectFps })} – {formatTimecode(timelineRange.endMs, { fps: projectFps })}
+                    </p>
+                  ) : null}
+                  {scope === 'custom' && canRange ? (
+                    <RangePicker
+                      projectId={props.projectId}
+                      totalMs={totalMs}
+                      fps={projectFps}
+                      stage={stage}
+                      boundaries={boundaries}
+                      value={rangeParts}
+                      onChange={setRangeParts}
+                      delivery={rangeDelivery}
+                      onDelivery={setRangeDelivery}
+                      error={rangeInvalid ? rangeError : null}
+                    />
+                  ) : null}
+                </Field>
+              )}
+              {dest === 'video' && props.covers && scope !== 'timeline' ? (
                 <Field label={t('covers.exportField')}>
                   {props.covers.list.length ? (
                     <div className="flex flex-wrap items-end gap-2.5" data-export-covers="">
@@ -1276,33 +1333,6 @@ export function ExportCenter(props: ExportCenterProps) {
                 </div>
               )}
 
-              {/* range: any destination with a picture or a sound over time can take a part */}
-              {canRange && (
-                <Field label={t('exportCenter.range')}>
-                  <Segmented
-                    value={range ? 'part' : 'all'}
-                    options={[
-                      { value: 'all', label: `${t('exportCenter.rangeAll')} · ${formatFilmTime(totalMs)}` },
-                      { value: 'part', label: t('exportCenter.rangePart') },
-                    ]}
-                    onChange={(v) => setRange(v === 'part')}
-                  />
-                  {range && (
-                    <RangePicker
-                      projectId={props.projectId}
-                      totalMs={totalMs}
-                      fps={projectFps}
-                      stage={stage}
-                      boundaries={boundaries}
-                      value={rangeParts}
-                      onChange={setRangeParts}
-                      delivery={rangeDelivery}
-                      onDelivery={setRangeDelivery}
-                      error={rangeInvalid ? rangeError : null}
-                    />
-                  )}
-                </Field>
-              )}
             </div>
           </div>
 

@@ -2,7 +2,7 @@
  * The parts of `window.openfilmDesktop` that are this app's own (src/preload-chat.cjs); the parts the copied chat code
  * uses (localAgents, pathForFile) are typed in lib/desktop-bridge.ts.
  */
-import type { CommunityItem, StudioRef, StudioSelection } from 'openfilm/studio-ui/lib/host.ts';
+import type { CommunityItem, HostWorkbench, StudioRef, StudioSelection } from 'openfilm/studio-ui/lib/host.ts';
 import type { FileChange } from './lib/file-changes';
 
 /* what Studio and the chat say to each other about the film is Studio's own contract (its lib/host.ts) */
@@ -22,6 +22,9 @@ interface AppBridge {
   /** Studio's language (its <html lang>) */
   onLanguage(listener: (language: string) => void): () => void;
   onProject(listener: (project: Project) => void): () => void;
+  workbench(): HostWorkbench | null;
+  onWorkbench(listener: (state: HostWorkbench | null) => void): () => void;
+  showWorkbench(projectId: string, workbench: string): void;
   onChatOpen(listener: (open: boolean) => void): () => void;
   onStudioBrowser(listener: (state: { state: 'downloading' | 'ready' | 'failed'; message?: string }) => void): () => void;
   onStudioFailed(listener: (message: string) => void): () => void;
@@ -91,7 +94,7 @@ interface AppBridge {
     unsaved?(project: string, except?: string[]): Promise<Array<{ turnId: string; events: TurnLog['events'] }>>;
     /** the project's files as a turn starts, kept by the app; then what the turn changed in them (src/file-changes.mjs).
         `undoable`: the app keeps how the turn found them, which `undo` puts back (while it runs) */
-    snapshot(project: string, turnId: string): Promise<unknown>;
+    snapshot(project: string, turnId: string, recover?: boolean): Promise<unknown>;
     changes(project: string, turnId: string): Promise<{ files: FileChange[]; cut: boolean; undoable?: boolean } | null>;
     undo?(project: string, turnId: string): Promise<{ ok: true; restored: number; missed: string[] } | { ok: false; code: 'gone' }>;
   };

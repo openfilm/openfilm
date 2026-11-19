@@ -4,6 +4,7 @@
  * it, numbered in its wires' order; its words; with which model; its shape, length and how pictures are used; Make),
  * and a cut its own (onto the timeline). Floating, they keep their size however far the board is zoomed.
  */
+import { GENERATION_PANEL, GENERATION_PROMPT, GENERATION_SEND as SEND } from './composer-style';
 import React from 'react';
 import { createPortal } from 'react-dom';
 import { NodeToolbar, Position, useStore } from '@xyflow/react';
@@ -46,10 +47,9 @@ const OPTION_OFF = 'bg-[var(--cv-chip)] text-[var(--cv-ink-2)] hover:bg-[var(--c
 const OPTION_TITLE = 'mb-1.5 text-[11.5px] text-[var(--cv-ink-3)]';
 const PICK = 'flex h-9 min-w-0 items-center gap-1.5 rounded-[10px] px-2.5 text-[14px] text-[var(--cv-ink)] transition hover:bg-[var(--cv-float-hover)]';
 /** the panel under a selected node: wider and rounder than the menus, a hairline round it */
-const PANEL = 'cv-bar-bottom relative rounded-[20px] border-[0.5px] !border-[var(--cv-float-line)] bg-[var(--cv-float)] shadow-[var(--cv-float-shadow)]';
-const PROMPT = 'mt-3 block max-h-[42vh] w-full resize-none bg-transparent px-1 text-[14px] leading-relaxed text-[var(--cv-ink)] outline-none placeholder:text-[var(--cv-ink-3)]';
+const PANEL = `cv-bar-bottom relative ${GENERATION_PANEL}`;
+const PROMPT = `mt-3 ${GENERATION_PROMPT}`;
 const COMPOSER_FOOTER = 'mt-2 flex min-w-0 items-center gap-1';
-const SEND = 'flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--cv-invert)] text-[var(--cv-on-invert)] transition hover:opacity-90 disabled:bg-[var(--cv-chip)] disabled:text-[var(--cv-ink-3)]';
 
 /** A corner button of a composer: its tools, its words larger. */
 const CORNER = 'flex h-8 w-8 items-center justify-center rounded-[9px] text-[var(--cv-ink-2)] transition hover:bg-[var(--cv-float-hover)] hover:text-[var(--cv-ink)]';

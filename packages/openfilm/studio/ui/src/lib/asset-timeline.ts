@@ -425,6 +425,8 @@ export interface PendingDrop {
   lane: string | null;
   /** A new track: its film.html index. */
   insertTrackAt: number | null;
+  generation?: 'running' | 'failed';
+  trackClips?: readonly string[];
 }
 
 /** How the clip is drawn from the moment it is dropped. */
@@ -477,10 +479,13 @@ export function withPendingBlocks(
       endMs: drop.endMs,
       kind: drop.blockKind,
       src: drop.src,
+      ...(drop.generation ? { generation: drop.generation } : {}),
       /* see-through: not written yet. No `loc`: it cannot be selected or dragged, there is nowhere to write an edit */
       off: true,
     };
-    const into = drop.lane != null ? out.findIndex((tr) => tr.lane === drop.lane) : -1;
+    const into = drop.trackClips?.length
+      ? out.findIndex((tr) => tr.blocks.some((b) => b.clipId && drop.trackClips?.includes(b.clipId)))
+      : drop.lane != null ? out.findIndex((tr) => tr.lane === drop.lane) : -1;
     if (into >= 0) {
       const row = out[into]!;
       row.blocks = [...row.blocks, block].sort((a, b) => a.startMs - b.startMs);

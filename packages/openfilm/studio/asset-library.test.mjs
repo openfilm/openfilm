@@ -37,7 +37,21 @@ test('the library drawer: the media are folders, the project and the person’s 
       if (!localStorage.getItem('openfilm.language')) localStorage.setItem('openfilm.language', 'en');
       localStorage.setItem('openfilm.project.assets', '1');
     });
+    await page.route('**/api/providers', route => route.fulfill({ json: {
+      providers: [{ id: 'fixture', name: 'Fixture', source: 'file', verbs: ['image'],
+        models: { image: [{ id: 'fast', name: 'Fast' }, { id: 'quality', name: 'Quality' }] } }],
+      model: { image: 'fast' }, use: { image: 'fixture' }, custom: [],
+    } }));
     await page.route('**/api/examples', route => route.fulfill({ json: { examples: [] } }));
+    await page.route('**/api/library/added', route => route.fulfill({ json: { ids: ['fixture/city', 'fixture/parks'] } }));
+    await page.route('**/api/library', async (route) => {
+      const response = await route.fetch();
+      const index = await response.json();
+      const packs = [{ id: 'fixture/city', name: { en: 'City' }, by: 'fixture' }, { id: 'fixture/parks', name: { en: 'Parks' }, by: 'fixture' }];
+      index.groups.sticker.push(...packs);
+      index.items.push(...packs.map((pack) => ({ id: `test/${pack.id}`, group: pack.id, cat: 'sticker', kind: 'page', by: pack.by, name: pack.name })));
+      await route.fulfill({ response, json: index });
+    });
     await page.goto(`${studio.origin}/projects/${project.id}?key=${studio.key}`);
     const drawer = page.locator('[data-studio-library]');
     const line = key => drawer.locator(`[data-rail-line="${key}"]`);
@@ -50,6 +64,16 @@ test('the library drawer: the media are folders, the project and the person’s 
     assert.ok(await readFile(join(process.env.OPENFILM_SAVED, LIB, 'Brand.svg'), 'utf8'));
     await line('saved/Sounds').click();
     await drawer.locator('[data-media-path="saved/Sounds/cover.svg"]').waitFor();
+
+    const generation = drawer.getByRole('button', { name: 'AI generation', exact: true });
+    assert.equal(await generation.count(), 0, 'generation is hidden from the media library even with a model connected');
+    for (const name of ['Voices', 'Captions', 'Music', 'Transitions']) {
+      const category = drawer.getByRole('button', { name, exact: true });
+      await category.click();
+      assert.equal(await category.getAttribute('aria-pressed'), 'true');
+      assert.equal(await generation.count(), 0, `generation is hidden from ${name}`);
+    }
+    await drawer.getByRole('button', { name: 'Media', exact: true }).click();
 
     /* the media's side bar is the folders; folders and packs keep one order the person drags */
     await line('saved/Sounds').dragTo(line(`saved/${LIB}`));
@@ -66,15 +90,24 @@ test('the library drawer: the media are folders, the project and the person’s 
     assert.equal(await line('project').count(), 0, 'no project line outside the media');
     const packs = await drawer.locator('[data-rail-kind="pack"]').evaluateAll(rows => rows.map(r => r.getAttribute('data-rail-line')));
     assert.ok(packs.length > 0, 'the music category has packs');
-    /* the box folds as its arrow does, and picks all of Official as it opens again; its arrow folds it and opens it again */
-    await section.click();
+    /* the arrow folds a section, and clicking its heading opens and selects its first child */
+    await section.locator('[data-rail-fold]').click();
     await line(packs[0]).waitFor({ state: 'detached' });
     await section.click();
-    await drawer.locator('[data-rail-section="openfilm"] > button[aria-pressed="true"]').waitFor();
+    await drawer.locator(`[data-rail-line="${packs[0]}"][aria-pressed="true"]`).waitFor();
     await section.locator('[data-rail-fold]').click();
     await line(packs[0]).waitFor({ state: 'detached' });
     await section.locator('[data-rail-fold]').click();
     await line(packs[0]).waitFor();
+    await drawer.getByRole('button', { name: 'Stickers', exact: true }).click();
+    const community = drawer.locator('[data-rail-section="community"]');
+    await community.getByRole('button', { name: 'Community', exact: true }).click();
+    await community.getByRole('button', { name: 'City', exact: true, pressed: true }).waitFor();
+    await community.getByRole('button', { name: 'Parks', exact: true }).click();
+    await community.locator('[data-rail-fold]').click();
+    await community.getByRole('button', { name: 'Community', exact: true }).click();
+    await community.getByRole('button', { name: 'City', exact: true, pressed: true }).waitFor();
+    await drawer.getByRole('button', { name: 'Music', exact: true }).click();
     /* a pack taken out of the library, then put back from "+ Add" */
     await line(packs[0]).click({ button: 'right' });
     await page.getByRole('menuitem', { name: 'Remove from the library', exact: true }).click();

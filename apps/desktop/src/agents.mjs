@@ -1479,13 +1479,21 @@ export class AgentSession {
    * Send a message; resolves with the stopReason when the turn ends. Everything on the way comes from onUpdate.
    * `turnId`: the app's own agent writes each request to its model in that turn's log (chat-store.mjs).
    */
-  async prompt(blocks, { turnId } = {}) {
+  async prompt(blocks, { turnId, recover = false } = {}) {
     if (!this.sessionId) throw new Error('The session has not started.');
-    const meta = this.opts.harness && turnId ? { _meta: { openfilm: { turnId, cwd: this.opts.cwd } } } : {};
-    const told = this.instructions ? [{ type: 'text', text: this.instructions }] : [];
+    if (recover && !turnId) throw new Error('The task to continue was not specified.');
+    const meta = this.opts.harness && turnId ? { _meta: { openfilm: { turnId, cwd: this.opts.cwd, ...(recover ? { recover } : {}) } } } : {};
+    const told = this.instructions && !(recover && this.opts.harness) ? [{ type: 'text', text: this.instructions }] : [];
+    // ACP can reopen a conversation but has no operation to resume an interrupted prompt.
+    if (recover && !this.opts.harness) told.push({ type: 'text', text: [
+      '<studio_note>Continue the interrupted task in this conversation.',
+      'Use the original request and the saved tail of your partial reply below. Inspect any work already done before making changes.',
+      'Continue from the unfinished part and avoid repeating completed work or text. If nothing was started, begin the original request.</studio_note>',
+    ].join(' ') });
+    const prompt = [...told, ...blocks];
     this.instructions = null;
     /* the message exactly as the agent gets it, for the turn log */
-    this.opts.onSend?.({ prompt: [...told, ...blocks], ...meta });
+    this.opts.onSend?.({ prompt, ...meta });
     this.refused = null;
     this.lastNotice = null;
     this.step = 'session/prompt';
@@ -1506,7 +1514,7 @@ export class AgentSession {
       setTimeout(() => giveUp(stallError(this.spec.label, stallMs)), 10_000).unref?.();
     }, Math.min(15_000, Math.max(50, stallMs / 4)));
     watch.unref?.();
-    const asking = this.conn.agent.request(acp.methods.agent.session.prompt, { sessionId: this.sessionId, prompt: [...told, ...blocks], ...meta })
+    const asking = this.conn.agent.request(acp.methods.agent.session.prompt, { sessionId: this.sessionId, prompt, ...meta })
       .catch(async (e) => {
         /* the app's own agent: a service with no balance left is said the same for every service, with its page */
         const own = this.opts.harness?.models?.find((m) => m.id === this.modelNow) ?? this.opts.harness?.models?.[0];

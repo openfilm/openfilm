@@ -6,7 +6,7 @@ import { createServer } from 'vite';
 import { chromium } from 'playwright-core';
 import shellConfig from '../shell/vite.config.ts';
 
-test('running tools keep their DOM, styles and position on completion, and a finished turn folds without moving the reply', { timeout: 60_000 }, async () => {
+test('activity rows and the hover toolbar stay aligned as the conversation changes', { timeout: 60_000 }, async () => {
   const server = await createServer({
     ...shellConfig, configFile: false, root: fileURLToPath(new URL('..', import.meta.url)),
     server: { host: '127.0.0.1', port: 0 }, logLevel: 'error',
@@ -26,6 +26,46 @@ test('running tools keep their DOM, styles and position on completion, and a fin
     await server.listen();
     const port = server.httpServer.address().port;
     browser = await chromium.launch({ headless: true });
+    for (const config of [
+      { locale: 'zh-CN', width: 440, height: 620, above: 0 },
+      { locale: 'en', width: 320, height: 280, above: 600 },
+    ]) {
+      const page = await browser.newPage({ viewport: { width: 800, height: 800 }, reducedMotion: 'reduce' });
+      await page.addInitScript(() => {
+        window.openfilmDesktop = { developer: { get: async () => ({ logs: false, changes: false }), onChange: () => () => {} } };
+      });
+      await page.goto(`http://127.0.0.1:${port}/activity-layout?${new URLSearchParams({ scenario: 'working-command', ...config })}`);
+      await page.waitForFunction(() => Boolean(window.activityFixture));
+      const status = page.getByRole('status').filter({ hasText: config.locale === 'zh-CN' ? '正在处理' : 'Working' });
+      const tool = page.locator('[data-activity-id="after"][aria-busy="true"]');
+      const summary = page.locator('[data-activity-id="command-0"]');
+      const geometry = async (row) => {
+        await row.locator('.tabular-nums').waitFor({ timeout: 5_000 }).catch(async (error) => {
+          throw new Error(`${error.message}\n${await page.locator('body').innerText()}`);
+        });
+        return row.evaluate((node) => {
+          const label = node.querySelector('[data-activity-label]');
+          const { x, y } = label.getBoundingClientRect();
+          const { y: clockY, right } = node.querySelector('.tabular-nums').getBoundingClientRect();
+          const { top, height } = node.getBoundingClientRect();
+          const { fontSize, fontWeight, lineHeight } = getComputedStyle(label);
+          return { top, height, x, y, clockY, right, fontSize, fontWeight, lineHeight };
+        });
+      };
+      const { x: statusLeft, ...before } = await geometry(status);
+      const summaryBox = await summary.boundingBox();
+      assert.equal(statusLeft, (await summary.locator('svg').first().boundingBox()).x, 'processing starts at the summary icon edge');
+      await page.evaluate(() => window.activityFixture.addTool());
+      const { x: toolLabelLeft, ...during } = await geometry(tool);
+      assert.equal((await tool.locator('svg').boundingBox()).x, statusLeft, 'the command icon starts at the same left edge');
+      assert.equal(toolLabelLeft, (await summary.locator('[data-activity-label]').boundingBox()).x, 'command labels follow their icons');
+      assert.deepEqual(during, before, 'running a command keeps the vertical position, timer and typography');
+      assert.deepEqual(await summary.boundingBox(), summaryBox, 'the completed tool group remains above the active row');
+      await page.evaluate(() => window.activityFixture.finishTool());
+      assert.deepEqual(await geometry(status), { x: statusLeft, ...before }, 'processing returns to the same row after the command completes');
+      assert.deepEqual(await summary.boundingBox(), summaryBox, 'updating the tool count leaves its position alone');
+      await page.close();
+    }
     const configs = ['en', 'zh-CN'].flatMap((locale) => ['single', 'group', 'counts'].flatMap((scenario) => [
       { width: 440, height: 620, above: 0, locale, scenario },
       { width: 320, height: 280, above: 600, locale, scenario },
@@ -45,7 +85,8 @@ test('running tools keep their DOM, styles and position on completion, and a fin
       await answer.waitFor({ state: 'visible' });
       await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
       const header = page.locator(`[data-activity-id="${config.scenario === 'single' ? 'command' : config.scenario === 'counts' ? 'edit-0' : 'check'}"]`);
-      assert.equal(await header.getAttribute('aria-busy'), 'true', 'the running tool is already in its conversation row');
+      const pending = page.locator(`[data-activity-id="${{ single: 'command', group: 'search', counts: 'edit-8' }[config.scenario]}"]`);
+      assert.equal(await pending.getAttribute('aria-busy'), 'true', 'the running tool is already in its conversation row');
       assert.equal(await page.getByRole('status', { includeHidden: true }).count(), 0, 'an inline tool does not leave a duplicate or empty status row');
       await header.evaluate((node) => { node.dataset.probe = 'preserved'; });
       const footer = page.locator('[data-turn-footer]').last();
@@ -72,11 +113,11 @@ test('running tools keep their DOM, styles and position on completion, and a fin
       const runningStyle = await snapshot();
       const runningLabel = await header.innerText();
       const beforeTool = await answer.boundingBox();
-      const headerHeights = () => page.locator('[data-activity-header]').evaluateAll((rows) => rows.map((row) => row.getBoundingClientRect().height));
-      const singleHeights = await headerHeights();
+      const pendingHeight = (await pending.boundingBox()).height;
       await page.evaluate(() => window.activityFixture.finishTool());
       await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
-      assert.equal(await header.getAttribute('aria-busy'), 'false', 'completing a later member updates a cached group');
+      if (config.scenario === 'single') assert.equal(await header.getAttribute('aria-busy'), 'false');
+      else assert.equal(await pending.count(), 0, 'the finished tool joins the collapsed summary');
       assert.equal(await header.getAttribute('data-probe'), 'preserved', 'the tool keeps the same DOM node on completion');
       assert.notEqual(await header.innerText(), runningLabel, 'the label changes to completed without changing its style');
       assert.deepEqual(await snapshot(), runningStyle, `tool row position, height and typography stay identical: ${JSON.stringify(config)}`);
@@ -86,22 +127,22 @@ test('running tools keep their DOM, styles and position on completion, and a fin
           : 'Edited files ×9 · Ran a command · Read files', 'counts and separators follow visible labels with normal spaces');
         assert.equal(await header.locator('.invisible').count(), 0, 'no hidden label reserves extra spacing before the count');
       }
-      assert.ok(Math.abs((await answer.boundingBox()).y - beforeTool.y) <= 1, 'finishing a tool preserves the reply position');
-      assert.deepEqual(await headerHeights(), singleHeights, 'single tool rows and their completed summaries have the same height');
+      const replyShift = (await answer.boundingBox()).y - beforeTool.y;
+      if (config.scenario === 'single') assert.ok(Math.abs(replyShift) <= 1, 'finishing an isolated tool preserves the reply position');
+      else assert.ok(replyShift <= 1, 'a tool joining the summary can only make the reply move up');
+      assert.equal((await header.boundingBox()).height, pendingHeight, 'tool rows and summaries have the same header height');
       const before = await answer.boundingBox();
       await page.evaluate(() => window.activityFixture.finish());
       await page.getByRole('status').waitFor({ state: 'hidden' });
       await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
       const after = await answer.boundingBox();
-      /* Folding keeps the reply in place by scrolling; a conversation shorter than its viewport has nothing to scroll. */
-      if (config.above) assert.ok(Math.abs(after.y - before.y) <= 1, `reply moved ${after.y - before.y}px at width ${config.width}`);
-      else assert.ok(after.y <= before.y, 'a short conversation folds upward, never pushing the reply down');
+      assert.ok(Math.abs(after.y - before.y) <= 1, `reply moved ${after.y - before.y}px at width ${config.width}`);
       assert.ok(await footerGap() <= 10, 'the finished reply keeps the same compact footer spacing');
-      assert.equal(await page.getByText('I will check the project first.', { exact: true }).count(), 0, 'the turn just watched folds as it finishes');
-      assert.equal(await page.locator('[data-activity-header]').count(), 0, 'its steps fold into the Worked line');
+      assert.equal(await page.getByText('I will check the project first.', { exact: true }).count(), 1, 'the turn just watched stays open when it finishes');
       await page.evaluate(() => window.activityFixture.next());
       await page.getByText('Continue.', { exact: true }).waitFor();
       assert.equal(await page.getByText('I will check the project first.', { exact: true }).count(), 0, 'earlier turns stay folded when a new turn starts');
+      assert.equal(await page.locator('[data-activity-header]').count(), 0, 'earlier steps fold into the Worked line');
       assert.deepEqual(errors, []);
       await page.close();
     }
@@ -114,18 +155,18 @@ test('running tools keep their DOM, styles and position on completion, and a fin
       });
       await page.goto(`http://127.0.0.1:${port}/activity-layout?${new URLSearchParams({ scenario: 'asset', width: 440, height: 620, locale })}`);
       await page.waitForFunction(() => Boolean(window.activityFixture));
-      const row = page.locator('[data-activity-id="image"]');
+      const row = page.locator('button[data-activity-id="image"]');
       await row.waitFor({ state: 'visible' });
+      await row.click();
+      await page.waitForFunction(() => [...document.querySelectorAll('img')].some((image) => image.getBoundingClientRect().height > 0));
       await row.evaluate((node) => { node.dataset.probe = 'preserved'; });
       const pictures = () => page.locator('img').evaluateAll((images) => images.filter((image) => image.getBoundingClientRect().height > 0).length);
       const shown = await pictures();
       await page.evaluate(() => window.activityFixture.addTool());
-      await page.locator('[data-activity-id="image"][aria-busy="true"]').waitFor();
+      await page.locator('[data-activity-id="after"][aria-busy="true"]').waitFor();
       assert.equal(await row.getAttribute('data-probe'), 'preserved', 'a lone act that made a picture keeps its row when another act joins it');
       assert.equal(await pictures(), shown, `a picture shown in a live turn never disappears when another act joins: ${locale}`);
-      await row.click();
-      await page.waitForFunction(() => [...document.querySelectorAll('img')].some((image) => image.getBoundingClientRect().height > 0));
-      assert.ok(await pictures() >= 1, 'the picture is still in its row once the group is opened');
+      assert.equal(await row.getAttribute('aria-expanded'), 'true', 'the tool group stays open');
       assert.deepEqual(errors, []);
       await page.close();
     }

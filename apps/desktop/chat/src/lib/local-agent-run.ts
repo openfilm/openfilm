@@ -37,6 +37,7 @@ import {
   desktopBridge,
   type LocalAgentAnswer,
   type LocalAgentEvent,
+  type LocalAgentFailure,
   type LocalAgentId,
   type LocalAgentRunningTurn,
   type LocalAgentTurnMeta,
@@ -291,12 +292,24 @@ export class LocalAgentTurn {
   private listeners = new Set<Listener>();
   private part = 0;
   private lastWasText = false;
+  interrupted = false;
   /* Each paragraph accumulates its full text here. The panel's merge (mergeStreamText) is made for whole
      snapshots and drops a chunk already present in the text as a repeat, so a lone space in ACP's small
      deltas could vanish ("the5-second"). Handing over the whole paragraph, it is taken as is. */
   private partText = new Map<number, string>();
 
-  constructor(readonly turnId: string, readonly agent: LocalAgentId, readonly turnNo: number) {}
+  constructor(readonly turnId: string, readonly agent: LocalAgentId, readonly turnNo: number, saved: TranscriptItem[] = []) {
+    this.items = saved;
+    for (const item of saved) {
+      const part = /^text:\d+:(\d+)$/.exec(item.id);
+      if (part) this.part = Math.max(this.part, Number(part[1]) + 1);
+      const thought = /^thought:\d+:(\d+)$/.exec(item.id);
+      if (thought) this.thoughtNo = Math.max(this.thoughtNo, Number(thought[1]));
+    }
+    this.recoveryPrefix = saved.length ? `resume-${saved.length}:` : '';
+  }
+
+  private readonly recoveryPrefix: string;
 
   readonly store: LocalTranscriptStore = {
     get: () => this.items,
@@ -321,6 +334,9 @@ export class LocalAgentTurn {
   apply(update: AcpUpdate): void {
     this.lastEventAt = Date.now();
     const kind = update.sessionUpdate;
+    if (this.recoveryPrefix && (kind === 'tool_call' || kind === 'tool_call_update') && update.toolCallId != null) {
+      update = { ...update, toolCallId: this.recoveryPrefix + String(update.toolCallId) };
+    }
     const closed = kind !== 'agent_thought_chunk' && this.closeThought();
     if (kind === 'tool_call' || kind === 'agent_thought_chunk' || kind === 'plan' || kind === 'notice') {
       if (this.lastWasText) this.part += 1;
@@ -432,7 +448,7 @@ export class LocalAgentTurn {
         content: String(entry.content).trim(),
         status: entry.status === 'completed' || entry.status === 'in_progress' ? entry.status : 'pending',
       }));
-    const id = `plan:${this.turnNo}`;
+    const id = `plan:${this.turnNo}:${this.recoveryPrefix}`;
     if (this.items.some((item) => item.id === id)) this.patchItem(id, { plan });
     else if (plan.length) this.items = [...this.items, { id, kind: 'plan', plan, turnNo: this.turnNo, pending: false, startedAt: Date.now() }];
     this.emit();
@@ -446,8 +462,9 @@ export class LocalAgentTurn {
     const { title, description, _meta } = update as {
       title?: unknown; description?: unknown; _meta?: { openfilm?: { noticeKey?: unknown } };
     };
-    if (_meta?.openfilm?.noticeKey === 'composer.modelTimeoutRetry') {
-      this.notice('composer.modelTimeoutRetry');
+    const noticeKey = _meta?.openfilm?.noticeKey;
+    if (noticeKey === 'composer.modelTimeoutRetry' || noticeKey === 'composer.modelConnectionRetry') {
+      this.notice(noticeKey);
       return;
     }
     const text = [title, description]
@@ -490,10 +507,10 @@ export class LocalAgentTurn {
    * A note the platform leaves in this turn (`noticeKey` is an i18n key), such as an attachment that could
    * not be put in the project folder. One per key.
    */
-  notice(noticeKey: string): void {
-    const id = `notice:${this.turnNo}:${noticeKey}`;
+  notice(noticeKey: string, detail?: string): void {
+    const id = `notice:${this.turnNo}:${this.recoveryPrefix}${noticeKey}`;
     if (this.items.some((item) => item.id === id)) return;
-    this.items = [...this.items, { id, kind: 'notice', noticeKey, turnNo: this.turnNo, pending: false, startedAt: Date.now() }];
+    this.items = [...this.items, { id, kind: 'notice', noticeKey, detail, turnNo: this.turnNo, pending: false, startedAt: Date.now() }];
     this.emit();
   }
 
@@ -505,6 +522,12 @@ export class LocalAgentTurn {
     this.emit();
   }
 
+  interrupt(): void {
+    if (this.interrupted) return;
+    this.interrupted = true;
+    this.seal();
+  }
+
   /**
    * It asked the user a question: the tool call's row becomes the question row (no new row), and the card
    * shows above the composer. With no matching tool call (the adapter did not report it first), a row is
@@ -514,6 +537,7 @@ export class LocalAgentTurn {
     const first = questions[0];
     if (!first) return;
     const ask = { question: first.question, options: first.options };
+    if (toolCallId != null) toolCallId = this.recoveryPrefix + toolCallId;
     const existing = toolCallId != null && this.items.some((item) => item.id === `act:${toolCallId}`);
     const callId = existing ? toolCallId! : `ask:${requestId}`;
     this.closeThought();
@@ -669,7 +693,7 @@ function dispatch(turn: LocalAgentTurn, event: Record<string, unknown> & { kind:
 }
 
 /** Recovered turns (see recoverLocalAgentTurns) wait on the shell's `done` for their key. */
-const doneWaiters = new Map<string, (result: { ok: true; stopReason: string } | { ok: false; error: string; balance?: Balance }) => void>();
+const doneWaiters = new Map<string, (result: { ok: true; stopReason: string } | LocalAgentFailure) => void>();
 /** what to do when a turn's first event comes: the agent has the message (runLocalAgentTurn's `onStarted`) */
 const startedHooks = new Map<LocalAgentTurn, () => void>();
 const started = (turn: LocalAgentTurn) => { const hook = startedHooks.get(turn); startedHooks.delete(turn); hook?.(); };
@@ -697,20 +721,29 @@ function listen(): void {
     }
     const turn = turnByKey.get(event.key);
     if (event.kind === 'done') {
+      if (event.sessionClosed) for (const [id, session] of sessions) if (session.key === event.key) sessions.delete(id);
       const waiter = doneWaiters.get(event.key);
       if (waiter) {
         doneWaiters.delete(event.key);
         waiter(event.ok ? { ok: true, stopReason: event.stopReason ?? 'end_turn' }
-          : { ok: false, error: event.error ?? 'The agent stopped.', ...(event.balance ? { balance: event.balance } : {}) });
+          : { ok: false, error: event.error ?? 'The agent stopped.', balance: event.balance, modelConnection: event.modelConnection });
       }
       return;
     }
     if (event.kind === 'exit') {
       endUnprompted(event.key);
       for (const [k, s] of sessions) if (s.key === event.key) sessions.delete(k);
-      if (turn && !turn.state.error) turn.patch({ error: 'The agent stopped unexpectedly.' });
+      if (turn && !turn.interrupted && !turn.state.error) {
+        turn.seal();
+        turn.patch({ error: 'The agent stopped unexpectedly.' });
+      }
       const waiter = doneWaiters.get(event.key);
       if (waiter) { doneWaiters.delete(event.key); waiter({ ok: false, error: 'The agent stopped unexpectedly.' }); }
+      return;
+    }
+    if (turn?.interrupted) {
+      if (event.kind === 'permission') void bridge.answerPermission(event.key, event.requestId, null);
+      else if (event.kind === 'question') void bridge.answerQuestion?.(event.key, event.requestId, null);
       return;
     }
     if (turn && unprompted.has(event.key)) stillUnprompted(event.key);
@@ -743,8 +776,8 @@ export function localAgentTurn(turnId: string): LocalAgentTurn | null {
 }
 
 /** Opens a turn: registered first, so the project page can subscribe the moment it shows the turn. */
-export function createLocalAgentTurn(turnId: string, agent: LocalAgentId, turnNo = 0): LocalAgentTurn {
-  const turn = new LocalAgentTurn(turnId, agent, turnNo);
+export function createLocalAgentTurn(turnId: string, agent: LocalAgentId, turnNo = 0, saved?: TranscriptItem[]): LocalAgentTurn {
+  const turn = new LocalAgentTurn(turnId, agent, turnNo, saved);
   turns.set(turnId, turn);
   return turn;
 }
@@ -782,8 +815,10 @@ export async function runLocalAgentTurn({
   onSessionInfo,
   onOptions,
   onStarted,
+  onDispatch,
   meta,
   images,
+  isStopped,
 }: {
   projectId: string;
   /** the chat's conversation: each has its own session of the agent's */
@@ -796,6 +831,7 @@ export async function runLocalAgentTurn({
   turn: LocalAgentTurn;
   /** the pictures of the message's references, for an agent that takes pictures */
   images?: PromptImage[];
+  isStopped?: () => boolean;
   /** Handed to the shell with the prompt: what a reloaded page needs to put this turn back. */
   meta?: LocalAgentTurnMeta;
   /** Options the user picked in the model menu (configId → value), set one by one once the session is open. */
@@ -804,6 +840,7 @@ export async function runLocalAgentTurn({
   onOptions?: (options: LocalAgentSessionInfo['configOptions']) => void;
   /** Called once the agent has the message: its first event of the turn, or the turn's end without one. */
   onStarted?: () => void;
+  onDispatch?: () => void;
 }): Promise<{ stopReason: string; lastTurnId: string }> {
   const bridge = desktopBridge()?.localAgents;
   if (!bridge) throw new Error('This needs the OpenFilm Mac app.');
@@ -822,12 +859,19 @@ export async function runLocalAgentTurn({
     session = { key: started.key, agent, cwd, info: started.info, projectId, conversation };
     sessions.set(sessionKey, session);
     tellContext();
-    onSessionInfo?.(started.info);
     /* its session of this conversation not taken up again: a new one, told what was said so far, and the person told */
     if (resume && (!started.info.resumed || started.info.sessionId !== resume)) {
-      text = withConversationSoFar(loadLocalAgentTurns(projectId, conversation).filter((x) => x.turn.id !== turn.turnId), text);
+      if (meta?.recovery && !meta.handoff) {
+        sessions.delete(sessionKey);
+        await bridge.close(started.key).catch(() => {});
+        startedHooks.delete(turn);
+        if (current === turn) current = null;
+        throw new Error(translate('composer.recoveryUnavailable'));
+      }
+      if (!meta?.handoff) text = withConversationSoFar(loadLocalAgentTurns(projectId, conversation).filter((x) => x.turn.id !== turn.turnId), text);
       turn.notice('agent.sessionNotResumed');
     }
+    onSessionInfo?.(started.info);
   }
   /* a turn the agent was working on by itself ends as the person writes */
   endUnprompted(session.key);
@@ -842,6 +886,7 @@ export async function runLocalAgentTurn({
   /* A message sent while it ran may have joined this turn. */
   const last = () => turnByKey.get(key) ?? turn;
   try {
+    if (isStopped?.()) return { stopReason: 'cancelled', lastTurnId: turn.turnId };
     const setOption = async ([configId, value]: [string, unknown]) => {
       const option = live.info.configOptions?.find((o) => o.id === configId);
       if (!option) return;
@@ -866,14 +911,17 @@ export async function runLocalAgentTurn({
     for (const entry of picked.filter(isModel)) await setOption(entry);
     for (const entry of picked.filter((entry) => !isModel(entry))) await setOption(entry);
     onOptions?.(live.info.configOptions);
+    if (isStopped?.()) return { stopReason: 'cancelled', lastTurnId: turn.turnId };
 
     /* where it is and how to work (the project, the `openfilm` manual, Studio already open) it was told when the
        session started (apps/desktop src/agents.mjs INSTRUCTIONS): the message goes as the person wrote it */
+    onDispatch?.();
     const r = await bridge.prompt(key, text, meta, images?.length ? images : undefined);
     /* The answer to the prompt can overtake its last updates (the closing words of its reply): stop
        listening only once they have stopped coming, or the saved reply ends mid-sentence. */
-    await drain(last());
-    if (!r.ok) throw Object.assign(new Error(r.error), { lastTurnId: last().turnId }, r.balance ? { balance: r.balance } : {});
+    if (!last().interrupted) await drain(last());
+    if (!r.ok) throw Object.assign(new Error(r.error), { lastTurnId: last().turnId, balance: r.balance, modelConnection: r.modelConnection });
+    if (r.sessionClosed && sessions.get(sessionKey)?.key === key) sessions.delete(sessionKey);
     started(turn);
     turn.model = last().model = r.model ?? null;
     return { stopReason: r.stopReason, lastTurnId: last().turnId };
@@ -924,7 +972,7 @@ export interface RecoveredLocalTurn {
   meta: LocalAgentTurnMeta;
   turn: LocalAgentTurn;
   /** Settles when the agent finishes (at once when it already had). */
-  finished: Promise<{ ok: true; stopReason: string } | { ok: false; error: string; balance?: Balance }>;
+  finished: Promise<{ ok: true; stopReason: string } | LocalAgentFailure>;
   /** The shell may forget it: the page has saved it. */
   ack(): void;
 }
@@ -946,14 +994,23 @@ export async function recoverLocalAgentTurns(projectId: string): Promise<Recover
   try { held = await bridge.running(); } catch { return []; }
   const out: RecoveredLocalTurn[] = [];
   for (const r of held) {
-    const meta = r.meta;
+    const meta = r.stopping
+      ? { ...r.meta, turn: { ...(r.meta.turn as Turn), status: 'cancelled', cancelReason: 'user' } }
+      : r.meta;
     if (!meta?.turnId || meta.projectId !== projectId || recovered.has(meta.turnId) || turns.has(meta.turnId)) continue;
     recovered.add(meta.turnId);
-    const turn = new LocalAgentTurn(meta.turnId, r.agent, meta.turnNo ?? 0);
+    const previous = meta.recovery
+      ? readSaved(projectId).find((entry) => entry.turn.id === meta.turnId)?.items.slice(0, meta.recoveryItems ?? 0)
+      : undefined;
+    const turn = new LocalAgentTurn(meta.turnId, r.agent, meta.turnNo ?? 0, previous);
+    if (meta.resumedWith) turn.notice('composer.resumedWith', meta.resumedWith);
     turns.set(meta.turnId, turn);
     for (const event of r.events) dispatch(turn, event);
+    if (r.stopping) turn.interrupt();
     const sessionKey = `${projectId}:${meta.sessionId}:${r.agent}`;
-    if (!sessions.has(sessionKey)) sessions.set(sessionKey, { key: r.key, agent: r.agent, cwd: r.cwd, projectId, conversation: meta.sessionId, info: { sessionId: '', agentInfo: null, authMethods: [], mcp: true, models: null, modes: null, configOptions: null } });
+    if (r.info && !sessions.has(sessionKey)) {
+      sessions.set(sessionKey, { key: r.key, agent: r.agent, cwd: r.cwd, projectId, conversation: meta.sessionId, info: r.info });
+    }
     let finished: RecoveredLocalTurn['finished'];
     if (r.done) {
       turn.seal();
@@ -969,7 +1026,7 @@ export async function recoverLocalAgentTurns(projectId: string): Promise<Recover
           if (done && doneWaiters.get(r.key) === resolve) { doneWaiters.delete(r.key); resolve(done); }
         }, () => {});
       }).then(async (result) => {
-        await drain(turn);
+        if (!turn.interrupted) await drain(turn);
         turn.seal();
         turnByKey.delete(r.key);
         if (current === turn) current = null;
@@ -994,12 +1051,15 @@ async function drain(turn: LocalAgentTurn, quietMs = 300, maxMs = 3000): Promise
 export async function cancelLocalAgentTurn(turnId: string): Promise<void> {
   const bridge = desktopBridge()?.localAgents;
   const turn = turns.get(turnId);
-  if (!bridge || !turn) return;
+  if (!turn) return;
+  turn.interrupt();
+  if (!bridge) return;
   for (const [key, t] of turnByKey) {
     if (t !== turn) continue;
     /* a turn the agent started by itself has no prompt of the page's to end it: it ends here, and the agent is told */
-    if (unprompted.get(key)?.turn === turn) endUnprompted(key, 'cancelled');
-    await bridge.cancel(key);
+    const background = unprompted.get(key)?.turn === turn;
+    if (background) endUnprompted(key, 'cancelled');
+    await bridge.cancel(key, background ? undefined : turnId);
   }
 }
 
@@ -1098,15 +1158,25 @@ export async function recoverLoggedTurns(projectId: string): Promise<number> {
     const prompt = events.find((e) => e.kind === 'prompt') as { meta?: LocalAgentTurnMeta; agent?: LocalAgentId } | undefined;
     const meta = prompt?.meta;
     if (!meta?.turn || !meta.sessionId) continue;
-    const turn = new LocalAgentTurn(turnId, meta.agent ?? prompt?.agent ?? 'claude', meta.turnNo ?? 0);
-    for (const event of events) if (event.kind === 'update' || event.kind === 'question' || event.kind === 'permission') dispatch(turn, event);
+    let latest = meta;
+    let turn = new LocalAgentTurn(turnId, meta.agent ?? prompt?.agent ?? 'claude', meta.turnNo ?? 0);
+    for (const event of events) {
+      if (event.kind === 'resume') {
+        const resumed = event.meta as LocalAgentTurnMeta | undefined;
+        if (!resumed?.turn) continue;
+        turn.seal();
+        latest = resumed;
+        turn = new LocalAgentTurn(turnId, resumed.agent, resumed.turnNo, turn.items);
+        if (resumed.resumedWith) turn.notice('composer.resumedWith', resumed.resumedWith);
+      } else if (event.kind === 'update' || event.kind === 'question' || event.kind === 'permission') dispatch(turn, event);
+    }
     turn.seal();
-    const done = [...events].reverse().find((e) => e.kind === 'done') as { ok?: boolean; stopReason?: string; error?: string; t: number } | undefined;
-    const patch: Partial<Turn> = !done ? { status: 'error', error: INTERRUPTED }
-      : done.ok === false ? { status: 'error', error: String(done.error ?? INTERRUPTED) }
-        : done.stopReason === 'cancelled' ? { status: 'cancelled' } : { status: 'ready' };
+    const done = [...events].reverse().find((e) => e.kind === 'done') as ({ ok: true; stopReason?: string } | LocalAgentFailure) | undefined;
+    const patch = !done ? { status: 'error' as const, error: INTERRUPTED }
+      : done.ok === false ? { status: 'error' as const, error: String(done.error ?? INTERRUPTED), modelConnection: done.modelConnection }
+        : done.stopReason === 'cancelled' ? { status: 'cancelled' as const } : { status: 'ready' as const };
     const last = events.at(-1)?.t;
-    putChatTurn(projectId, { turn: { ...(meta.turn as Turn), ...patch, ...(last ? { updatedAt: new Date(last).toISOString() } : {}) }, items: turn.items });
+    putChatTurn(projectId, { turn: { ...(latest.turn as Turn), ...patch, ...(last ? { updatedAt: new Date(last).toISOString() } : {}) }, items: turn.items });
     made += 1;
   }
   return made;
@@ -1145,6 +1215,19 @@ export function finishRunningLocalTurn(id: string): RunningLocalTurn | null {
   const entry = runningTurns.get(id) ?? null;
   if (entry) { runningTurns.delete(id); emitRunning(); }
   return entry;
+}
+
+/** The transport and chat record settle before a new prompt can use the same conversation. */
+export function waitForRunningLocalTurn(id: string): Promise<void> {
+  if (!runningTurns.has(id)) return Promise.resolve();
+  return new Promise((resolve) => {
+    const check = () => {
+      if (runningTurns.has(id)) return;
+      runningListeners.delete(check);
+      resolve();
+    };
+    runningListeners.add(check);
+  });
 }
 
 export function runningLocalTurns(projectId?: string): RunningLocalTurn[] {

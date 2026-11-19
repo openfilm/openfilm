@@ -11,7 +11,7 @@ import { AgentSession } from './agents.mjs';
 import { agentOffer } from './openfilm-agent.mjs';
 
 /** A service on the Chat Completions API that answers "ok" and notes the model each request named (and each request, and its key). */
-async function service({ broke = false, fails = null, busyOnce = false, largest = Infinity, reads = 0, bash = null } = {}) {
+async function service({ broke = false, fails = null, busyOnce = false, hold = null, disconnectAt = [], interruptToolAt = 0, largest = Infinity, reads = 0, bash = null } = {}) {
   const asked = [];
   const bodies = [];
   const keys = [];
@@ -23,6 +23,7 @@ async function service({ broke = false, fails = null, busyOnce = false, largest 
       asked.push(model);
       bodies.push(JSON.parse(body || '{}'));
       keys.push(String(req.headers.authorization ?? ''));
+      if (disconnectAt.includes(asked.length)) { res.destroy(); return; }
       /* a proxy in front of the service refusing a body past its size, with its own HTML page */
       if (body.length > largest) { res.writeHead(413, { 'content-type': 'text/html' }); res.end('<html><head><title>413 Request Entity Too Large</title></head><body><center><h1>413 Request Entity Too Large</h1></center><hr><center>openresty</center></body></html>'); return; }
       if (broke) { res.writeHead(402, { 'content-type': 'application/json' }); res.end(JSON.stringify({ error: { message: 'Insufficient Balance' } })); return; }
@@ -34,8 +35,20 @@ async function service({ broke = false, fails = null, busyOnce = false, largest 
         return;
       }
       if (fails) { res.writeHead(400, { 'content-type': 'application/json' }); res.end(JSON.stringify({ error: { message: fails } })); return; }
-      res.writeHead(200, { 'content-type': 'text/event-stream' });
+      res.writeHead(200, { 'content-type': 'text/event-stream', 'x-request-id': 'fixture-model-request' });
       const chunk = (choice, extra = {}) => `data: ${JSON.stringify({ id: 'c', object: 'chat.completion.chunk', created: 0, model, choices: [choice], ...extra })}\n\n`;
+      if (asked.length === interruptToolAt) {
+        res.write(chunk({ index: 0, delta: { role: 'assistant', tool_calls: [{
+          index: 0, id: 'incomplete-tool', type: 'function', function: { name: 'bash', arguments: '{"command":"echo interrupted >> progress.txt"}' },
+        }] }, finish_reason: null }));
+        setTimeout(() => res.destroy(), 50);
+        return;
+      }
+      if (hold && asked.length === hold.at) {
+        res.write(chunk({ index: 0, delta: { role: 'assistant', content: 'partial' }, finish_reason: null }));
+        hold.started(() => res.destroy());
+        return;
+      }
       /* `bash`: the first answer runs that command */
       if (bash && asked.length === 1) {
         res.end(chunk({ index: 0, delta: { role: 'assistant', tool_calls: [{
@@ -90,6 +103,81 @@ test('OpenFilm runs Pi on the shared account, switches cloud models and sends Op
     assert.ok(svc.bodies[0].tools.length > 0, 'the built-in agent can use its tools');
     assert.ok(svc.bodies[0].messages.some((m) => m.role === 'system'));
   } finally { session.close(); svc.close(); }
+});
+
+test('a paused Pi turn resumes with the selected model and retries disconnects without replaying tools', { timeout: 30_000 }, async () => {
+  let firstStarted;
+  const began = new Promise((resolve) => { firstStarted = resolve; });
+  const svc = await service({ hold: { at: 2, started: firstStarted }, interruptToolAt: 3, disconnectAt: [4], bash: 'echo first >> progress.txt' });
+  const cwd = mkdtempSync(join(tmpdir(), 'of-pi-pause-'));
+  const home = mkdtempSync(join(tmpdir(), 'of-pi-pause-home-'));
+  const updates = [];
+  const opts = { agent: 'byok', cwd, harness: { home, models: [own('test', svc.url), own('other', svc.url)], env: { OPENFILM_BYOK_KEY_test: 'test-key', OPENFILM_BYOK_KEY_other: 'test-key' } }, onUpdate: (update) => updates.push(update) };
+  let agent = new AgentSession(opts);
+  try {
+    const { sessionId } = await agent.start();
+    const pending = agent.prompt([{ type: 'text', text: 'Original edit request' }], { turnId: 'original' });
+    await began;
+    await agent.cancel();
+    assert.equal(await pending, 'cancelled');
+    agent.close();
+    agent = new AgentSession({ ...opts, resume: sessionId });
+    assert.equal((await agent.start()).resumed, true);
+    await agent.setConfigOption('model', 'other');
+    assert.equal(await agent.prompt([], { turnId: 'original', recover: true }), 'end_turn');
+    assert.equal(svc.bodies.length, 5);
+    assert.deepEqual(svc.asked, ['test', 'test', 'other', 'other', 'other']);
+    for (const { messages } of svc.bodies.slice(2)) {
+      assert.deepEqual(messages.filter((message) => message.role === 'user').flatMap((message) => message.content).map((part) => part.text ?? part), ['Original edit request']);
+      assert.equal(messages.filter((message) => message.role === 'tool').length, 1);
+    }
+    assert.equal(updates.filter((update) => update._meta?.openfilm?.noticeKey === 'composer.modelConnectionRetry').length, 2);
+    assert.equal(updates.filter((update) => update.sessionUpdate === 'tool_call').length, 1);
+    assert.equal(readFileSync(join(cwd, 'progress.txt'), 'utf8'), 'first\n');
+    await assert.rejects(agent.prompt([], { turnId: 'original', recover: true }), /already finished/);
+  } finally {
+    agent.close();
+    svc.close();
+    rmSync(cwd, { recursive: true, force: true });
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('a dropped model stream keeps the partial reply and surfaces the interruption without replay', { timeout: 30_000 }, async () => {
+  let disconnect;
+  const svc = await service({ hold: { at: 1, started: (drop) => { disconnect = drop; } } });
+  const cwd = mkdtempSync(join(tmpdir(), 'of-pi-dropped-stream-'));
+  const home = mkdtempSync(join(tmpdir(), 'of-pi-dropped-stream-home-'));
+  let reply = '';
+  const session = new AgentSession({ agent: 'byok', cwd,
+    harness: { home, models: [own('test', svc.url)], env: { OPENFILM_BYOK_KEY_test: 'test-key' } },
+    onUpdate: (update) => {
+      if (update.sessionUpdate === 'agent_message_chunk') {
+        reply += update.content.text;
+        disconnect();
+      }
+    },
+  });
+  try {
+    await session.start();
+    await assert.rejects(session.prompt([{ type: 'text', text: 'Hello' }]), (error) => {
+      assert.match(error.message, /connection to the model service was interrupted/i);
+      const { modelConnection, details } = error.data;
+      assert.match(details, /terminated|connection error/i);
+      assert.deepEqual({ ...modelConnection, elapsedMs: Number.isFinite(modelConnection.elapsedMs) }, {
+        phase: 'streaming', host: new URL(svc.url).host, elapsedMs: true, status: 200,
+        requestId: 'fixture-model-request', code: 'UND_ERR_SOCKET', retries: 0, partial: true,
+      });
+      return true;
+    });
+    assert.equal(reply, 'partial');
+    assert.equal(svc.asked.length, 1);
+  } finally {
+    session.close();
+    svc.close();
+    rmSync(cwd, { recursive: true, force: true });
+    rmSync(home, { recursive: true, force: true });
+  }
 });
 
 test('OpenFilm account model requests follow the configured HTTP proxy', { timeout: 30_000 }, async () => {

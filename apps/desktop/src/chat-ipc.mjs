@@ -113,8 +113,17 @@ export function registerChatIpc(ipcMain, { trusted, projects, dataDir, reveal, t
     void dropHold(kept.get(turnId)?.hold ?? null);
     kept.delete(turnId);
   };
-  handle('desktop:chat:snapshot', async ({ project: path, turnId }) => {
+  handle('desktop:chat:snapshot', async ({ project: path, turnId, recover }) => {
     const dir = await project(path);
+    if (recover === true) {
+      if (snapshots.get(turnId)?.dir === dir) return { ok: true };
+      const original = undoable.get(turnId);
+      if (original?.dir === dir) {
+        undoable.delete(turnId);
+        snapshots.set(turnId, original);
+        return { ok: true };
+      }
+    }
     const hold = holdDir(dir, turnId);
     /* links left from before (the app closed on a turn) are no use now: only the turns this launch knows keep theirs */
     const turnFiles = join(dir, '.film', 'cache', 'turn-files');

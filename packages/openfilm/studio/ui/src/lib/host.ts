@@ -31,6 +31,8 @@ export interface StudioHost {
   name?: string;
   /** A successful rename, here or in another page: the chat keeps its identity but uses the new name and folder. */
   projectChanged?: (project: HostProject) => void;
+  /** The workspace the app's conversation is looking at, with the editors available in this project. */
+  workbenchChanged?: (state: HostWorkbench) => void;
   /**
    * The window has no title bar of its own: Studio's top bar is where the window is dragged, and `inset` pixels at its
    * left (macOS) and `insetRight` at its right (Windows) are left free for the window's controls. `onChange` tells of a
@@ -52,7 +54,10 @@ export interface StudioHost {
    */
   ask?: (request: { text: string; refs: StudioRef[] }) => void;
   /** The desktop composer's model picker and the options to use for the next canvas writing request. */
-  canvasWriting?: { Picker: React.ComponentType<{ triggerClassName?: string }>; selection: () => HostWritingModel | null };
+  canvasWriting?: {
+    Picker: React.ComponentType<{ triggerClassName?: string; isolated?: boolean; onSelection?: (model: HostWritingModel | null) => void }>;
+    selection: () => HostWritingModel | null;
+  };
   /**
    * What is selected in the project shown and where the playhead is, each time either changes (the time a few times
    * a second while playing): what a chat's "@current selection" and "@current time" point at.
@@ -224,7 +229,7 @@ export interface StudioHost {
     /** a project's tab: shown, opened when it is not */
     open: (projectId: string) => void;
     move: (id: string, index: number) => void;
-    report: (state: { title?: string; exporting?: number | null; exportStage?: string | null; gone?: boolean }) => void;
+    report: (state: { title?: string; exporting?: number | null; exportStage?: string | null; generating?: boolean; gone?: boolean }) => void;
     /** projects this page deleted: their tabs close together, none of them to be opened again */
     gone?: (projectIds: string[]) => Promise<unknown>;
     /** another tab's title, its project renamed from this page's tabs (its page may be gone, and cannot say it) */
@@ -469,6 +474,7 @@ export interface StudioSelection {
  * (empty: sent or cleared).
  */
 export type StudioCommand =
+  | { type: 'show-workbench'; projectId: string; workbench: string }
   | { type: 'select-clip'; id?: string | null; loc?: string | null; seek?: boolean }
   | { type: 'seek'; time: number }
   | { type: 'show-range'; start: number; end: number }
@@ -488,6 +494,12 @@ export type StudioCommand =
   /* the app's chat shows the plugins' window (the installed, Discover, or a skill's page) or the projects window's
      examples (an example's page); none: the examples */
   | { type: 'show-examples'; open?: CommunityItem };
+
+export interface HostWorkbench {
+  projectId: string;
+  current: string | null;
+  available: readonly string[];
+}
 
 /**
  * A skill or an example to open on its page (a pill of one clicked); `plugins`, the plugins' window (the chat's button);

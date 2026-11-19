@@ -5,7 +5,7 @@ import { clipFade, parseFilm } from '../../../../src/film-doc.mjs';
 import type { Op } from '../api.ts';
 import type { EditClip, EditModel, EditTrack } from './timeline-edit.ts';
 import {
-  cutForClick, cutNear, findTransitions, foldHeads, headsOf, planRemoveTransition, planResizeTransition, planTransition,
+  cutForClick, cutNear, findTransitions, foldHeads, headsOf, pictureCuts, planRemoveTransition, planResizeTransition, planTransition,
   type ClipFacts, type FactsOf, type TransitionOpts,
 } from './transitions.ts';
 import { fadeEdits, fadeFromPointer, fadeHandleX } from './clip-fade.ts';
@@ -18,6 +18,20 @@ import { fadeEdits, fadeFromPointer, fadeHandleX } from './clip-fade.ts';
 type Spec = [id: string, startS: number, endS: number, more?: Partial<EditClip> & { sound?: boolean; fade?: [number, number]; src?: string }];
 type FilmClip = { id: string; src: string; at?: number; time?: number[]; attrs?: Record<string, string>; overrides?: unknown[]; sound?: true };
 type FilmValue = { stage?: { w: number; h: number }; tracks: { clips: FilmClip[]; locked?: boolean }[] };
+
+test('picture transition targets are adjacent on one unlocked track', () => {
+  const clip = (id: string, startMs: number, endMs: number): EditClip => ({
+    id, startMs, endMs, inMs: 0, sourceMs: endMs - startMs, speed: 1,
+  });
+  const a = clip('a', 0, 1000), b = clip('b', 1000, 2000), c = clip('c', 2010, 3000);
+  const model: EditModel = [
+    { index: 0, role: 'video', clips: [a, b, c] },
+    { index: 1, role: 'video', clips: [clip('other', 2000, 3000)] },
+    { index: 2, locked: true, clips: [a, b] },
+    { index: 3, role: 'audio', clips: [a, b] },
+  ];
+  assert.deepEqual(pictureCuts(model, () => ({ picture: true, fade: [0, 0] })), [{ a: 'a', b: 'b', track: 0, atMs: 1000 }]);
+});
 
 /** film.html's value: videos (or sounds) with their trim written, fades in seconds. */
 function film(...tracks: (Spec[] | { locked?: boolean; clips: Spec[] })[]): FilmValue {

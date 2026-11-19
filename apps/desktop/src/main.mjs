@@ -799,7 +799,7 @@ async function start() {
   tabHandle('desktop:tabs:close', (self, { id }) => { void closeTab(typeof id === 'string' ? id : self); return { ok: true }; });
   tabHandle('desktop:tabs:move', (_self, { id, index }) => { if (tabs?.move(String(id), Number(index))) tellTabs(); return { ok: true }; });
   /* what a page shows now: its project's title, an export's progress; or its project gone */
-  tabHandle('desktop:tabs:report', (self, { title, exporting, exportStage, gone }) => {
+  tabHandle('desktop:tabs:report', (self, { title, exporting, exportStage, generating, gone }) => {
     if (!tabs) return { ok: false };
     /* its project gone (deleted, in this page or another; its folder gone): its tab closes, without asking. Asked of
        Studio first: a tab closed stops its agent, and a project missing only film.html is not gone (tabs.mjs projectGone) */
@@ -814,6 +814,7 @@ async function start() {
       ...(typeof title === 'string' ? { title: title.slice(0, 200) } : {}),
       ...(exporting !== undefined ? { exporting: Number.isFinite(exporting) ? exporting : null } : {}),
       ...(exportStage !== undefined ? { exportStage: typeof exportStage === 'string' ? exportStage.slice(0, 120) : null } : {}),
+      ...(typeof generating === 'boolean' ? { generating } : {}),
     });
     tellTabs();
     return { ok: true };

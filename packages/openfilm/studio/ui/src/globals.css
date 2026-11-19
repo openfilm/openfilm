@@ -132,9 +132,10 @@
   /* the window's ground (rgb 20): what shows between the panes; every pane's inside, its top bars, the viewer round
      the picture and the canvas's board among them, uses the panel color */
   --bg-app: #141414;
-  --bg-titlebar: #202223;
+  --bg-titlebar: #202020;
   --bg-panel: #191919;
-  --bg-raised: #202223;
+  --bg-raised: #202020;
+  --chat-message-bg: #252525;
   /* large windows use the panel color for the sidebar and the raised color for the page */
   --dialog-side: var(--bg-panel);
   --dialog-main: var(--bg-raised);
@@ -145,7 +146,7 @@
   --bg-pressed: rgba(255, 255, 255, 0.12);
   --bg-selected: color-mix(in srgb, var(--accent) 16%, transparent);
 
-  --text: #e6e6e6;
+  --text: #f0f0f0;
   --text-muted: #a3a3a3;
   --text-faint: #717177;
   --editor-control: var(--text);
@@ -460,7 +461,7 @@ body.tl-pinning, body.tl-pinning * { cursor: crosshair !important; }
 
 /* The zoom slider: a narrow rounded thumb, the traveled part lit (`--pos` is set by the component). */
 .tl-zoom {
-  --zoom-fill: #e6e6e6;
+  --zoom-fill: #f0f0f0;
   --zoom-rail: #373737;
   -webkit-appearance: none;
   appearance: none;
@@ -861,7 +862,7 @@ html[data-file-drag] iframe { pointer-events: none; }
 [data-theme='dark'] .cv-checker,
 .cv-checker.cv-checker-night {
   background-color: #2c2c2c;
-  background-image: repeating-conic-gradient(#202223 0 25%, transparent 0 50%);
+  background-image: repeating-conic-gradient(#202020 0 25%, transparent 0 50%);
 }
 
 /* the Community's banner: the next thing fades in over the last (components/library/CommunityViews Hero) */

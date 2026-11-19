@@ -35,7 +35,7 @@ test('closing: the next to the right comes forward; the last closed leaves none;
   assert.equal(tabs.reopen()?.projectId, 'B', 'a closed project open again already: brought forward');
 });
 
-test('saved and restored, moved; agents and exports keep a page from being let go', () => {
+test('saved and restored, moved; agents, exports and generations keep a page from being let go', () => {
   let t = 0;
   const tabs = createTabs({ newId: ids(), now: () => t });
   tabs.open({ projectId: 'A', title: 'One' }); tabs.open({ projectId: 'B', title: 'Two' }); tabs.open({ projectId: 'C' });
@@ -49,6 +49,10 @@ test('saved and restored, moved; agents and exports keep a page from being let g
   assert.equal(tabs.list().find((x) => x.projectId === 'B').exportStage, 'Muxing media');
   assert.deepEqual(tabs.idle(5 * 60_000), [], 'A works, B exports, C is in front');
   tabs.setAgents([]);
+  assert.deepEqual(tabs.idle(5 * 60_000), [tabs.byProject('A').id]);
+  tabs.report(tabs.byProject('A').id, { generating: true });
+  assert.deepEqual(tabs.idle(5 * 60_000), []);
+  tabs.report(tabs.byProject('A').id, { generating: false });
   assert.deepEqual(tabs.idle(5 * 60_000), [tabs.byProject('A').id]);
   assert.equal(tabs.setAgents([], ['A']), true);
   assert.equal(tabs.list().find((x) => x.projectId === 'A').asking, true);

@@ -120,8 +120,14 @@ test('M adds a marker, ⇧M and ⌥M go to the next and the one before (⌥M typ
   assert.equal(mac('M', { shiftKey: true }), 'next-marker');
   assert.equal(actionOf({ ...press('µ', { altKey: true }), code: 'KeyM' }, OPENFILM_MAC, true), 'prev-marker');
   assert.equal(win('m', { altKey: true }), 'prev-marker');
-  assert.equal(mac('m', { metaKey: true }), null);
   assert.equal(mac('m', { altKey: true, shiftKey: true }), 'prev-marker', '⌥⇧M too');
+});
+
+test('Command+M and Ctrl+M open export in each built-in scheme', () => {
+  for (const scheme of BUILT_IN_SCHEMES) {
+    assert.equal(actionOf(press('m', { metaKey: true }), schemeKeymap(scheme, true), true), 'export');
+    assert.equal(actionOf(press('m', { ctrlKey: true }), schemeKeymap(scheme, false), false), 'export');
+  }
 });
 
 test('keys that are not the editor\'s stay the browser\'s, and Ctrl is the modifier off a Mac', () => {

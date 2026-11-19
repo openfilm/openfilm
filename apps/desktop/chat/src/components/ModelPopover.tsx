@@ -70,16 +70,26 @@ export function ChatAgentIcon({ id, size = 14 }: { id: LocalAgentId; size?: numb
   return <AgentIcon id={id} size={size} />;
 }
 
-export function CanvasModelPicker({ triggerClassName }: { triggerClassName?: string }) {
-  return <div className="of-chat min-w-0" data-canvas-writing-model=""><ModelPopover placement="top" triggerClassName={triggerClassName} /></div>;
+export function CanvasModelPicker({ triggerClassName, isolated, onSelection }: {
+  triggerClassName?: string;
+  isolated?: boolean;
+  onSelection?: (model: ReturnType<typeof canvasWritingModel>) => void;
+}) {
+  return <div className="of-chat min-w-0" data-canvas-writing-model="">
+    {isolated ? <IsolatedModelPicker triggerClassName={triggerClassName} onSelection={onSelection} />
+      : <ModelPopover placement="top" triggerClassName={triggerClassName} />}
+  </div>;
 }
 
 export function canvasWritingModel() {
   const state = useLocalAgents.getState();
-  const agent = currentAgent(state);
+  return writingModel(state, currentAgent(state), state.prefs);
+}
+
+function writingModel(state: ReturnType<typeof useLocalAgents.getState>, agent: LocalAgentId, chosen: Parameters<typeof effectivePrefs>[0]) {
   if (!shownAgents(state.roster).some((entry) => entry.id === agent && entry.status === 'ready')) return null;
-  const options = agentOptions(state, agent);
-  const prefs = effectivePrefs(state.prefs, agent, state.roster, options);
+  const options = agentOptions({ ...state, prefs: chosen }, agent);
+  const prefs = effectivePrefs(chosen, agent, state.roster, options);
   const picked: Record<string, string | number | boolean> = {};
   for (const option of menuOptions(options, '').filter((row) => offeredOption(agent, state.roster, row))) {
     const value = optionValue(options, prefs, option.id);
@@ -88,11 +98,25 @@ export function canvasWritingModel() {
   return { agent, options: picked };
 }
 
+function IsolatedModelPicker({ triggerClassName, onSelection }: {
+  triggerClassName?: string;
+  onSelection?: (model: ReturnType<typeof canvasWritingModel>) => void;
+}) {
+  const state = useLocalAgents();
+  const [picked, setPicked] = React.useState<LocalAgentId | undefined>();
+  const [prefs, setPrefs] = React.useState<typeof state.prefs>(() => state.prefs);
+  const agent = picked ?? currentAgent(state);
+  const selection = JSON.stringify(writingModel(state, agent, prefs));
+  React.useEffect(() => { onSelection?.(JSON.parse(selection)); }, [onSelection, selection]);
+  return <ModelPopover placement="top" triggerClassName={triggerClassName} agent={agent} prefs={prefs} isolated
+    onPick={setPicked} onPref={(id, option, value) => setPrefs((was) => ({ ...was, [id]: { ...was[id], [option]: value } }))} />;
+}
+
 /**
  * The composer's agent menu. In a conversation, `agent` and `prefs` are the ones it goes on with (lib/conversation-agent),
  * and `onPick` and `onPref` keep a change on it too; without them, the agent and options picked last.
  */
-export function ModelPopover({ placement = 'bottom', align = 'start', agent: conversationAgent, prefs: conversationPrefs, onPick, onPref, triggerClassName }: {
+export function ModelPopover({ placement = 'bottom', align = 'start', agent: conversationAgent, prefs: conversationPrefs, onPick, onPref, triggerClassName, isolated }: {
   placement?: 'top' | 'bottom';
   align?: 'start' | 'end';
   triggerClassName?: string;
@@ -100,6 +124,7 @@ export function ModelPopover({ placement = 'bottom', align = 'start', agent: con
   prefs?: Partial<Record<LocalAgentId, Record<string, unknown>>>;
   onPick?: (agent: LocalAgentId) => void;
   onPref?: (agent: LocalAgentId, configId: string, value: unknown) => void;
+  isolated?: boolean;
 } = {}) {
   const t = useT();
   const [open, setOpen] = React.useState(false);
@@ -171,7 +196,7 @@ export function ModelPopover({ placement = 'bottom', align = 'start', agent: con
   };
   const chooseAgent = (a: RosterAgent) => {
     setSide(null);
-    if (a.status === 'ready') { la.pick(a.id); onPick?.(a.id); return; }
+    if (a.status === 'ready') { if (!isolated) la.pick(a.id); onPick?.(a.id); return; }
     if (a.status === 'checking' || a.status === 'waiting') return;
     /* not connected, signed out, not found, no key: set up in Settings → Agents, where connecting and signing in are */
     setOpen(false);
@@ -182,7 +207,7 @@ export function ModelPopover({ placement = 'bottom', align = 'start', agent: con
   const choosing = side ? rows.find((o) => o.id === side) : undefined;
   const chosenValue = (o: Option) => (o.fixed ? o.options![0]!.value : optionValue(options, prefs, o.id));
   /* a fixed row's one value is already the one in use */
-  const pickChoice = (o: Option, value: unknown) => { if (!o.fixed) { la.setPref(agent, o.id, value); onPref?.(agent, o.id, value); } };
+  const pickChoice = (o: Option, value: unknown) => { if (!o.fixed) { if (!isolated) la.setPref(agent, o.id, value); onPref?.(agent, o.id, value); } };
 
   /* Keep the side menu beside its row and inside the window, including when an agent adds choices while it is open
      or the window's height changes. Measure again after width/height constraints change the rendered menu. */

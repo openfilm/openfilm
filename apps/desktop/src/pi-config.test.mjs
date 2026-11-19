@@ -114,7 +114,10 @@ test('why a turn failed, in plain words: a service that sent nothing in time, a 
   assert.equal(failureText("400: This model's maximum context length is 65536 tokens. However, you requested 70000 tokens."), `The conversation is too long for the model. ${hint}`);
   assert.equal(failureText('prompt is too long: 213462 tokens > 200000 maximum'), `The conversation is too long for the model. ${hint}`);
   assert.equal(failureText('401 Incorrect API key provided'), '401 Incorrect API key provided');
-  assert.equal(failureText('terminated'), 'terminated', 'a connection cut off is not said to be a timeout');
+  const disconnected = 'The connection to the model service was interrupted. Continue to pick up this task.';
+  assert.equal(failureText('Connection error.'), disconnected);
+  assert.equal(failureText('terminated'), disconnected);
+  assert.equal(retryNotice({ errorMessage: 'Connection error.' })._meta.openfilm.noticeKey, 'composer.modelConnectionRetry');
 });
 
 test('a model service tried again, as a notice: one that sent nothing in time in plain words, else with what Pi said', () => {

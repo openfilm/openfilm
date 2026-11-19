@@ -63,6 +63,7 @@ import { BUILT_IN, TEXT_COMPONENT, builtInItem, cutTrack, cutsOf, defaultTextWor
 import type { LibraryActions } from '@/components/library/LibraryDrawer';
 import type { CaptionsActions, CaptionsMake } from '@/components/library/CaptionsPane';
 import { LibraryTrial, type TemplatePreviewState } from '@/components/library/LibraryTrial';
+import { useLibraryGeneration } from '@/components/library/useLibraryGeneration';
 import { hugText } from '@/lib/text-box';
 import { textVars, withMotion, withWords } from '@/lib/text-look';
 import { apartOnTracks, stackClipEdit, toggleClipEdits, type ClipEdit } from '@/lib/film-clip-edits';
@@ -76,7 +77,7 @@ import { readTimelinePrefs, switchesOf } from '@/lib/timeline-prefs';
 import { fadeMsOf, type FadeMs } from '@/lib/clip-fade';
 import { hasSoundToDetach } from '@/lib/clip-volume';
 import {
-  cutForClick, findTransitions, foldHeads, headsOf, planRemoveTransition, planResizeTransition, planTransition, TRANSITION_MS,
+  cutForClick, findTransitions, foldHeads, headsOf, pictureCuts, planRemoveTransition, planResizeTransition, planTransition, TRANSITION_MS,
   type ClipFacts, type TransitionAsk, type TransitionPlan,
 } from '@/lib/transitions';
 import { frameMs } from '@/lib/timecode';
@@ -95,7 +96,7 @@ import { createViewerZoom } from '@/lib/viewer-zoom';
 import { factsOfProbe, resourceKindOf, srcHitsAsset, type WorkspaceResource } from '@/lib/workspace-resources';
 import { ContextMenu, type ContextMenuEntry } from './ContextMenu';
 import { studioHost, type StageBox, type StudioCommand, type StudioRef } from '../lib/host';
-import { clipRef, layerRef, markRange, momentRef, rangeRef, regionRef, subtitleRef, trackRef, type ClipFrameSource, type FilmRange } from '@/lib/studio-refs';
+import { clipRef, layerRef, markRange, momentRef, orderedRange, rangeRef, regionRef, subtitleRef, trackRef, type ClipFrameSource, type FilmRange } from '@/lib/studio-refs';
 import { boxNow, chatPointOf, draftBoxesAt, draftMarksOf, sameClip, NO_DRAFT, type DraftMarks, type PictureMarks } from '@/lib/chat-marks';
 import { filmCommandOf, FILM, parseLink } from '@/lib/links';
 import { usePageChanges } from './use-page-changes';
@@ -210,6 +211,8 @@ function editStepLabel(edits: readonly ClipEdit[], tracks: readonly TimelineTrac
 
 /** The white page under a dip to white (studio/server/transition-pages.mjs keeps it once). */
 const WHITE_SRC = 'transitions/white.html';
+const WHITE_SAVED_SRC = 'saved/openfilm/transitions-white-card/white.html';
+const LIBRARY_GENERATION_ENABLED = false;
 
 /** An edit-history label naming the clips it was done to (see OperationHistory's stepText): "Deleted slow". */
 /** No keyframes picked. */
@@ -614,14 +617,17 @@ export function ProjectView({ projectId, onProject }: {
     probeMedia(film.film?.tracks.flatMap((track) => track.clips.map((clip) => clip.src)) ?? []);
   }, [film.film, probeMedia]);
   const [pendingDrops, setPendingDrops] = React.useState<PendingDrop[]>([]);
+  const [generationDrop, setGenerationDrop] = React.useState<PendingDrop | null>(null);
+  const [generationTrack, setGenerationTrack] = React.useState<number | null>(null);
   /* the caption tracks' files, read: their cues are blocks of their rows (lib/caption-blocks) */
   const captionSrcs = React.useMemo(() => (film.film?.tracks ?? []).flatMap((tr) => (tr.captions ? [tr.captions.src] : [])), [film.film]);
   const cuesOf = useCaptionTracksOf(projectId, captionSrcs);
   const timelineTracks = React.useMemo<TimelineTrack[]>(() => {
     if (!film.film) return [];
     const base = withCueBlocks(layoutTracks(filmShape(film.film as unknown as FilmDoc, info?.spans ?? [], mediaFacts, Boolean(previewError))), cuesOf);
-    return pendingDrops.length ? withPendingBlocks(base, pendingDrops) : base;
-  }, [film.film, info, mediaFacts, pendingDrops, previewError, cuesOf]);
+    const drops = generationDrop ? [...pendingDrops, generationDrop] : pendingDrops;
+    return drops.length ? withPendingBlocks(base, drops) : base;
+  }, [film.film, info, mediaFacts, pendingDrops, generationDrop, previewError, cuesOf]);
   const tracksRef = React.useRef(timelineTracks);
   tracksRef.current = timelineTracks;
   /* the clips' links (`data-link`, by clip id): clips sharing one are edited together (lib/timeline-edit) */
@@ -1345,8 +1351,10 @@ export function ProjectView({ projectId, onProject }: {
     for (const tr of film.film?.tracks ?? []) {
       for (const c of tr.clips) {
         const moveIn = cutMovesOn(c.style).in;
+        const src = c.src.split('#')[0]!;
         facts.set(c.id, {
-          picture: filmClipKind(c) !== 'audio', fade: fadeMsOf(c), src: c.src.split('#')[0]!, ...(c.src === WHITE_SRC ? { white: true } : {}),
+          picture: filmClipKind(c) !== 'audio', fade: fadeMsOf(c), src,
+          ...(src === WHITE_SRC || src === WHITE_SAVED_SRC ? { white: true } : {}),
           ...(moveIn ? { moveIn: { slug: moveIn.slug, ms: Math.round(moveIn.secs * 1000) } } : {}),
         });
       }
@@ -1384,7 +1392,7 @@ export function ProjectView({ projectId, onProject }: {
       /* the default length, on the frame grid */
       const frame = frameMs(1);
       /* a move as long as the library has it */
-      const ms = ask.move ? ask.move.in.secs * 1000 : TRANSITION_MS;
+      const ms = ask.durationMs ?? (ask.move ? ask.move.in.secs * 1000 : TRANSITION_MS);
       plan = planTransition(model, clipFacts, ask.type, ask.cut, Math.round(ms / frame) * frame, opts);
       label = 'history.stepTransition';
     } else {
@@ -2334,7 +2342,7 @@ export function ProjectView({ projectId, onProject }: {
       look(item, block?.loc && clip ? [{ loc: block.loc, style: clip.style }] : []);
       return null;
     };
-    return { actions, applyDrop, lookTargets, place };
+    return { actions, applyDrop, lookTargets, place, cutHere };
   }, [language, selectedClips, editModel, projectId, addMedia, timelineTracks, edit, filmClipOf, editBlocks, editClips, playTextMotion, askTransition, t, toast, insertTemplate]);
   const saveBlocks = React.useCallback((blocks: readonly TimelineBlock[], into: string, together = false) => {
     const kept = blocks.filter((b) => b.clipId);
@@ -3010,7 +3018,23 @@ export function ProjectView({ projectId, onProject }: {
   const templateItemsRef = React.useRef<LibraryItem[]>([]);
   templateItemsRef.current = (libraryIndex?.items ?? []).filter((i) => i.cat === 'template' && i.kind === 'group');
   /* the range marked on the timeline (⇧-drag on the ruler, I and O): Studio's, told to the app with the selection */
-  const [markedRange, setMarkedRange] = React.useState<FilmRange | null>(null);
+  const [rangeSelection, setMarkedRange] = React.useState<FilmRange | null>(null);
+  const markedRange = React.useMemo(() => rangeSelection
+    && orderedRange(Math.min(totalMs, rangeSelection.startMs), Math.min(totalMs, rangeSelection.endMs)), [rangeSelection, totalMs]);
+  const markTimelineRange = React.useCallback((point: 'in' | 'out', atMs = player.current.time() * 1000) => {
+    setMarkedRange((range) => markRange(range, point, snapToFrame(atMs), totalMs) ?? range);
+  }, [totalMs]);
+  const rangeFromClips = React.useCallback(() => {
+    if (!selectedBlocks.length) return;
+    setMarkedRange(orderedRange(Math.min(...selectedBlocks.map((b) => b.startMs)), Math.max(...selectedBlocks.map((b) => b.endMs))));
+  }, [selectedBlocks]);
+  const [exportTarget, setExportTarget] = React.useState<{ kind: 'film'; range: FilmRange | null } | { kind: 'clip'; id: string } | null>(null);
+  const exportOpen = exportTarget != null;
+  const openFilmExport = React.useCallback(() => {
+    if (previewError && !markedRange) toast.showError(`${t('project.filmCannotExport')} ${previewError}`);
+    else if (totalMs > 0) setExportTarget({ kind: 'film', range: markedRange });
+    else toast.show(t('project.filmNotReady'));
+  }, [markedRange, previewError, totalMs, toast, t]);
   /* Clicking a range in chat briefly points it out, separately from the editing selection. */
   const [flashRange, setFlashRange] = React.useState<FilmRange | null>(null);
   React.useEffect(() => {
@@ -4943,6 +4967,11 @@ export function ProjectView({ projectId, onProject }: {
     const take = () => event.preventDefault();
     const once = !event.repeat;
     switch (cmd) {
+      case 'export':
+        if (canvasOpen || fullscreen) return;
+        take();
+        if (once && !exportOpen) openFilmExport();
+        return;
       case 'preview-fullscreen':
         if (!(totalMs > 0)) return;
         take();
@@ -4961,7 +4990,7 @@ export function ProjectView({ projectId, onProject }: {
         if (!(totalMs > 0)) return;
         take();
         /* an end that would leave no range (I at the film's end) leaves the range as it was */
-        setMarkedRange((cur) => markRange(cur, cmd === 'mark-in' ? 'in' : 'out', snapToFrame(now), totalMs) ?? cur);
+        markTimelineRange(cmd === 'mark-in' ? 'in' : 'out', now);
         return;
       case 'clear-range':
         if (!markedRange) return;
@@ -5029,7 +5058,7 @@ export function ProjectView({ projectId, onProject }: {
         /* ⇧X: the range is the selected clips' span */
         if (!selectedBlocks.length) return;
         take();
-        setMarkedRange({ startMs: Math.min(...selectedBlocks.map((b) => b.startMs)), endMs: Math.max(...selectedBlocks.map((b) => b.endMs)) });
+        rangeFromClips();
         return;
       }
       case 'copy-attrs': if (!selectedBlocks.length) return; take(); if (once) copyAttrs(selectedClips); return;
@@ -5224,14 +5253,11 @@ export function ProjectView({ projectId, onProject }: {
       void api.settings(projectId).then(setSettings, () => {});
     },
   };
-  const [exportOpen, setExportOpen] = React.useState(false);
-  const [exportClipId, setExportClipId] = React.useState<string | null>(null);
   /* the picture's menu is built before this: it reaches export through a ref */
   const exportTrayRef = React.useRef<ExportTrayHandle>(null);
   const openClipExport = React.useCallback((clipId: string) => {
     if (!(totalMs > 0)) { toast.show(t('project.filmNotReady')); return; }
-    setExportClipId(clipId);
-    setExportOpen(true);
+    setExportTarget({ kind: 'clip', id: clipId });
   }, [totalMs, toast, t]);
   openClipExportRef.current = openClipExport;
   const mgBlocks = React.useMemo(() => timelineTracks
@@ -5301,6 +5327,36 @@ export function ProjectView({ projectId, onProject }: {
               addTrack: async () => { await newCaptionTrack(null); },
   });
   const libraryPreview = useSteady({ bar: libraryPreviewBar, picture: fullscreen ? null : libraryPreviewPicture, dismissRef: dismissLibraryPreview, begin: beginLibraryPreview });
+  const generationCuts = () => LIBRARY_GENERATION_ENABLED
+    ? pictureCuts(editModelOf(tracksRef.current.filter((track) => !track.hidden), clipLinks), clipFacts)
+    : [];
+  const assetGeneration = useLibraryGeneration({
+    projectId, folder: loaded?.project.path,
+    tracks: () => tracksRef.current,
+    target: () => timelineCommands.current?.target() ?? generationTrack,
+    time: () => timeRef.current,
+    cut: () => {
+      const cuts = generationCuts();
+      if (!cuts.length) return null;
+      const target = library.cutHere()?.cut;
+      return cuts.find((cut) => cut.a === target?.a && cut.b === target.b) ?? null;
+    },
+    canCut: (cut) => generationCuts().some((candidate) => candidate.a === cut.a && candidate.b === cut.b),
+    speech: () => {
+      const at = timeRef.current;
+      const heard = new Set(heardClips.map((clip) => clip.clipId));
+      const rows = tracksRef.current.filter((row) => !row.hidden && !row.muted && !row.locked);
+      const blocks = rows.flatMap((row) => row.blocks).filter((block) => block.clipId && heard.has(block.clipId));
+      return blocks.find((block) => selectedClips.some((b) => b.clipId === block.clipId))
+        ?? blocks.find((block) => block.startMs <= at && at < block.endMs) ?? null;
+    },
+    stage: () => stageRef.current,
+    pending: setGenerationDrop,
+    edit, transition: askTransition,
+    done: (name) => toast.show(t('assetDrawer.added').replace('{name}', name)),
+  });
+  const generationActions = useSteady(assetGeneration);
+  const libraryActions = useSteady({ ...library.actions, ...(LIBRARY_GENERATION_ENABLED ? { generation: generationActions } : {}) });
   const shellLibrary = useSteady({
     add: (file: WorkspaceResource, saved: boolean) => { if (saved) void placeSaved(file, { atPlayhead: true }); else void addMedia(file, { atPlayhead: true }); },
     pickedPath: pickedMedia?.path ?? null, pickedSaved,
@@ -5311,7 +5367,7 @@ export function ProjectView({ projectId, onProject }: {
       if (how?.saved) setPickedSaved(Boolean(file));
     },
     usedSrcs, onDropClipsForAssets: dropClipsForAssets, litPath: chatPoint?.file ?? null,
-    actions: library.actions, tried: libraryTrial?.id ?? null, templateStatus,
+    actions: libraryActions, tried: libraryTrial?.id ?? null, templateStatus,
     preview: libraryPreview, captions: libraryCaptions, speak: speakVoice, recorder,
   });
   /* the top bar is the shell's (shell/top-bar); what the edit has on it is given here, and drawn there in the shell's
@@ -5321,18 +5377,14 @@ export function ProjectView({ projectId, onProject }: {
      changes: the buttons call the edit's functions as the latest render made them */
   const barDoes = useSteady({
     coverFromFrame,
-    askExport: () => {
-      if (previewError) toast.showError(`${t('project.filmCannotExport')} ${previewError}`);
-      else if (totalMs > 0) setExportOpen(true);
-      else toast.show(t('project.filmNotReady'));
-    },
+    askExport: openFilmExport,
   });
   /* the film's export wherever a workbench of the film is shown (the edit, Screening…); not over the canvas, which
      makes material and has bars of its own */
   const exportAway = canvasOpen;
   const topBarTools = React.useMemo(() => (<>
     {exportAway ? null : (<>
-    <Tooltip label={t('projectMenu.export')} side="bottom">
+    <Tooltip label={t('projectMenu.export')} side="bottom" action="export">
       <button type="button" aria-label={t('projectMenu.export')} aria-haspopup="dialog" aria-expanded={exportOpen} className={TOP_BTN}
         onClick={() => barDoes.askExport()}>
         <Upload size={16} />
@@ -5804,6 +5856,9 @@ export function ProjectView({ projectId, onProject }: {
                     range={markedRange}
                     flashRange={flashRange}
                     onRangeChange={setMarkedRange}
+                    onMarkRange={markTimelineRange}
+                    onRangeFromClips={rangeFromClips}
+                    onExportRange={openFilmExport}
                     trackMenuExtra={trackMenuExtra}
                     onOrganizeTracks={organizeTimelineTracks}
                     transcribed={transcribedSrcs}
@@ -5857,6 +5912,7 @@ export function ProjectView({ projectId, onProject }: {
                     hasClipboard={clipboard.length > 0 || layerBoard != null}
                     selected={selectedIds}
                     onSelectedChange={onTimelineSelected}
+                    onTargetChange={setGenerationTrack}
                     waveUrl={waveUrl}
                     history={timelineHistory}
                     {...tools.timeline}
@@ -5900,7 +5956,7 @@ export function ProjectView({ projectId, onProject }: {
       <ExportCenter
         covers={{ projectId, list: coverList?.covers ?? [], main: coverList?.main ?? null, edit: () => coverTile.open() }}
         open={exportOpen}
-        onClose={() => { setExportOpen(false); setExportClipId(null); }}
+        onClose={() => setExportTarget(null)}
         projectId={projectId}
         savedRevision={film.savedRevision}
         refreshPreview={film.refresh}
@@ -5912,7 +5968,8 @@ export function ProjectView({ projectId, onProject }: {
         playheadMs={timeMs}
         markersMs={tools.timeline.snapPointsMs}
         mgBlocks={mgBlocks}
-        {...(exportClipId ? { focusClipId: exportClipId } : {})}
+        focusClipId={exportTarget?.kind === 'clip' ? exportTarget.id : undefined}
+        timelineRange={exportTarget?.kind === 'film' ? exportTarget.range : null}
         onQueued={(jobs) => exportTrayRef.current?.push(jobs)}
         projectFps={projectFps}
         missingFiles={[...mediaTrouble].flatMap(([src, why]) => (why === 'missing' ? [src] : []))}

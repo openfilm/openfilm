@@ -65,6 +65,27 @@ export type FactsOf = (id: string) => ClipFacts | undefined;
 /** A cut: the clip ending there (`a`) and the one starting there (`b`); one of them alone is a clip's edge. */
 export interface CutRef { a: string | null; b: string | null }
 
+export interface PictureCut { a: string; b: string; atMs: number; track: number }
+
+/** The visible picture track's join points, in timeline order. Gaps and clip edges alone are not joins. */
+export function pictureCuts(model: EditModel, facts: FactsOf): PictureCut[] {
+  return model.flatMap((track) => {
+    if (track.locked || track.captions || track.role === 'audio') return [];
+    const cuts: PictureCut[] = [];
+    for (let i = 1; i < track.clips.length; i++) {
+      const a = track.clips[i - 1]!;
+      const b = track.clips[i]!;
+      if (Math.abs(a.endMs - b.startMs) > TOUCH_MS) continue;
+      const before = facts(a.id);
+      const after = facts(b.id);
+      if (before?.picture && !before.white && after?.picture && !after.white) {
+        cuts.push({ a: a.id, b: b.id, atMs: b.startMs, track: track.index });
+      }
+    }
+    return cuts;
+  });
+}
+
 export interface FilmTransition {
   /** Its name on the timeline (stays while its clips do). */
   key: string;
@@ -89,7 +110,7 @@ export interface FilmTransition {
 
 /** What the timeline asks of the editor: a transition put on a cut, made longer or shorter, or taken away. */
 export type TransitionAsk =
-  | { kind: 'add'; type: TransitionKind; cut: CutRef; move?: { in: CutPreset; out?: CutPreset } }
+  | { kind: 'add'; type: TransitionKind; cut: CutRef; durationMs?: number; move?: { in: CutPreset; out?: CutPreset } }
   | { kind: 'resize'; key: string; durationMs: number }
   | { kind: 'remove'; key: string };
 
