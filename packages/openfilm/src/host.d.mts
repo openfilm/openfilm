@@ -3,7 +3,7 @@ export declare const HOST_FLAG: string;
 export declare const SEEK_INSIDE_FRAME: string;
 export declare const FILM_CLOCK: string;
 export declare function injectFirst(html: string, tag: string): string;
-export declare function serve(root: string, opts?: { port?: number }): Promise<{ url: string; close(): Promise<void> }>;
+export declare function serve(root: string, opts?: { port?: number; timeline?: string; renderRanges?: [number, number][] }): Promise<{ url: string; close(): Promise<void> }>;
 /** Listen on 127.0.0.1 at `port`; for port 0, never at a port browsers refuse to open. The port it listens on. */
 export declare function listenLocal(server: import('node:net').Server, port?: number): Promise<number>;
 export interface LaunchOptions { headed?: boolean; channel?: string | null; args?: string[]; env?: Record<string, string | undefined> }

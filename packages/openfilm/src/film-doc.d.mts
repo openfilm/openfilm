@@ -143,6 +143,7 @@ export declare function clipTag(clip: FilmClip): string;
 export declare function parseFilm(value: unknown): FilmDoc;
 
 export declare function clipSpeed(clip: { src: string; speed?: unknown }): number;
+export declare function clipOutsideRanges(clip: FilmClip, ranges?: readonly [number, number][]): boolean;
 export type FilmClipSpan = { from: number; to: number; speed: number; length: number }
 export declare function clipSpan(clip: { src: string; time?: FilmTimeSpan; speed?: unknown }, native: number | undefined, where?: string): FilmClipSpan;
 export declare function sourceAt(span: FilmClipSpan, localSec: number, clip: { src: string }, native?: number): number;

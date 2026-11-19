@@ -5828,7 +5828,8 @@ export function ProjectView({ projectId, onProject }: {
         open={exportOpen}
         onClose={() => { setExportOpen(false); setExportClipId(null); }}
         projectId={projectId}
-        filmRev={film.rev ?? undefined}
+        savedRevision={film.savedRevision}
+        refreshPreview={film.refresh}
         title={title || 'video'}
         durationMs={totalMs}
         stage={stage}

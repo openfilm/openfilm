@@ -5,6 +5,7 @@
  * itself, what an empty board says, and a file seen whole over the board.
  */
 import React from 'react';
+import { useVideoPlayback } from '@/lib/video-playback';
 import { Background, BackgroundVariant, useReactFlow, useStore } from '@xyflow/react';
 import {
   AudioLines, Clapperboard, Grid3x3, Hand, History, Image as ImageIcon, Keyboard, LayoutTemplate, ListTree, Map as MapIcon, MousePointer2, Palette, Scissors, Search,
@@ -384,13 +385,17 @@ export function Outline({ nodes, fileOf, sources, onShow, onClose }: {
 export function Viewer({ file, sources, onClose }: { file: WorkspaceResource; sources: MediaSources; onClose: () => void }) {
   const t = useT();
   const src = sources.file(file);
+  const video = useVideoPlayback(file, sources);
+  const status = video.message(t);
   return (
     <div className="absolute inset-0 z-40 flex items-center justify-center bg-black/85 p-10" onPointerDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
       <button type="button" aria-label={t('canvas.outline.close')} onClick={onClose}
         className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20"><X size={18} /></button>
       <div className="absolute left-5 top-5 max-w-[60%] truncate text-[13px] text-white/80">{file.name}</div>
       {file.kind === 'image' ? <img src={src} alt="" className="cv-checker cv-checker-night max-h-full max-w-full object-contain" />
-        : file.kind === 'video' ? <video src={src} controls autoPlay playsInline className="max-h-full max-w-full" />
+        : file.kind === 'video' ? (status
+          ? <p role="status" className="text-sm text-white/80">{status}</p>
+          : <video src={video.src} onError={video.onError} controls autoPlay playsInline className="max-h-full max-w-full" />)
           : file.kind === 'audio' ? <audio src={src} controls autoPlay className="w-[min(520px,80%)]" />
             : <div className="text-white/70">{file.name}</div>}
     </div>

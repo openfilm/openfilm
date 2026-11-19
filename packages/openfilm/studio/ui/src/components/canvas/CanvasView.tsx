@@ -2119,13 +2119,13 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
           const tool = CLIP_TOOLS.find((x) => x.key === clipAI.tool)!;
           const models = clipModels(tool, choicesFor(providers, 'video'));
           const last = lastModel('video');
-          return <ClipToolEditor tool={tool} src={sources.file(clip)} frameAt={frameOf(clipAI.path)} length={(clip.durationMs ?? 0) / 1000} models={models}
+          return <ClipToolEditor tool={tool} file={clip} sources={sources} frameAt={frameOf(clipAI.path)} models={models}
             first={models.find((m) => isOwn(tool, m)) ?? models.find((m) => last && m.via === last.via && m.model === last.model)}
             files={files.filter((f) => !f.path.startsWith(`${WORK}/`))} srcOf={(f) => sources.file(f)} onClose={() => setClipAI(null)}
             onMake={(made) => makeFromClip(clipAI.id, clipAI.path, tool, made)} />;
         })() : null}
         {trimming && byPath.get(trimming.path) ? (
-          <TrimEditor src={sources.file(byPath.get(trimming.path)!)} frameAt={frameOf(trimming.path)} onClose={() => setTrimming(null)}
+          <TrimEditor file={byPath.get(trimming.path)!} sources={sources} frameAt={frameOf(trimming.path)} onClose={() => setTrimming(null)}
             onDone={async (from, to) => { if (await runClip(trimming.id, { op: 'trim', path: trimming.path, from, to }, t('canvas.clipTools.trim'))) setTrimming(null); }} />
         ) : null}
         {pictureTool && byPath.get(pictureTool.path) ? (() => {
@@ -2162,7 +2162,7 @@ function BoardView({ shown = true, projectId, folder, files, sources, onAddToFil
             uploads={[...new Set(nodes.flatMap((n) => (n.type === 'file' ? [n.data.path] : [])))].flatMap((path) => {
               const file = byPath.get(path);
               if (!file || (file.kind !== 'image' && file.kind !== 'video' && file.kind !== 'audio')) return [];
-              return [{ path, media: file.kind, url: file.kind === 'image' ? sources.file(file) : file.kind === 'video' ? sources.file(file) : undefined }];
+              return [{ path, media: file.kind, url: file.kind === 'image' ? sources.file(file) : sources.poster?.(file) }];
             })} />
         ) : null}
         <BoardSwitcher boards={boards} current={boardId}

@@ -1,6 +1,8 @@
-/** Keep the macOS window available for Dock activation without ending Studio or agent sessions. */
-export function keepWindowOnClose(win, { mac, isQuitting, save }) {
+/** Keep the macOS window available for Dock activation, and background work alive when Windows closes its window. */
+export function keepWindowOnClose(win, { mac, isQuitting, save, shouldMinimize }) {
   let leavingFullScreen = false;
+  let checking = false;
+  let closeAllowed = false;
   function cancelClose() {
     leavingFullScreen = false;
     win.removeListener('leave-full-screen', hide);
@@ -10,6 +12,7 @@ export function keepWindowOnClose(win, { mac, isQuitting, save }) {
     if (!win.isDestroyed() && !isQuitting()) win.hide();
   }
   win.on('close', (event) => {
+    if (closeAllowed) return;
     save();
     if (mac && !isQuitting()) {
       event.preventDefault();
@@ -19,6 +22,19 @@ export function keepWindowOnClose(win, { mac, isQuitting, save }) {
       leavingFullScreen = true;
       win.once('leave-full-screen', hide);
       win.setFullScreen(false);
+    } else if (shouldMinimize && !isQuitting()) {
+      event.preventDefault();
+      if (checking) return;
+      checking = true;
+      void Promise.resolve().then(shouldMinimize).catch(() => true).then((busy) => {
+        checking = false;
+        if (win.isDestroyed() || isQuitting()) return;
+        if (busy) win.minimize();
+        else {
+          closeAllowed = true;
+          try { win.close(); } finally { closeAllowed = false; }
+        }
+      });
     } else cancelClose();
   });
   /* Dock activation while full screen is leaving keeps the window open. */

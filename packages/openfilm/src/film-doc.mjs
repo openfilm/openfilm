@@ -458,6 +458,14 @@ export function clipSpeed(clip) {
   return isFinite(v) && v >= SPEED_MIN && v <= SPEED_MAX ? v : 1;
 }
 
+/** A trimmed clip whose entire span is outside the source ranges being drawn. */
+export function clipOutsideRanges(clip, ranges) {
+  if (!ranges?.length || clip.time?.length !== 2) return false;
+  const start = clip.at ?? 0;
+  const end = start + (clip.time[1] - clip.time[0]) / clipSpeed(clip);
+  return ranges.every(([from, to]) => start >= to || end <= from);
+}
+
 /**
  * Which part of its source a clip plays and how long it lasts on the film.
  *

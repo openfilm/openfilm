@@ -40,7 +40,7 @@ export function useHostTabs() {
 function Light({ tab }: { tab: HostTab }) {
   const t = useT();
   if (tab.asking) return <span title={t('switcher.asking')} className="h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--warn)] shadow-[0_0_0_2px_color-mix(in_srgb,var(--warn)_18%,transparent)]" />;
-  if (tab.exporting != null) return <span className="shrink-0 font-mono text-[10.5px] text-[var(--text-faint)]">{t('switcher.exporting').replace('{n}', String(Math.round(tab.exporting * 100)))}</span>;
+  if (tab.exporting != null) return <span title={tab.exportStage} className="max-w-32 shrink-0 truncate text-[10.5px] tabular-nums text-[var(--text-faint)]">{tab.exportStage ?? t('switcher.exporting').replace('{n}', String(Math.round(tab.exporting * 100)))}</span>;
   if (tab.working) return <span title={t('switcher.working')} className="status-breathe h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--text-muted)]" />;
   return null;
 }

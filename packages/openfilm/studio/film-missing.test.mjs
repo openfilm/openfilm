@@ -182,6 +182,12 @@ test('the timeline keeps its displayed revision until the new preview draws', { 
   const { rev } = await (await api('')).json();
   const arrived = Promise.withResolvers();
   const release = Promise.withResolvers();
+  const releaseSettings = Promise.withResolvers();
+  const isExportApi = (url) => url.pathname.endsWith('/exports');
+  await page.route((url) => isExportApi(url) && url.searchParams.get('view') === 'settings', async (route) => {
+    await releaseSettings.promise;
+    await route.continue().catch(() => {});
+  });
   await page.route((url) => url.pathname.endsWith('/card2.html'), async (route) => {
     if (route.request().resourceType() !== 'document') return route.continue();
     arrived.resolve();
@@ -197,12 +203,38 @@ test('the timeline keeps its displayed revision until the new preview draws', { 
     assert.ok(await before.isVisible());
     assert.ok(await page.locator('[data-block-title="card"]').isVisible());
     assert.equal(await page.locator('[data-block-title="card2"]').count(), 0);
-    const exportResponse = await api('/exports', { method: 'POST', body: JSON.stringify({ jobs: [{ kind: 'subtitles' }], filmRev: rev }) });
-    assert.equal(exportResponse.status, 409, 'the old timeline cannot silently export the file being prepared');
-  } finally { release.resolve(); }
+    const settings = page.waitForRequest((req) => isExportApi(new URL(req.url())) && new URL(req.url()).searchParams.get('view') === 'settings');
+    await page.getByRole('button', { name: 'Export', exact: true }).click();
+    await settings;
+    const queued = page.waitForResponse((res) => isExportApi(new URL(res.url())) && res.request().method() === 'POST');
+    await page.getByRole('dialog', { name: 'Export' }).getByRole('button', { name: 'Export', exact: true }).click({ timeout: 6000 });
+    const exportResponse = await queued;
+    assert.equal(exportResponse.status(), 200, 'the displayed timeline can queue without waiting for settings or the next preview');
+    assert.equal(exportResponse.request().postDataJSON().filmRev, rev);
+  } finally { release.resolve(); releaseSettings.resolve(); }
   await shown(page, 'card2.html').getByRole('heading', { name: 'Ready together' }).waitFor({ timeout: 6000 });
   assert.ok(await page.locator('[data-block-title="card2"]').isVisible());
   assert.equal(await page.locator('[data-block-title="card"]').count(), 0);
+});
+
+test('the export tray shows muxing and elapsed time instead of a stalled percentage', { timeout: 30_000 }, async (t) => {
+  const { page } = await open(t, 'Export muxing status', async ({ page, address }) => {
+    await page.route((url) => url.pathname === `/api${address}/exports` && url.searchParams.get('view') === 'queue', (route) => {
+      const now = Date.now();
+      return route.fulfill({ json: { exports: [{ id: 'movie', project: address.split('/').at(-1), kind: 'video', label: 'H.264',
+        status: 'running', phase: 'muxing', phaseAt: now - 7000, phaseProgress: null, progress: 0.99, at: now - 8000, encoder: 'h264_videotoolbox' }] } });
+    });
+  });
+  const trigger = page.locator('[data-export-queue-trigger]');
+  await trigger.getByText('Muxing media').waitFor();
+  await trigger.click();
+  const tray = page.locator('[data-export-queue]');
+  assert.equal(await tray.getByRole('progressbar', { name: 'Muxing media' }).getAttribute('aria-valuenow'), null);
+  assert.equal(await tray.getByText('99%').count(), 0);
+  const elapsed = tray.getByText(/\d+:\d\d in this step/);
+  const before = await elapsed.textContent();
+  await page.waitForFunction((before) => [...document.querySelectorAll('[data-export-queue] span')]
+    .some((node) => /\d+:\d\d in this step/.test(node.textContent) && node.textContent !== before), before);
 });
 
 test('a failed edit and a failed recovery read cannot stall later disk changes or edits', { timeout: 30_000 }, async (t) => {

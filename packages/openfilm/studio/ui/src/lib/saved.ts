@@ -52,6 +52,7 @@ const fragmentOf = (f: { bundle?: { file?: string } }) => {
 
 export const savedSources: MediaSources = {
   file: (f) => (f.bundle && !f.bundle.file ? `/api/saved/poster?path=${enc(f.path)}&v=${Math.round(f.mtimeMs)}` : `/api/saved/file?path=${enc(own(f))}&v=${Math.round(f.mtimeMs)}${fragmentOf(f)}`),
+  videoCopy: (f) => `/api/saved/playback?path=${enc(own(f))}&v=${Math.round(f.mtimeMs)}${fragmentOf(f)}`,
   poster: (f) => (f.bundle && (!f.bundle.file || f.kind !== 'video') ? `/api/saved/poster?path=${enc(f.path)}&v=${Math.round(f.mtimeMs)}` : f.kind === 'video' ? media('poster', own(f), Math.round(f.mtimeMs)) : undefined),
   wave: (f) => media('wave', own(f), Math.round(f.mtimeMs)),
   pagePoster: (f) => (f.bundle ? `/api/saved/poster?path=${enc(f.path)}&v=${Math.round(f.mtimeMs)}` : undefined),

@@ -15,6 +15,7 @@ import type { SourceRange } from '@/lib/media-place';
 import { exactRate, formatTimecode, snapToFrame, useTimecodeFps } from '@/lib/timecode';
 import { cuePlain, readVtt, voiceTranscriptText } from '../../../../src/captions.mjs';
 import { type MediaSources, type WorkspaceResource } from '@/lib/workspace-resources';
+import { useVideoPlayback } from '@/lib/video-playback';
 import { keyAction } from '@/lib/keymap-store';
 import { isTypingTarget } from './typing-target';
 import { CLEAR, KIND_ICON, MediaPreview } from './MediaPreview';
@@ -217,7 +218,9 @@ function MediaPreviewPane({ file, sources, onClose, onPlace, withinDialog, saved
   const [playing, setPlaying] = React.useState(false);
   const [time, setTime] = React.useState(0);
   const [duration, setDuration] = React.useState((file.durationMs ?? 0) / 1000);
-  const [failed, setFailed] = React.useState(false);
+  const [failedFile, setFailed] = React.useState(false);
+  const video = useVideoPlayback(file, sources);
+  const failed = file.kind === 'video' ? video.failed : failedFile;
   const timed = file.kind === 'video' || file.kind === 'audio';
   const src = sources.file(file);
 
@@ -281,12 +284,14 @@ function MediaPreviewPane({ file, sources, onClose, onPlace, withinDialog, saved
         onDragEnd={clearResourceDrag}>
         {failed ? (
           <p className="text-[12.5px] text-[var(--text-muted)]">{t('media.cannotPreview')}</p>
+        ) : file.kind === 'video' && video.preparing ? (
+          <p role="status" className="text-[12.5px] text-[var(--text-muted)]">{video.message(t)}</p>
         ) : file.kind === 'video' ? (
           <video
             key={file.path}
             data-asset-preview-control=""
             ref={mediaRef}
-            src={src}
+            src={video.src}
             /* a poster that fails to load covers the first frame in black: only when there is one */
             poster={sources.poster?.(file)}
             playsInline
@@ -296,6 +301,7 @@ function MediaPreviewPane({ file, sources, onClose, onPlace, withinDialog, saved
             className={FIT}
             style={fitted(shape)}
             {...mediaEvents}
+            onError={video.onError}
             onLoadedMetadata={(e) => { shapeOf(e.currentTarget.videoWidth, e.currentTarget.videoHeight); mediaEvents.onLoadedMetadata?.(e); }}
           />
         ) : file.kind === 'image' ? (

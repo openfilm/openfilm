@@ -6,6 +6,7 @@
  */
 import React from 'react';
 import { Plus, Server } from 'lucide-react';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { useT } from '@/i18n';
 import type { OwnService, OwnServiceFields, ProvidersHook } from '@/lib/providers';
 import { SettingsButton, SettingsField, SettingsGroup, SettingsInset, SettingsItem, SettingsStatus, settingsError, settingsLink } from './ui';
@@ -21,6 +22,8 @@ export function CustomServices({ hook, adding = 0 }: { hook: ProvidersHook; addi
   const t = useT();
   const services = hook.state?.custom ?? [];
   const [open, setOpen] = React.useState<string | null>(null);
+  const [removeId, setRemoveId] = React.useState<string | null>(null);
+  const removing = services.find((service) => service.id === removeId);
   const group = React.useRef<HTMLDivElement>(null);
   React.useEffect(() => {
     if (!adding) return;
@@ -46,12 +49,13 @@ export function CustomServices({ hook, adding = 0 }: { hook: ProvidersHook; addi
             )}
             control={open === service.id ? null : (
               <>
-                <SettingsButton variant="quiet" disabled={hook.busy === service.id} onClick={() => void hook.removeService(service.id)}>{t('settings.providers.own.remove')}</SettingsButton>
+                <SettingsButton variant="quiet" disabled={hook.busy === service.id} onClick={() => setRemoveId(service.id)}>{t('settings.providers.own.remove')}</SettingsButton>
                 <SettingsButton onClick={() => setOpen(service.id)}>{t('settings.providers.own.edit')}</SettingsButton>
               </>
             )}
           >
             {open === service.id ? <ServiceForm hook={hook} service={service} onDone={() => setOpen(null)} /> : null}
+            {open !== service.id && hook.problem && hook.problemFor === service.id ? <p className={settingsError} role="alert">{hook.problem}</p> : null}
           </SettingsItem>
         ))}
         {open === '' ? (
@@ -62,6 +66,18 @@ export function CustomServices({ hook, adding = 0 }: { hook: ProvidersHook; addi
           </div>
         )}
       </SettingsGroup>
+      {removing ? (
+        <ConfirmDialog open danger initialFocus="cancel"
+          title={t('settings.providers.own.removeTitle').replace('{name}', () => removing.name)}
+          description={t('settings.providers.own.removeNote')}
+          confirmLabel={t('settings.providers.own.remove')}
+          onCancel={() => setRemoveId(null)}
+          onConfirm={() => {
+            setRemoveId(null);
+            if (hook.busy !== removing.id) void hook.removeService(removing.id);
+          }}
+        />
+      ) : null}
     </div>
   );
 }

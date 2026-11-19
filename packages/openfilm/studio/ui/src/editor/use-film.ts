@@ -57,6 +57,10 @@ export function useFilm(projectId: string, initial: FilmState | null, onChange: 
   }, []);
   const ref = useRef(state);
   const queue = useRef(Promise.resolve());
+  const savedRevision = useCallback(async () => {
+    await queue.current;
+    return ref.current?.rev;
+  }, []);
   const changed = useRef(onChange);
   changed.current = onChange;
   const read = useRef(onRead);
@@ -316,7 +320,7 @@ export function useFilm(projectId: string, initial: FilmState | null, onChange: 
   const forget = useCallback(() => setSteps(() => ({ done: [], undone: [] })), [setSteps]);
 
   return {
-    film: state?.value ?? null, rev: state?.rev ?? null, candidate, present, refresh, error, broken, edit, record, undo, redo, rollbackTo, forget, steps,
+    film: state?.value ?? null, rev: state?.rev ?? null, candidate, present, refresh, savedRevision, error, broken, edit, record, undo, redo, rollbackTo, forget, steps,
     canUndo: steps.done.length > 0, canRedo: steps.undone.length > 0, settled: () => queue.current,
   };
 }

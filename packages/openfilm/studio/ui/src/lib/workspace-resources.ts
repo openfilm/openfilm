@@ -103,8 +103,10 @@ export interface MediaListing {
 
 /** Where the pane's pictures, sounds and pages come from. Addresses should carry the file's version (its mtime). */
 export interface MediaSources {
-  /** The file's own bytes: what the viewer plays, and a still's picture. */
+  /** The file's own bytes, including for downloading and sharing. */
   file(file: WorkspaceResource): string;
+  /** POST queues a compatibility copy; GET serves it when ready. */
+  videoCopy?(file: WorkspaceResource): string;
   /** A small picture of a video (or still), when there is one; undefined: none (a still then shows itself). */
   poster?(file: WorkspaceResource): string | undefined;
   /** A sound's waveform, JSON `{ peaks: number[] }` with peaks 0..1 (a 503 is asked again: still being written). */
@@ -348,8 +350,10 @@ export function warmProjectMedia(projectId: string, listing: MediaListing | null
  */
 export function srcHitsAsset(src: string, path: string): boolean {
   if (!src) return false;
-  const file = src.split('#')[0]!;
-  return file === path || path.endsWith(`/${file}`) || file.endsWith(`/${path}`);
+  const file = src.split(/[?#]/)[0]!.replace(/^(?:\.\/)+/, '');
+  const same = (name: string) => name === path || path.endsWith(`/${name}`) || name.endsWith(`/${path}`);
+  if (same(file)) return true;
+  try { return same(decodeURIComponent(file)); } catch { return false; }
 }
 
 const SIZE_UNITS = ['B', 'KB', 'MB', 'GB', 'TB'];

@@ -603,6 +603,16 @@ async function runStudio(env) {
   }
 }
 
+/** The desktop owns Studio. Its quit-when-idle endpoint reports work without shutting it down. */
+async function studioBusy() {
+  if (!studio) return false;
+  const res = await fetch(`${studio.origin}/api/quit`, {
+    method: 'POST', headers: { 'x-studio-key': studio.key, 'content-type': 'application/json' },
+    body: JSON.stringify({ whenIdle: true }), signal: AbortSignal.timeout(3000),
+  });
+  return res.status === 409;
+}
+
 async function start() {
   /* updates (updates.mjs): Restart waits while an agent's turn runs or Studio exports, either would be lost */
   updates = startUpdates({
@@ -612,13 +622,7 @@ async function start() {
     onState: (next) => broadcast('desktop:update', next),
     prepareRestart: async () => {
       if (localAgents?.isBusy()) return { ok: false, error: 'agent-busy' };
-      /* Studio's quit-when-idle answers 409 while it exports; otherwise the window's Studio stays (studio-process.mjs
-         `stays`, 423), and is stopped in beforeInstall. No answer: no Studio, no export to lose. */
-      const res = studio && await fetch(`${studio.origin}/api/quit`, {
-        method: 'POST', headers: { 'x-studio-key': studio.key, 'content-type': 'application/json' },
-        body: JSON.stringify({ whenIdle: true }), signal: AbortSignal.timeout(3000),
-      }).catch(() => null);
-      return res?.status === 409 ? { ok: false, error: 'exporting' } : { ok: true };
+      return await studioBusy().catch(() => false) ? { ok: false, error: 'exporting' } : { ok: true };
     },
     /* what before-quit would do, done first (`quitting`), so the quit Squirrel starts is not held up or cancelled */
     beforeInstall: async () => {
@@ -698,7 +702,10 @@ async function start() {
   win.on('moved', saveState);
   win.on('enter-full-screen', () => broadcast('desktop:full-screen', true));
   win.on('leave-full-screen', () => broadcast('desktop:full-screen', false));
-  cancelWindowClose = keepWindowOnClose(win, { mac, isQuitting: () => quitting, save: saveState });
+  cancelWindowClose = keepWindowOnClose(win, {
+    mac, isQuitting: () => quitting, save: saveState,
+    ...(windows ? { shouldMinimize: async () => Boolean(localAgents?.isBusy()) || await studioBusy() } : {}),
+  });
   win.on('closed', () => { win = null; views.clear(); pagePresentation = null; app.quit(); });
 
   ipcMain.on('desktop:theme', (event, next) => { if (fromPage(event)) setTheme(next); });
@@ -750,7 +757,7 @@ async function start() {
   tabHandle('desktop:tabs:close', (self, { id }) => { void closeTab(typeof id === 'string' ? id : self); return { ok: true }; });
   tabHandle('desktop:tabs:move', (_self, { id, index }) => { if (tabs?.move(String(id), Number(index))) tellTabs(); return { ok: true }; });
   /* what a page shows now: its project's title, an export's progress; or its project gone */
-  tabHandle('desktop:tabs:report', (self, { title, exporting, gone }) => {
+  tabHandle('desktop:tabs:report', (self, { title, exporting, exportStage, gone }) => {
     if (!tabs) return { ok: false };
     /* its project gone (deleted, in this page or another; its folder gone): its tab closes, without asking. Asked of
        Studio first: a tab closed stops its agent, and a project missing only film.html is not gone (tabs.mjs projectGone) */
@@ -761,7 +768,11 @@ async function start() {
       }
       return { ok: true };
     }
-    tabs.report(self, { ...(typeof title === 'string' ? { title: title.slice(0, 200) } : {}), ...(exporting !== undefined ? { exporting: typeof exporting === 'number' ? exporting : null } : {}) });
+    tabs.report(self, {
+      ...(typeof title === 'string' ? { title: title.slice(0, 200) } : {}),
+      ...(exporting !== undefined ? { exporting: Number.isFinite(exporting) ? exporting : null } : {}),
+      ...(exportStage !== undefined ? { exportStage: typeof exportStage === 'string' ? exportStage.slice(0, 120) : null } : {}),
+    });
     tellTabs();
     return { ok: true };
   });

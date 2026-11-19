@@ -17,7 +17,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { existsSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, extname, join, relative, sep } from 'node:path';
 import { colorTagsOf, encoders, h264ColorTags, hardwareEncoder, hardwareOptions, onTheChip } from './encoders.mjs';
-import { kindOf, lutsOf, readFilmFile, srcHref } from './film-doc.mjs';
+import { clipOutsideRanges, kindOf, lutsOf, readFilmFile, srcHref } from './film-doc.mjs';
 import { ffmpeg, fileOf, hash, kill, outDir } from './shared.mjs';
 
 /** A key frame further apart than this is slow to seek to frame by frame. */
@@ -163,15 +163,16 @@ export function madeCopy(file, root, { recheck = false } = {}) {
 /**
  * The files of a film's video clips: film.html at `film` (a path in `root`, as a URL says it), as a render, a look or
  * a still of it plays them. `ungraded`: only those of clips not graded by LUTs (a graded one plays its graded copy).
- * @param {string} root @param {string} film @param {{ ungraded?: boolean }} [options]
+ * @param {string} root @param {string} film @param {{ ungraded?: boolean, timeline?: string, renderRanges?: [number, number][] }} [options]
  */
-export function filmVideos(root, film, { ungraded = false } = {}) {
+export function filmVideos(root, film, { ungraded = false, timeline, renderRanges } = {}) {
   let doc;
-  try { doc = readFilmFile(readFileSync(join(root, decodeURI(film)), 'utf8')).doc; } catch { return []; }
+  try { doc = readFilmFile(timeline ?? readFileSync(join(root, decodeURI(film)), 'utf8')).doc; } catch { return []; }
   const files = new Set();
   for (const track of doc?.tracks ?? []) {
+    if (renderRanges && track.hidden) continue;
     for (const clip of track.clips) {
-      if (kindOf(clip) !== 'video' || (ungraded && lutsOf(clip).length)) continue;
+      if (kindOf(clip) !== 'video' || (ungraded && lutsOf(clip).length) || (renderRanges && clip.disabled) || clipOutsideRanges(clip, renderRanges)) continue;
       try { files.add(fileOf(root, film, srcHref(clip.src))); } catch { /* a source out of the folder: not served either */ }
     }
   }
@@ -454,16 +455,18 @@ export function gradedCopy(root, key) {
 /**
  * The film's video clips graded by LUTs (lutsOf): film.html at `film` (a path in `root`, as a URL says it), each one's
  * file, LUT files and the part of the file it plays (gradeRange), once each.
- * @param {string} root @param {string} film @returns {{ file: string, luts: string[], range: { from: number, to: number } | null }[]}
+ * @param {string} root @param {string} film @param {{ timeline?: string, renderRanges?: [number, number][] }} [options]
+ * @returns {{ file: string, luts: string[], range: { from: number, to: number } | null }[]}
  */
-export function filmGrades(root, film) {
+export function filmGrades(root, film, { timeline, renderRanges } = {}) {
   let doc;
-  try { doc = readFilmFile(readFileSync(join(root, decodeURI(film)), 'utf8')).doc; } catch { return []; }
+  try { doc = readFilmFile(timeline ?? readFileSync(join(root, decodeURI(film)), 'utf8')).doc; } catch { return []; }
   const grades = new Map();
   for (const track of doc?.tracks ?? []) {
+    if (renderRanges && track.hidden) continue;
     for (const clip of track.clips) {
       const luts = lutsOf(clip);
-      if (!luts.length) continue;
+      if (!luts.length || (renderRanges && clip.disabled) || clipOutsideRanges(clip, renderRanges)) continue;
       try {
         const range = gradeRange(clip.time);
         const grade = { file: fileOf(root, film, srcHref(clip.src)), luts: luts.map((lut) => fileOf(root, film, srcHref(lut))), range };

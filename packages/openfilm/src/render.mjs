@@ -1,7 +1,7 @@
 // film render: the deliverable. Frames are rendered in parallel page instances, averaged
 // over the shutter for motion blur, encoded with tagged BT.709 color, and muxed with the mix of the film's sounds.
 import { spawn, spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { availableParallelism, freemem, totalmem } from 'node:os';
 import { basename, dirname, extname, join, resolve } from 'node:path';
 import { clipKind, FILM_FILE } from './film-doc.mjs';
@@ -11,7 +11,7 @@ import { encoderWait } from './encoder-wait.mjs';
 import { FilmPage, launch, SOFTWARE_GL } from './host.mjs';
 import { exactRate, ffmpegRate } from './rate.mjs';
 import { browserCopies, filmGrades, filmVideos, gradedCopies, gradeKey, gradeRange } from './seekable.mjs';
-import { ffmpeg, filmSound, fmt, kill, locate, mix, open, outDir, parseTarget, shown, UsageError, write } from './shared.mjs';
+import { ffmpeg, filmSound, fmt, hash, kill, locate, mix, open, outDir, parseTarget, shown, UsageError, write } from './shared.mjs';
 import { burned } from './burn.mjs';
 import { renderSelection, selectionClips, selectionFrame } from './render-ranges.mjs';
 import { isLoudness, LOUDNESS_RANGE, LOUDNESS_SLACK, loudnessText, toLoudness, TRUE_PEAK } from './loudness.mjs';
@@ -137,10 +137,20 @@ export async function render(args, opts = {}) {
      gives them back; else it starts its own and closes them */
   const pool = opts.browsers ?? null;
   const lent = pool ? await pool.take(Math.max(1, Number(opts.workers ?? 1))) : [];
+  /* Keep everything the original audio window or any rounded picture sample can use. */
+  const rate = exactRate(Number(opts.fps ?? 30));
+  const fps = rate.fps;
+  const samples = Math.max(1, Number(opts.samples ?? (opts.blur ? 8 : 1)));
+  const shutter = Number(opts.shutter ?? 0.5);
+  const reach = samples > 1 ? Math.abs(shutter) / (2 * fps) : 0;
+  const selectionRanges = range ? [range] : Array.isArray(opts.ranges) ? opts.ranges : [];
+  const renderRanges = selectionRanges.every((span) => Array.isArray(span) && span.length === 2 && span.every(Number.isFinite))
+    ? selectionRanges.map(([from, to]) => [Math.max(0, Math.min(from, Math.round(from * fps) / fps - reach)),
+      Math.max(to, Math.round(to * fps) / fps + Math.max(0, reach - 1 / fps))]) : [];
   let failed = true;
   let probe;
   try {
-    probe = await open(target, { ...(opts.root ? { root: opts.root } : {}), swap, missed, grade, ...(pool ? { browser: lent[0] } : {}) });
+    probe = await open(target, { root: opts.root, timeline: opts.timeline, renderRanges, swap, missed, grade, ...(pool ? { browser: lent[0] } : {}) });
   } catch (e) {
     await pool?.give(lent, { retire: true });
     throw e;
@@ -154,9 +164,6 @@ export async function render(args, opts = {}) {
      told at once (`onSoftware`), to say so while it waits */
   const software = SOFTWARE_GL.test(await probe.film.gpu().catch(() => ''));
   if (software) opts.onSoftware?.();
-  /* 29.97 is 30000/1001, as the footage shot at it is (rate.mjs) */
-  const rate = exactRate(Number(opts.fps ?? 30));
-  const fps = rate.fps;
   /** @type {Map<number, Promise<FilmPage>>} pages of the film that draw its captions alone, by their scale (direct.mjs) */
   const captionPages = new Map();
   const captionPage = (/** @type {number} */ k) => {
@@ -169,11 +176,12 @@ export async function render(args, opts = {}) {
     await Promise.allSettled(open.map((page) => page.then((p) => p.close())));
   };
   const film = isFilm ? entry : opts.root ? FILM_FILE : null;
+  const source = film === FILM_FILE ? { timeline: opts.timeline, renderRanges } : undefined;
   /* the film's videos graded by LUTs (SPEC.md --of-lut) get their graded copies, the ones the preview plays (a master
      export's of its own, as its other copies); one that can't be made is drawn as it is, and said. Made before the
      footage is looked at: a graded clip's copy is what is read straight (direct.mjs), and what its frame is drawn
      from when the two are compared */
-  const grades = film ? filmGrades(root, film) : [];
+  const grades = film ? filmGrades(root, film, source) : [];
   /** @type {string[]} the videos of grades that failed: played as they are, so they may need a copy as they are */
   const ungraded = [];
   if (grades.length) {
@@ -242,7 +250,6 @@ export async function render(args, opts = {}) {
   if (total <= 0) { await probe.close(); await pool?.give(lent); throw new UsageError(`nothing to render between ${fmt(from)} and ${fmt(to)}${meta.duration != null ? `: the film is ${fmt(meta.duration)} long` : ''}`); }
   if (range && range[1] > end) console.error(`openfilm render: ${fmt(range[0])}-${fmt(range[1])} runs past the film's end (${fmt(meta.duration)}): rendered to there`);
   const scale = opts.scale ?? (opts['4k'] ? 3840 / meta.width : 1);
-  const samples = Math.max(1, Number(opts.samples ?? (opts.blur ? 8 : 1)));
   // A host that has proved static picture intervals (isolated caption cues) may reuse the captured PNG between
   // these source-frame boundaries. Encoding and the output clock still include every frame, including alpha reads.
   if (opts.frameHolds != null && (!opts.alpha || !opts.silent || samples !== 1 || range || opts.ranges
@@ -250,7 +257,6 @@ export async function render(args, opts = {}) {
     await probe.close(); await pool?.give(lent); throw new UsageError('frameHolds requires an isolated, silent transparent render with frame-grid boundaries');
   }
   const frameHolds = opts.frameHolds == null ? null : new Set(opts.frameHolds);
-  const shutter = Number(opts.shutter ?? 0.5);
   const alpha = !!opts.alpha;
   /* the whole film is the person's, beside film.html; a stretch rendered to check something stays in the tool's folder */
   const out = resolve(opts.out ?? (range
@@ -306,7 +312,7 @@ export async function render(args, opts = {}) {
     const straightOnly = new Set(footage?.layers.filter((l) => l.file && !drawn.has(l.file)).map((l) => l.file));
     /* a file played only graded needs no copy as it is, though the page may have opened it before its graded copy was
        made (that copy is made first, above) */
-    const plain = new Set(film ? filmVideos(root, film, { ungraded: true }) : []);
+    const plain = new Set(film ? filmVideos(root, film, { ungraded: true, ...source }) : []);
     const gradedOnly = new Set(grades.map((g) => g.file).filter((file) => !plain.has(file) && !ungraded.includes(file)));
     const files = [...new Set([...[...videos].filter((file) => !gradedOnly.has(file)), ...plain, ...ungraded])].filter((file) => !straightOnly.has(file));
     /* one the browser does not decode then fails its first frame, by its clip (timeline.mjs): never drawn black */
@@ -332,6 +338,7 @@ export async function render(args, opts = {}) {
   const work = store.folder;
   const settingsFor = (/** @type {typeof format} */ f) => settingsOf({ entry, root, frames: [f0, f1], fps: ffmpegRate(rate), size, scale, samples, shutter, alpha,
     duration: Number.isFinite(end) ? end : null, fine: !!opts.fine, spans: selection?.spans ?? null, format: f,
+    ...(opts.timeline !== undefined ? { timeline: hash(Buffer.from(opts.timeline)) } : {}),
     ...(frameHolds ? { frameHolds: [...frameHolds] } : {}),
     ...(alpha && samples > 1 ? { alphaMix: 1 } : {}) });
   /* chunks a render that stopped drew with alpha, or without the chip after it gave up, are drawn on so */
@@ -364,6 +371,37 @@ export async function render(args, opts = {}) {
   const problems = [];
   /** @type {Awaited<ReturnType<typeof toLoudness>> | null} */
   let loud = null;
+  const audioStop = new AbortController();
+  const audioSignal = opts.signal ? AbortSignal.any([audioStop.signal, opts.signal]) : audioStop.signal;
+  let audioDir;
+  const audioCodec = format.audio;
+  let waitingOnAudio = false;
+  let audioPhase = null;
+  const audioStatus = (phase) => {
+    audioPhase = phase;
+    opts.onAudioPhase?.(phase);
+    if (phase && waitingOnAudio) opts.onPhase?.(phase);
+  };
+  const prepareSound = async (codec) => {
+    audioStatus('audio');
+    const all = await filmSound(probe, selection ? 0 : from, audioSignal);
+    const clips = selection ? selectionClips(all, selection.spans) : all;
+    if (!clips.length) return null;
+    /* Independent of picture chunks: an encoder fallback can reset those while the mix is being written. */
+    audioDir ??= mkdtempSync(join(dirname(work), `.parts-${process.pid}-audio-`));
+    const ext = extname(out);
+    const sound = join(audioDir, ext === '.mp4' ? 'sound.m4a' : ext === '.webm' ? 'sound.webm' : 'sound.wav');
+    if (opts.loudness != null) {
+      const wav = join(audioDir, 'mix.wav');
+      await mix(clips, to - from, wav, ['-c:a', 'pcm_f32le'], { signal: audioSignal });
+      audioStatus('loudness');
+      loud = await toLoudness(wav, sound, codec, { lufs: opts.loudness, signal: audioSignal });
+    } else await mix(clips, to - from, sound, codec, { limit: true, signal: audioSignal });
+    return sound;
+  };
+  const mixSound = (codec) => prepareSound(codec).finally(() => audioStatus(null));
+  const audio = opts.silent || !meta.sounds.length ? Promise.resolve(null) : mixSound(audioCodec);
+  audio.catch(() => {});
   /* cancelled (`signal`): stop now, not once every browser has drawn the frame it is on; the finally closes them */
   const cancelled = opts.signal?.aborted ? Promise.reject(new Error('cancelled'))
     : new Promise((_, fail) => opts.signal?.addEventListener('abort', () => fail(new Error('cancelled')), { once: true }));
@@ -524,18 +562,12 @@ export async function render(args, opts = {}) {
     if (process.stderr.isTTY && !opts.onProgress) process.stderr.write('\n');
     for (const p of pages) problems.push(...p.problems);
 
-    const allClips = opts.silent ? [] : await filmSound(probe, selection ? 0 : from);
-    const clips = selection ? selectionClips(allClips, selection.spans) : allClips;
-    if (opts.signal?.aborted) throw new Error('cancelled');
-    const sound = clips.length ? join(work, `sound${extname(out) === '.mp4' ? '.m4a' : extname(out) === '.webm' ? '.webm' : '.wav'}`) : null;
-    /* --loudness: the mix as it is (32-bit float: sounds added together pass full scale), brought to the target as it
-       is encoded; the picture is not touched. Without it, the mix as it is, its peaks caught under the ceiling: sounds
-       added together never clip */
-    if (sound && opts.loudness != null) {
-      const wav = join(work, 'mix.wav');
-      await mix(clips, to - from, wav, ['-c:a', 'pcm_f32le']);
-      loud = await toLoudness(wav, sound, format.audio, { lufs: opts.loudness, signal: opts.signal });
-    } else if (sound) await mix(clips, to - from, sound, format.audio, { limit: true });
+    waitingOnAudio = true;
+    if (audioPhase) opts.onPhase?.(audioPhase);
+    let sound = await audio;
+    if (sound && format.audio.join('\0') !== audioCodec.join('\0')) sound = await mixSound(format.audio);
+    waitingOnAudio = false;
+    audioSignal.throwIfAborted();
     const after = [...format.tag, ...(extname(out) === '.mp4' ? ['-movflags', '+faststart'] : [])];
     /* the parts straight into `out`, with the sound: a page's frames are on the disk twice at most while it is written,
        not three times (a long page drawn as PNG for an editing project is gigabytes). A part with nothing to add is
@@ -546,16 +578,26 @@ export async function render(args, opts = {}) {
        bitrate as the parts are joined, from the parts as they are. Should that fail, the parts are the film */
     const ceiling = format.ceiling;
     const over = !!ceiling && parts.reduce((bytes, p) => bytes + statSync(p).size, 0) * 8 > ceiling.bits * (total / fps);
-    if (over || parts.length > 1 || sound || after.length || !moved(parts[0], out)) {
+    const needsJoin = over || parts.length > 1 || sound || after.length;
+    if (!needsJoin) opts.onPhase?.('saving');
+    if (needsJoin || !moved(parts[0], out)) {
       /* names, not paths: concat reads them beside the list, and a path can hold a `'` (C:\\Users\\O'Brien) */
       if (parts.length > 1) writeFileSync(join(work, 'list.txt'), parts.map((p) => `file '${basename(p)}'`).join('\n'));
       const video = parts.length > 1 ? ['-f', 'concat', '-safe', '0', '-i', join(work, 'list.txt')] : ['-i', parts[0]];
-      const joined = (/** @type {string[]} */ codec) => ffmpeg([...video, ...(sound ? ['-i', sound, '-map', '0:v', '-map', '1:a'] : []), ...codec, ...after, out]).done;
+      const joined = (/** @type {string[]} */ codec) => ffmpeg([...video, ...(sound ? ['-i', sound, '-map', '0:v', '-map', '1:a'] : []), ...codec, ...after, out], { signal: opts.signal }).done;
+      if (over) opts.onPhase?.('encoding');
       const again = over ? await joined([...ceiling.video, '-c:a', 'copy']).then(() => true, (e) => { if (opts.signal?.aborted) throw e; return false; }) : false;
-      if (!again) await joined(['-c', 'copy']);
+      if (!again) {
+        opts.onPhase?.('muxing');
+        await joined(['-c', 'copy']);
+      }
     }
     failed = false;
   } finally {
+    if (!failed) opts.onPhase?.('finishing');
+    audioStop.abort();
+    await audio.catch(() => {});
+    if (audioDir) try { rmSync(audioDir, { recursive: true, force: true, maxRetries: 5 }); } catch { /* swept on the next render */ }
     for (const off of unwatch) off();
     /* a render that ended takes its chunks away, and so does one cancelled on purpose (a 4K export's chunks are tens of
        GB, out of sight); one that stopped on its own (an error, a crash, the app quit) keeps those it finished for the next */
@@ -604,51 +646,49 @@ function loudnessLines(lufs, loud, silent) {
     ...(landed ? [] : [`! the sound did not land on ${lufs} LUFS under ${TRUE_PEAK} dBTP: a stretch may be clipped or far louder than the rest; look at the mix`])];
 }
 
-/**
- * One browser per three cores, at most four, and memory to spare (a page with its media takes 1.5 GB or more, and the
- * encoder and the person's own apps need theirs): a render leaves the computer usable while it runs.
- */
 /** The memory a browser drawing a film takes, with its share of the encoding (a 1080p film's page measured 1.1 GB). */
 const WORKER_MEMORY = 1.5 * 2 ** 30;
 /** Memory left free for the person's own apps. */
 const RESERVE = 2 * 2 ** 30;
 /** Frames worth a browser of their own: for fewer, starting one costs more than it saves. */
 const FRAMES_PER_WORKER = 60;
-/** More browsers stop drawing faster: they share one graphics chip (measured: three draw twice as fast as one;
- * past four, slower, and eight ran out of resources). */
+/** Default limit for machines without separately reported performance and efficiency cores. */
 const MAX_WORKERS = 4;
 
 /**
- * What a render may use of this machine: its performance cores (Apple silicon's efficiency cores are slow for
- * drawing; elsewhere a core is two threads) and the memory free now. On a Mac `os.freemem()` counts only memory never
+ * What a render may use of this machine: its performance cores, any separately reported efficiency cores, and the
+ * memory free now. On a Mac `os.freemem()` counts only memory never
  * used, a fraction of what is free: the system's own share of free memory is read instead.
  */
 export function machine() {
   const sysctl = (/** @type {string} */ name) => Number(spawnSync('sysctl', ['-n', name], { encoding: 'utf8', timeout: 2000 }).stdout?.trim());
   let cores = Math.max(1, Math.floor(availableParallelism() / 2));
+  let efficiencyCores = 0;
   let available = freemem();
   if (process.platform === 'darwin') {
     const performance = sysctl('hw.perflevel0.physicalcpu');
     if (performance > 0) cores = performance;
+    if (process.arch === 'arm64') efficiencyCores = sysctl('hw.perflevel1.physicalcpu') || 0;
     const free = sysctl('kern.memorystatus_level');
     if (free > 0 && free <= 100) available = (totalmem() * free) / 100;
   }
-  return { cores, available };
+  return { cores, efficiencyCores, available };
 }
 
 /**
- * How many browsers draw a render: one for each performance core but one (the person keeps one), as many as the
- * memory free now holds with room left for the person's apps, and enough frames for each; at most four. The
- * computer stays usable while it renders: a render takes only memory that is free when it starts.
- * @param {{ cores: number, available: number }} [budget] @param {number} [frames]
+ * How many browsers draw a render. A hybrid Mac with plentiful cores can put more work on its media pipeline,
+ * provided every worker fits in the free memory budget and has enough frames to draw.
+ * @param {{ cores: number, available: number, efficiencyCores?: number }} [budget] @param {number} [frames]
  */
-export function defaultWorkers({ cores, available } = machine(), frames = Infinity) {
-  return Math.max(1, Math.min(MAX_WORKERS, cores - 1, Math.floor((available - RESERVE) / WORKER_MEMORY), Math.floor(frames / FRAMES_PER_WORKER)));
+export function defaultWorkers({ cores, available, efficiencyCores = 0 } = machine(), frames = Infinity) {
+  const hybrid = cores >= 4 && efficiencyCores >= 4;
+  const cpu = hybrid ? Math.min(5, cores + 1) : Math.min(MAX_WORKERS, cores - 1);
+  return Math.max(1, Math.min(cpu, Math.floor((available - RESERVE) / WORKER_MEMORY), Math.floor(frames / FRAMES_PER_WORKER)));
 }
 
 /** A manual Studio limit overrides Auto's hardware recommendation, while short pages still earn their browsers.
  * The export API validates 1–8; Auto retains the conservative memory/core budget above.
- * @param {number | undefined} requested @param {number} [frames] @param {{cores:number,available:number}} [budget] */
+ * @param {number | undefined} requested @param {number} [frames] @param {{cores:number,available:number,efficiencyCores?:number}} [budget] */
 export function renderWorkerLimit(requested, frames = Infinity, budget = machine()) {
   return requested == null ? defaultWorkers(budget, frames)
     : Math.max(1, Math.min(requested, Math.floor(frames / FRAMES_PER_WORKER)));

@@ -2,6 +2,7 @@
  * What the canvas does to a picture or a clip on this computer, without a service: a picture cut into the cells of a
  * grid (its panels found by their gutters), a clip's frame taken as a picture. Each gives files to bring into the project.
  */
+import { cannotDecode, prepareVideoCopy } from '@/lib/video-playback';
 
 const load = (src: string) => new Promise<HTMLImageElement>((done, fail) => {
   const img = new Image();
@@ -143,7 +144,7 @@ export async function splitGrid(src: string, rows: number, cols: number, base: s
 }
 
 /** A clip's frame at `seconds` (its first, without one), as a PNG. */
-export async function frameOf(src: string, seconds: number, name: string): Promise<File> {
+export async function frameOf(src: string, seconds: number, name: string, copy?: string): Promise<File> {
   const video = document.createElement('video');
   video.crossOrigin = 'anonymous';
   video.muted = true;
@@ -176,6 +177,10 @@ export async function frameOf(src: string, seconds: number, name: string): Promi
     canvas.height = video.videoHeight;
     canvas.getContext('2d')!.drawImage(video, 0, 0);
     return png(canvas, name);
+  } catch (error) {
+    if (!copy || !cannotDecode(video)) throw error;
+    const playable = await prepareVideoCopy(copy, AbortSignal.timeout(180_000));
+    return frameOf(playable, seconds, name);
   } finally {
     video.removeAttribute('src');
     video.load();

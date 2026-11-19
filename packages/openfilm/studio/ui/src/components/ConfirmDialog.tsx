@@ -11,6 +11,7 @@ export function ConfirmDialog({
   confirmLabel,
   cancelLabel,
   danger = false,
+  initialFocus = 'confirm',
   altLabel,
   onAlt,
   onConfirm,
@@ -22,6 +23,7 @@ export function ConfirmDialog({
   confirmLabel?: string;
   cancelLabel?: string;
   danger?: boolean;
+  initialFocus?: 'confirm' | 'cancel';
   /** a second answer besides confirming, between Cancel and the confirm button */
   altLabel?: string;
   onAlt?: () => void;
@@ -32,17 +34,19 @@ export function ConfirmDialog({
   const dialogRef = React.useRef<HTMLDivElement>(null);
   const cancelButtonRef = React.useRef<HTMLButtonElement>(null);
   const confirmButtonRef = React.useRef<HTMLButtonElement>(null);
+  const actions = React.useRef({ onCancel, onConfirm });
+  actions.current = { onCancel, onConfirm };
 
   React.useEffect(() => {
     if (!open) return;
-    /* focus starts on the confirm button, so Enter confirms: the person already chose once. It is safe because
-       focus must be inside the dialog; Esc, or Tab to Cancel and Enter, backs out. */
     const previouslyFocused = document.activeElement as HTMLElement | null;
-    confirmButtonRef.current?.focus();
+    (initialFocus === 'cancel' ? cancelButtonRef : confirmButtonRef).current?.focus();
     const onKey = (e: KeyboardEvent) => {
+      if (e.defaultPrevented) return;
       if (e.key === 'Escape') {
+        e.preventDefault();
         e.stopPropagation();
-        onCancel();
+        actions.current.onCancel();
         return;
       }
       if (e.key === 'Enter') {
@@ -51,7 +55,7 @@ export function ConfirmDialog({
           // Enter on another button (Cancel, the second answer) presses that button
           if (target instanceof HTMLButtonElement && target !== confirmButtonRef.current) return;
           e.preventDefault();
-          onConfirm();
+          actions.current.onConfirm();
         }
       }
     };
@@ -60,7 +64,7 @@ export function ConfirmDialog({
       window.removeEventListener('keydown', onKey);
       previouslyFocused?.focus?.();
     };
-  }, [open, onCancel, onConfirm]);
+  }, [open, initialFocus]);
 
   if (!open || typeof document === 'undefined') return null;
 
@@ -74,6 +78,12 @@ export function ConfirmDialog({
         ref={dialogRef}
         className="w-full max-w-[420px]"
         onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => {
+          if (e.key !== 'Escape') return;
+          e.preventDefault();
+          e.stopPropagation();
+          onCancel();
+        }}
         role="dialog"
         aria-modal="true"
         aria-label={title}

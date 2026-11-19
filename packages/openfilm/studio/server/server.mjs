@@ -31,7 +31,7 @@ import { CoverFilmError, coverFolder, coverFrame, coverLook, coverLooks, coverPi
 import { readPage, writePage } from './page-text.mjs';
 import { FileError, bringIn, collect, extractAudio, freezeFrame, importFile, inside, listFiles, makeFolder, moveCheck, moveFile, readable, relink, trashFile } from './files.mjs';
 import { mediaReferences } from '../../src/media-links.mjs';
-import { ExportError, createExports, draftApps, exportCapabilities, exportFilmStamp, exportsRoot, projectSizes, renderDefaults } from './exports.mjs';
+import { ExportError, createExports, draftApps, exportCapabilities, exportsRoot, projectSizes, renderDefaults } from './exports.mjs';
 import { MediaError, frame, loudness, mixLoudness, mixedWaveform, poster, probe, waveform } from './derived.mjs';
 import { HistoryError, checkoutVersion, copyVersion, deleteVersions, discardChanges, keepAside, log, recoverVersions, restoreFilm, saveVersion, status as historyStatus, versionFilesChanged } from './history.mjs';
 import * as personEdits from './person-edits.mjs';
@@ -52,8 +52,8 @@ export { vaultSealer } from './keys.mjs';
 import { BrowseError, browseFolder, browsePlaces } from './browse.mjs';
 import { exampleFile, exampleFolder, listExamples, listNews } from './examples.mjs';
 import { pickFiles, pickFolder } from './folder-picker.mjs';
-import { readPrefs, writePrefs } from './prefs.mjs';
-import { ensureProxies, playChecks } from './proxies.mjs';
+import { PROXY_HEIGHTS, readPrefs, writePrefs } from './prefs.mjs';
+import { ensurePlayback, ensureProxies, playChecks, readyProxy } from './proxies.mjs';
 import { ensurePreviews, knownLate, pausePreviews, cancelPreviews, clearPreviews, retryPreviews } from './preview-cache.mjs';
 import { stopVisionDownloads } from '../../src/vision-assets.mjs';
 import { npmOpenfilm, olderThanThis } from '../client.mjs';
@@ -560,6 +560,7 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
         return json(res, 200, {});
       }
       if (sub === 'file' && req.method === 'GET') return sendMedia(req, res, readable(lib, rel(at)));
+      if (sub === 'playback' && (req.method === 'GET' || req.method === 'POST')) return sendPlayback(req, res, lib, rel(at), url);
       if (sub === 'poster' && req.method === 'GET') return sendMedia(req, res, await savedCall(() => bundlePoster(at)));
       if (sub === 'media' && req.method === 'GET') {
         const what = url.searchParams.get('what');
@@ -1372,20 +1373,25 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     if (rest === 'proxies' && req.method === 'POST') {
       const { proxies } = readPrefs();
       const { undecoded } = /** @type {{ undecoded?: unknown }} */ (await readJson(req));
-      const videos = (await listFiles(project.path)).files.filter((f) => f.kind === 'video').map((f) => f.path);
+      const paths = new Set((await listFiles(project.path)).files.filter((f) => f.kind === 'video').map((f) => f.path));
       /* the footage most of the film's clips play first: its proxy is made first, the one a scrub needs most */
       const uses = new Map();
       for (const track of /** @type {{ clips: { src: string }[] }[]} */ ((await readProjectFilm(project.path).catch(() => null))?.doc?.tracks ?? [])) {
         for (const clip of track.clips) {
-          let path = String(clip.src).split('#')[0].replace(/^\.\//, '');
-          try { path = decodeURI(path); } catch { /* as written */ }
+          let path = String(clip.src).split(/[?#]/)[0].replace(/^(?:\.\/)+/, '');
+          if (!paths.has(path)) try { path = decodeURIComponent(path); } catch { /* as written */ }
+          if (clipKind(path) !== 'video' || !servable(project.path, path)) continue;
+          paths.add(path);
           uses.set(path, (uses.get(path) ?? 0) + 1);
         }
       }
-      videos.sort((a, b) => (uses.get(b) ?? 0) - (uses.get(a) ?? 0));
-      const told = Array.isArray(undecoded) ? undecoded.filter((rel) => typeof rel === 'string' && videos.includes(rel)) : [];
+      const videos = [...paths].sort((a, b) => (uses.get(b) ?? 0) - (uses.get(a) ?? 0));
+      const told = Array.isArray(undecoded) ? undecoded.filter((rel) => typeof rel === 'string' && paths.has(rel)) : [];
       const states = await ensureProxies(project.path, videos, proxies.height, { on: proxies.on, undecoded: told });
       return json(res, 200, { on: proxies.on, height: proxies.height, states, checks: await playChecks(project.path, videos) });
+    }
+    if (rest === 'playback' && (req.method === 'GET' || req.method === 'POST')) {
+      return sendPlayback(req, res, project.path, url.searchParams.get('path') ?? '', url);
     }
     /* renders of the stretches the preview played late (preview-cache.mjs), asked for when not made yet: each one's
        name and state, at the proxies' size */
@@ -1609,7 +1615,14 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
        how many subtitle cues the film has (the subtitle choices need some), and how big the project and its parts are */
     if (rest === 'exports') {
       if (req.method === 'GET') {
-        return json(res, 200, { exports: exports.list(project.id), folder: exportsRoot(), can: await exportCapabilities(), render: renderDefaults(), drafts: draftApps(), subtitles: await exports.subtitles(project.path), captionTracks: await exports.captionTracks(project.path), project: await projectSizes(project.path) });
+        const view = url.searchParams.get('view');
+        if (view === 'queue') return json(res, 200, { exports: exports.list(project.id) });
+        if (view === 'captions') return json(res, 200, await exports.captionInfo(project.path));
+        if (view === 'project') return json(res, 200, await projectSizes(project.path));
+        const settings = async () => ({ folder: exportsRoot(), can: await exportCapabilities(), render: renderDefaults(), drafts: draftApps() });
+        if (view === 'settings') return json(res, 200, await settings());
+        const [config, captions, sizes] = await Promise.all([settings(), exports.captionInfo(project.path), projectSizes(project.path)]);
+        return json(res, 200, { exports: exports.list(project.id), ...config, ...captions, project: sizes });
       }
       if (req.method === 'POST') {
         exportRoots.set(project.id, project.path);
@@ -1621,9 +1634,6 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
         /* several at once: `{ jobs: [ask…], folder? }` → `{ exports }`; one: the ask itself → `{ export }` */
         if (body && typeof body === 'object' && 'jobs' in body) {
           const request = Array.isArray(body.jobs) ? { ...body, jobs: body.jobs.map(withSampling) } : body;
-          if (Array.isArray(request.jobs) && request.jobs.some((/** @type {any} */ job) => job?.kind !== 'project') && typeof request.filmRev === 'string') {
-            await exportFilmStamp(project.path, request.filmRev);
-          }
           return json(res, 200, { exports: exports.startAll(project, request) });
         }
         return json(res, 200, { export: exports.start(project, withSampling(body)) });
@@ -1714,7 +1724,7 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
       if (status === 500) console.error(e);
       if (res.headersSent) return res.end();
       json(res, status, { error: e instanceof Error ? e.message : String(e), ...(e instanceof HttpError ? e.extra : {}),
-        ...((e instanceof ProjectError || e instanceof FetchError || e instanceof BrowseError) && e.code ? { code: e.code } : {}),
+        ...((e instanceof ProjectError || e instanceof FetchError || e instanceof BrowseError || e instanceof ExportError) && e.code ? { code: e.code } : {}),
         ...(e instanceof HistoryError && e.code ? { code: e.code } : {}) });
     });
   });
@@ -2034,6 +2044,15 @@ function pictureType(/** @type {Buffer} */ bytes) {
   return head === 'RIFF' ? 'image/webp' : head === '\x89PNG' ? 'image/png' : 'image/jpeg';
 }
 
+/** @param {import('node:http').IncomingMessage} req @param {import('node:http').ServerResponse} res @param {string} root @param {string} rel @param {URL} url */
+async function sendPlayback(req, res, root, rel, url) {
+  if (clipKind(rel) !== 'video') throw new HttpError(400, 'path: a video file');
+  const asked = Number(url.searchParams.get('height'));
+  const height = PROXY_HEIGHTS.includes(asked) ? asked : readPrefs().proxies.height;
+  if (req.method === 'POST') return json(res, 200, { ...await ensurePlayback(root, rel, height), height });
+  return sendMedia(req, res, readyProxy(root, rel, height), { check: true });
+}
+
 /**
  * A picture or a video from this computer, a range answered as one (a preview is seeked in); none: 404.
  * @param {import('node:http').IncomingMessage} req @param {import('node:http').ServerResponse} res @param {string | null | undefined} file
@@ -2051,6 +2070,7 @@ function sendMedia(req, res, file, { keep = false, check = false } = {}) {
   const type = {
     '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp', '.gif': 'image/gif', '.avif': 'image/avif', '.svg': 'image/svg+xml',
     '.mp4': 'video/mp4', '.m4v': 'video/mp4', '.webm': 'video/webm', '.mov': 'video/quicktime',
+    '.mkv': 'video/x-matroska', '.avi': 'video/x-msvideo', '.ogv': 'video/ogg',
     '.mp3': 'audio/mpeg', '.m4a': 'audio/mp4', '.aac': 'audio/aac', '.wav': 'audio/wav', '.ogg': 'audio/ogg', '.opus': 'audio/ogg', '.flac': 'audio/flac', '.weba': 'audio/webm',
   }[extname(file).toLowerCase()] ?? 'application/octet-stream';
   const range = /^bytes=(\d*)-(\d*)$/.exec(String(req.headers.range ?? ''));

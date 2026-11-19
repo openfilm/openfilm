@@ -81,11 +81,10 @@ async function cached(/** @type {string} */ root, /** @type {string} */ kind, /*
  */
 export async function probe(root, rel) {
   const { abs, key } = await source(root, rel);
-  /* `.4`: since the size is as shown (an older answer has a turned video's sides as stored), with the codec, its
-     profile and level */
-  const bytes = await cached(root, 'probe', `${key}.4.json`, async () => {
+  const bytes = await cached(root, 'probe', `${key}.5.json`, async () => {
     const out = JSON.parse((await tool('ffprobe', ['-v', 'error', '-print_format', 'json', '-show_format', '-show_streams', abs])).toString());
-    const video = out.streams?.find((/** @type {{ codec_type: string }} */ s) => s.codec_type === 'video');
+    const video = out.streams?.find((/** @type {{ codec_type: string, disposition?: { attached_pic?: number } }} */ s) =>
+      s.codec_type === 'video' && !s.disposition?.attached_pic);
     const audio = out.streams?.some((/** @type {{ codec_type: string }} */ s) => s.codec_type === 'audio');
     const [n, d] = String(video?.avg_frame_rate ?? '0/1').split('/').map(Number);
     const duration = Number(out.format?.duration);
@@ -97,6 +96,7 @@ export async function probe(root, rel) {
       ...(d && n ? { fps: Math.round((n / d) * 100) / 100 } : {}),
       ...(video?.codec_name ? { codec: String(video.codec_name), pixfmt: String(video.pix_fmt ?? '') } : {}),
       ...(video?.profile ? { profile: String(video.profile) } : {}),
+      ...(video && hasAlpha(video) ? { alpha: true } : {}),
       ...(Number(video?.level) > 0 ? { level: Number(video.level) } : {}),
       audio: Boolean(audio),
     }));

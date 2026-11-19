@@ -7,7 +7,7 @@ import React from 'react';
  * such as the button that introduces the desktop app.
  */
 /** A tab of the app's window (`tabs` below): a project's, its title as Studio shows it. */
-export interface HostTab { id: string; projectId: string; title: string; active: boolean; working: boolean; asking: boolean; exporting: number | null }
+export interface HostTab { id: string; projectId: string; title: string; active: boolean; working: boolean; asking: boolean; exporting: number | null; exportStage?: string }
 
 /** Settings → Developer, as the app keeps it (`developer` below). */
 export interface HostDeveloper { logs: boolean; changes: boolean }
@@ -222,7 +222,7 @@ export interface StudioHost {
     /** a project's tab: shown, opened when it is not */
     open: (projectId: string) => void;
     move: (id: string, index: number) => void;
-    report: (state: { title?: string; exporting?: number | null; gone?: boolean }) => void;
+    report: (state: { title?: string; exporting?: number | null; exportStage?: string | null; gone?: boolean }) => void;
     /** projects this page deleted: their tabs close together, none of them to be opened again */
     gone?: (projectIds: string[]) => Promise<unknown>;
     /** another tab's title, its project renamed from this page's tabs (its page may be gone, and cannot say it) */

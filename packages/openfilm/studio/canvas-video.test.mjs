@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { chromium } from 'playwright-core';
@@ -348,6 +348,57 @@ test('a canvas video uploads in place and keeps its frame while playing, renamin
     await highlighted.waitFor();
     assert.equal(await library.getByRole('button', { name: 'Media', exact: true }).getAttribute('aria-pressed'), 'true');
     assert.equal(await page.locator('[data-work-mode="canvas"]').count(), 1);
+
+    // Simulate a decoder refusing the original even though the codec check considers WebM playable.
+    await page.route('**/assets/clip.webm?of-original=1&v=*', (route) => route.fulfill({ status: 415 }));
+    const requestsCopy = page.waitForRequest((request) => request.method() === 'POST'
+      && new URL(request.url()).pathname.endsWith('/playback') && new URL(request.url()).searchParams.get('path') === 'assets/clip.webm');
+    await page.reload();
+    await page.locator('[data-work-mode]').first().waitFor();
+    await showWorkbench(page, 'canvas');
+    await requestsCopy;
+    await page.waitForFunction((nodeId) => {
+      const compatible = document.querySelector(`[data-id="${nodeId}"] video`);
+      return compatible?.currentSrc.includes('/playback?') && compatible.readyState >= 2;
+    }, id);
+    assert.equal(await node.getByText('Video could not be played', { exact: true }).count(), 0);
+    await showWorkbench(page, 'edit');
+    const libraryToggle = page.locator('[data-viewer-library]');
+    if (await libraryToggle.getAttribute('aria-pressed') === 'false') await libraryToggle.click();
+    await asset.dblclick();
+    await page.waitForFunction(() => {
+      const source = document.querySelector('video[data-asset-preview-control]');
+      return source?.currentSrc.includes('/playback?') && source.readyState >= 2;
+    });
+
+    // A clip in a scene folder also recovers in the editing preview, outside the project's asset listing.
+    await mkdir(join(root, 'scene'));
+    await copyFile(input, join(root, 'scene', 'late.webm'));
+    await page.route('**/scene/late.webm', async (route) => {
+      const response = await route.fetch();
+      if (response.headers()['content-type'] === 'video/webm') await route.fulfill({ status: 415 });
+      else await route.fulfill({ response });
+    });
+    const timelineRequestsCopy = page.waitForRequest((request) => request.method() === 'POST'
+      && request.url().endsWith('/proxies') && request.postDataJSON().undecoded.includes('scene/late.webm'));
+    await writeFile(join(root, 'film.html'), filmHtml({
+      stage: { w: 1280, h: 720 }, tracks: [{ clips: [{ id: 'late', src: 'scene/late.webm', time: [0, 4] }] }],
+    }));
+    await page.reload();
+    await page.locator('[data-work-mode]').first().waitFor();
+    await showWorkbench(page, 'edit');
+    await timelineRequestsCopy;
+    const timelineVideo = page.frameLocator('iframe[title="film"]:not([data-loading]):not([data-leaving])').locator('video[src*="late.webm"]').first();
+    await timelineVideo.waitFor({ state: 'attached' }).catch(async (error) => {
+      const diagnostics = await Promise.all(page.frames().filter((f) => f.url().includes('/film.html')).map((f) => f.evaluate(() => ({
+        url: location.href, videos: [...document.querySelectorAll('video')].map((v) => [v.outerHTML.slice(0, 300), v.readyState, v.error?.message]),
+      }))));
+      throw new Error(`Timeline video did not mount: ${JSON.stringify(diagnostics)}`, { cause: error });
+    });
+    assert.ok(await timelineVideo.evaluate((v) => v.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA || new Promise((done) => {
+      v.addEventListener('loadeddata', () => done(true), { once: true });
+      window.setTimeout(() => done(false), 5000);
+    })));
     assert.deepEqual(errors, []);
   } finally {
     releaseUpload?.();

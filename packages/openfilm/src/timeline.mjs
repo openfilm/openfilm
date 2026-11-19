@@ -2,7 +2,7 @@
 // in host.mjs); the file's own elements are the clips: an <iframe> a web page, a <video>, an <img> a still, an
 // <audio> a sound for the mix. Where each plays and sits is what film-doc.mjs reads in the file, the same reading
 // Studio plays and exports by; how each looks is the file's own CSS. Track 0, the first <section>, is on top.
-import { MEDIA_RATE_MAX, MEDIA_RATE_MIN, registerEffects, clipFade, clipSpan, clipTag, declarations, fadeGain, filmHead, fittedFade, keyframeBlocks, kindOf, lutsOf, mediaPlays, pictureLutsOf, parseFilm, pictureRect, readFilmFile, sourceAt, srcHref } from './film-doc.mjs';
+import { MEDIA_RATE_MAX, MEDIA_RATE_MIN, registerEffects, clipFade, clipOutsideRanges, clipSpan, clipTag, declarations, fadeGain, filmHead, fittedFade, keyframeBlocks, kindOf, lutsOf, mediaPlays, pictureLutsOf, parseFilm, pictureRect, readFilmFile, sourceAt, srcHref } from './film-doc.mjs';
 import { override, restore } from './overrides.mjs';
 import { CAPTION_BASE_CSS, cueCss, cueLayout, cueNodes, readVtt, regionBox } from './captions.mjs';
 import { clearVideoEffects, drawVideoEffects, hideVideoEffects, suspendVideoEffects, retryVideoEffects, videoEffectsOn, videoEffectsState, setVideoPreview, clearVideoAnalysisCache } from './video-effects.mjs';
@@ -54,6 +54,7 @@ const url = (src) => new URL(srcHref(src), location.href);
 /* an editor's preview (`?film-missing=skip`) plays on past a clip whose file is not there: the clip keeps its time,
    but is neither loaded, drawn nor heard. Anything else (a check, an export) says the missing file and stops */
 const SKIP_MISSING = new URL(location.href).searchParams.get('film-missing') === 'skip';
+const renderRanges = window.filmHost?.renderRanges;
 const ready = (a) => Promise.resolve(typeof a.ready === 'function' ? a.ready() : a.ready);
 
 /**
@@ -1349,7 +1350,15 @@ async function load(row, track, ti, el) {
   const kind = kindOf(row);
   /* the element's own style as the file wrote it, its place (left, top…) included: place() writes over that */
   const c = { kind, id: row.id, src: row.src, track: ti, el, node: el, touched: new Map(), found: [], drawn: false, shown: false, css: el.getAttribute('style') ?? '' };
-  if (kind === 'sound') {
+  const hidden = renderRanges && track.hidden;
+  const inactive = renderRanges && row.time?.length === 2 && (row.disabled || (kind === 'sound' && track.muted));
+  if (hidden || inactive || clipOutsideRanges(row, renderRanges)) {
+    /* Visible tracks retain their exact clock. A hidden track does not contribute to the film's duration. */
+    c.missing = true;
+    if (hidden && row.time?.length !== 2) c.native = (row.time?.[0] ?? 0) + 0.001;
+    c.nw = stage.w; c.nh = stage.h;
+    if (kind === 'sound') c.el = null;
+  } else if (kind === 'sound') {
     /* a sound is heard in the mix (see hear), never by its element */
     el.pause?.();
     el.preload = 'none';
@@ -1391,8 +1400,8 @@ async function load(row, track, ti, el) {
     c.native = Number.isFinite(length) && length > 0 ? length : undefined;
     c.inner = (c.win.__filmSounds?.() ?? []).map((s) => ({ ...s }));
     if ([...pagesAwake].filter((p) => p.child).length > PAGES_AWAKE) restPage(c);
-  } else if (SKIP_MISSING && row.time?.length === 2) {
-    /* an editor's preview: a page whose #t= is its length opens when the playhead comes near (see near), its own
+  } else if ((SKIP_MISSING || renderRanges) && row.time?.length === 2) {
+    /* A page whose #t= is its length opens when a frame needs it (see near), its own
        length and size learned then (see wakePage); the film is up without waiting for every page of a long film */
     c.row = row;
     c.unread = true;
@@ -1608,7 +1617,7 @@ async function syncCaptions(value) {
     captionText = new Promise((done) => { link.onload = done; link.onerror = done; });
     document.head.append(link);
   }
-  const want = value.tracks.flatMap((track, ti) => (track.captions ? [{ ti, track }] : []));
+  const want = value.tracks.flatMap((track, ti) => (track.captions && !(renderRanges && track.hidden) ? [{ ti, track }] : []));
   for (const layer of [...captionLayers]) {
     if (want.some((w) => w.ti === layer.ti && w.track.captions.src === layer.src)) continue;
     layer.el.remove();

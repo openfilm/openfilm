@@ -74,17 +74,20 @@ if (process.argv.includes('--pool')) {
             onProgress: (/** @type {number} */ done, /** @type {number} */ total) => { process.send?.({ type: 'progress', done, total }); },
             onSoftware: () => { process.send?.({ type: 'software' }); },
             onEncoder: (/** @type {string} */ encoder) => { process.send?.({ type: 'encoder', encoder }); },
+            onPhase: (/** @type {string} */ phase) => { process.send?.({ type: 'phase', phase }); },
+            onAudioPhase: (/** @type {string | null} */ phase) => { process.send?.({ type: 'audioPhase', phase }); },
           });
           break;
         } catch (e) {
           if (tries > 1 || abort.signal.aborted || !browserFailed(e)) throw e;
+          process.send?.({ type: 'phase', phase: 'retrying' });
           process.stderr.write(`openfilm: ${e instanceof Error ? e.message.split('\n')[0] : e}: drawn again in a new browser\n`);
         }
       }
       await say({ type: 'done', result });
       process.exit(0);
     } catch (e) {
-      await say({ type: 'failed', error: e instanceof Error ? e.message : String(e) });
+      await say({ type: 'failed', error: e instanceof Error ? e.message : String(e), code: /** @type {{ code?: string }} */ (e)?.code });
       process.exit(1);
     }
   });
