@@ -42,23 +42,24 @@ const readJson = (path: string): Record<string, unknown> | null => {
  * module names `openfilm/workbench/<name>` brings it, built from `src/plugins/<name>/index.tsx`; several may name one
  * (Motion's names the edit's). In the plugins' order (openfilm.json `order`, then the folder's name), as Studio lists
  * them. `withPage`: one the shell lays out among the page's panels in the edit's arrangement (lib/blocks arrangementOf of the plugin's
- * `workbench`: the edit, and Motion with it) is put in the page with it; any other (the canvas, warmed once the page
+ * `workbench`: the edit) is put in the page with it; any other (the canvas, warmed once the page
  * is drawn or when first shown; one that takes the panes' place) is loaded when it is wanted.
  */
 function workbenches(): Map<string, { src: string; withPage: boolean }> {
   /* each plugin's workbench and the blocks it is laid out in, to know which are laid out in the edit's arrangement */
   const laidOut = readdirSync(PLUGINS, { withFileTypes: true }).filter((e) => e.isDirectory()).flatMap((e) => {
     const manifest = readJson(join(PLUGINS, e.name, 'openfilm.json'));
-    return typeof manifest?.workbench === 'string' ? [{ workbench: manifest.workbench, blocks: readBlocks(manifest.blocks) }] : [];
+    return manifest?.soon !== true && typeof manifest?.workbench === 'string' ? [{ workbench: manifest.workbench, blocks: readBlocks(manifest.blocks) }] : [];
   });
   const named = readdirSync(PLUGINS, { withFileTypes: true }).filter((e) => e.isDirectory()).flatMap((e) => {
+    const manifest = readJson(join(PLUGINS, e.name, 'openfilm.json'));
+    if (manifest?.soon === true) return [];
     const browser = readJson(join(PLUGINS, e.name, 'package.json'))?.browser;
     if (typeof browser !== 'string') return [];
     let module: string;
     try { module = readFileSync(join(PLUGINS, e.name, browser), 'utf8'); } catch { return []; }
     const name = NAMED.exec(module)?.[1];
     if (!name) return [];
-    const manifest = readJson(join(PLUGINS, e.name, 'openfilm.json'));
     const order = typeof manifest?.order === 'number' && Number.isFinite(manifest.order) ? manifest.order : 1000;
     const amongPanels = typeof manifest?.workbench === 'string' && arrangementOf(manifest.workbench, laidOut) === 'edit';
     return [{ id: e.name, browser, name, order, amongPanels }];

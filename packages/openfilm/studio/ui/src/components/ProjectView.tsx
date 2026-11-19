@@ -359,8 +359,6 @@ export function ProjectView({ projectId, onProject }: {
   const pauseRef = React.useRef<() => void>(() => {});
   /* layers the motion panel just put something on, twirled open on the motion timeline */
   const [motionReveal, setMotionReveal] = React.useState<{ ids: readonly string[]; n: number } | null>(null);
-  /* the shell's way to show or hide a block of the edit's (shell/layout): the motion view opens the timeline and inspector with it */
-  const openBlockRef = React.useRef<(id: string, open: boolean) => void>(() => {});
 
   /* ── transport: the sound is the clock; the picture follows it, drawn in the preview from the player's line ── */
   const player = React.useRef(new Player());
@@ -697,7 +695,6 @@ export function ProjectView({ projectId, onProject }: {
      share where the panels are docked, and their boxes where they float. How each is drawn there (the timeline fitted
      to its tracks, the inspector left out of a narrow window while idle) is the edit's (editSizes below), told to the
      shell through the wiring (`blocks`). A block shown or hidden here is told with `openBlock` */
-  openBlockRef.current = (id, open) => openBlock('edit', id, open);
   const own = React.useMemo(() => {
     const places: Record<string, BlockPlace> = {}, free: Record<string, DockRect> = {};
     for (const block of arrangement.spec.blocks) {
@@ -5173,7 +5170,7 @@ export function ProjectView({ projectId, onProject }: {
   );
 
   /* what the shell reaches of the edit when it needs it (shell/frame): the picture drawn again, the files the film
-     plays; what changing the workbench shown asks of the edit (playing stopped, Motion's panes opened); what the
+     plays; what changing the workbench shown asks of the edit (playing stopped); what the
      layout reads of the edit's panes; what the library does here; and what the edit has on the top bar (below). The
      edit's own functions are called as the latest render made them */
   const forShell = React.useRef({ addFromCanvas, sendFromCanvas, listing });
@@ -5181,22 +5178,27 @@ export function ProjectView({ projectId, onProject }: {
   /* what others put in the film (openfilm/studio addTo: the canvas's file, or its cut, then the film shown), by path;
      the links to the film it shows (lib/links: a clip, a moment, a stretch, as the app's commands they stand for); and
      the app's commands that are the edit's (openfilm/studio onCommand) */
-  React.useEffect(() => provide('edit', {
-    opens: [FILM],
-    show: (link) => {
+  React.useEffect(() => {
+    const show = (link: string) => {
       const command = filmCommandOf(parseLink(link)?.fragment ?? null);
       if (command) hostCommands.current(command);
-    },
-    add: (paths, { show }) => {
-      const { listing: listed } = forShell.current;
-      const all = listed ? [...listed.files, ...listed.pages] : [];
-      const files = paths.flatMap((path) => all.find((f) => f.path === path) ?? []);
-      if (show) { void forShell.current.sendFromCanvas(files); return; }
-      void (async () => { for (const file of files) await forShell.current.addFromCanvas(file); })();
-    },
-    settle: () => forHistory.current.settle(),
-    restored: () => forHistory.current.restored(),
-  }), []);
+    };
+    const leaveEdit = provide('edit', {
+      opens: [FILM],
+      show,
+      add: (paths, { show }) => {
+        const { listing: listed } = forShell.current;
+        const all = listed ? [...listed.files, ...listed.pages] : [];
+        const files = paths.flatMap((path) => all.find((f) => f.path === path) ?? []);
+        if (show) { void forShell.current.sendFromCanvas(files); return; }
+        void (async () => { for (const file of files) await forShell.current.addFromCanvas(file); })();
+      },
+      settle: () => forHistory.current.settle(),
+      restored: () => forHistory.current.restored(),
+    });
+    const leaveMotion = provide('motion', { opens: [FILM], show });
+    return () => { leaveMotion(); leaveEdit(); };
+  }, []);
   React.useEffect(() => onCommand((command) => hostCommands.current(command)), []);
   /* the window is laid out by the shell (shell/layout); how the edit's blocks are drawn there is given here, for
      wherever they are and for the layout's menu, which draws each arrangement with it: each shown or not, its size
@@ -5272,7 +5274,6 @@ export function ProjectView({ projectId, onProject }: {
     reloadPicture: () => preview.current?.reload?.(),
     srcsInUse: () => blocksRef.current.flatMap((b) => (b.src ? [b.src] : [])),
     pause: () => pauseRef.current(),
-    motionShown: () => { openBlockRef.current('timeline', true); openBlockRef.current('inspector', true); },
     blocks: blockSizer,
     library: shellLibrary,
     topBar: shellTopBar,
@@ -5745,7 +5746,6 @@ export function ProjectView({ projectId, onProject }: {
                     onViewChange={setThumbView}
                     tracks={layerTracks ? layerTracks.map((r) => r.track) : editTracks}
                     layers={layerTracks ? layerView(filmMotion, layerTracks, pickedKeys.size > 0, selectedBlocks.length > 0, openComposition) : null}
-                    timelineView={workModes.includes('motion') && workModes.includes('edit') ? { now: workMode === 'motion' ? 'motion' : 'edit', onView: setWorkMode } : null}
                     totalMs={totalMs}
                     timeMs={timeMs}
                     clock={playing ? clock : null}

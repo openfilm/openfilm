@@ -7,8 +7,9 @@ import { chromium } from 'playwright-core';
 import { filmHtml, readFilmFile } from '../src/film-doc.mjs';
 import { openProject } from './server/projects.mjs';
 import { startStudio } from './server/server.mjs';
+import { showWorkbench } from './show-workbench.mjs';
 
-test('animating a clip and adding a layer preserve the edit and its caption track', { timeout: 120_000 }, async () => {
+test('the editor catalog shows upcoming editors, and Motion edits the same film from its own workspace', { timeout: 120_000 }, async () => {
   const scratch = await mkdtemp(join(tmpdir(), 'of-motion-workspace-'));
   const names = ['HOME', 'SHARED_HOME', 'LIBRARY', 'SAVED', 'EXPORTS'];
   const saved = new Map(names.map((name) => [`OPENFILM_${name}`, process.env[`OPENFILM_${name}`]]));
@@ -36,27 +37,28 @@ test('animating a clip and adding a layer preserve the edit and its caption trac
     await page.goto(`${studio.origin}/projects/${project.id}?key=${studio.key}`);
     await page.locator('[data-block-kind="caption"]').first().waitFor({ state: 'visible' });
     assert.equal(await page.locator('[data-timeline-view-item="motion"]').count(), 0);
-    const switcher = page.locator('[data-work-mode]');
-    /* workbenches are turned on and off under Mine, in the Community window opened from the OpenFilm menu (Studio in a browser) */
+    /* Enable Motion from the editor catalog. Upcoming editors are visible without an install action. */
     await page.getByRole('button', { name: 'OpenFilm menu', exact: true }).click();
     await page.getByRole('menuitem', { name: 'Community', exact: true }).click();
-    await page.getByRole('button', { name: 'Mine', exact: true }).click();
-    const motion = page.getByRole('switch', { name: 'Turn on Motion' });
-    await motion.waitFor();
-    assert.equal(await motion.getAttribute('aria-checked'), 'false');
-    await page.getByRole('switch', { name: 'Turn off Canvas' }).click();
-    await page.getByRole('switch', { name: 'Turn on Canvas' }).waitFor();
-    assert.equal(await switcher.count(), 1, 'Screening and the edit remain: the one button switches them');
-    await page.getByRole('switch', { name: 'Turn off Screening' }).click();
-    await page.getByRole('switch', { name: 'Turn on Screening' }).waitFor();
-    assert.equal(await switcher.count(), 0, 'only Edit remains');
-    await motion.click();
-    await page.getByRole('switch', { name: 'Turn off Motion' }).waitFor();
-    /* the window closed */
+    const community = page.getByRole('dialog', { name: 'Community' });
+    await community.getByRole('button', { name: 'Plugins', exact: true }).click();
+    const editors = community.locator('[data-community-shelf="Editors"]');
+    for (const title of ['Sound', '3D', 'Compositing']) {
+      const card = editors.locator(`[data-store-card="${title}"]`);
+      await card.getByText('Coming soon', { exact: true }).waitFor();
+      assert.equal(await card.getByRole('button', { name: `Get ${title}`, exact: true }).count(), 0);
+    }
+    const getMotion = editors.getByRole('button', { name: 'Get Motion', exact: true });
+    const installed = page.waitForResponse((response) => response.url().endsWith('/api/plugins/motion') && response.request().method() === 'PUT');
+    await getMotion.click();
+    assert.equal((await installed).ok(), true);
+    await getMotion.waitFor({ state: 'detached' });
     await page.keyboard.press('Escape');
-    await page.getByRole('dialog', { name: 'Community' }).waitFor({ state: 'detached' });
+    await community.waitFor({ state: 'detached' });
+    await showWorkbench(page, 'motion');
+    await page.locator('[data-block="edit:timeline"]').waitFor();
     await page.reload();
-    await page.locator('[data-timeline-view-item="motion"]').click();
+    await page.locator('[data-work-mode="motion"]').waitFor();
     const layer = page.locator('[data-motion-layer="card"]');
     await layer.waitFor({ state: 'visible' });
     await layer.click({ position: { x: 200, y: 10 } });
@@ -96,11 +98,24 @@ test('animating a clip and adding a layer preserve the edit and its caption trac
     await page.getByRole('button', { name: 'New layer', exact: true }).click();
     await page.getByRole('menuitem', { name: 'Rectangle', exact: true }).click();
     await until(async () => (await film()).tracks.flatMap((track) => track.clips).length === 2);
-    await page.locator('[data-timeline-view-item="edit"]').click();
+    await showWorkbench(page, 'edit');
+    await page.locator('[data-block="timeline"]').waitFor();
     await page.locator('[data-block-kind="caption"]').first().waitFor({ state: 'visible' });
     assert.equal(await page.locator('[data-motion-layer]').count(), 0);
+    assert.equal(await page.locator('[data-timeline-view-item]').count(), 0);
     assert.equal(await readFile(join(root, 'captions.vtt'), 'utf8'), captions);
     assert.equal((await film()).tracks.filter((track) => track.captions?.src === 'captions.vtt').length, 1);
+
+    await showWorkbench(page, 'motion');
+    const editDisabled = await page.evaluate(async () => (await fetch('/api/plugins/edit', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ on: false }),
+    })).ok);
+    assert.equal(editDisabled, true);
+    await page.reload();
+    await page.locator('[data-work-mode="motion"]').waitFor();
+    await layer.waitFor({ state: 'visible' });
     assert.deepEqual(errors, []);
   } finally {
     await browser?.close();

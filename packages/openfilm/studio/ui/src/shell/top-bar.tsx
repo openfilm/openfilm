@@ -70,13 +70,12 @@ function Bar({ frame, loaded }: { frame: ReturnType<typeof useProjectFrame>; loa
   const bar = useWiring('topBar')?.topBar;
   const {
     projectId, setLoaded, toast, reveal, title, setProjectsOpen, setSettingsOpen, desktopOpen, setDesktopOpen,
-    canvasOpen, setCanvasOpen, surface, showWorkbench, benchPlugins, pickBench, canToggleCanvas, colorOpen,
+    canvasOpen, setCanvasOpen, nowShown, showWorkbench, benchPlugins, pickBench, canToggleCanvas,
     /* the page's panels are being rearranged (shell/layout): the workbench shown stays the one it is meanwhile */
     layoutEditing,
   } = frame;
   /* the workbench shown, as the top bar names it, and its help when requested */
-  const shownBench = surface ?? (canvasOpen ? 'canvas' : colorOpen ? 'color' : 'edit');
-  const guide = useWorkbenchGuide(frame.noBench ? null : shownBench, benchPlugins);
+  const guide = useWorkbenchGuide(nowShown, benchPlugins);
   /* ? (not while typing, nor over another dialog): the help of the editor shown, opened or put away */
   const guideRef = React.useRef({ guide, none: frame.noBench });
   guideRef.current = { guide, none: frame.noBench };
@@ -160,7 +159,7 @@ function Bar({ frame, loaded }: { frame: ReturnType<typeof useProjectFrame>; loa
         {/* the buttons plugins put on the bar (openfilm/studio topBar) */}
         <PluginTools />
         {/* the edit or the canvas, in the panes' place: the one shown, by its name, and a click for the other */}
-        {pickBench ? <ModeSwitcher now={shownBench} plugins={benchPlugins} onPick={showWorkbench} onGuide={guide.open} disabled={layoutEditing} />
+        {pickBench && nowShown ? <ModeSwitcher now={nowShown} plugins={benchPlugins} onPick={showWorkbench} onGuide={guide.open} disabled={layoutEditing} />
           : canToggleCanvas ? <Tooltip label={t(canvasOpen ? 'canvas.toEdit' : 'canvas.toCanvas')} action="work-mode" side="bottom">
           <button type="button" aria-label={t(canvasOpen ? 'canvas.toEdit' : 'canvas.toCanvas')} data-work-mode={canvasOpen ? 'canvas' : 'edit'} disabled={layoutEditing} onClick={() => setCanvasOpen(!canvasOpen)}
             className="flex h-[26px] shrink-0 items-center rounded-md bg-[var(--bg-hover)] px-2.5 text-[12.5px] font-medium text-[var(--text)] transition hover:bg-[var(--bg-pressed)]">

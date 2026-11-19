@@ -54,7 +54,6 @@ import {
   ArrowRightFromLine,
   TriangleAlert,
   Blend,
-  Waypoints,
   Plus,
 } from 'lucide-react';
 import { useLanguage, useT } from '@/i18n';
@@ -762,7 +761,6 @@ export interface TimelineProps {
    * How the film's timeline is shown, first on its toolbar: cutting it (its tracks of clips) or animating it (the same
    * tracks, twirled open to layers, their properties and keyframes). None: one way only.
    */
-  timelineView?: { now: 'edit' | 'motion'; onView: (view: 'edit' | 'motion') => void } | null;
   /** The transitions the fades make (lib/transitions findTransitions): a mark over each, picked, resized, deleted. */
   transitions?: readonly FilmTransition[];
   /** A transition put on a cut (the cut's menu, a clip's menu), resized or deleted. Null = done. */
@@ -1053,7 +1051,6 @@ export const Timeline = React.memo(function Timeline({
   fades,
   motionLanes,
   layers = null,
-  timelineView = null,
   transitions,
   onTransition,
   pickedTransition = null,
@@ -4255,16 +4252,12 @@ export const Timeline = React.memo(function Timeline({
         }
       }}
     >
-      {/* ── Toolbar: cut or animate · mode (select / split) · undo / redo / history · split · status · the switches · zoom · subtitles ── */}
+      {/* ── Toolbar: mode (select / split) · undo / redo / history · split · status · the switches · zoom · subtitles ── */}
       <div
         ref={toolbarRef}
         className="@container relative flex h-[34px] shrink-0 items-center gap-1.5 border-b px-2"
         style={{ background: TL.head, borderColor: TL.line }}
       >
-        {timelineView ? <>
-          <ViewPicker now={timelineView.now} onView={timelineView.onView} />
-          <span className="mx-0.5 h-4 w-px" style={{ background: TL.line }} />
-        </> : null}
         {onSplit && !layers ? <>
           <ModePicker mode={mode} onPick={setMode} />
           <span className="mx-0.5 h-4 w-px" style={{ background: TL.line }} />
@@ -5009,36 +5002,6 @@ export type TimelineMode = 'select' | 'split';
  * Select / split — a button and a dropdown. Split is a mode, not only a button: a rough cut is a dozen cuts in a row,
  * and the pointer becoming a blade beats select-then-split each time.
  */
-/**
- * Cutting or animating the film: two icons side by side, the way it is shown now raised,
- * each naming on hover what it is for. Both always in sight, so which one is on, and that there is another, needs no
- * menu.
- */
-function ViewPicker({ now, onView }: { now: 'edit' | 'motion'; onView: (view: 'edit' | 'motion') => void }) {
-  const t = useT();
-  const items = [
-    { id: 'edit' as const, label: t('timeline.viewEdit'), note: t('timeline.viewEditNote'), icon: <Film size={15} /> },
-    { id: 'motion' as const, label: t('timeline.viewMotion'), note: t('timeline.viewMotionNote'), icon: <Waypoints size={15} /> },
-  ];
-  return (
-    <div role="radiogroup" aria-label={t('timeline.viewPick')} data-timeline-view={now}
-      className="flex h-[26px] shrink-0 items-center gap-px rounded-[7px] bg-[var(--bg-field)] p-[2px]">
-      {items.map((item) => {
-        const on = item.id === now;
-        return (
-          <Tooltip key={item.id} side="bottom" label={`${item.label} · ${item.note}`}>
-            <button type="button" role="radio" aria-checked={on} aria-label={item.label} data-timeline-view-item={item.id}
-              onMouseDown={(e) => e.preventDefault()} onClick={() => { if (!on) onView(item.id); }}
-              className={`flex h-[22px] w-[26px] items-center justify-center rounded-[5px] text-[var(--editor-control)] outline-none transition focus-visible:ring-1 focus-visible:ring-[var(--accent)] ${on ? 'bg-[var(--bg-pressed)]' : 'hover:bg-[var(--bg-hover)]'}`}>
-              {item.icon}
-            </button>
-          </Tooltip>
-        );
-      })}
-    </div>
-  );
-}
-
 function ModePicker({
   mode, onPick,
 }: { mode: TimelineMode; onPick: (m: TimelineMode) => void }) {

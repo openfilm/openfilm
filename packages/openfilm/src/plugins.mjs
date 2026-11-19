@@ -235,8 +235,8 @@ function readPlugin(dir, id) {
   if (showcase) plugin.showcase = showcase;
   const profile = profileOf(raw, byLanguage);
   if (profile) plugin.profile = profile;
-  if (typeof raw.workbench === 'string' && WORKBENCH.test(raw.workbench) && !soon) plugin.workbench = raw.workbench;
-  const blocks = plugin.workbench ? readBlocks(raw.blocks) : undefined;
+  if (typeof raw.workbench === 'string' && WORKBENCH.test(raw.workbench)) plugin.workbench = raw.workbench;
+  const blocks = plugin.workbench && !soon ? readBlocks(raw.blocks) : undefined;
   if (blocks) plugin.blocks = blocks;
   const tab = soon ? undefined : tabOf(raw.tab, byLanguage);
   if (tab) plugin.tab = tab;

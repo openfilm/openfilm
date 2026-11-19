@@ -25,6 +25,7 @@
     "ko": "직접 믹싱하는 사람",
     "es": "Quien mezcla a mano"
   },
+  "workbench": "sound",
   "soon": true,
   "skills": [],
   "requires": [

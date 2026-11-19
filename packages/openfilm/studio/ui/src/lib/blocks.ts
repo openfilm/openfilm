@@ -1,7 +1,7 @@
 /**
  * The arrangements the page lays workbenches out in, from the blocks their plugins declare (openfilm.json `blocks`,
  * src/plugin-blocks.mjs): for each workbench that declares blocks, its own (by id) and those it borrows from another
- * workbench (by `owner:id`, as that one declares them). A workbench that names another's (`"blocks": "edit"`: Motion)
+ * workbench (by `owner:id`, as that one declares them). A workbench that names another's entire arrangement (`"blocks": "edit"`)
  * is laid out in that one's arrangement; one that declares none takes the panes' place whole (components/surfaces).
  */
 import type { BlockDecl } from '../../../../src/plugin-blocks.mjs';

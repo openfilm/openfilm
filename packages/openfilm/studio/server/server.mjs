@@ -1807,7 +1807,8 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
    * brings, by name (src/skills.mjs commandsIn). Its own ship with OpenFilm, so they are not asked leave to run.
    */
   const pluginsShown = () => pluginStates().map((p) => {
-    const folder = join(pluginsDir(), p.id), module = elementIn(folder), commands = commandsIn(folder, p.id);
+    const folder = join(pluginsDir(), p.id);
+    const module = p.soon ? null : elementIn(folder), commands = p.soon ? null : commandsIn(folder, p.id);
     const icon = appIconIn(folder);
     /* the icon's address changes with its file, so a new one is not hidden by the copy the page keeps an hour */
     let drawn = '';

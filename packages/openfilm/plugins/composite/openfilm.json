@@ -25,6 +25,7 @@
     "ko": "키잉, 트래킹 등 세밀한 작업을 하는 사람",
     "es": "Quien hace croma, seguimiento y trabajo fino de imagen"
   },
+  "workbench": "composite",
   "soon": true,
   "skills": [],
   "requires": [
