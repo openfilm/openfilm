@@ -10,8 +10,8 @@ import React from 'react';
 import { ExternalLink, User } from 'lucide-react';
 import { useT } from '@/i18n';
 import { accountState } from '@/lib/account';
-import { useProviders } from '@/lib/providers';
-import { SettingsButton, SettingsGroup, SettingsLinkButton, settingsError } from './ui';
+import { useOpenFilmAccount } from '@/lib/providers';
+import { SettingsButton, SettingsGroup, SettingsItem, SettingsLinkButton, settingsError } from './ui';
 
 /** The account's picture, else the first letter of its name on the app's color. */
 export function Avatar({ src, name, size = 40 }: { src: string | null | undefined; name: string; size?: number }) {
@@ -29,14 +29,18 @@ export function Avatar({ src, name, size = 40 }: { src: string | null | undefine
 
 export function AccountGroup() {
   const t = useT();
-  const hook = useProviders();
-  const own = hook.state?.providers.find((p) => p.id === 'openfilm');
-  const signing = hook.state?.signingIn;
+  const hook = useOpenFilmAccount();
+  const { own, signingIn: signing } = hook;
   const busy = hook.busy === 'openfilm';
   const problem = (hook.problemFor === 'openfilm' ? hook.problem : null) ?? (signing?.errorFor === 'openfilm' ? signing.error : null) ?? own?.connectionError;
 
-  /* until Studio has said, the row keeps its place without saying either */
-  if (!own) return <SettingsGroup title={t('settings.account.group')}><div className="h-[86px]" /></SettingsGroup>;
+  if (!own) return (
+    <SettingsGroup title={t('settings.account.group')}>
+      <SettingsItem mark={<User size={18} aria-hidden />} title="OpenFilm"
+        description={<span role="status">{t(hook.accountLoadFailed ? 'settings.account.loadFailed' : 'settings.account.loading')}</span>}
+        control={hook.accountLoadFailed ? <SettingsButton onClick={hook.retryAccount}>{t('settings.account.retry')}</SettingsButton> : null} />
+    </SettingsGroup>
+  );
 
   const state = accountState(own, signing);
   const signedIn = state === 'signed-in' || state === 'env';

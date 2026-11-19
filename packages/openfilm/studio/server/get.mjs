@@ -39,7 +39,7 @@ import { dropTranscripts, readTranscript, transcriptIsCurrent, transcriptPath, w
 import { readable } from './files.mjs';
 import { HttpError, json, readJson } from './http.mjs';
 import { kindOf, modelFor, providerKey } from './keys.mjs';
-import { chooseProvider, freshProviders, listProviders, providerSettings } from './providers/index.mjs';
+import { chooseProvider, freshProviders, isAudioGeneration, listProviders, providerSettings } from './providers/index.mjs';
 import { noteMade } from './media-made.mjs';
 import { addedDir } from './providers/added.mjs';
 import { isOutputName, mediaSeconds, translatedLines, translationAsk } from './providers/common.mjs';
@@ -83,12 +83,12 @@ export const VERBS = /** @type {Record<string, VerbSpec>} */ ({
     options: { out, text: { value: 'text', required: true }, voice: { value: 'voiceId', required: true, repeat: 'many' } },
   },
   sfx: {
-    help: 'A sound effect. Returns src, its measured dur and, when measured, attack (seconds into the file where the hit is) and peakDb. --sec is a request: the dur returned is what it is.',
+    help: 'A sound effect. Returns src, its measured dur and, when measured, attack (seconds into the file where the hit is) and peakDb. --sec is a request: the dur returned is what it is. May use credits from the selected service. If it fails, tell the person before trying again or switching services.',
     dir: 'assets/audio/sfx', timeoutSec: 300,
     options: { out, prompt, sec: { value: 'seconds', min: 0.5, max: 22 } },
   },
   music: {
-    help: 'Music. Returns src and its measured dur. --sec is a request and the track is often longer: play the part you need with a media fragment on the clip\'s src (#t=in,out).',
+    help: 'Music. Returns src and its measured dur. --sec is a request and the track is often longer: play the part you need with a media fragment on the clip\'s src (#t=in,out). May use credits from the selected service. If it fails, tell the person before trying again or switching services.',
     dir: 'assets/audio/music', timeoutSec: 300,
     options: { out, prompt, sec: { value: 'seconds', min: 3, max: 300 } },
   },
@@ -328,6 +328,10 @@ export async function runGet(root, verb, given, { via, model, yes = false, ask, 
     return show(await speechReceipt(root, 'asr', String(args.src), { skip: true, note: 'It has a transcript already, made since the file last changed (--force makes it again).' }));
   }
   const settings = await providerSettings();
+  const audio = isAudioGeneration(verb);
+  if (audio && settings.use[verb] === '' && !recoverOnly) {
+    throw new GetError(`Generating ${WORDS[verb]} is off in Settings → Services. Use the project's existing audio or the free library. Only the person can turn generation back on.`);
+  }
   /* a voice of OpenFilm's service is its recording, sent with the run under SAMPLE_INPUT; --voice keeps its name */
   let sampleOf = '';
   if (verb === 'tts' && typeof args.voice === 'string' && args.voice.startsWith('my:')) {
@@ -341,8 +345,11 @@ export async function runGet(root, verb, given, { via, model, yes = false, ask, 
     args.language = voice.language;
   }
   /* `--via` names one: when it cannot, it says why (no such provider, not this verb, no key) */
-  const provider = await chooseProvider(/** @type {Verb} */ (verb), { via: via ?? null, settings }).catch((e) => { throw usage(e.message); });
+  const provider = await chooseProvider(/** @type {Verb} */ (verb), { via: via ?? null, settings, recoverOnly }).catch((e) => {
+    throw usage(audio ? `${e.message} Stop and tell the person before using another service.` : e.message);
+  });
   if (!provider) {
+    if (audio) throw new GetError(`${notConnected([verb])} Tell the person, or use the free library.`);
     throw new GetError(`${notConnected([verb])} Tell the person. Until then, make it in code, or use a service the person has a key for (with its API docs), and save it under assets/.`);
   }
 
@@ -409,18 +416,30 @@ export async function runGet(root, verb, given, { via, model, yes = false, ask, 
   /* a job a provider takes on the person's own key (fal, OpenRouter, Volcengine) is kept as it is taken, and waited for
      again when the same run starts again after a restart: never submitted and paid twice (media-transfer.mjs) */
   let journal = null;
-  if (RESUMABLE.has(provider.id)) {
-    const identity = { verb, args: { ...args, fresh: undefined }, model: runModel ?? null, inputs: await inputVersions(root, spec, args) };
-    journal = await mediaTransfer(root, clock.signal).then((t) => t?.request(`${provider.id}\0${keyTag(ctx.key)}`, identity, fresh, ctx.about) ?? null).catch(() => null);
-  }
-  if (journal) Object.assign(ctx, { resume: journal.reply?.job, checkpoint: (/** @type {unknown} */ job) => journal.remember({ job }) });
-  if (recoverOnly && RESUMABLE.has(provider.id) && !journal?.reply?.job) {
-    await journal?.finish(); await journal?.release(); clock.clear();
-    throw new GetError(`${provider.name} never took this run, so there is nothing to collect and nothing was paid. Make it again to have it.`);
-  }
+  let previousAudio = false;
+  let submittedAudio = false;
   /** @type {RunResult | undefined} */
   let result;
   try {
+    const ownAudio = audio && provider.id !== 'openfilm';
+    if (RESUMABLE.has(provider.id) || ownAudio) {
+      const identity = { verb, args: { ...args, fresh: undefined }, model: runModel ?? null, inputs: await inputVersions(root, spec, args) };
+      const request = mediaTransfer(root, clock.signal)
+        .then((transfer) => transfer?.request(`${provider.id}\0${keyTag(ctx.key)}`, identity, fresh, ctx.about) ?? null);
+      journal = await (ownAudio ? request : request.catch(() => null));
+      if (ownAudio && !journal) throw new GetError('Could not record this audio request in the project. No generation was submitted.');
+      if (journal) {
+        const run = journal;
+        Object.assign(ctx, { resume: run.reply?.job, checkpoint: (/** @type {unknown} */ job) => run.remember({ job }) });
+        if (ownAudio && run.resumed && !run.reply?.job) {
+          previousAudio = true;
+          throw new GetError(`An earlier ${provider.name} request may have been charged. Check the original outcome with the provider. Use --fresh only after the person explicitly asks for another take.`);
+        }
+      }
+      if (recoverOnly && !journal?.reply?.job) {
+        throw new GetError(`${provider.name} never took this run, so there is nothing to collect and nothing was paid. Make it again to have it.`);
+      }
+    }
     if (verb === 'video' && !yes) {
       const words = typeof args.prompt === 'string' ? args.prompt : '';
       const named = offered.find((m) => m.id === runModel)?.name ?? runModel;
@@ -429,6 +448,7 @@ export async function runGet(root, verb, given, { via, model, yes = false, ask, 
       await approve({ kind: 'video', provider: provider.name, ...(named ? { model: named } : {}), seconds: from !== null ? Math.round(from) : Number(args.duration),
         ...(words ? { prompt: words.length > 200 ? `${words.slice(0, 199).trimEnd()}…` : words } : {}) });
     }
+    submittedAudio = audio;
     result = await provider.run(/** @type {Verb} */ (verb), args, ctx);
     const files = await land(root, verb, args, result);
     /* how each was made, kept with the project (media-made.mjs): a generated file's name says nothing of it */
@@ -444,8 +464,12 @@ export async function runGet(root, verb, given, { via, model, yes = false, ask, 
     /* a job known to be over (refused, or failed at the provider) is let go; one cut off or never reached is kept */
     const unknown = clock.signal.aborted || /** @type {{ unreached?: boolean, mediaUncertain?: boolean }} */ (e)?.unreached
       || /** @type {{ mediaUncertain?: boolean }} */ (e)?.mediaUncertain || /** @type {Error} */ (e)?.name === 'AbortError';
-    if (journal && !unknown) await journal.finish().catch(() => {});
-    if (clock.timedOut()) throw new GetError(provider.id === 'openfilm'
+    const refusal = /** @type {{ status?: number, code?: string, rejected?: boolean }} */ (e);
+    const status = refusal?.status ?? 0;
+    const uncertainAudio = submittedAudio && (unknown || result !== undefined ||
+      (!refusal?.rejected && refusal?.code !== 'balance' && (!status || status === 408 || status >= 500)));
+    if (journal && !unknown && !previousAudio && !uncertainAudio) await journal.finish().catch(() => {});
+    if (clock.timedOut() && !audio) throw new GetError(provider.id === 'openfilm'
       ? `OpenFilm did not deliver this within ${waitSec} s. The task may already be complete and paid. Run the same command to recover its original result; use --fresh only when the person intentionally wants another paid take.`
       : `${provider.name} did not finish within ${waitSec} s, so Studio stopped waiting. Nothing landed in the project; try again later.`);
     if (/** @type {{ code?: string, limit?: boolean }} */ (e)?.code === 'balance' && /** @type {{ limit?: boolean }} */ (e).limit) {
@@ -456,6 +480,15 @@ export async function runGet(root, verb, given, { via, model, yes = false, ask, 
       tell?.({ kind: 'balance', provider: provider.name, providerId: provider.id });
       throw new GetError(`This did not run: ${provider.name} doesn't have enough balance. The person can top it up at ${provider.billingUrl}, `
         + 'or switch to another service. Nothing was made. Stop and tell them; do not run it again until they say so.', 1, 'balance');
+    }
+    if (audio && submittedAudio) {
+      const reason = e instanceof Error && e.message ? e.message : `${provider.name} did not return audio.`;
+      const recovery = provider.id === 'openfilm' || RESUMABLE.has(provider.id)
+        ? 'Collect the original request if available.'
+        : 'Check the original request with the provider.';
+      throw new GetError(uncertainAudio
+        ? `${reason} The request may already have been charged. ${recovery} Do not submit a new take or switch services without the person’s approval.`
+        : `${reason} Tell the person and wait before trying again or switching services.`);
     }
     throw e;
   } finally {

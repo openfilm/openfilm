@@ -30,6 +30,7 @@ import {
   type TextNode,
 } from 'lexical';
 import { FileText, Image as ImageIcon, Music, Video } from 'lucide-react';
+import { COMPOSER_SURFACE } from '../ComposerCard';
 import { PILL_ICON } from './PromptPill';
 import { $createPromptReferenceNode } from './PromptReferenceNode';
 import {
@@ -300,8 +301,8 @@ function MentionMenu({
       aria-label={label}
       /* Marks the open mention menu. */
       data-prompt-menu=""
-      style={style}
-      className="z-[10000] flex flex-col overflow-hidden rounded-[14px] border border-[var(--border)] bg-[var(--bg-raised)] shadow-[0_18px_48px_-12px_rgba(0,0,0,0.45),0_2px_8px_rgba(0,0,0,0.12)]"
+      style={{ ...style, background: COMPOSER_SURFACE }}
+      className="z-[10000] flex flex-col overflow-hidden rounded-[14px] border border-[var(--border)] shadow-[0_18px_48px_-12px_rgba(0,0,0,0.45),0_2px_8px_rgba(0,0,0,0.12)]"
     >
       <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-1.5">
         {options.map((option, index) => {

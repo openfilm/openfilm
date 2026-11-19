@@ -9,6 +9,12 @@ import { serviceUrl } from './providers/common.mjs';
 /** One shared validation result for Services and the desktop agent; no inference request is made. */
 let cached = /** @type {{ key: string, baseUrl: string, until: number, result: Connection } | null} */ (null);
 let checking = /** @type {{ key: string, baseUrl: string, promise: Promise<Connection> } | null} */ (null);
+const agentBaseUrl = () => `${serviceUrl('API', 'https://openfilm.dev')}/v1/agent`;
+
+/** The last known credential check for this account. Reading it never waits on the network. */
+export function lastAccountConnection(/** @type {string | undefined} */ key) {
+  return cached && cached.key === key && cached.baseUrl === agentBaseUrl() ? cached.result : null;
+}
 
 /** @param {string} key @param {string} baseUrl @param {{ fresh?: boolean, fetch?: typeof fetch }} options */
 async function connection(key, baseUrl, { fresh = false, fetch: fetchImpl = fetch }) {
@@ -37,13 +43,13 @@ async function connection(key, baseUrl, { fresh = false, fetch: fetchImpl = fetc
 /**
  * `strict` (the desktop agent): a moment the file cannot be read throws rather than reading as signed out, so the
  * agent keeps the account it had.
- * @param {{ fresh?: boolean, strict?: boolean, fetch?: typeof fetch }} options
+ * @param {{ fresh?: boolean, strict?: boolean, fetch?: typeof fetch, settings?: import('./keys.mjs').ProviderSettings }} options
  */
 export async function desktopAccount(options = {}) {
-  const settings = await readSettings(undefined, { strict: options.strict === true });
+  const settings = options.settings ?? await readSettings(undefined, { strict: options.strict === true });
   const credential = providerKey(openfilm, settings);
   const signing = signInState();
-  const baseUrl = `${serviceUrl('API', 'https://openfilm.dev')}/v1/agent`;
+  const baseUrl = agentBaseUrl();
   const checked = credential?.key && signing.provider !== 'openfilm' ? await connection(credential.key, baseUrl, options) : null;
   return {
     key: credential?.key ?? null,

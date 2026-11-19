@@ -13,8 +13,9 @@ import { useT } from '@/i18n';
 import { STILL_DROP_MS } from '@/lib/asset-timeline';
 import type { SourceRange } from '@/lib/media-place';
 import { exactRate, formatTimecode, snapToFrame, useTimecodeFps } from '@/lib/timecode';
-import { cuePlain, readVtt } from '../../../../src/captions.mjs';
+import { cuePlain, readVtt, voiceTranscriptText } from '../../../../src/captions.mjs';
 import { type MediaSources, type WorkspaceResource } from '@/lib/workspace-resources';
+import { useVideoPlayback } from '@/lib/video-playback';
 import { keyAction } from '@/lib/keymap-store';
 import { isTypingTarget } from './typing-target';
 import { CLEAR, KIND_ICON, MediaPreview } from './MediaPreview';
@@ -129,7 +130,7 @@ function SourceBar({ time, duration, playing, onToggle, onSeek, disabled, marks,
 }) {
   const t = useT();
   const marked = marks && (marks.in != null || marks.out != null)
-    ? `${formatTimecode((marks.in ?? 0) * 1000, { hours: false })} – ${formatTimecode((marks.out ?? duration) * 1000, { hours: false })}`
+    ? `${formatTimecode((marks.in ?? 0) * 1000)} – ${formatTimecode((marks.out ?? duration) * 1000)}`
     : null;
   return (
     <div className="shrink-0 pt-1">
@@ -141,7 +142,7 @@ function SourceBar({ time, duration, playing, onToggle, onSeek, disabled, marks,
         onPlayPause={onToggle}
         onFullscreen={onFullscreen}
         /* the part marked with I and O, while there is one (`,` and `.` put it on the film) */
-        extra={marked ? <span data-source-range="" className="shrink-0 text-[11px] tabular-nums text-[var(--accent)]">{marked}</span> : undefined}
+        extra={marked ? <span data-source-range="" className="min-w-0 truncate text-[11px] tabular-nums text-[var(--accent)]">{marked}</span> : undefined}
       />
     </div>
   );
@@ -166,18 +167,18 @@ export interface SourcePreviewProps {
 }
 
 /** A WebVTT's lines as they read (a transcript, a subtitle file): each one's time, and what it says. */
-function VttLines({ url }: { url: string }) {
+function VttLines({ url, path }: { url: string; path: string }) {
   const t = useT();
   const [lines, setLines] = React.useState<{ start: number; text: string }[] | null>(null);
   React.useEffect(() => {
     let current = true;
     setLines(null);
     fetch(url).then((r) => (r.ok ? r.text() : '')).then(
-      (text) => { if (current) setLines(readVtt(text).cues.map((c) => ({ start: c.start, text: cuePlain(c.text) }))); },
+      (text) => { if (current) setLines(readVtt(voiceTranscriptText(path, text)).cues.map((c) => ({ start: c.start, text: cuePlain(c.text) }))); },
       () => { if (current) setLines([]); },
     );
     return () => { current = false; };
-  }, [url]);
+  }, [url, path]);
   if (!lines) return null;
   if (!lines.length) return <p className="text-[11.5px] text-[var(--text-faint)]">{t('media.transcriptEmpty')}</p>;
   return (
@@ -217,7 +218,9 @@ function MediaPreviewPane({ file, sources, onClose, onPlace, withinDialog, saved
   const [playing, setPlaying] = React.useState(false);
   const [time, setTime] = React.useState(0);
   const [duration, setDuration] = React.useState((file.durationMs ?? 0) / 1000);
-  const [failed, setFailed] = React.useState(false);
+  const [failedFile, setFailed] = React.useState(false);
+  const video = useVideoPlayback(file, sources);
+  const failed = file.kind === 'video' ? video.failed : failedFile;
   const timed = file.kind === 'video' || file.kind === 'audio';
   const src = sources.file(file);
 
@@ -281,12 +284,14 @@ function MediaPreviewPane({ file, sources, onClose, onPlace, withinDialog, saved
         onDragEnd={clearResourceDrag}>
         {failed ? (
           <p className="text-[12.5px] text-[var(--text-muted)]">{t('media.cannotPreview')}</p>
+        ) : file.kind === 'video' && video.preparing ? (
+          <p role="status" className="text-[12.5px] text-[var(--text-muted)]">{video.message(t)}</p>
         ) : file.kind === 'video' ? (
           <video
             key={file.path}
             data-asset-preview-control=""
             ref={mediaRef}
-            src={src}
+            src={video.src}
             /* a poster that fails to load covers the first frame in black: only when there is one */
             poster={sources.poster?.(file)}
             playsInline
@@ -296,6 +301,7 @@ function MediaPreviewPane({ file, sources, onClose, onPlace, withinDialog, saved
             className={FIT}
             style={fitted(shape)}
             {...mediaEvents}
+            onError={video.onError}
             onLoadedMetadata={(e) => { shapeOf(e.currentTarget.videoWidth, e.currentTarget.videoHeight); mediaEvents.onLoadedMetadata?.(e); }}
           />
         ) : file.kind === 'image' ? (
@@ -311,7 +317,7 @@ function MediaPreviewPane({ file, sources, onClose, onPlace, withinDialog, saved
           /* a subtitle or transcript file: its lines, as they read */
           <div data-asset-preview-control="" className="h-full w-full max-w-[640px] overflow-y-auto py-2">
             <p className="mb-3 truncate text-[13px] font-medium text-[var(--text)]">{file.name}</p>
-            <VttLines url={src} />
+            <VttLines url={src} path={file.path} />
           </div>
         ) : (
           /* a file Studio does not play: what it is, by its icon and name */

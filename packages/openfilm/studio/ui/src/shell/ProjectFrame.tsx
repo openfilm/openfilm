@@ -76,17 +76,6 @@ export function useProjectFrame(projectId: string) {
   }, [rawListing, filesTick, projectId, factsIn]);
   React.useEffect(() => { probeMedia([]); }, [probeMedia]);
 
-  const folder = loaded?.folder ?? '';
-  const mediaSources = React.useMemo<MediaSources>(() => {
-    const media = (what: string, path: string, mtime: number | string) => `/api/projects/${encodeURIComponent(projectId)}/media?what=${what}&path=${encodeURIComponent(path)}&v=${mtime}`;
-    return {
-      file: (f) => `${folder}${f.path.split('/').map(encodeURIComponent).join('/')}?v=${Math.round(f.mtimeMs)}`,
-      poster: (f) => (f.kind === 'video' ? media('poster', f.path, Math.round(f.mtimeMs)) : undefined),
-      wave: (f) => media('wave', f.path, Math.round(f.mtimeMs)),
-      pagePoster: (f) => media('poster', f.path, `${Math.round(f.mtimeMs)}.${filesTick}`),
-      pageSurface: (f) => `${folder}${f.path.split('/').map(encodeURIComponent).join('/')}`,
-    };
-  }, [projectId, folder, filesTick]);
   /*
    * proxies (studio/server/proxies.mjs): asked for the project's heavy footage whenever its files change or the
    * preferences do, followed while they are made, and for the footage this browser does not decode (lib/decodes.ts),
@@ -102,6 +91,18 @@ export function useProjectFrame(projectId: string) {
     unplayed.current.add(src);
     askProxies.current?.();
   }, []);
+  const folder = loaded?.folder ?? '';
+  const mediaSources = React.useMemo<MediaSources>(() => {
+    const media = (what: string, path: string, mtime: number | string) => `/api/projects/${encodeURIComponent(projectId)}/media?what=${what}&path=${encodeURIComponent(path)}&v=${mtime}`;
+    return {
+      file: (f) => `${folder}${f.path.split('/').map(encodeURIComponent).join('/')}?of-original=1&v=${Math.round(f.mtimeMs)}`,
+      videoCopy: (f) => `/api/projects/${encodeURIComponent(projectId)}/playback?path=${encodeURIComponent(f.path)}&v=${Math.round(f.mtimeMs)}`,
+      poster: (f) => (f.kind === 'video' ? media('poster', f.path, Math.round(f.mtimeMs)) : undefined),
+      wave: (f) => media('wave', f.path, Math.round(f.mtimeMs)),
+      pagePoster: (f) => media('poster', f.path, `${Math.round(f.mtimeMs)}.${filesTick}`),
+      pageSurface: (f) => `${folder}${f.path.split('/').map(encodeURIComponent).join('/')}`,
+    };
+  }, [projectId, folder, filesTick]);
   const [prefsTick, setPrefsTick] = React.useState(0);
   React.useEffect(() => {
     const changed = () => setPrefsTick((n) => n + 1);
@@ -121,13 +122,22 @@ export function useProjectFrame(projectId: string) {
       const states = answer.states ?? {};
       setProxies(states);
       /* made since the last answer, or found made for footage just said not to decode (the server had not heard yet) */
-      const now = before ? Object.keys(states).filter((path) => states[path]!.state === 'ready' && (before![path]?.state !== 'ready' || (states[path]!.needed && !before![path]?.needed))) : [];
-      if (now.some((path) => wiringStore.get()?.srcsInUse?.().some((src) => srcHitsAsset(src, path)))) wiringStore.get()?.reloadPicture?.();
+      const now = Object.entries(states).filter(([path, state]) => state.state === 'ready' && (before
+        ? before[path]?.state !== 'ready' || (state.needed && !before[path]?.needed)
+        : state.needed));
+      const wiring = wiringStore.get();
+      const playing = wiring?.srcsInUse?.() ?? [];
+      if (now.some(([path]) => playing.some((src) => srcHitsAsset(src, path)) || [...unplayed.current].some((src) => srcHitsAsset(src, path)))) wiring?.reloadPicture?.();
       before = states;
       const found = (await Promise.all(Object.entries(answer.checks ?? {}).map(async ([path, check]) => ((await decodes(check)) ? [] : [path])))).flat();
       if (!alive) return;
-      for (const path of new Set([...Object.keys(states), ...Object.keys(answer.checks ?? {})])) {
-        if (!found.includes(path) && [...unplayed.current].some((src) => srcHitsAsset(src, path))) found.push(path);
+      const listed = rawListing.files.filter(({ kind }) => kind === 'video');
+      for (const src of unplayed.current) {
+        let path = src.split(/[?#]/)[0]!.replace(/^(?:\.\/)+/, '');
+        const listedPath = listed.find((file) => srcHitsAsset(path, file.path))?.path;
+        if (!listedPath) try { path = decodeURIComponent(path); } catch { /* as written */ }
+        const reported = listedPath ?? path;
+        if (reported && !found.includes(reported)) found.push(reported);
       }
       const told = found.every((path) => undecoded.includes(path));
       undecoded = found;
@@ -306,15 +316,13 @@ export function useProjectFrame(projectId: string) {
      workbench on shows is pointed out in the library ── */
   const openLink = React.useRef<(link: string) => void>(() => {});
   openLink.current = (link) => {
-    const showing = shown.noBench ? null : shown.surface ?? (shown.canvasOpen ? 'canvas' : 'edit');
+    const showing = shown.nowShown === 'color' ? 'edit' : shown.nowShown;
     /* the workbench shown first: one that shows the file too keeps the person where they are */
     const claims = [...workbenchOpens()];
     const route = routeLink(link, [...claims.filter(([name]) => name === showing), ...claims.filter(([name]) => name !== showing)], shown.workModes);
     if (!route) return;
     if ('file' in route) { library.showFile(route.file); return; }
-    /* the edit as it was left: in Motion's view when that is how it was (Motion is a view of the edit) */
-    const motion = route.workbench === 'edit' && shown.motionOpen && shown.workModes.includes('motion');
-    if (showing !== route.workbench) shown.showWorkbench(motion ? 'motion' : route.workbench);
+    if (showing !== route.workbench) shown.showWorkbench(route.workbench);
     showIn(route.workbench, route.link);
   };
   /* openfilm/studio `open`, from any plugin's element */
@@ -325,6 +333,10 @@ export function useProjectFrame(projectId: string) {
      whoever listens (openfilm/studio onCommand: the edit) ── */
   const appCommand = React.useRef<(command: StudioCommand) => void>(() => {});
   appCommand.current = (command) => {
+    if (command.type === 'show-workbench') {
+      if (command.projectId === projectId && shown.workModes.includes(command.workbench) && shown.nowShown !== command.workbench) shown.showWorkbench(command.workbench);
+      return;
+    }
     if (command.type === 'open') { if (typeof command.link === 'string') openLink.current(command.link); return; }
     const link = linkOfCommand(command);
     if (link) { openLink.current(link); return; }
@@ -340,6 +352,11 @@ export function useProjectFrame(projectId: string) {
     tellCommand(command);
   };
   React.useEffect(() => { studioHost?.onCommand?.((command) => appCommand.current(command)); }, []);
+  React.useEffect(() => {
+    if (shown.pluginsRead && loaded?.project.id === projectId) {
+      studioHost?.workbenchChanged?.({ projectId, current: shown.nowShown, available: shown.workModes });
+    }
+  }, [projectId, loaded?.project.id, shown.pluginsRead, shown.nowShown, shown.workModes]);
   /* an example opened in the Community: its page in the projects window */
   React.useEffect(() => { setExampleOpener((id) => windows.setProjectsOpen({ example: id })); return () => setExampleOpener(null); }, [windows.setProjectsOpen]);
   /* what was asked of a workbench that was not there yet (studio/hub) is not given to one of the next project */

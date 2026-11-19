@@ -5,6 +5,26 @@ import { thumbCellStyle } from '@/lib/thumb-cell';
 import { pickShot } from '@/lib/thumb-pick';
 import { retryImage } from '@/lib/retry-image';
 
+/** Shares the gesture scale with the thumbnail strips without rendering the whole timeline. */
+export function createThumbZoom() {
+  let scale = 1;
+  const listeners = new Set<() => void>();
+  return {
+    get: () => scale,
+    subscribe(listener: () => void) {
+      listeners.add(listener);
+      return () => { listeners.delete(listener); };
+    },
+    set(nextScale: number) {
+      if (nextScale === scale) return;
+      scale = nextScale;
+      for (const listener of listeners) listener();
+    },
+  };
+}
+
+const restingZoom = createThumbZoom();
+
 /**
  * The row of thumbnails on a picture clip. The pictures come from outside (the `thumbs` prop); this only lays them
  * out, on the source's own time grid (cells at whole steps from the source's start), cut by the clip's edges — as in
@@ -18,7 +38,7 @@ import { retryImage } from '@/lib/retry-image';
  * distance limit — a far picture beats a half-empty clip that looks broken; exact shots replace it as they arrive.
  */
 export function BlockThumbs({
-  thumbs, startMs, endMs, pxPerMs, height, topOffset = 0, thumbWidthPx = THUMB_CELL_PX, visiblePx,
+  thumbs, startMs, endMs, pxPerMs, height, topOffset = 0, thumbWidthPx = THUMB_CELL_PX, visiblePx, zoom = restingZoom,
 }: {
   thumbs: ReadonlyMap<number, string>;
   startMs: number;
@@ -33,7 +53,9 @@ export function BlockThumbs({
    * hundreds of cells while a screen shows dozens. The window is rounded to whole screens (see Timeline thumbWindow).
    */
   visiblePx?: { from: number; to: number } | undefined;
+  zoom?: ReturnType<typeof createThumbZoom> | undefined;
 }): React.ReactElement | null {
+  const scale = React.useSyncExternalStore(zoom.subscribe, zoom.get);
   /* the shot times, sorted: the one for each cell is found by binary search */
   const times = React.useMemo(
     () => [...thumbs.keys()].sort((a, b) => a - b),
@@ -42,20 +64,27 @@ export function BlockThumbs({
 
   const cells = React.useMemo(() => {
     if (!(pxPerMs > 0) || height <= 0 || !times.length) return [];
-    const stepMs = thumbWidthPx / pxPerMs;
+    const livePxPerMs = pxPerMs * scale;
+    const stepMs = thumbWidthPx / livePxPerMs;
     const out: { left: number; url: string }[] = [];
     /* the cell straddling the clip's start begins before it (a negative left) and is cut by the clip's edge */
     const first = Math.floor(startMs / stepMs) * stepMs;
-    for (let t = first; t < endMs; t += stepMs) {
-      const left = (t - startMs) * pxPerMs;
-      if (visiblePx && (left + thumbWidthPx < visiblePx.from || left > visiblePx.to)) continue;
+    const firstLeft = (first - startMs) * livePxPerMs;
+    const firstVisible = visiblePx
+      ? Math.max(0, Math.ceil((visiblePx.from * scale - firstLeft) / thumbWidthPx) - 1)
+      : 0;
+    const visibleEnd = visiblePx ? visiblePx.to * scale : Infinity;
+    for (let i = firstVisible; ; i++) {
+      const t = first + i * stepMs;
+      const left = firstLeft + i * thumbWidthPx;
+      if (t >= endMs || left > visibleEnd) break;
       const shot = pickShot(times, Math.round(t), startMs, endMs);
       const url = shot == null ? undefined : thumbs.get(shot);
       if (!url) continue;
       out.push({ left, url });
     }
     return out;
-  }, [thumbs, times, startMs, endMs, pxPerMs, height, thumbWidthPx, visiblePx]);
+  }, [thumbs, times, startMs, endMs, pxPerMs, height, thumbWidthPx, visiblePx, scale]);
 
   if (!cells.length) return null;
 
@@ -64,21 +93,24 @@ export function BlockThumbs({
       className="pointer-events-none absolute inset-x-0 bottom-0 overflow-hidden"
       style={{ top: topOffset }}
     >
-      {/* keyed by index: on zoom every cell's left changes, and keying by it would remount the whole row */}
-      {cells.map((cell, i) => (
-        <img
-          key={i}
-          src={cell.url}
-          alt=""
-          draggable={false}
-          className="absolute top-0 object-cover"
-          style={thumbCellStyle(cell.left, thumbWidthPx, height)}
-          /* a picture that fails is hidden (the clip color shows), better than a broken-image icon, and asked for
-             again a little later; it comes back when it loads */
-          onError={(e) => { e.currentTarget.style.visibility = 'hidden'; retryImage(e.currentTarget); }}
-          onLoad={(e) => { e.currentTarget.style.visibility = ''; }}
-        />
-      ))}
+      {/* Cells are laid out at the live density. Counter the timeline's transform inside the clip boundary. */}
+      <div className="absolute inset-0 origin-top-left" style={scale === 1 ? undefined : { transform: `scaleX(${1 / scale})` }}>
+        {/* Key by index so zoom can reuse the images when their positions change. */}
+        {cells.map((cell, i) => (
+          <img
+            key={i}
+            src={cell.url}
+            alt=""
+            draggable={false}
+            className="absolute top-0 object-cover"
+            style={thumbCellStyle(cell.left, thumbWidthPx, height)}
+            /* a picture that fails is hidden (the clip color shows), better than a broken-image icon, and asked for
+               again a little later; it comes back when it loads */
+            onError={(e) => { e.currentTarget.style.visibility = 'hidden'; retryImage(e.currentTarget); }}
+            onLoad={(e) => { e.currentTarget.style.visibility = ''; }}
+          />
+        ))}
+      </div>
     </div>
   );
 }

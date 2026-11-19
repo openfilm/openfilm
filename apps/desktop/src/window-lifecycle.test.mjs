@@ -9,6 +9,7 @@ class Window extends EventEmitter {
   fullScreen = false;
   fullScreenRequests = [];
   hide() { this.visible = false; }
+  minimize() { this.minimized = true; }
   show() { this.visible = true; }
   isDestroyed() { return this.destroyed; }
   isFullScreen() { return this.fullScreen; }
@@ -91,6 +92,25 @@ test('Windows and Linux window close still follows the existing quit path', () =
   win.close();
   assert.equal(win.destroyed, true);
   assert.equal(saved, 1);
+});
+
+test('Windows minimizes while Studio is busy and closes normally when idle', async () => {
+  const win = new Window();
+  const ready = Promise.withResolvers();
+  let checks = 0;
+  keepWindowOnClose(win, { mac: false, isQuitting: () => false, save: () => {},
+    shouldMinimize: () => ++checks === 1 ? ready.promise : false });
+  win.close();
+  win.close();
+  assert.equal(win.destroyed, false, 'the window stays open while Studio answers');
+  ready.resolve(true);
+  await new Promise(setImmediate);
+  assert.equal(checks, 1);
+  assert.equal(win.minimized, true);
+  assert.equal(win.destroyed, false);
+  win.close();
+  await new Promise(setImmediate);
+  assert.equal(win.destroyed, true);
 });
 
 for (const platform of ['darwin', 'win32', 'linux']) {

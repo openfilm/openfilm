@@ -15,7 +15,8 @@
  *            { type: 'pick', x, y, seq }          what is under this stage point
  *            { type: 'shown' }            this load is shown now, over the one it replaces: say when it is on screen
  *   film   → { source: 'openfilm-film', type: 'ready', duration, width, height, sounds, spans, origin }
- *            { type: 'seeked', t, seq }           the frame at t is on screen
+ *            { type: 'seeked', t, seq, seekSeq, drawn, terminal }  the seek's result, or progress while it is still pending
+ *            { type: 'seek-ready', t, seq, seekSeq }    the same frame finished drawing after that limit
  *            { type: 'clock', ping, now }         this page's clock (performance.now) when the ping came
  *            { type: 'played', frames, drawn, late, rendered, ms, spans }   while playing, about once a second over
  *                                         `ms`: the screen's refreshes, the film's frames drawn, the refreshes that got
@@ -96,16 +97,47 @@
 
   /* one frame at a time: a seek that comes while one is drawing waits, and only the latest waiting one is drawn */
   const FRAME_WAIT_MS = 1000;
+  const SCRUB_DRAW_MS = 120;
+  const SCRUB_SETTLE_MS = 120;
+  const pendingFrame = Symbol('pending frame');
+  const supersededFrame = Symbol('superseded frame');
   /* a load of the film behind the one shown: the editor swaps it in at its first picture, so that picture is waited
      for whole (its videos' files loaded, sought there), up to this long; let go sooner, it swapped in black */
   const BEHIND_WAIT_MS = 20_000;
   let drawing = false;
   let next = null;
+  let currentSeek = null;
+  let yieldLiveDraw = null;
+  let preparing = null;
+  let prepareTimer;
   let refreshStill = false;
   /* the moment last asked for (drawn, being drawn or waiting): what an edit changed in place is drawn at */
   let asked = 0;
+  const isCurrent = (seek) => currentSeek === seek && !line;
+  const seekResult = (seek, ready, extra = {}) => post({ type: 'seeked', t: seek.t, seq: seek.seq, seekSeq: seek.seekSeq, drawn: ready, ...extra });
+  const tryCachedSeek = (seek) => {
+    if (!isCurrent(seek) || seek.behind || seek.liveDrawn) return null;
+    if (seek.cache === undefined) {
+      const lookup = editor()?.showCachedSeek?.(seek.t, () => isCurrent(seek) && !seek.liveDrawn);
+      seek.cache = lookup?.then((ready) => {
+        if (ready && isCurrent(seek) && !seek.liveDrawn) {
+          seek.cached = true;
+          seekResult(seek, true);
+        }
+        return ready;
+      }, () => false) ?? null;
+    }
+    return seek.cache;
+  };
+  const failSeek = (seek) => {
+    if (!isCurrent(seek) || seek.cached) return;
+    const report = () => { if (isCurrent(seek) && !seek.cached) seekResult(seek, false, { terminal: true }); };
+    const cache = tryCachedSeek(seek);
+    if (cache) void cache.then(report);
+    else report();
+  };
   const draw = async () => {
-    if (drawing || (!next && !refreshStill)) return;
+    if (drawing || preparing || (!next && !refreshStill)) return;
     drawing = true;
     const seek = next;
     const t = seek?.t ?? asked;
@@ -121,13 +153,78 @@
          for as long as they took. A frame that does not come within a moment is let go: one stuck page or video must
          not stop the picture. */
       const watch = editor()?.watch;
+      const drawingFrame = Promise.resolve(watch && !behind ? watch(t) : drawn(f, t));
       let timer;
-      await Promise.race([watch && !behind ? watch(t) : drawn(f, t), new Promise((done) => { timer = setTimeout(done, behind ? BEHIND_WAIT_MS : FRAME_WAIT_MS); })]);
-      clearTimeout(timer);
-      if (seek) post({ type: 'seeked', t, seq: seek.seq });
-    } catch (e) { fail(e); }
+      let cacheTimer;
+      let completed;
+      try {
+        const wait = behind ? BEHIND_WAIT_MS : seek?.scrub && watch ? SCRUB_DRAW_MS : FRAME_WAIT_MS;
+        const waiting = [
+          drawingFrame.then((ready) => ready !== false),
+          new Promise((done) => { timer = setTimeout(() => done(pendingFrame), wait); }),
+        ];
+        if (watch && seek && !behind) {
+          cacheTimer = setTimeout(() => { tryCachedSeek(seek); }, SCRUB_DRAW_MS);
+          if (!seek.scrub) waiting.push(new Promise((done) => { yieldLiveDraw = () => done(supersededFrame); }));
+        }
+        completed = await Promise.race(waiting);
+        if (completed !== true && seek?.publish) throw new Error('The new film did not draw its first frame in time.');
+      } finally { clearTimeout(timer); clearTimeout(cacheTimer); yieldLiveDraw = null; }
+      if (seek) {
+        if (completed === true) {
+          seek.liveDrawn = true;
+          if (!seek.cached && (!seek.scrub || isCurrent(seek))) seekResult(seek, true);
+        } else if (completed === pendingFrame) {
+          if (!seek.cached && (!seek.scrub || isCurrent(seek))) seekResult(seek, false);
+          if (!behind) {
+            tryCachedSeek(seek);
+            void drawingFrame.then((ready) => {
+              if (!isCurrent(seek)) return;
+              if (ready === false) { failSeek(seek); return; }
+              seek.liveDrawn = true;
+              if (!seek.cached) post({ type: 'seek-ready', t, seq: seek.seq, seekSeq: seek.seekSeq });
+            }, () => failSeek(seek));
+          }
+        } else if (completed === false) failSeek(seek);
+      }
+    } catch (e) {
+      if (!seek || behind || isCurrent(seek)) fail(e);
+      if (seek && !behind) failSeek(seek);
+    }
     drawing = false;
     if (line) requestFrame(); else draw();
+  };
+
+  const clearPreparation = () => {
+    clearTimeout(prepareTimer);
+    preparing = null;
+  };
+  const prepareSeek = (seek) => {
+    const pages = up && !seek.behind && editor()?.prepareSeekPages?.(seek.t);
+    if (!pages) { draw(); return; }
+    preparing = seek;
+    tryCachedSeek(seek);
+    prepareTimer = setTimeout(() => { if (!seek.cached) seekResult(seek, false); }, FRAME_WAIT_MS);
+    void pages.then(() => {
+      if (preparing !== seek) return;
+      clearPreparation();
+      draw();
+    });
+  };
+  /** Keep the most recent scrub. Cold chapters load when the pointer settles or the seek is committed. */
+  const seekTo = (message) => {
+    stop();
+    clearPreparation();
+    const seek = currentSeek = next = { ...message, seekSeq: message.seq };
+    asked = seek.t;
+    yieldLiveDraw?.();
+    if (!seek.scrub || !up || editor()?.canScrub?.(seek.t) !== false) { prepareSeek(seek); return; }
+    preparing = seek;
+    tryCachedSeek(seek);
+    prepareTimer = setTimeout(() => {
+      clearPreparation();
+      prepareSeek(seek);
+    }, SCRUB_SETTLE_MS);
   };
 
   /*
@@ -166,13 +263,15 @@
     lastT = t;
     drawing = true;
     tally.drawn += 1;
+    let timer;
     try {
       const watch = editor()?.watch;
       const play = { rate: line.rate, now: Math.min(lineAt(now), end) };
-      let timer;
-      await Promise.race([watch ? watch(t, play) : drawn(up, t), new Promise((done) => { timer = setTimeout(done, FRAME_WAIT_MS); })]);
-      clearTimeout(timer);
+      const waiting = [watch ? watch(t, play) : drawn(up, t), new Promise((done) => { timer = setTimeout(done, FRAME_WAIT_MS); })];
+      if (watch) waiting.push(new Promise((done) => { yieldLiveDraw = done; }));
+      await Promise.race(waiting);
     } catch (e) { fail(e); }
+    finally { clearTimeout(timer); yieldLiveDraw = null; }
     drawing = false;
     /* a seek that came while this frame drew (the film stopped): drawn now */
     if (next) draw();
@@ -214,8 +313,10 @@
     if (m.type === 'shown') { requestAnimationFrame(() => requestAnimationFrame(() => post({ type: 'painted' }))); return; }
     /* before the next frame is drawn: the one asked for after them shows them */
     if (m.type === 'overrides') { if (!editor()) tweaks = Array.isArray(m.list) && m.list.length ? m.list : null; return; }
-    if (m.type === 'seek') { stop(); next = m; asked = m.t; draw(); return; }
+    if (m.type === 'seek') { seekTo(m); return; }
     if (m.type === 'play') {
+      clearPreparation();
+      currentSeek = null;
       const fps = Number(m.fps);
       line = { t: Number(m.t), at: Number(m.at), rate: Number(m.rate) || 1, fps: fps > 0 ? fps : 0 };
       next = null;

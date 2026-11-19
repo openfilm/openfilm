@@ -47,6 +47,8 @@ import { providerName } from '@/lib/providers';
 import { CaptionsPane, type CaptionsActions, type CaptionsSource } from './CaptionsPane';
 import { STARRED, VoicesPane, type VoiceSample } from './VoicesPane';
 import { CoversPane, type CoversActions, type CoversLine } from './CoversPane';
+import { GENERATABLE, type GenerationActions } from '@/lib/asset-generation';
+import { GenerationPane } from './GenerationPane';
 
 type OwnCategory = 'media' | 'voice' | 'captions' | 'cover' | 'coverPicture' | LibraryCategory;
 /** One of OpenFilm's own categories, or a plugin's tab (by its plugin's id). */
@@ -84,6 +86,7 @@ const NEW_TEXT = 'new';
 /* a namespace of the side bar shown whole: OpenFilm's own things of the category, or those got from the Community */
 const OFFICIAL_ALL = '@official';
 const COMMUNITY_ALL = '@community';
+const GENERATE = '@generate';
 const PRESETS = 'presets';
 const ART = 'art';
 const TEMPLATES = 'tpl';
@@ -109,6 +112,7 @@ export interface LibraryActions {
   add: (item: LibraryItem) => void;
   /** A click: tried in the viewer (null: no longer). */
   tryOut: (item: LibraryItem | null) => void;
+  generation?: GenerationActions;
 }
 
 
@@ -461,7 +465,7 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, onUpload, onKee
   const officialPacks = cat === 'text' ? [] : packsShown.filter((p) => p.official);
   const communityPacks = packsShown.filter((p) => !p.official);
   const [folded, setFolded] = React.useState<Record<string, boolean>>(readFolded);
-  const fold = (id: string) => setFolded((was) => { const next = { ...was, [`${cat}:${id}`]: !was[`${cat}:${id}`] }; keepFolded(next); return next; });
+  const fold = (id: string, closed?: boolean) => setFolded((was) => { const next = { ...was, [`${cat}:${id}`]: closed ?? !was[`${cat}:${id}`] }; keepFolded(next); return next; });
   const lines = [...head, ...movable];
   const holdLine = (e: React.PointerEvent<HTMLElement>, key: string) => {
     if (e.button !== 0 || renaming) return;
@@ -521,7 +525,7 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, onUpload, onKee
   /* the media's files (this project's, a folder of the person's), unless one of its namespaces is shown (`group`) */
   const ownShown = !ownLines && (current.kind === 'project' || current.kind === 'folder') && !(cat === 'media' && group !== '');
   /* a namespace shown whole (or the text's looks or templates, OpenFilm's): no line in it lit */
-  const wholeShown = group === STARRED || group === OFFICIAL_ALL || group === COMMUNITY_ALL || (cat === 'text' && (group === ART || group === TEMPLATES));
+  const wholeShown = group === STARRED || group === GENERATE || group === OFFICIAL_ALL || group === COMMUNITY_ALL || (cat === 'text' && (group === ART || group === TEMPLATES));
   const lineOn = (line: Line) => !(q && !ownShown) && (cat === 'media'
     ? (line.kind === 'pack' ? group === line.group : group === '' && line.key === current.key)
     : line.key === current.key && !(sectioned && wholeShown));
@@ -532,6 +536,8 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, onUpload, onKee
   };  /* the side bar as namespaces (all but the media's): a box picks, or opens to the lines it holds */
   type RailNode = { key: string; name: string; on?: boolean; onPick?: () => void; line?: Line; children?: RailNode[] };
   const railPick = (id: string): RailNode => ({ key: id || 'all', name: '', on: group === id && !(q && id !== RECORD), onPick: () => pickGroup(id) });
+  const generationCategory = actions.generation && GENERATABLE.find((value) => value === cat);
+  const generationNode = { ...railPick(GENERATE), name: t('assetGeneration.title') };
   const ofLine = (line: Line): RailNode => ({ key: line.key, name: line.name, on: lineOn(line), onPick: () => pickLine(line), line });
   /* the voice-over's own: the person's (recording, then their voices cloned), the starred, the services */
   const inMine = cat === 'voice' && (group === MY_VOICES || group === RECORD);
@@ -547,6 +553,7 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, onUpload, onKee
   ];
   const nodes: RailNode[] = cat === 'voice' ? [
     { ...railPick(STARRED), name: t('assetDrawer.favorites') },
+    ...(generationCategory ? [generationNode] : []),
     { key: 'mine', name: t('assetDrawer.railMine'), on: inMine && !q, onPick: () => pickGroup(MY_VOICES) },
     { key: 'services', name: t('assetDrawer.railServices'), children: [
       { ...railPick(''), name: t('assetDrawer.all') },
@@ -562,19 +569,21 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, onUpload, onKee
     { ...railPick('ai'), name: t('covers.fromAi') },
   ] : cat === 'captions' ? [
     { ...railPick('speech'), name: t('assetDrawer.captionsFromSpeech') },
+    ...(generationCategory ? [generationNode] : []),
     { ...railPick('file'), name: t('assetDrawer.captionsFromFile') },
     { ...railPick('hand'), name: t('assetDrawer.captionsByHand') },
   ] : [
     /* the same order in every category: (the text's new line), 收藏, (the text's 我的: its looks saved), 官方, 社区 */
     ...head.filter((l) => l.kind === 'new').map(ofLine),
     { ...railPick(STARRED), name: t('assetDrawer.favorites') },
+    ...(generationCategory ? [generationNode] : []),
     ...head.filter((l) => l.kind === 'presets').map((l) => ({ ...ofLine(l), name: t('assetDrawer.railMine') })),
     ...spaces,
   ];
 
   /* the line shown is the pack's or the folder's it says (as the drawer opens, as the category changes) */
   React.useEffect(() => {
-    if (ownLines) return;
+    if (ownLines || wholeShown) return;
     if ((current.kind === 'project' || current.kind === 'folder') && mediaScope !== current.key) onMediaScope(current.key);
     const want = current.kind === 'pack' ? current.group ?? '' : current.kind === 'new' ? NEW_TEXT : current.kind === 'presets' ? PRESETS : null;
     if (want != null && want !== group) { SHOWN.group[cat] = want; setGroup(want); }
@@ -704,8 +713,7 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, onUpload, onKee
       ...visible.filter((i) => i.kind === 'group').map(templateExamplePath)]);
   }, [isShown, items, drawn]);
 
-  /* a namespace of the side bar, as a box: one that shows its whole picks it (opened); its arrow, or a box that only
-     holds others, folds it; each line under it a pack (or the voice-over's services) */
+  /* The heading opens the first child. The arrow only folds the group. */
   const railNode = (node: RailNode): React.ReactNode => {
     if (!node.children) {
       return (
@@ -723,10 +731,12 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, onUpload, onKee
       <div key={node.key} className="flex flex-col" data-rail-section={node.key}>
         <button type="button" aria-expanded={node.children.length ? open : undefined} aria-pressed={whole ? Boolean(node.on) : undefined} title={node.name}
           onClick={(e) => {
-            /* the box itself opens or folds it, as its arrow does; one that shows its whole is picked as it opens */
             const arrow = Boolean((e.target as HTMLElement).closest('[data-rail-fold]'));
-            if (node.children?.length) fold(node.key);
-            if (whole && !arrow && (!open || !node.children?.length)) node.onPick?.();
+            if (arrow) { if (node.children?.length) fold(node.key); return; }
+            if (!node.children?.length) { node.onPick?.(); return; }
+            if (!open) fold(node.key, false);
+            const first = node.children[0];
+            if (!first?.on) first?.onPick?.();
           }}
           className={`${RAIL_BOX} ${lit ? 'text-[var(--accent)]' : 'text-[var(--text)]'}`}>
           <span className="min-w-0 flex-1 truncate">{node.name}</span>
@@ -736,14 +746,18 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, onUpload, onKee
             </span>
           ) : null}
         </button>
-        {open ? node.children.map((child) => (
-          <button key={child.key} type="button" onClick={child.onPick} aria-pressed={child.on} title={child.name}
-            data-rail-line={child.line?.key} data-rail-kind={child.line?.kind}
-            onContextMenu={child.line ? (e) => { e.preventDefault(); setRailMenu({ x: e.clientX, y: e.clientY, items: lineMenu(child.line!) }); } : undefined}
-            className={`${RAIL_CHILD} ${child.on ? 'text-[var(--accent)]' : 'text-[var(--text)] hover:text-[var(--accent)]'}`}>
-            <span className="min-w-0 flex-1 truncate">{child.name}</span>
-          </button>
-        )) : null}
+        {open && node.children.length ? (
+          <div className={RAIL_CHILDREN}>
+            {node.children.map((child) => (
+              <button key={child.key} type="button" onClick={child.onPick} aria-pressed={child.on} title={child.name}
+                data-rail-line={child.line?.key} data-rail-kind={child.line?.kind}
+                onContextMenu={child.line ? (e) => { e.preventDefault(); setRailMenu({ x: e.clientX, y: e.clientY, items: lineMenu(child.line!) }); } : undefined}
+                className={`${RAIL_CHILD} ${child.on ? 'text-[var(--accent)]' : 'text-[var(--text)]'}`}>
+                <span className="min-w-0 flex-1 truncate">{child.name}</span>
+              </button>
+            ))}
+          </div>
+        ) : null}
       </div>
     );
   };
@@ -807,7 +821,7 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, onUpload, onKee
         {/* as wide as the person dragged its edge (RAIL), kept for next time */}
         <div className="relative flex shrink-0" style={{ width: rail }}>
           <RailEdge width={rail} onWidth={setRail} />
-          <nav ref={railNav} data-studio-host-panel="" className="flex min-w-0 flex-1 flex-col gap-1 overflow-y-auto border-r border-[var(--border)] px-2 pb-[var(--drawer-foot)] pt-2.5">
+          <nav ref={railNav} data-studio-host-panel="" className="flex min-w-0 flex-1 flex-col gap-1 overflow-y-auto border-r border-[var(--border)] px-2.5 pb-[var(--drawer-foot)] pt-2.5">
             {/* the side bar is the library's folders: this project's, the person's own (the library folder's), the packs
                 of the Community (OpenFilm's own among them), as one list in the person's order; the right side shows
                 what of this category the line picked holds */}
@@ -825,9 +839,12 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, onUpload, onKee
                       <span className="min-w-0 flex-1 truncate">{t('assetDrawer.railMine')}</span>
                       <ChevronDown size={13} aria-hidden className={`shrink-0 transition-transform duration-150 ${folded[`${cat}:mine`] ? '' : 'rotate-180'}`} />
                     </button>
-                    {folded[`${cat}:mine`] ? null : movable.map((line, i) => mineLine(line, i, 'child'))}
+                    {folded[`${cat}:mine`] ? null : (
+                      <div className={RAIL_CHILDREN}>{movable.map((line, i) => mineLine(line, i, 'child'))}</div>
+                    )}
                   </div>
                 ) : null}
+                {generationCategory ? railNode(generationNode) : null}
                 {spaces.map(railNode)}
               </div>
             )}
@@ -861,7 +878,9 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, onUpload, onKee
           </nav>
         </div>
         <div className="relative flex min-h-0 min-w-0 flex-1 flex-col" data-studio-host-panel={ownShown ? undefined : ''}>
-          {ownShown ? media(kindsOf(cat)) : cat === 'captions' ? (captions ? <CaptionsPane actions={captions} source={group as CaptionsSource} /> : null)
+          {group === GENERATE && generationCategory && actions.generation ? (
+            <GenerationPane key={generationCategory} category={generationCategory} actions={actions.generation} />
+          ) : ownShown ? media(kindsOf(cat)) : cat === 'captions' ? (captions ? <CaptionsPane actions={captions} source={group as CaptionsSource} /> : null)
             : cat === 'cover' || cat === 'coverPicture' ? (covers ? <CoversPane actions={covers} category={cat === 'cover' ? 'cover' : 'coverPicture'} line={group as CoversLine} /> : null)
             : (
             <>
@@ -980,8 +999,9 @@ function StarButton({ item, kept, className }: { item: LibraryItem; kept: boolea
 }
 
 /** A namespace of the side bar, as a box (one that opens, its heading); a line under one that opened. */
-const RAIL_BOX = 'flex h-[26px] w-full shrink-0 select-none items-center gap-1 rounded-[4px] bg-[var(--bg-field)] px-2.5 text-left text-[11.5px] font-semibold transition-colors hover:bg-[var(--bg-pressed)]';
-const RAIL_CHILD = 'flex h-7 w-full shrink-0 items-center px-2.5 text-left text-[11.5px] font-semibold transition-colors';
+const RAIL_BOX = 'flex h-[26px] w-full shrink-0 select-none items-center gap-1 rounded-[4px] bg-[var(--bg-field)] px-2.5 text-left text-[11.5px] font-semibold hover:bg-[var(--bg-pressed)]';
+const RAIL_CHILDREN = 'mt-2 flex flex-col gap-2';
+const RAIL_CHILD = 'flex h-6 w-full shrink-0 select-none items-center rounded-[4px] px-2.5 text-left text-[11.5px] font-semibold hover:bg-[var(--bg-pressed)] focus-visible:bg-[var(--bg-pressed)]';
 
 /** The sections of the side bars folded, by category and section, kept on this computer. */
 const FOLDED_KEY = 'openfilm.library.folded';
@@ -1065,7 +1085,7 @@ function RailLine({ line, on, onPick, onMenu, onHold, held = false, style, drop,
         if (drop?.accepts(e.dataTransfer)) { e.preventDefault(); e.stopPropagation(); drop.onDrop(e); }
       }}
       /* the one shown in the accent; a folder something is dragged over, ringed; the one held, lifted */
-      className={`${look === 'box' ? RAIL_BOX : `${RAIL_CHILD} rounded-md`} ${on ? 'text-[var(--accent)]' : `text-[var(--text)] ${look === 'child' ? 'hover:text-[var(--accent)]' : ''}`} ${held ? 'cursor-grabbing bg-[var(--bg-raised)] shadow-[0_6px_18px_rgba(0,0,0,0.28)] ring-1 ring-[var(--border-strong)]' : ''} ${over ? 'ring-1 ring-[var(--accent)]' : ''} ${line.link?.missing ? 'opacity-60' : ''}`}>
+      className={`${look === 'box' ? RAIL_BOX : RAIL_CHILD} ${on ? 'text-[var(--accent)]' : 'text-[var(--text)]'} ${held ? 'cursor-grabbing bg-[var(--bg-raised)] shadow-[0_6px_18px_rgba(0,0,0,0.28)] ring-1 ring-[var(--border-strong)]' : ''} ${over ? 'ring-1 ring-[var(--accent)]' : ''} ${line.link?.missing ? 'opacity-60' : ''}`}>
       <span className="min-w-0 flex-1 truncate">{label ?? line.name}</span>
     </button>
   );

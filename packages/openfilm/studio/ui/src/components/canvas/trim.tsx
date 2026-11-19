@@ -5,6 +5,8 @@
 import React from 'react';
 import { Check, LoaderCircle, Pause, Play } from 'lucide-react';
 import { useT } from '@/i18n';
+import { useVideoPlayback } from '@/lib/video-playback';
+import type { MediaSources, WorkspaceResource } from '@/lib/workspace-resources';
 import { CanvasModal } from './libraries';
 
 const MIN_PART = 0.2;
@@ -24,8 +26,16 @@ export function Filmstrip({ length, frameAt }: { length: number; frameAt?: (ms: 
 }
 const time = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toFixed(1).padStart(4, '0')}`;
 
-export function TrimEditor({ src, frameAt, onClose, onDone }: { src: string; frameAt?: (ms: number) => string; onClose: () => void; onDone: (from: number, to: number) => Promise<void> | void }) {
+export function TrimEditor({ file, sources, frameAt, onClose, onDone }: {
+  file: WorkspaceResource;
+  sources: MediaSources;
+  frameAt?: (ms: number) => string;
+  onClose: () => void;
+  onDone: (from: number, to: number) => Promise<void> | void;
+}) {
   const t = useT();
+  const playback = useVideoPlayback(file, sources);
+  const status = playback.message(t);
   const video = React.useRef<HTMLVideoElement>(null);
   const track = React.useRef<HTMLDivElement>(null);
   const [length, setLength] = React.useState(0);
@@ -57,7 +67,7 @@ export function TrimEditor({ src, frameAt, onClose, onDone }: { src: string; fra
     if (!v) return;
     if (!v.paused) { v.pause(); return; }
     if (v.currentTime < part[0] || v.currentTime >= part[1] - 0.05) v.currentTime = part[0];
-    void v.play();
+    void v.play().catch(() => {});
   };
   const done = async () => {
     if (busy || part[1] - part[0] < MIN_PART) return;
@@ -98,9 +108,10 @@ export function TrimEditor({ src, frameAt, onClose, onDone }: { src: string; fra
         <span className="text-[12px] text-[var(--cv-ink-3)]">{t('canvas.clipTools.trimHint')}</span>
       </div>
       <div className="flex min-h-0 flex-1 items-center justify-center p-6">
-        <video ref={video} src={src} playsInline preload="auto" className="max-h-full max-w-full rounded-[10px] bg-black"
+        <video ref={video} src={playback.src} onError={playback.onError} hidden={Boolean(status)} playsInline preload="auto" className="max-h-full max-w-full rounded-[10px] bg-black"
           onLoadedMetadata={(event) => { const d = event.currentTarget.duration; if (Number.isFinite(d)) { setLength(d); setPart([0, d]); } }}
           onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} onClick={play} />
+        {status ? <p role="status" className="text-sm text-[var(--cv-ink-3)]">{status}</p> : null}
       </div>
       <div className="px-5 pb-2">
         {/* the clip's track: the part kept lit between its two grips, the playhead a line */}

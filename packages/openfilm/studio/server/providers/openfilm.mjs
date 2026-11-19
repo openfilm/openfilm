@@ -264,7 +264,7 @@ export default {
     };
     /* a release restarts the service: a request is said again through it, and a run it no longer knows (404) is posted
        again with the same key, which never charges twice; one it still counts as running elsewhere (409) is waited for */
-    const steady = { patience: polling.patience, keep: [409] };
+    const steady = { patience: polling.patience, keep: [409], stopOnCommandFailure: true };
     /* a short request that hears nothing for 45 s is asked again (the same key: never a second charge); one carrying
        its inputs inline (a service with no upload address) is given its whole time */
     const short = { ...ctx, networkTimeoutMs: 45_000 };
@@ -297,6 +297,12 @@ export default {
     try {
     for (;;) {
       for (let wait = Math.min(polling.first, polling.ms); [202, 404, 409].includes(res.status); wait = Math.min(polling.ms, wait * 2)) {
+        if (res.status === 202) {
+          const progress = await res.clone().json().catch(() => null);
+          if (progress?.status === 'reconciliation' || progress?.phase === 'reconciliation') {
+            throw new Error(`OpenFilm could not confirm the supplier's result. Keep request ${runKey} to recover it later.`);
+          }
+        }
         if (Date.now() > until) throw new Error(`${NAME} has not delivered this after ${Math.round(polling.most / 60_000)} minutes. It may already be complete and charged. Keep request ${runKey} to recover it; do not start a new generation just to fetch its result.`);
         await sleep(res.status === 409 ? polling.busy : wait, ctx.signal);
         res = res.status === 202 ? await get() : await post();

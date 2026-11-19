@@ -75,8 +75,8 @@ export default {
   clones,
   async run(verb, args, ctx) {
     const base = serviceUrl('ELEVENLABS', 'https://api.elevenlabs.io');
-    const send = (/** @type {string} */ path, /** @type {RequestInit} */ init = {}) =>
-      call(NAME, `${base}${path}`, { ...init, headers: { 'xi-api-key': ctx.key, ...init.headers } }, ctx);
+    const send = (/** @type {string} */ path, /** @type {RequestInit} */ init = {}, retryThrottle = false) =>
+      call(NAME, `${base}${path}`, { ...init, headers: { 'xi-api-key': ctx.key, ...init.headers } }, ctx, { retryThrottle });
     const post = (/** @type {string} */ path, /** @type {unknown} */ body) =>
       send(path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
 
@@ -84,11 +84,18 @@ export default {
     if (verb === 'tts') {
       /* a recording's voice (`--voice-sample`) is cloned for it: `--voice` then only names it in what the run says */
       const voice = text(args['voice-sample']) ? await sampleVoice(args, ctx, NAME, clones) : needed(args, 'voice');
+      if (/[\\/]/.test(voice)) throw new Error('Use an ElevenLabs voice ID for --voice, or pass a recording with --voice-sample.');
       const named = text(args['voice-sample']) ? text(args.voice) || 'sample' : voice;
       const said = needed(args, 'text');
       const path = landing('audio/vo', args.out, 'mp3');
       const model = modelOf(MODELS, 'tts', ctx);
-      const body = await (await post(`/v1/text-to-speech/${encodeURIComponent(voice)}/with-timestamps?output_format=${FORMAT}`, { text: said, model_id: model })).json();
+      const response = await post(`/v1/text-to-speech/${encodeURIComponent(voice)}/with-timestamps?output_format=${FORMAT}`, { text: said, model_id: model }).catch((error) => {
+        if (error instanceof Error && /invalid (?:voice )?id|voice with voice_id .*not found/i.test(error.message)) {
+          error.message += ' Choose an ElevenLabs voice and use its voice ID.';
+        }
+        throw error;
+      });
+      const body = await response.json();
       if (typeof body?.audio_base64 !== 'string') throw new Error(`${NAME} answered without audio.`);
       const bytes = new Uint8Array(Buffer.from(body.audio_base64, 'base64'));
       const dur = mp3Seconds(bytes);
@@ -129,7 +136,7 @@ export default {
       form.set('timestamps_granularity', 'word');
       form.set('tag_audio_events', 'false');
       form.set('temperature', '0');
-      const body = await (await send('/v1/speech-to-text', { method: 'POST', body: form })).json();
+      const body = await (await send('/v1/speech-to-text', { method: 'POST', body: form }, true)).json();
       const words = (Array.isArray(body?.words) ? body.words : [])
         .filter((/** @type {any} */ w) => w?.type === 'word' && Number.isFinite(w.start) && text(w.text))
         .map((/** @type {any} */ w) => ({ token: text(w.text), start: w.start, end: Number.isFinite(w.end) ? w.end : w.start }));
@@ -173,7 +180,7 @@ async function voices(args, send) {
   const limit = clamp(Math.round(number(args.limit) ?? 5), 1, 100);
   const language = text(args.language).toLowerCase();
   const gender = text(args.gender).toLowerCase().slice(0, 1);
-  const prompt = text(args.prompt);
+  const prompt = text(args.prompt).split(/\s+/).slice(0, 30).join(' ');
   const page = async (/** @type {string} */ search) => {
     const query = new URLSearchParams({ page_size: '100', ...(search ? { search } : {}) });
     const body = await (await send(`/v2/voices?${query}`)).json();

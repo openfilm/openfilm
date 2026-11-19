@@ -45,6 +45,7 @@ export const PROJECT_PARTS: readonly ProjectPart[] = ['history', 'chat', 'logs']
 export type ProjectSizes = { work: number } & Record<ProjectPart, number | null>;
 
 export type ExportJobStatus = 'waiting' | 'running' | 'done' | 'failed' | 'cancelled';
+export type ExportPhase = 'preparing' | 'audio' | 'loudness' | 'rendering' | 'encoding' | 'retrying' | 'muxing' | 'cover' | 'subtitles' | 'copying' | 'packaging' | 'saving' | 'checking' | 'finishing';
 
 export interface ExportJob {
   id: string;
@@ -55,7 +56,12 @@ export interface ExportJob {
   label: string;
   kind: ExportRequest['kind'];
   status: ExportJobStatus;
-  phase: 'preparing' | 'audio' | 'rendering' | 'encoding' | 'copying' | 'finishing' | null;
+  phase: ExportPhase | null;
+  phaseAt?: number | null;
+  /** A fraction of the current stage, when the server can measure that stage. */
+  phaseProgress?: number | null;
+  /** Sound may be worked on concurrently with picture rendering. */
+  audioPhase?: 'audio' | 'loudness' | null;
   /** 0 to 1. */
   progress: number;
   framesDone: number;
@@ -108,17 +114,26 @@ async function call<T>(url: string, init?: RequestInit & { json?: unknown }): Pr
     ...init,
     ...(init?.json !== undefined ? { headers: { 'content-type': 'application/json' }, body: JSON.stringify(init.json) } : {}),
   });
-  const body = await res.json().catch(() => ({})) as { error?: string };
-  if (!res.ok) throw new Error(body.error || `Studio answered ${res.status}`);
+  const body = await res.json().catch(() => ({})) as { error?: string; code?: string };
+  if (!res.ok) throw Object.assign(new Error(body.error || `Studio answered ${res.status}`), { code: body.code });
   return body as T;
 }
 
-/**
- * The project's exports, where they go by default, what this machine encodes, how many subtitle cues the film has, and
- * how big the project and its parts are.
- */
-export function listExports(projectId: string): Promise<{ exports: ExportJob[]; folder: string; can: ExportCapabilities; render?: { auto: number; max: number }; drafts?: { jianying: boolean; capcut: boolean }; subtitles?: number; captionTracks?: boolean; project?: ProjectSizes }> {
-  return call(endpoint(projectId), { cache: 'no-store' });
+/** The queue is fetched independently of media probes and project folder scans. */
+export function listExports(projectId: string): Promise<{ exports: ExportJob[] }> {
+  return call(`${endpoint(projectId)}?view=queue`, { cache: 'no-store' });
+}
+
+export function exportSettings(projectId: string, signal: AbortSignal): Promise<{ folder: string; can: ExportCapabilities; render: { auto: number; max: number }; drafts: { jianying: boolean; capcut: boolean } }> {
+  return call(`${endpoint(projectId)}?view=settings`, { signal, cache: 'no-store' });
+}
+
+export function exportCaptions(projectId: string, signal: AbortSignal): Promise<{ subtitles: number; captionTracks: boolean }> {
+  return call(`${endpoint(projectId)}?view=captions`, { signal, cache: 'no-store' });
+}
+
+export function exportProjectSizes(projectId: string, signal: AbortSignal): Promise<ProjectSizes> {
+  return call(`${endpoint(projectId)}?view=project`, { signal, cache: 'no-store' });
 }
 
 /** A video file's frame rate (`media?what=probe`); null when it has none or can't be read. */
@@ -130,8 +145,8 @@ export async function probeFps(projectId: string, path: string): Promise<number 
 }
 
 /** Queue exports, all or none. `folder`: where to write them (absolute, or ~/…); missing = the default folder. */
-export async function startExports(projectId: string, jobs: readonly ExportRequest[], folder?: string): Promise<ExportJob[]> {
-  const body = await call<{ exports: ExportJob[] }>(endpoint(projectId), { method: 'POST', json: { jobs, ...(folder ? { folder } : {}) } });
+export async function startExports(projectId: string, jobs: readonly ExportRequest[], folder?: string, filmRev?: string): Promise<ExportJob[]> {
+  const body = await call<{ exports: ExportJob[] }>(endpoint(projectId), { method: 'POST', json: { jobs, folder, filmRev } });
   return body.exports;
 }
 

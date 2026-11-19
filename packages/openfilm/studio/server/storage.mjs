@@ -99,16 +99,16 @@ const inside = (/** @type {string} */ root, /** @type {string} */ path) => { con
  * Every listed project that is there, with what it takes, the biggest first (`linked`: a folder elsewhere, opened in
  * place, not in the projects' folder), and the sums; and the room OpenFilm's other folders take: the person's own media and skills, the exports, and what the app keeps
  * for itself (models, the library it downloaded, its logs).
+ * @param {string} root @param {string} savedPath
  * @returns {Promise<{ projects: ({ id: string, name: string, path: string, linked: boolean } & Usage)[], total: number, clearable: number,
  *   places: { saved: number, skills: number, exports: number, app: number } }>}
  */
-async function measure() {
-  const root = libraryRoot();
+async function measure(root, savedPath) {
   const projects = [];
   for (const p of (await listProjects()).filter((p) => !p.missing)) projects.push({ id: p.id, name: p.name || basename(p.path), path: p.path, linked: !inside(root, p.path), ...await projectUsage(p.path) });
   projects.sort((a, b) => b.total - a.total);
   const homes = [...new Set([studioHomeDir(), sharedHome()])];
-  const [saved, skills, exported, ...app] = await Promise.all([folderSize(savedRoot()), folderSize(mySkillsDir()), folderSize(exportsRoot()), ...homes.map(folderSize)]);
+  const [saved, skills, exported, ...app] = await Promise.all([folderSize(savedPath), folderSize(mySkillsDir()), folderSize(exportsRoot()), ...homes.map(folderSize)]);
   return {
     projects, total: projects.reduce((sum, p) => sum + p.total, 0), clearable: projects.reduce((sum, p) => sum + p.clearable, 0),
     places: { saved, skills, exports: exported, app: app.reduce((a, b) => a + b, 0) },
@@ -118,14 +118,21 @@ async function measure() {
 /* measured once for every window that asks at the same time, and kept a little: the card opens at once when it is
    opened again, and a walk of every project's folder never runs twice side by side */
 const KEEP = 30_000;
-/** @type {{ at: number, value: Awaited<ReturnType<typeof measure>> } | null} */
+/** @type {{ key: string, at: number, value: Awaited<ReturnType<typeof measure>> } | null} */
 let kept = null;
-/** @type {Promise<Awaited<ReturnType<typeof measure>>> | null} */
-let measuring = null;
+/** @type {Map<string, ReturnType<typeof measure>>} */
+const measuring = new Map();
 
 /** What OpenFilm takes on disk (see measure). `fresh`: measured again now (after a clear). */
 export async function storage({ fresh = false } = {}) {
-  if (!fresh && kept && Date.now() - kept.at < KEEP) return kept.value;
-  if (!measuring) measuring = measure().then((value) => { kept = { at: Date.now(), value }; return value; }).finally(() => { measuring = null; });
-  return measuring;
+  const root = libraryRoot();
+  const saved = savedRoot();
+  const key = JSON.stringify([studioHomeDir(), sharedHome(), root, saved, exportsRoot()]);
+  if (!fresh && kept?.key === key && Date.now() - kept.at < KEEP) return kept.value;
+  let run = measuring.get(key);
+  if (!run) {
+    run = measure(root, saved).then((value) => { kept = { key, at: Date.now(), value }; return value; }).finally(() => { measuring.delete(key); });
+    measuring.set(key, run);
+  }
+  return run;
 }

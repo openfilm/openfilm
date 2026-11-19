@@ -389,3 +389,27 @@ test('a run the service refused is over: the same settings make a new run; one w
   await assert.rejects(openfilm.run('tts', args, { ...ctx(), root }));
   assert.equal(new Set(keys()).size, 1, 'kept to recover');
 });
+
+test('a legacy 503 that reports a refunded media task stops polling after the first failed GET', async () => {
+  seen.length = 0;
+  reply = (req) => req.method === 'POST' ? [202, { status: 'running' }]
+    : [503, { error: 'command_failed', message: 'provider busy', refunded: 4 }];
+  await assert.rejects(openfilm.run('tts', { text: 'hi', voice: 'v', out: 'hello' }, ctx()), /provider busy/);
+  const requests = seen.filter((r) => r.url.pathname === '/v1/media/run');
+  assert.deepEqual(requests.map((r) => r.method), ['POST', 'GET']);
+  assert.equal(requests[1].url.searchParams.get('key'), requests[0].headers['idempotency-key']);
+});
+
+test('supplier reconciliation stops polling and preserves the original request for recovery', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'openfilm-reconciliation-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  seen.length = 0;
+  reply = (req) => [202, { status: req.method === 'GET' ? 'reconciliation' : 'running' }];
+  const args = { text: 'hi', voice: 'v', out: 'hello' };
+  const context = { ...ctx(), root };
+  await assert.rejects(openfilm.run('tts', args, context), /could not confirm the supplier's result/);
+  await assert.rejects(openfilm.run('tts', args, context), /could not confirm the supplier's result/);
+  const requests = seen.filter((r) => r.url.pathname === '/v1/media/run');
+  assert.deepEqual(requests.map((r) => r.method), ['POST', 'GET', 'GET']);
+  for (const req of requests.slice(1)) assert.equal(req.url.searchParams.get('key'), requests[0].headers['idempotency-key']);
+});

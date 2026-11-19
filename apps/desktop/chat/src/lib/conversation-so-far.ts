@@ -4,6 +4,7 @@
  * message carries what was said so far: each message and the agent's reply, newest kept when it is long.
  */
 import type { SavedTurn } from '@/lib/chat-store';
+import { readFileChanges, type TurnFileChanges } from './file-changes.ts';
 
 /** at most this many characters of what was said before, and of one reply in it */
 export const SO_FAR_MAX = 24_000;
@@ -26,6 +27,24 @@ export function withConversationSoFar(earlier: readonly SavedTurn[], text: strin
     size += one.length;
   }
   if (!said.length) return text;
-  return 'This conversation went on before, in a session of yours that could not be opened again. What was said so far'
+  return 'What was said earlier in this conversation'
     + `${cut ? ' (the latest of it)' : ''}:\n\n<conversation-so-far>\n${said.join('\n\n')}\n</conversation-so-far>\n\n${text}`;
+}
+
+/** The selected agent has a separate session; give it the task and the work it can verify in the same folder. */
+export function withInterruptedTask(earlier: readonly SavedTurn[], { turn, items }: SavedTurn): string {
+  const changes = readFileChanges((turn as TurnFileChanges).fileChanges) ?? [];
+  const recordedSteps = items.filter((item) => item.kind === 'act' && item.act).slice(-24)
+    .map((item) => [item.act, item.detail || item.query].filter(Boolean).join(' ').slice(0, 300));
+  const progress = {
+    originalRequest: turn.prompt,
+    partialReply: items.filter((item) => item.kind === 'text').map((item) => item.text).join('\n\n').slice(-8_000),
+    recordedSteps,
+    changedFiles: changes.slice(0, 40).map(({ path, change }) => ({ path, change })),
+  };
+  return withConversationSoFar(earlier, [
+    'Continue this interrupted task in the current project. Verify the existing work in the project before making changes.',
+    'Use the recorded steps as a progress record and avoid repeating completed edits or paid operations.',
+    JSON.stringify(progress),
+  ].join('\n\n'));
 }

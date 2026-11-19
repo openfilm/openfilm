@@ -26,7 +26,7 @@ import { EMPTY_FILM } from './film.mjs';
 import { FILM_FILE, filmHtml } from '../../src/film-doc.mjs';
 import { writeAtomic } from './atomic.mjs';
 import { coverAt } from './cover.mjs';
-import { libraryProjects, libraryRoot, savedRoot } from '../../src/locations.mjs';
+import { libraryProjects, libraryRoot, requireOutsideInstallation, savedRoot } from '../../src/locations.mjs';
 import { projectMissing } from './project-presence.mjs';
 import { compoundOuter } from './parts.mjs';
 
@@ -91,24 +91,43 @@ function exclusive(change) {
   return run;
 }
 
-/** The list of projects and the person's preferences, read fresh each time (another Studio command may have written). */
-export async function readState() {
+const statePath = () => join(studioHome(), 'studio.json');
+
+function decodeIndex(/** @type {string | null} */ text) {
   try {
-    const raw = JSON.parse(await readFile(join(studioHome(), 'studio.json'), 'utf8'));
-    return /** @type {StudioState} */ ({
-      recent: Array.isArray(raw.recent) ? raw.recent : [],
-      folders: Array.isArray(raw.folders) ? raw.folders.filter((/** @type {any} */ f) => f && typeof f.id === 'string' && typeof f.name === 'string') : [],
-    });
-  } catch { return /** @type {StudioState} */ ({ recent: [], folders: [] }); }
+    const raw = text === null ? null : JSON.parse(text);
+    return raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : null;
+  } catch { return null; }
+}
+
+const readIndex = (/** @type {string} */ path) => readFile(path, 'utf8').then(decodeIndex, () => null);
+
+/** The registered projects, including external folders which cannot be rediscovered in the projects directory. */
+export async function readState() {
+  const path = statePath();
+  const raw = await readIndex(path) ?? await readIndex(`${path}.backup`);
+  return /** @type {StudioState} */ ({
+    recent: Array.isArray(raw?.recent) ? raw.recent : [],
+    folders: Array.isArray(raw?.folders) ? raw.folders.filter((/** @type {any} */ f) => f && typeof f.id === 'string' && typeof f.name === 'string') : [],
+  });
 }
 
 /* the file is shared with every OpenFilm on this computer (`npx openfilm`, the app), older or newer: what this one does
    not know of it is written back as it was */
 async function writeState(/** @type {StudioState} */ state) {
   await mkdir(studioHome(), { recursive: true });
-  const path = join(studioHome(), 'studio.json');
-  const kept = await readFile(path, 'utf8').then(JSON.parse, () => null);
-  await writeAtomic(path, `${JSON.stringify({ ...(kept && typeof kept === 'object' && !Array.isArray(kept) ? kept : {}), ...state }, null, 2)}\n`);
+  const path = statePath();
+  const backup = `${path}.backup`;
+  const text = await readFile(path, 'utf8').catch(e => {
+    if (e.code !== 'ENOENT') throw e;
+    return null;
+  });
+  const primary = decodeIndex(text);
+  if (!primary && text !== null) await writeAtomic(`${path}.${newId()}.damaged`, text);
+  const kept = primary ?? await readIndex(backup);
+  const contents = `${JSON.stringify({ ...kept, ...state }, null, 2)}\n`;
+  await writeAtomic(path, contents);
+  await writeAtomic(backup, contents).catch(() => {});
 }
 
 /** Folders that are never a project: the disk's root, the home folder, and Studio's own. */
@@ -118,6 +137,11 @@ function refuse(/** @type {string} */ folder) {
   if (folder === home) throw new ProjectError('your home folder cannot be a project; make a folder for it');
   const own = resolve(studioHome());
   if (folder === own || folder.startsWith(own + sep)) throw new ProjectError('Studio keeps its own files there');
+}
+
+function requireNewProjectFolder(/** @type {string} */ folder) {
+  try { requireOutsideInstallation(folder); }
+  catch (e) { throw new ProjectError(/** @type {Error} */ (e).message, 400); }
 }
 
 const newId = () => randomBytes(9).toString('base64url');
@@ -160,6 +184,7 @@ export async function openProject(path, { create = true } = {}) {
   if (existsSync(asked) && !statSync(asked).isDirectory()) throw new ProjectError(`${asked} is a file; a project is a folder`);
   if (!create && !existsSync(asked)) throw new ProjectError('That folder does not exist.', 404, 'not-found');
   if (!create && !existsSync(join(asked, FILM_FILE))) throw new ProjectError('There is no film.html in that folder.', 409, 'no-film');
+  if (!existsSync(join(asked, FILM_FILE))) requireNewProjectFolder(asked);
   await mkdir(join(asked, TOOL_DIR), { recursive: true });
   /* one folder is one project however it is reached (through a link; /var and /private/var on macOS) */
   const folder = realpathSync(asked);
@@ -182,6 +207,7 @@ export async function openProject(path, { create = true } = {}) {
 export async function createProject(name = 'Untitled') {
   const clean = folderName(name);
   const root = libraryRoot();
+  requireNewProjectFolder(root);
   await mkdir(root, { recursive: true });
   let candidate = join(root, clean);
   for (let n = 2; existsSync(candidate); n++) candidate = join(root, `${clean} ${n}`);
@@ -233,6 +259,7 @@ export async function duplicateProject(/** @type {string} */ id, /** @type {stri
   if (projectMissing(source.path)) throw new ProjectError('The project is missing.', 410);
   const clean = folderName(name ?? `${basename(source.path)} copy`);
   const root = resolve(libraryRoot());
+  requireNewProjectFolder(root);
   if (staysInside(relative(source.path, root))) throw new ProjectError('The projects library cannot be inside the project being copied.', 409);
   await mkdir(root, { recursive: true });
   const library = realpathSync(root);
@@ -577,23 +604,24 @@ export async function forgetProject(/** @type {string} */ id) {
  * stays where it is, in the list, and is named in `failed`. Across disks a project is copied whole and the old folder
  * sent to the trash; an old folder the trash will not take (the Recycle Bin refusing one bigger than it holds, a
  * trash on another disk) stays on the old disk and is named in `left`: the project has moved, the copy being whole.
- * @param {string | null} to @param {{ move?: boolean, choose: (folder: string | null) => void }} options
+ * @param {string | null} to @param {{ move?: boolean, choose: (folder: string | null) => void | Promise<void> }} options
  */
 export async function moveLibrary(to, { move = false, choose }) {
   const from = libraryRoot();
-  choose(to);
+  const previousSaved = savedRoot();
+  await choose(to);
   const into = libraryRoot();
   /** @type {{ name: string, error: string }[]} */
   const failed = [];
   /** @type {{ name: string, path: string, error: string }[]} */
   const left = [];
   let moved = 0;
-  if (!move || resolve(from) === resolve(into) || !existsSync(from)) return { moved, failed, left };
+  if (!move || !relative(from, into) || sameFolder(from, into) || !existsSync(from)) return { moved, failed, left };
   await mkdir(into, { recursive: true });
   return exclusive(async () => {
     const state = await readState();
     const realFrom = realpathSync(from);
-    for (const folder of libraryProjects(from)) {
+    for (const folder of libraryProjects(from, previousSaved)) {
       let target = join(into, basename(folder));
       for (let n = 2; existsSync(target); n++) target = join(into, `${basename(folder)} ${n}`);
       try {

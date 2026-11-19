@@ -1,14 +1,59 @@
 /**
- * What a track's head has beside lock, hide and mute: solo (hear this track alone, in Studio only) and the edge to
- * drag it taller or shorter by (lib/track-heights).
+ * Track head controls shared by the timeline rows and their divider.
  */
 import * as React from 'react';
+import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 
 import { useT } from '@/i18n';
 import { clampTrackHeight } from '@/lib/track-heights';
 import { Tooltip } from './Tooltip';
 
-/** Solo: an S, in the accent while the track is soloed; ⌥-click soloes it alone. */
+/** The divider reveals the panel toggle beside the pointer, without re-rendering the tracks as it moves. */
+export function TrackHeadDividerToggle({ x, bottom, collapsed, disabled, onToggle }: {
+  x: number;
+  bottom: number;
+  collapsed: boolean;
+  disabled: boolean;
+  onToggle: () => void;
+}) {
+  const t = useT();
+  const label = t(collapsed ? 'timeline.expandTrackHeads' : 'timeline.collapseTrackHeads');
+  const follow = (e: React.PointerEvent<HTMLButtonElement>) => {
+    const button = e.currentTarget;
+    const y = e.clientY - button.getBoundingClientRect().top;
+    button.style.setProperty('--track-toggle-y', `${Math.round(y)}px`);
+  };
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      aria-expanded={!collapsed}
+      disabled={disabled}
+      data-track-head-divider=""
+      className="group absolute top-0 z-[55] w-1.5 -translate-x-1/2 cursor-pointer outline-none disabled:pointer-events-none"
+      style={{ left: x, bottom }}
+      onPointerEnter={follow}
+      onPointerMove={follow}
+      onPointerLeave={(e) => e.currentTarget.style.removeProperty('--track-toggle-y')}
+      onClick={onToggle}
+    >
+      <span
+        aria-hidden="true"
+        className="pointer-events-none invisible absolute left-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center group-hover:visible group-focus-visible:visible"
+        style={{ top: 'clamp(12px, var(--track-toggle-y, 50%), calc(100% - 34px))' }}
+      >
+        <span className="pointer-events-auto grid size-5 place-items-center rounded-[4px] border border-[var(--border-strong)] bg-[var(--bg-raised)] text-[var(--text)] shadow-sm group-focus-visible:outline group-focus-visible:outline-[var(--accent)]">
+          {collapsed ? <PanelLeftOpen size={13} /> : <PanelLeftClose size={13} />}
+        </span>
+        <span className="absolute left-1/2 top-full mt-1 -translate-x-1/2 whitespace-nowrap rounded-[4px] bg-[var(--bg-raised)] px-1.5 py-1 text-[11px] font-medium leading-none text-[var(--text)] shadow-sm">
+          {label}
+        </span>
+      </span>
+    </button>
+  );
+}
+
+/** Solo: an S in the accent color when on; ⌥-click soloes it alone. */
 export function SoloButton({ on, onToggle }: { on: boolean; onToggle: (only: boolean) => void }) {
   const t = useT();
   const label = on ? t('editorTools.unsolo') : t('editorTools.solo');
@@ -30,15 +75,11 @@ export function SoloButton({ on, onToggle }: { on: boolean; onToggle: (only: boo
           e.currentTarget.blur();
           onToggle(e.altKey);
         }}
-        className="flex h-full w-full items-center justify-center rounded-[4px] outline-none transition-colors hover:bg-[var(--bg-hover)]"
+        className={`flex size-6 items-center justify-center rounded-[4px] text-[12px] font-semibold leading-none outline-none transition-colors ${
+          on ? 'text-[var(--accent)]' : 'text-[var(--editor-control)] hover:bg-[var(--bg-hover)]'
+        }`}
       >
-        {/* the letter alone, as the head's other switches: muted at rest, the accent when on */}
-        <span
-          className="text-[12px] font-semibold leading-none"
-          style={{ color: on ? 'var(--accent)' : 'var(--text-muted)' }}
-        >
-          S
-        </span>
+        S
       </button>
     </Tooltip>
   );

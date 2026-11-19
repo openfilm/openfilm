@@ -120,8 +120,14 @@ test('M adds a marker, ⇧M and ⌥M go to the next and the one before (⌥M typ
   assert.equal(mac('M', { shiftKey: true }), 'next-marker');
   assert.equal(actionOf({ ...press('µ', { altKey: true }), code: 'KeyM' }, OPENFILM_MAC, true), 'prev-marker');
   assert.equal(win('m', { altKey: true }), 'prev-marker');
-  assert.equal(mac('m', { metaKey: true }), null);
   assert.equal(mac('m', { altKey: true, shiftKey: true }), 'prev-marker', '⌥⇧M too');
+});
+
+test('Command+M and Ctrl+M open export in each built-in scheme', () => {
+  for (const scheme of BUILT_IN_SCHEMES) {
+    assert.equal(actionOf(press('m', { metaKey: true }), schemeKeymap(scheme, true), true), 'export');
+    assert.equal(actionOf(press('m', { ctrlKey: true }), schemeKeymap(scheme, false), false), 'export');
+  }
 });
 
 test('keys that are not the editor\'s stay the browser\'s, and Ctrl is the modifier off a Mac', () => {
@@ -191,8 +197,15 @@ test('the built-in schemes: each app\'s keys where Studio has the action, OpenFi
   assert.deepEqual(schemeKeymap('premiere', false)['clear-range'], ['mod+shift+x']);
   assert.equal(actionOf(press('k', { metaKey: true }), premiere, true), 'split');
   assert.equal(actionOf(press('\\'), premiere, true), 'zoom-fit');
+  assert.equal(actionOf(press('='), premiere, true), 'zoom-in', 'Zoom In');
+  assert.equal(actionOf({ ...press('+', { shiftKey: true }), code: 'Equal' }, premiere, true), 'zoom-in', '+ is the = key with ⇧');
+  assert.equal(actionOf({ ...press('+'), code: 'NumpadAdd' }, premiere, true), 'zoom-in', 'the keypad\'s +');
+  assert.equal(actionOf(press('-'), premiere, true), 'zoom-out');
 
   const fcp = schemeKeymap('fcp', true);
+  assert.equal(actionOf({ ...press('+', { shiftKey: true }), code: 'Equal' }, fcp, true), 'zoom-in', 'plain + zooms there too');
+  assert.equal(actionOf(press('-'), fcp, true), 'zoom-out');
+  assert.equal(actionOf(press('=', { metaKey: true }), fcp, true), 'zoom-in');
   assert.deepEqual(fcp.loop, ['mod+l']);
   assert.deepEqual(fcp.refer, [], '⌘L loops there');
   assert.deepEqual(fcp['ripple-delete'], ['Backspace', 'Delete'], 'Delete closes the gap');

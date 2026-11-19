@@ -1,7 +1,7 @@
 import { test, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -15,6 +15,7 @@ import { zipFiles } from './zip.mjs';
 import { launch } from '../../src/host.mjs';
 import { layoutTracks } from '../ui/src/lib/timeline-layout.ts';
 import { filmHtml } from '../../src/film-doc.mjs';
+import { readProjectFilm } from './film.mjs';
 import { JIANYING_DRAFT_PATH } from './jianying.mjs';
 import { draftRasterFilter } from '../../scripts/draft-bench-frames.mjs';
 
@@ -198,7 +199,7 @@ test('the exports folder: OPENFILM_EXPORTS, else `exports` in OPENFILM_HOME, els
 test('a video export is render: an MP4 named after the project, with progress, never over an earlier one', ffmpeg, async () => {
   const seen = [];
   const exports = createExports({ onChange: (job) => seen.push(job) });
-  const job = exports.start(project(), { kind: 'video', fps: 24 });
+  const job = exports.start(project(), { kind: 'video', fps: 24, loudness: -14 });
   const done = await ended(exports, job);
   assert.equal(done.status, 'done', done.error);
   assert.equal(done.out, join(exportsRoot(), 'Tiny.mp4'));
@@ -220,11 +221,44 @@ test('a video export is render: an MP4 named after the project, with progress, n
   assert.equal(parseInt(frames, 10), 24);
   assert.ok(seen.some((j) => j.progress > 0 && j.progress < 1), 'progress between start and end');
   assert.ok(seen.some((j) => j.phase === 'rendering' && j.framesTotal === 24 && j.framesDone > 0), 'frames as they are drawn');
+  assert.ok(seen.some((j) => j.audioPhase === 'audio'), 'audio work is reported alongside drawing');
+  assert.ok(seen.some((j) => j.audioPhase === 'loudness'), 'loudness is announced by the worker');
+  const steps = ['encoding', 'muxing', 'finishing', 'saving'].map((step) => seen.findIndex((j) => j.phase === step));
+  assert.ok(steps[0] >= 0 && steps.slice(1).every((index, i) => index > steps[i]), 'output phases arrive in order');
+  for (const index of steps) {
+    assert.equal(seen[index].phaseProgress, null, 'an unmeasured stage has no percentage');
+    assert.ok(seen[index].phaseAt >= done.startedAt);
+  }
 
   const again = exports.start(project(), { kind: 'audio', format: 'm4a', range: [0, 0.5] });
   const sound = await ended(exports, again);
   assert.equal(sound.status, 'done', sound.error);
   assert.ok(existsSync(join(exportsRoot(), 'Tiny 0-0.5s - mix.m4a')), 'the mix, named so');
+});
+
+test('a queued export renders the displayed timeline through saves before and during rendering', ffmpeg, async (t) => {
+  const dir = mkdtempSync(join(scratch, 'Queued timeline-'));
+  const file = join(dir, 'film.html');
+  const markup = (src) => filmHtml({ stage: { w: 320, h: 180 }, tracks: [{ clips: [{ src, id: 'card', time: [0, 0.3] }] }] });
+  writeFileSync(join(dir, 'first.html'), '<body style="background:red"><script>window.film={duration:1,frame(){}}</script>');
+  writeFileSync(join(dir, 'second.html'), '<body style="background:blue"><script>window.film={duration:1,frame(){}}</script>');
+  writeFileSync(file, markup('first.html'));
+  const { rev } = await readProjectFilm(dir);
+  writeFileSync(file, markup('second.html'));
+  let replaced = false;
+  const exports = createExports({ onChange(job) {
+    if (job.phase !== 'finishing' || replaced) return;
+    const temporary = join(dir, 'replace.html');
+    writeFileSync(temporary, markup('first.html') + '\n<!-- saved again -->');
+    renameSync(temporary, file);
+    replaced = true;
+  } });
+  t.after(() => exports.stopAll());
+  const [job] = exports.startAll(project('Queued timeline', dir), { filmRev: rev, jobs: [{ kind: 'video', fps: 10, hardware: false }] });
+  const done = await ended(exports, job);
+  assert.ok(replaced, 'the live file was saved again after drawing');
+  assert.equal(done.status, 'done', done.error);
+  assert.ok(near(firstFrame(done.out).at(150, 70), [255, 0, 0]), 'the old red timeline is exported');
 });
 
 test('an export named where it is asked for: that is the file, and the project is not asked', ffmpeg, async () => {
@@ -713,8 +747,8 @@ test('subtitles: SRT, WebVTT or a transcript of the film\'s cues; a film without
   const none = await ended(silent, silent.start(project('Silent'), { kind: 'subtitles' }));
   assert.equal(none.status, 'failed');
   assert.match(none.error, /no subtitles/);
-  assert.equal(await silent.subtitles(root), 0);
-  assert.equal(await createExports({ captions: subtitles }).subtitles(root), 2);
+  assert.equal((await silent.captionInfo(root)).subtitles, 0);
+  assert.equal((await createExports({ captions: subtitles }).captionInfo(root)).subtitles, 2);
 });
 
 test('slides: a PowerPoint deck and a PDF, one page per scene, the scene named in the notes', ffmpeg, async () => {
@@ -1726,6 +1760,12 @@ test('the API: where exports go and what can be made here; several at once; open
     assert.deepEqual(Object.keys(listed.can).sort(), ['h264', 'hevc', 'hevcAlpha', 'hevcBitrate', 'mp3', 'prores', 'proresChip', 'vp9']);
     assert.deepEqual(Object.keys(listed.drafts).sort(), ['capcut', 'jianying'], 'whether 剪映 and CapCut are here, for an editing project');
     assert.equal(listed.subtitles, 0, 'no subtitle cues in a new project');
+    const queueOnly = await (await api(`/projects/${project.id}/exports?view=queue`)).json();
+    assert.deepEqual(queueOnly, { exports: [] });
+    const settings = await (await api(`/projects/${project.id}/exports?view=settings`)).json();
+    assert.equal(settings.folder, listed.folder);
+    assert.equal(settings.project, undefined);
+    assert.equal(settings.subtitles, undefined);
     const bad = await api(`/projects/${project.id}/exports`, { method: 'POST', body: { jobs: [{ kind: 'audio' }, { kind: 'slides', format: 'key' }] } });
     assert.equal(bad.status, 400);
     const queued = await (await api(`/projects/${project.id}/exports`, { method: 'POST', body: { jobs: [{ kind: 'audio', label: 'Sound' }] } })).json();

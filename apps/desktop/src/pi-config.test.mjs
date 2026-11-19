@@ -114,7 +114,10 @@ test('why a turn failed, in plain words: a service that sent nothing in time, a 
   assert.equal(failureText("400: This model's maximum context length is 65536 tokens. However, you requested 70000 tokens."), `The conversation is too long for the model. ${hint}`);
   assert.equal(failureText('prompt is too long: 213462 tokens > 200000 maximum'), `The conversation is too long for the model. ${hint}`);
   assert.equal(failureText('401 Incorrect API key provided'), '401 Incorrect API key provided');
-  assert.equal(failureText('terminated'), 'terminated', 'a connection cut off is not said to be a timeout');
+  const disconnected = 'The connection to the model service was interrupted. Continue to pick up this task.';
+  assert.equal(failureText('Connection error.'), disconnected);
+  assert.equal(failureText('terminated'), disconnected);
+  assert.equal(retryNotice({ errorMessage: 'Connection error.' })._meta.openfilm.noticeKey, 'composer.modelConnectionRetry');
 });
 
 test('a model service tried again, as a notice: one that sent nothing in time in plain words, else with what Pi said', () => {
@@ -222,4 +225,16 @@ test('the byte guard includes UTF-8 text, system and tools, and leaves space for
   assert.ok(fitted.pruned.length >= 2, 'text leaves room for only part of the pictures');
   assert.equal(fitted.messages[0], messages[0], 'system and tools are left intact');
   assert.equal(fitImages([{ role: 'user', content: [{ type: 'image', data: 'x'.repeat(20) }] }], 0).kept, 0, 'a picture too large by itself is omitted');
+});
+
+test('Cloudflare and model gateway timeouts show a short message while diagnostics retain the original error', () => {
+  const errorMessage = '524 {"error_name":"origin_response_timeout", "ray_id":"example"}';
+  const notice = retryNotice({ errorMessage });
+  assert.match(notice.title, /took too long to respond/);
+  assert.equal(notice.description, undefined);
+  assert.equal(failureText('504 {"error":{"code":"upstream_timeout"}}'), 'The model service took too long to respond. Try again or switch models.');
+  assert.throws(() => stopReason({ stopReason: 'error', errorMessage }), (e) => {
+    assert.equal(e.details, errorMessage);
+    return true;
+  });
 });

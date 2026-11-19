@@ -32,6 +32,11 @@ import { dirname, join } from 'node:path';
 import { startStudio, vaultSealer } from 'openfilm/studio';
 import { desktopAccount } from 'openfilm/desktop-account';
 import { launch } from 'openfilm/host';
+import { recordProblem } from 'openfilm/problems';
+
+process.on('uncaughtExceptionMonitor', (error, origin) => {
+  recordProblem({ area: 'studio', step: origin, what: `${error?.name ?? 'Error'}: ${error?.message ?? String(error)}`, code: error?.code });
+});
 
 const parent = process.parentPort;
 const send = (message) => parent.postMessage(message);

@@ -65,14 +65,23 @@ export const ExportTray = React.forwardRef<ExportTrayHandle, { projectId: string
   /* in an app with tabs: this project's tab shows how far its exports have got (none running: nothing) */
   const running = jobs.filter(jobIsActive);
   const share = running.length ? Math.floor((running.reduce((sum, j) => sum + (j.progress ?? 0), 0) / running.length) * 100) / 100 : null;
-  React.useEffect(() => { studioHost?.tabs?.report({ exporting: share }); }, [share]);
+  const current = running.find((job) => job.status === 'running' && !cancelling(job));
+  const pct = current ? phasePercent(current) : null;
+  const currentPhase = current ? phaseLabel(current, t) : '';
+  const exportStage = pct == null && running.length
+    ? currentPhase || t(running.some(cancelling) ? 'exportTray.cancelling' : 'exportTray.queued') : null;
+  React.useEffect(() => {
+    studioHost?.tabs?.report({ exporting: pct == null ? share : pct / 100, exportStage });
+  }, [share, pct, exportStage]);
 
-  const merge = React.useCallback((incoming: readonly ExportJob[]) => {
+  const merge = React.useCallback((incoming: readonly ExportJob[], seed = false) => {
     setJobs((prev) => {
-      /* an export can end before the answer that queued it arrives (a subtitle file takes milliseconds): an ended
-         job is never put back to waiting by older news */
-      const ended = new Map(prev.filter((j) => !jobIsActive(j)).map((j) => [j.id, j]));
-      const next = incoming.map((j) => (jobIsActive(j) && ended.get(j.id)) || j);
+      /* Queue responses can arrive after live progress for the same job. */
+      const known = new Map(prev.map((j) => [j.id, j]));
+      const next = incoming.map((j) => {
+        const prior = known.get(j.id);
+        return prior && (seed || (!jobIsActive(prior) && jobIsActive(j))) ? prior : j;
+      });
       const ids = new Set(next.map((j) => j.id));
       return [...next, ...prev.filter((j) => !ids.has(j.id))];
     });
@@ -80,7 +89,7 @@ export const ExportTray = React.forwardRef<ExportTrayHandle, { projectId: string
 
   React.useImperativeHandle(ref, () => ({
     push: (queued) => {
-      merge(queued);
+      merge(queued, true);
       if (queued.length) setOpen(true);
     },
   }), [merge]);
@@ -138,7 +147,9 @@ export const ExportTray = React.forwardRef<ExportTrayHandle, { projectId: string
   const headline = ended ? ended.text
     : stopping === active.length ? t('exportTray.cancelling')
       : t('exportTray.running').replace('{n}', String(active.length - stopping));
-  const pct = share == null ? null : Math.round(share * 100);
+  const badge = pct != null ? `${pct}%` : exportStage || visible.length;
+  const detail = currentPhase || exportStage;
+  const statusLabel = [headline, detail === headline ? '' : detail, pct != null ? `${pct}%` : ''].filter(Boolean).join(' · ');
   const icon = !ended ? <Loader2 size={14} className="shrink-0 animate-spin text-[var(--accent)]" />
     : ended.tone === 'err' ? <CircleAlert size={14} className="shrink-0 text-[var(--err)]" />
       : ended.tone === 'muted' ? <Ban size={14} className="shrink-0 text-[var(--text-faint)]" />
@@ -149,11 +160,11 @@ export const ExportTray = React.forwardRef<ExportTrayHandle, { projectId: string
       onEscapeKeyDown={() => { setOpen(false); trigger.current?.focus({ preventScroll: true }); }}
       trigger={
       <button ref={trigger} type="button" data-export-queue-trigger="" aria-expanded={open} aria-controls={open ? id : undefined}
-        aria-label={`${headline}${pct == null ? '' : ` · ${pct}%`}`}
-        title={headline}
+        aria-label={statusLabel}
+        title={statusLabel}
         className="flex h-[26px] min-w-[48px] shrink-0 items-center justify-center gap-1 rounded-md bg-[var(--bg-hover)] px-1.5 text-[11px] font-medium tabular-nums text-[var(--text)] transition hover:bg-[var(--bg-pressed)]">
         {icon}
-        {pct == null ? visible.length : `${pct}%`}
+        <span className="max-w-32 truncate">{badge}</span>
       </button>
     }>
       <section ref={panel} id={id} tabIndex={-1} data-export-queue="" aria-label={headline}
@@ -218,6 +229,23 @@ export const ExportTray = React.forwardRef<ExportTrayHandle, { projectId: string
   );
 });
 
+const phaseLabel = (job: ExportJob, t: (key: string) => string) => t(`exportTray.phase.${job.phase ?? 'preparing'}`);
+
+function phasePercent(job: ExportJob) {
+  const value = job.phaseProgress;
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 && value < 1 ? Math.floor(value * 100) : null;
+}
+
+function PhaseElapsed({ at, t }: { at: number; t: (key: string) => string }) {
+  const [now, setNow] = React.useState(Date.now);
+  React.useEffect(() => {
+    setNow(Date.now());
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [at]);
+  return <span className="shrink-0 text-[var(--text-faint)]">{t('exportTray.stageElapsed').replace('{time}', formatDuration(Math.max(0, now - at)))}</span>;
+}
+
 function JobLine({ job, cancelling, t }: { job: ExportJob; cancelling: boolean; t: (k: string) => string }) {
   const [whole, setWhole] = React.useState(false);
   if (cancelling) {
@@ -227,27 +255,37 @@ function JobLine({ job, cancelling, t }: { job: ExportJob; cancelling: boolean; 
     return <p className="mt-0.5 text-[11.5px] text-[var(--text-faint)]">{t('exportTray.queued')}</p>;
   }
   if (job.status === 'running') {
-    const pct = Math.round(job.progress * 100);
+    const pct = phasePercent(job);
+    const drawing = job.phase === 'rendering';
     const parts = [
-      job.phase ? t(`exportTray.phase.${job.phase}`) : '',
-      job.framesTotal ? `${job.framesDone}/${job.framesTotal}` : '',
-      job.rate ? `${job.rate.toFixed(job.rate < 10 ? 1 : 0)} fps` : '',
-      job.renderWorkers ? t('exportTray.workers').replace('{n}', String(job.renderWorkers)) : '',
+      drawing && job.framesTotal ? `${job.framesDone}/${job.framesTotal}` : '',
+      drawing && job.rate ? `${job.rate.toFixed(job.rate < 10 ? 1 : 0)} fps` : '',
+      drawing && job.renderWorkers ? t('exportTray.workers').replace('{n}', String(job.renderWorkers)) : '',
     ].filter(Boolean);
-    /* how long is left never gives way: a narrow tray cuts the rest first */
-    const left = job.etaMs != null ? `${t('exportTray.eta')} ${formatDuration(job.etaMs)}` : '';
+    const left = drawing && job.etaMs != null ? t('exportTray.stageEta').replace('{time}', formatDuration(job.etaMs)) : '';
+    const label = phaseLabel(job, t);
+    const audioLabel = job.audioPhase && job.audioPhase !== job.phase ? t(`exportTray.phase.${job.audioPhase}`) : '';
     return (
       <div className="mt-1.5">
         {job.software ? <p className="mb-1.5 text-[11.5px] leading-snug text-[var(--warn)]">{t('exportTray.software')}</p> : null}
-        <div className="h-[3px] overflow-hidden rounded-full bg-[var(--bg-field)]">
-          <div className="h-full rounded-full bg-[var(--accent)] transition-[width] duration-500" style={{ width: `${pct}%` }} />
+        <div className="mb-1.5 flex items-baseline justify-between gap-2 text-[11.5px] tabular-nums text-[var(--text)]">
+          <span role="status" data-export-phase={job.phase ?? 'preparing'}>
+            {label}{audioLabel && <span className="block text-[var(--text-muted)]">{audioLabel}</span>}
+          </span>
+          <PhaseElapsed at={job.phaseAt ?? job.startedAt ?? job.at} t={t} />
         </div>
-        <p className="mt-1 flex items-center gap-1.5 text-[11px] tabular-nums text-[var(--text-faint)]">
-          <span className="min-w-0 flex-1 truncate">{parts.join(' · ')}{left ? ' ·' : ''}</span>
-          {left ? <span className="shrink-0">{left}</span> : null}
-          {job.encoder ? <span className="shrink-0 rounded bg-[var(--bg-field)] px-1 py-px font-mono text-[10px]">{job.encoder}</span> : null}
-          <span className="shrink-0">{pct}%</span>
-        </p>
+        <div role="progressbar" aria-label={label} aria-valuenow={pct ?? undefined} className="h-[3px] overflow-hidden rounded-full bg-[var(--bg-field)]">
+          {pct == null ? <div className="h-full w-full rounded-full bg-[var(--accent)]/40 animate-pulse motion-reduce:animate-none" />
+            : <div className="h-full rounded-full bg-[var(--accent)] transition-[width] duration-500" style={{ width: `${pct}%` }} />}
+        </div>
+        {(parts.length > 0 || left || job.encoder || pct != null) ? (
+          <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] tabular-nums text-[var(--text-faint)]">
+            {parts.length > 0 ? <span>{parts.join(' · ')}</span> : null}
+            {left ? <span>{left}</span> : null}
+            {job.encoder ? <span className="rounded bg-[var(--bg-field)] px-1 py-px font-mono text-[10px]">{job.encoder}</span> : null}
+            {pct != null ? <span className="ml-auto">{pct}%</span> : null}
+          </p>
+        ) : null}
       </div>
     );
   }

@@ -32,6 +32,16 @@ test('a project with no chat yet has none; what is saved comes back, the turns i
   assert.deepEqual(loadChat(dir).turns.find((t) => t.turn.id === 't1').items, [], 'a turn saved again replaces itself');
 });
 
+test('an old message queue stays on disk when the conversation is loaded', () => {
+  const dir = project();
+  saveSessions(dir, { sessions: [], last: null });
+  const file = join(chatDir(dir), 'queue.json');
+  const contents = JSON.stringify([{ id: 'local:old', sessionId: 's1', instruction: 'Unsent message' }]);
+  writeFileSync(file, contents);
+  assert.deepEqual(loadChat(dir), { sessions: [], last: null, turns: [] });
+  assert.equal(readFileSync(file, 'utf8'), contents);
+});
+
 test('a turn is written to its log as it happens and read back, a broken last line left out', async () => {
   const dir = project();
   const log = openLog(dir, 't1');

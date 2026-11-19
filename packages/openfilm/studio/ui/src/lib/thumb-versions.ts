@@ -91,6 +91,8 @@ export function addThumbs(
   const now = versionsOf(wanted);
   let loaded: Map<string, string> | null = null;
   for (const [key, url] of batch) {
+    const requested = wanted.get(key);
+    if (requested != null && requested !== url) continue;
     const v = versionOf(key);
     const want = v && now.get(v.clip);
     if (v && want != null && v.version !== want) continue;

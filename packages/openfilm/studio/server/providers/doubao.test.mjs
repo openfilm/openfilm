@@ -290,6 +290,8 @@ test('a dialogue of two voices: the podcast model speaks the script turn by turn
     assert.deepEqual(r.receipt.tokens, { text: 12, audio: 38 });
     events = [['153', { code: 40000010, message: 'PodcastTTS invalid param' }]];
     await assert.rejects(doubaoDialogue({ text: 'x', voice: 'a+b' }, ctx), /could not make it: PodcastTTS invalid param/);
+    events = [['153', { message: 'resource ID is mismatched with speaker related resource' }]];
+    await assert.rejects(doubaoDialogue({ text: 'x', voice: 'a+b' }, ctx), /Choose a pair of Doubao Podcast voices/);
     events = [['360', { payload: { speaker: 'a', text: 'x' } }], ['361', { data: half }]];
     await assert.rejects(doubaoDialogue({ text: 'x', voice: 'a+b' }, ctx), (e) => e.mediaUncertain === true);
     /* two voices take the dialogue, whatever voice-over model was named */
@@ -300,4 +302,19 @@ test('a dialogue of two voices: the podcast model speaks the script turn by turn
     reply = (_req, res) => res.writeHead(200, { 'Content-Type': 'application/json', 'X-Api-Status-Code': '20000000' }).end(JSON.stringify(fixture()));
     if (previous === undefined) delete process.env.OPENFILM_DOUBAO_PODCAST_URL; else process.env.OPENFILM_DOUBAO_PODCAST_URL = previous;
   }
+});
+
+test('a Doubao TTS internal speech error keeps the provider code and request ID', async (t) => {
+  const origin = 'http://127.0.0.1:' + server.address().port;
+  const previous = process.env.OPENFILM_DOUBAO_TTS_URL;
+  process.env.OPENFILM_DOUBAO_TTS_URL = origin + '/api/v3/tts/unidirectional';
+  const savedReply = reply;
+  t.after(() => {
+    reply = savedReply;
+    if (previous === undefined) delete process.env.OPENFILM_DOUBAO_TTS_URL;
+    else process.env.OPENFILM_DOUBAO_TTS_URL = previous;
+  });
+  reply = (_req, res) => res.writeHead(200, { 'Content-Type': 'application/json' }).end('{"code":55000000}\n');
+  const ctx = { key: 'speech-key', model: 'seed-tts-2.0', root: '', signal: AbortSignal.timeout(10_000), say: () => {}, read: async () => new Uint8Array() };
+  await assert.rejects(doubao.run('tts', { text: 'Hello', voice: 'a' }, ctx), /55000000.*Request: .*internal speech service error/);
 });

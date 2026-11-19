@@ -152,7 +152,9 @@ async function audio(verb, args, ctx) {
     body: JSON.stringify({ model: AUDIO, text_prompt: asked.slice(0, 3000), audio_config: { format: 'mp3', sample_rate: 44100 } }),
   }, ctx);
   const body = /** @type {any} */ (await res.json());
-  if (body?.code !== undefined && body.code !== 0 && body.code !== 20000000) throw new Error(`Doubao could not make it: ${text(body.message) || body.code}. Request id: ${requestId}.`);
+  if (body?.code !== undefined && body.code !== 0 && body.code !== 20000000) {
+    throw Object.assign(new Error(`Doubao could not make it: ${text(body.message) || body.code}. Request id: ${requestId}.`), { rejected: true });
+  }
   if (typeof body?.audio !== 'string' || !body.audio) throw new Error(`Doubao returned no audio. Request id: ${requestId}.`);
   const bytes = new Uint8Array(Buffer.from(body.audio, 'base64'));
   const dur = number(body.duration) ?? number(body.original_duration) ?? 0;

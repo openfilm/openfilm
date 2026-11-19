@@ -71,6 +71,8 @@ const clickTimeline = (page) => page.locator('[data-timeline]').click({ position
 
 test('a transition tried in the library plays once, leaves the film free, and plays again on another click', { timeout: 120_000 }, async () => {
   await withLibrary('Transitions', async ({ page, trial, watch }) => {
+    assert.equal(await page.getByText('Click the join between two adjacent picture clips', { exact: false }).count(), 0);
+    assert.equal(await page.locator('[data-transition-target]').count(), 0);
     /* the transitions are in packs of their own: each found by its name */
     const search = page.locator('[data-studio-library] input[placeholder^="Search"]');
     for (const name of ['Blinds', 'Cross dissolve', 'Push left']) {

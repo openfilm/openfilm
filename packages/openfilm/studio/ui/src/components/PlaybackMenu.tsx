@@ -17,8 +17,8 @@ export type PlaybackSettings = {
 };
 
 /**
- * The viewer's playback settings: loop and the speed. What is not the default shows on the
- * button itself (the loop icon, "1.5×"), so it is seen without opening the menu. Laid out as the layout menu beside
+ * The viewer's playback settings: the current speed and, when on, the loop icon are visible on the button.
+ * Laid out as the layout menu beside
  * it is (a row each, its icon in a tile); the speed is one segmented control. Nothing here takes focus on click: the next
  * Space still plays.
  */
@@ -75,8 +75,8 @@ export function PlaybackMenu({ size, disabled, settings }: {
           const rect = button.current!.getBoundingClientRect();
           setAnchor((current) => current ? null : { right: Math.max(12, window.innerWidth - rect.right), bottom: window.innerHeight - rect.top + 6 });
         }}>
-        {loop ? <Repeat size={Math.round(size * 0.8)} className="text-[var(--accent)]" aria-hidden /> : null}
-        {loop && speed === 1 ? null : <SpeedFace speed={speed} size={size} />}
+        {loop ? <Repeat size={Math.round(size * 0.8)} aria-hidden /> : null}
+        <SpeedFace speed={speed} />
       </button>
     </Tooltip>
     {anchor && createPortal(<div ref={panel} id={id} role="dialog" aria-label={t('viewer.playback')}

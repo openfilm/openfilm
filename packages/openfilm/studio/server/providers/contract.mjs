@@ -79,6 +79,7 @@
  *   networkTimeoutMs?: number,
  *   say: (line: string) => void,
  *   read: (path: string) => Promise<Uint8Array>,
+ *   inputSize?: (path: string) => number | undefined,
  *   link?: (path: string) => Promise<string>,
  *   handOff?: boolean,
  *   keep?: (path: string, response: Response) => Promise<{ path: string, url: string, type?: string, bytes: number }>,

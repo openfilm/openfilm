@@ -410,13 +410,16 @@ test('the preview plays heavy footage from its proxy once made; what the file is
   const played = await size();
   assert.ok(played > 0 && played !== statSync(big).size, 'the proxy');
   assert.equal(await size('?film-facts=1'), statSync(big).size, 'what the file is: the file');
+  assert.equal(await size('?of-original=1'), statSync(big).size, 'a download still reads the original');
   /* off: the original, and no proxy asked for */
   assert.deepEqual(await (await api('/api/prefs', { method: 'PATCH', body: { proxies: { on: false } } })).json(), { proxies: { on: false, height: 720 }, seenVersion: null, projectsFolder: null, keys: null, autoVersions: false, showAutoVersions: false, libraryCategories: null });
   assert.equal(await size(), statSync(big).size);
   assert.deepEqual((await (await api(`/api/projects/${project.id}/proxies`, { method: 'POST', body: {} })).json()).states, {});
   /* footage the editor's browser does not decode: its proxy is made and played, off as on */
   const hevc = join(project.path, 'assets', 'drone.mp4');
-  execFileSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'testsrc=size=1280x720:rate=25:duration=1', '-c:v', 'libx265', '-pix_fmt', 'yuv420p10le', '-tag:v', 'hvc1', '-x265-params', 'log-level=error', hevc]);
+  execFileSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'testsrc=size=1280x720:rate=25:duration=1',
+    '-f', 'lavfi', '-i', 'sine=frequency=440:duration=1', '-c:v', 'libx265', '-pix_fmt', 'yuv420p10le',
+    '-tag:v', 'hvc1', '-x265-params', 'log-level=error', '-c:a', 'aac', hevc]);
   answer = await (await api(`/api/projects/${project.id}/proxies`, { method: 'POST', body: {} })).json();
   assert.deepEqual(answer.checks, { 'assets/drone.mp4': { type: 'video/mp4; codecs="hvc1.2.4.L93.B0"', width: 1280, height: 720, fps: 25 } }, 'what the editor asks its browser');
   assert.deepEqual(answer.states, {}, 'not said yet');
@@ -427,6 +430,33 @@ test('the preview plays heavy footage from its proxy once made; what the file is
   assert.deepEqual(answer.states, { 'assets/drone.mp4': { state: 'ready', needed: true } });
   const served = (await (await fetch(`${folder}assets/drone.mp4`)).arrayBuffer()).byteLength;
   assert.ok(served > 0 && served !== statSync(hevc).size, 'its proxy');
+  const copyOf = `/api/projects/${project.id}/playback?path=assets%2Fdrone.mp4`;
+  assert.deepEqual(await (await api(copyOf, { method: 'POST' })).json(), { state: 'ready', needed: true, height: 720 });
+  const response = await api(copyOf);
+  assert.equal(response.headers.get('content-type'), 'video/mp4');
+  const copy = join(scratch, 'drone-playback.mp4');
+  writeFileSync(copy, Buffer.from(await response.arrayBuffer()));
+  const { streams } = JSON.parse(execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'stream=codec_name,pix_fmt', '-of', 'json', copy]));
+  assert.deepEqual(streams, [{ codec_name: 'h264', pix_fmt: 'yuv420p' }, { codec_name: 'aac' }]);
+  assert.deepEqual(Buffer.from(await (await fetch(`${folder}assets/drone.mp4?of-original=1`)).arrayBuffer()), readFileSync(hevc));
+  const range = await api(copyOf, { headers: { range: 'bytes=0-9' } });
+  assert.equal(range.status, 206);
+  assert.deepEqual(Buffer.from(await range.arrayBuffer()), readFileSync(copy).subarray(0, 10));
+  const savedPath = 'saved%2Fdrone-hevc.mp4';
+  const put = await fetch(`${studio.origin}/api/saved/files?path=${savedPath}`, {
+    method: 'PUT', headers: { 'x-studio-key': studio.key, 'content-type': 'application/octet-stream' }, body: readFileSync(hevc),
+  });
+  assert.equal(put.status, 200);
+  const savedCopy = `/api/saved/playback?path=${savedPath}`;
+  let savedPlayback;
+  for (const end = Date.now() + 15_000; Date.now() < end;) {
+    savedPlayback = await (await api(savedCopy, { method: 'POST' })).json();
+    if (savedPlayback.state === 'ready' || savedPlayback.state === 'failed') break;
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  assert.equal(savedPlayback.state, 'ready');
+  assert.equal((await api(savedCopy)).headers.get('content-type'), 'video/mp4');
+  assert.deepEqual(Buffer.from(await (await api(`/api/saved/file?path=${savedPath}`)).arrayBuffer()), readFileSync(hevc));
   assert.equal(await size(), statSync(big).size, 'the heavy one still the original');
   await api('/api/prefs', { method: 'PATCH', body: { proxies: { on: true } } });
 });

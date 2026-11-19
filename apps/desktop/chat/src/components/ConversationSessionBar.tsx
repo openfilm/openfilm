@@ -7,7 +7,6 @@ import { Popover, keepFocus } from './Popover';
 import { Tooltip } from './Tooltip';
 import { useT } from '@/i18n';
 import type { ProjectSessionItem } from '@/lib/project-sessions';
-import { useLocalAgentTurn } from '@/lib/local-agent-run';
 import { PANE_BAR, PANE_TITLE } from './dock-pane-bar';
 import { useClickOpen } from 'openfilm/studio-ui/lib/click-open.ts';
 import menu from 'openfilm/studio-ui/components/WorkspaceMenu.module.css';
@@ -57,64 +56,22 @@ function TitleInput({ initial, placeholder, className, onDone }: {
   );
 }
 
-/** How a conversation stands, as a dot beside its title, unless it is at rest and seen. */
-export type SessionStatus = 'working' | 'asking' | 'done' | 'error';
-
-/**
- * A conversation's light, as a chat app's sessions have one: breathing while its agent works, amber while it waits
- * for an answer, and once it has stopped where nobody was looking, blue (done) or red (failed) until it is shown.
- */
-function StatusLight({ turnId, unseen }: { turnId: string | null; unseen?: 'done' | 'error' }) {
-  const t = useT();
-  const live = useLocalAgentTurn(turnId);
-  const status: SessionStatus | null = turnId
-    ? (live && (live.state.question || live.state.permission) ? 'asking' : 'working')
-    : unseen ?? null;
-  const words: Record<SessionStatus, string> = {
-    working: t('projectMenu.running'),
-    asking: t('projectMenu.asking'),
-    done: t('projectMenu.done'),
-    error: t('projectMenu.failed'),
-  };
-  if (!status) return null;
-  return (
-    <span aria-label={words[status]} title={words[status]} className="flex h-[13px] w-[13px] shrink-0 items-center justify-center">
-      <span className={`h-1.5 w-1.5 rounded-full ${LIGHT[status]}`} />
-    </span>
-  );
-}
-
-const LIGHT: Record<SessionStatus, string> = {
-  working: 'status-breathe bg-[var(--text-muted)]',
-  asking: 'bg-[var(--warn)] shadow-[0_0_0_2px_color-mix(in_srgb,var(--warn)_18%,transparent)]',
-  done: 'bg-[var(--accent)]',
-  error: 'bg-[var(--err)]',
-};
-
-/** The conversation's popup card: a new one, the search and the history, each row with its own actions; double clicking renames in place. */
+/** The current conversation's title opens the new-chat action and searchable history. */
 export function ConversationBar({
-  sessions,
-  currentSessionId,
-  running,
-  unseen,
-  onSelectSession,
-  onNewSession,
-  onRenameSession,
-  onPinSession,
-  onArchiveSession,
+  sessions, currentSessionId, running,
+  onSelectSession, onNewSession, onRenameSession, onPinSession, onArchiveSession,
 }: SessionActions & {
   sessions: ProjectSessionItem[];
   currentSessionId: string;
-  running: Map<string, string>;
-  unseen: Map<string, 'done' | 'error'>;
+  running: ReadonlySet<string>;
   onSelectSession: (sessionId: string) => void;
   onNewSession: () => boolean;
 }) {
   const t = useT();
   const popup = useClickOpen();
   const untitled = t('project.untitledSession');
-  const current = sessions.find((s) => s.id === currentSessionId);
-  const label = current?.title.trim() || untitled;
+  const name = sessions.find((session) => session.id === currentSessionId)?.title.trim();
+  const label = name || untitled;
   const [renaming, setRenaming] = React.useState(false);
   React.useEffect(() => { setRenaming(false); popup.dismiss(); }, [currentSessionId, popup.dismiss]);
   const [alreadyNew, setAlreadyNew] = React.useState(false);
@@ -123,59 +80,49 @@ export function ConversationBar({
     const timer = setTimeout(() => setAlreadyNew(false), 1800);
     return () => clearTimeout(timer);
   }, [alreadyNew]);
-  const otherRunning = [...running].find(([id]) => id !== currentSessionId)?.[1] ?? null;
-  const otherUnseen = [...unseen].find(([id]) => id !== currentSessionId)?.[1];
-  const go = (run: () => void) => { popup.dismiss(); run(); };
+  const go = (action: () => void) => { popup.dismiss(); action(); };
 
   return (
-    <div className={PANE_BAR}>
-      <div data-conversation-title className="relative inline-flex min-w-0 max-w-full">
-        <Popover open={popup.open && !renaming} onOpenChange={(next) => { if (next) popup.setOpen(true); else popup.dismiss(); }} bare
+    <div className={PANE_BAR} data-conversation-bar="">
+      <div data-conversation-title={currentSessionId} className="relative inline-flex min-w-0 max-w-full">
+        <Popover open={popup.open && !renaming} onOpenChange={(open) => { if (open) popup.setOpen(true); else popup.dismiss(); }} bare
           trigger={(
             <button type="button" aria-haspopup="dialog" aria-expanded={popup.open && !renaming}
-              aria-hidden={renaming || undefined} tabIndex={renaming ? -1 : undefined}
+              aria-hidden={renaming || undefined} tabIndex={renaming ? -1 : undefined} title={label}
               onClick={(event) => { event.stopPropagation(); popup.toggle(); }}
               onDoubleClick={() => { if (onRenameSession) { popup.dismiss(); setRenaming(true); } }}
-              className={`flex h-[22px] min-w-0 max-w-[16rem] items-center gap-1.5 rounded px-1.5 outline-none transition-colors hover:bg-[var(--bg-hover)] focus-visible:shadow-[inset_0_0_0_1px_var(--accent)] ${renaming ? 'invisible' : ''}`}
-            >
-              <span className={`${PANE_TITLE} ${current?.title.trim() ? '' : 'text-[var(--text-faint)]'}`}>{label}</span>
-              {otherRunning || otherUnseen ? <StatusLight turnId={otherRunning} unseen={otherUnseen} /> : null}
-              <ChevronDown size={12} className="shrink-0 text-[var(--text-faint)]" />
+              className={`flex h-[22px] min-w-0 max-w-[16rem] items-center gap-1.5 rounded px-1.5 outline-none transition-colors hover:bg-[var(--bg-hover)] focus-visible:shadow-[inset_0_0_0_1px_var(--accent)] ${renaming ? 'invisible' : ''}`}>
+              <span className={`${PANE_TITLE} ${name ? '' : 'text-[var(--text-faint)]'}`}>{label}</span>
+              <ChevronDown size={12} className="shrink-0 text-[var(--text-faint)]" aria-hidden />
             </button>
-          )}
-        >
+          )}>
           <div data-conversation-menu role="dialog" aria-label={t('project.sessionHistory')} className={`${menu.menu} ${menu.chatMenu}`}>
-            <SessionHistory sessions={sessions} currentSessionId={currentSessionId} running={running} unseen={unseen}
+            <SessionHistory sessions={sessions} currentSessionId={currentSessionId} running={running}
               onSelectSession={(id) => go(() => onSelectSession(id))}
               onRenameSession={onRenameSession} onPinSession={onPinSession} onArchiveSession={onArchiveSession}>
-              <button type="button" onClick={() => { if (onNewSession()) popup.dismiss(); else setAlreadyNew(true); }} className={menu.newButton}>
-                <Plus size={13} strokeWidth={2} /><span>{t('projectMenu.newSession')}</span>
+              <button type="button" className={menu.newButton}
+                onClick={() => { if (onNewSession()) popup.dismiss(); else setAlreadyNew(true); }}>
+                <Plus size={13} strokeWidth={2} aria-hidden /><span>{t('projectMenu.newSession')}</span>
               </button>
               {alreadyNew ? <div role="status" className={menu.notice}>{t('project.alreadyNew')}</div> : null}
             </SessionHistory>
           </div>
         </Popover>
-        {/* Keep the hidden title's size while its input is in front of it. */}
         {renaming ? (
-          <TitleInput initial={current?.title.trim() ?? ''} placeholder={untitled}
+          <TitleInput initial={name ?? ''} placeholder={untitled}
             onDone={(title) => { setRenaming(false); if (title) onRenameSession?.(currentSessionId, title); }}
-            className={`${PANE_TITLE} absolute inset-0 box-border h-[22px] w-full bg-transparent py-0 pl-1.5 ${otherRunning || otherUnseen ? 'pr-[43px]' : 'pr-6'} leading-[18px] text-[var(--text)] outline-none placeholder:text-[var(--text-faint)]`}
-          />
+            className={`${PANE_TITLE} absolute inset-0 box-border h-[22px] w-full bg-transparent py-0 pl-1.5 pr-6 leading-[18px] text-[var(--text)] outline-none placeholder:text-[var(--text-faint)]`} />
         ) : null}
       </div>
-      <span className="min-w-0 flex-1" />
     </div>
   );
 }
 
-/** A conversation's own buttons in the history: pin, rename, archive. */
 const ROW_BTN = menu.iconButton;
 
-/** One conversation in the history: its title, a running one turning; each row has its own actions. */
-function SessionRow({ item, label, active, turnId, unseen, onSelect, onRenameSession, onPinSession, onArchiveSession }: SessionActions & {
-  item: ProjectSessionItem; label: string; active: boolean; turnId: string | null; unseen?: 'done' | 'error'; onSelect: () => void;
+function SessionRow({ item, label, active, running, onSelect, onRenameSession, onPinSession, onArchiveSession }: SessionActions & {
+  item: ProjectSessionItem; label: string; active: boolean; running: boolean; onSelect: () => void;
 }) {
-  const running = Boolean(turnId);
   const t = useT();
   const [renaming, setRenaming] = React.useState(false);
   const icon = item.pinned ? <Pin size={13} className={menu.rowIcon} /> : <MessageCircle size={13} className={menu.rowIcon} />;
@@ -193,9 +140,6 @@ function SessionRow({ item, label, active, turnId, unseen, onSelect, onRenameSes
           {icon}<span className={menu.rowName}>{label}</span>
         </button>
       )}
-      {turnId || unseen ? (
-        <span className={menu.rowStatus}><StatusLight turnId={turnId} unseen={unseen} /></span>
-      ) : null}
       {renaming ? null : (
         <div className={menu.rowActions}>
           {onPinSession && !item.archived ? (
@@ -229,23 +173,20 @@ function SessionRow({ item, label, active, turnId, unseen, onSelect, onRenameSes
 
 /**
  * The project's conversations: search, then each that said something, pinned first, then
- * the latest; those archived folded at the foot (opened by the search too). Picking one shows it, as a tab.
+ * the latest; those archived folded at the foot (opened by the search too).
  */
 function SessionHistory({
   sessions,
   currentSessionId,
   running,
-  unseen,
   onSelectSession,
   children,
   ...actions
 }: SessionActions & {
   sessions: ProjectSessionItem[];
   currentSessionId: string;
-  running: Map<string, string>;
-  unseen: Map<string, 'done' | 'error'>;
+  running: ReadonlySet<string>;
   onSelectSession: (sessionId: string) => void;
-  /** what goes above the search: a new conversation */
   children?: React.ReactNode;
 }) {
   const t = useT();
@@ -265,7 +206,7 @@ function SessionHistory({
 
   const row = (item: ProjectSessionItem) => (
     <SessionRow key={item.id} item={item} label={labelOf(item)} active={item.id === currentSessionId}
-      turnId={running.get(item.id) ?? null} unseen={unseen.get(item.id)} onSelect={() => onSelectSession(item.id)} {...actions} />
+      running={running.has(item.id)} onSelect={() => onSelectSession(item.id)} {...actions} />
   );
 
   return (

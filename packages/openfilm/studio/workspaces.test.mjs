@@ -187,9 +187,9 @@ test('normal panels have no new library header and every preset stays in the cur
 
 test('export progress stays in the title bar as the workspace changes', { timeout: 60_000 }, async () => {
   await withWorkspace(async page => {
-    await page.route('**/api/projects/*/exports', route => route.fulfill({ json: { exports: [{
+    await page.route('**/api/projects/*/exports?view=queue', route => route.fulfill({ json: { exports: [{
       id: 'active', label: 'Wide export', kind: 'video', status: 'running', phase: 'rendering',
-      progress: 0.42, framesDone: 42, framesTotal: 100, rate: 30, etaMs: 2000, encoder: 'h264', outputs: [],
+      progress: 0.42, phaseProgress: 0.42, framesDone: 42, framesTotal: 100, rate: 30, etaMs: 2000, encoder: 'h264', outputs: [],
     }] } }));
     await page.reload();
     const badge = page.locator('[data-titlebar] [data-export-queue-trigger]');

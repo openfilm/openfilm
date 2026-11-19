@@ -262,7 +262,7 @@ export function toTraceLogItems(items: TranscriptItem[]): AgentActivityItem[] {
 
 function traceLogItem(item: TranscriptItem): AgentActivityItem {
   if (item.kind === 'notice') {
-    return { kind: 'notice' as const, id: item.id, label: item.noticeKey ?? '', ...(item.text ? { text: item.text } : {}) };
+    return { kind: 'notice' as const, id: item.id, label: item.noticeKey ?? '', ...(item.text ? { text: item.text } : {}), ...(item.detail ? { detail: item.detail } : {}) };
   }
   if (item.kind === 'thought') {
     return {

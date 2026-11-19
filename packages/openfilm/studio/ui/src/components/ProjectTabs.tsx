@@ -75,7 +75,8 @@ export function ProjectTabs({ current, onProjects, onRenameCurrent, onCoverCurre
           {editing?.tab.id === tab.id ? <input ref={input} className={`${styles.rename} ${styles.tabRename}`} aria-label={t('projectMenu.rename')} maxLength={56} value={editing.name}
             onChange={event => setEditing({ ...editing, name: event.target.value })} onBlur={() => void finishRename(true)}
             onKeyDown={event => { if (event.nativeEvent.isComposing) return; if (event.key === 'Enter' || event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); void finishRename(event.key === 'Enter'); } }} /> : null}
-          {tab.asking || tab.working ? <span aria-label={t(tab.asking ? 'switcher.asking' : 'switcher.working')} className={`${styles.status} ${tab.asking ? styles.asking : 'status-breathe'}`} /> : tab.exporting != null ? <span className={styles.progress}>{Math.round(tab.exporting * 100)}%</span> : null}
+          {tab.asking || tab.working ? <span aria-label={t(tab.asking ? 'switcher.asking' : 'switcher.working')} className={`${styles.status} ${tab.asking ? styles.asking : 'status-breathe'}`} /> : null}
+          {tab.exporting != null ? <span className={`${styles.progress} max-w-24 shrink-0 truncate`} title={tab.exportStage}>{tab.exportStage ?? `${Math.round(tab.exporting * 100)}%`}</span> : null}
           <button type="button" className={styles.close} aria-label={t('projectTabs.closeNamed').replace('{name}', tab.title || t('project.untitled'))} onClick={() => host.close(tab.id)}><X size={12} /></button>
         </div>)}
       </div>

@@ -6,7 +6,8 @@
 import React from 'react';
 import { ArrowUp, Check, ChevronDown, Music } from 'lucide-react';
 import { useT } from '@/i18n';
-import type { WorkspaceResource } from '@/lib/workspace-resources';
+import { useVideoPlayback } from '@/lib/video-playback';
+import type { MediaSources, WorkspaceResource } from '@/lib/workspace-resources';
 import { lengthOf, lengthRange } from '@/lib/canvas';
 import { STYLES } from '@/lib/canvas-library';
 import type { ClipChoice, ClipTool } from '@/lib/canvas-clip';
@@ -24,13 +25,12 @@ export const CLIP_REFERENCE_MAX = 15;
 const PART_MIN = 2;
 const clock = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toFixed(1).padStart(4, '0')}`;
 
-export function ClipToolEditor({ tool, src, frameAt, length: told, models, first, files, srcOf, onClose, onMake }: {
+export function ClipToolEditor({ tool, file, sources, frameAt, models, first, files, srcOf, onClose, onMake }: {
   tool: ClipTool;
-  src: string;
+  file: WorkspaceResource;
+  sources: MediaSources;
   /** a frame of the clip at a time, for its track */
   frameAt?: (ms: number) => string;
-  /** the clip's length, s */
-  length: number;
   /** the models that do it, the one made for it first */
   models: readonly ClipChoice[];
   /** the one picked first */
@@ -42,6 +42,8 @@ export function ClipToolEditor({ tool, src, frameAt, length: told, models, first
   onMake: (made: ClipMade) => Promise<void>;
 }) {
   const t = useT();
+  const playback = useVideoPlayback(file, sources);
+  const status = playback.message(t);
   const key = (c: ClipChoice) => `${c.via}/${c.model ?? ''}`;
   const [picked, setPicked] = React.useState(() => (first && models.some((m) => key(m) === key(first)) ? first : models[0]));
   const [modelsOpen, setModelsOpen] = React.useState(false);
@@ -52,7 +54,7 @@ export function ClipToolEditor({ tool, src, frameAt, length: told, models, first
   const [sec, setSec] = React.useState(() => lengthOf('video', 5, picked?.spec, 'omni') ?? 5);
   const [busy, setBusy] = React.useState(false);
   /* the part of a clip longer than a model takes: its end to carry on from, else its start; moved by dragging */
-  const [length, setLength] = React.useState(told);
+  const [length, setLength] = React.useState((file.durationMs ?? 0) / 1000);
   const long = length > CLIP_REFERENCE_MAX + 0.05;
   const [part, setPart] = React.useState<[number, number]>([0, 0]);
   React.useEffect(() => { setPart(tool.length ? [Math.max(0, length - CLIP_REFERENCE_MAX), length] : [0, Math.min(length, CLIP_REFERENCE_MAX)]); }, [length, tool.length]);
@@ -89,8 +91,9 @@ export function ClipToolEditor({ tool, src, frameAt, length: told, models, first
       </div>
       <div className="flex min-h-0 flex-1 gap-5 p-5">
         <div className="flex min-w-0 flex-1 items-center justify-center rounded-[14px] bg-black/40">
-          <video src={src} autoPlay loop muted playsInline controls className="max-h-full max-w-full rounded-[10px]"
-            onLoadedMetadata={(event) => { const d = event.currentTarget.duration; if (Number.isFinite(d) && Math.abs(d - length) > 0.05) setLength(d); }} />
+          {status ? <p role="status" className="text-sm text-[var(--cv-ink-3)]">{status}</p>
+            : <video src={playback.src} onError={playback.onError} autoPlay loop muted playsInline controls className="max-h-full max-w-full rounded-[10px]"
+              onLoadedMetadata={(event) => { const d = event.currentTarget.duration; if (Number.isFinite(d) && Math.abs(d - length) > 0.05) setLength(d); }} />}
         </div>
         {/* what the tool asks */}
         <aside className="flex w-[340px] shrink-0 flex-col gap-5 overflow-y-auto pr-1">

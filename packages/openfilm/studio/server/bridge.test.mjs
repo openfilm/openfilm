@@ -51,6 +51,70 @@ test('a video the timeline could not play is told to the editor, those from befo
   assert.deepEqual(page.said.filter((m) => m.type === 'undecoded').map((m) => m.src), ['media/a.mov', 'media/b.mp4']);
 });
 
+test('scrubbing through cold pages does not load them before the final position is chosen', async () => {
+  const page = filmPage();
+  await page.settle();
+  const prepared = [];
+  page.window.__filmEditor.canScrub = (t) => t === 2;
+  page.window.__filmEditor.prepareSeekPages = (t) => { prepared.push(t); return null; };
+  page.send({ type: 'seek', t: 6, seq: 1, scrub: true });
+  page.send({ type: 'seek', t: 7, seq: 2, scrub: true });
+  page.send({ type: 'seek', t: 2, seq: 3 });
+  await page.settle();
+  assert.deepEqual(prepared, [2]);
+  assert.deepEqual(page.drawn.map((d) => d.t), [2]);
+  page.drawn[0].done();
+  await page.settle();
+  assert.deepEqual(page.said.filter((m) => m.type === 'seeked').map((m) => m.seq), [3]);
+});
+
+test('a drag can draw its own frame while a superseded playback frame is still pending', async () => {
+  const page = filmPage();
+  await page.settle();
+  page.send({ type: 'play', t: 0, at: page.clock(), rate: 1, fps: 30 });
+  await page.refresh();
+  assert.equal(page.drawn.length, 1);
+  assert.ok(page.drawn[0].play);
+  page.send({ type: 'seek', t: 5, seq: 1, scrub: true });
+  await page.settle();
+  assert.equal(page.drawn.at(-1).t, 5);
+  page.drawn.at(-1).done();
+  page.drawn[0].done();
+  await page.settle();
+  assert.deepEqual(page.said.filter((m) => m.type === 'seeked').map((m) => [m.t, m.drawn]), [[5, true]]);
+});
+
+test('a terminal still-frame failure is reported separately from a slow seek', async () => {
+  const page = filmPage();
+  await page.settle();
+  page.send({ type: 'seek', t: 3, seq: 1 });
+  await page.settle();
+  page.drawn[0].done(false);
+  await page.settle();
+  assert.deepEqual(page.said.filter((m) => m.type === 'seeked').map((m) => [m.t, m.seekSeq, m.drawn, m.terminal]), [[3, 1, false, true]]);
+});
+
+test('a cached frame can answer a cold seek but cannot answer a superseded seek', async () => {
+  const page = filmPage();
+  await page.settle();
+  const cold = new Promise(() => {});
+  const lookups = [];
+  page.window.__filmEditor.prepareSeekPages = (t) => t > 2 ? cold : null;
+  page.window.__filmEditor.showCachedSeek = (t, isCurrent) => new Promise((resolve) => lookups.push({ t, isCurrent, resolve }));
+  page.send({ type: 'seek', t: 7, seq: 1 });
+  page.send({ type: 'seek', t: 6, seq: 2 });
+  assert.equal(lookups[0].isCurrent(), false);
+  assert.equal(lookups[1].isCurrent(), true);
+  lookups[0].resolve(true);
+  lookups[1].resolve(true);
+  await page.settle();
+  assert.deepEqual(page.said.filter((m) => m.type === 'seeked').map((m) => [m.t, m.seekSeq, m.drawn]), [[6, 2, true]]);
+  page.send({ type: 'seek', t: 2, seq: 3 });
+  await page.settle();
+  page.drawn[0].done();
+  await page.settle();
+});
+
 test('an edit changed in place while the first moment is still drawing is drawn at that moment, not at 0 s', async () => {
   const page = filmPage();
   await page.settle();

@@ -272,33 +272,10 @@ const ConversationTurn = React.memo(function ConversationTurn({
   /* Finished (not live, not still running): the changes card and footer go below */
   const settled = !live && entry.status !== 'active';
   const running = entry.status === 'active';
-  /* A finished turn folds, as in Codex / Claude Code: the process becomes one line ("Worked 3m 40s · 14 steps")
-     and the answer stands out. For the turn you watched, folding must not move the answer you are reading: draw
-     one frame unfolded, note the answer's bottom edge in the viewport, then fold and restore the scroll, so the
-     answer stays put and the process above it shrinks. Turns you didn't watch (after a reload, older turns)
-     start folded. */
+  // Leave the latest reply in place when it finishes. Older turns open with their process folded.
   const watched = React.useRef(live);
-  if (live) watched.current = true;
-  const [folded, setFolded] = React.useState(false);
-  const collapsed = settled && (!(watched.current && isLast) || folded);
-  const thread = React.useContext(StickToBottomContext);
-  const tailRef = React.useRef<HTMLDivElement | null>(null);
-  const foldAnchor = React.useRef<number | null>(null);
-  React.useLayoutEffect(() => {
-    if (!settled || collapsed) return;
-    const tail = tailRef.current;
-    foldAnchor.current = tail ? tail.getBoundingClientRect().top : null;
-    setFolded(true);
-  }, [settled, collapsed]);
-  React.useLayoutEffect(() => {
-    const top = foldAnchor.current;
-    foldAnchor.current = null;
-    const tail = tailRef.current;
-    const scroller = thread?.viewport ?? null;
-    if (!folded || top == null || !tail || !scroller) return;
-    const delta = tail.getBoundingClientRect().top - top;
-    if (delta !== 0) scroller.scrollTop += delta;
-  }, [folded, thread]);
+  if (live || running) watched.current = true;
+  const collapsed = settled && (!isLast || !watched.current);
   const items = React.useMemo(
     () => (live ? liveTranscript : preferTranscript(lastLive.current ?? [], storedItems ?? [])),
     // lastLive only changes while live, and live is in the deps.
@@ -360,7 +337,7 @@ const ConversationTurn = React.memo(function ConversationTurn({
       ) : (
       <div className="group/ask flex min-w-0 flex-col gap-1">
       <div className="flex justify-end">
-        <div className="flex max-w-[88%] flex-col gap-1.5 rounded-[12px] border border-[var(--border)] bg-[var(--bg-field)] px-3 py-2">
+        <div className="flex max-w-[88%] flex-col gap-1.5 rounded-[12px] border border-[var(--border)] bg-[var(--chat-message-bg,var(--bg-field))] px-3 py-2">
           {/* files brought in are pills in the sentence, with their thumbnails; a message from before that shows
               them in a row of their own */}
           {entry.attachments.length > 0 && !pillPictures && <TurnAttachments items={entry.attachments} />}
@@ -384,9 +361,8 @@ const ConversationTurn = React.memo(function ConversationTurn({
       {/* The agent's side is a block of its own: hovering it (not the whole turn) shows the line below */}
       <div className="group/reply flex min-w-0 flex-col gap-2 empty:hidden">
       {/* What the agent did. Fully open while running; for turns you didn't watch, the process folds to one line and the answer stands out. */}
-      <TurnBody rows={rows} collapsed={collapsed} {...(entry.durationMs ? { durationMs: entry.durationMs } : {})} />
-      {/* The answer's bottom edge, the anchor for folding (see folded above). */}
-      {rows?.length ? <div ref={tailRef} aria-hidden className="-mt-2 h-0" /> : null}
+      <TurnBody rows={rows} collapsed={collapsed} {...(entry.durationMs ? { durationMs: entry.durationMs } : {})}
+        status={running ? <StatusLine items={rows ?? NO_ROWS} fallback={liveActivity} ownAgent={entry.agent === 'byok' || entry.agent === 'openfilm'} /> : null} />
       {/* Only for older turns you didn't watch (after a reload, scrolling back). The turn you watched has its
           process in hand, even with no rows (stopped right after sending), and never says "loading": that line
           appearing and vanishing made the conversation jump on send and on finish. */}
@@ -413,12 +389,6 @@ const ConversationTurn = React.memo(function ConversationTurn({
           turns it off). No "version N · switch to it" link: going back belongs to the top bar's history. */}
       {settled && showChanges && entry.fileChanges?.length ? <FileChangesList changes={entry.fileChanges} /> : null}
 
-      {/* The status and hover actions occupy separate rows. An empty status takes no room; a visible status
-          stays above the complete footer, including on hover and focus. The footer stays in one place
-          in the tree: a log opened from it stays open as the turn finishes. An interruption doesn't
-          show Failed here: the reason and Resume appear above the composer (the last turn's, even after a
-          restart); an older one's reason is on its footer's Interrupted, on hover. */}
-      {running ? <StatusLine items={rows ?? NO_ROWS} fallback={liveActivity} ownAgent={entry.agent === 'byok' || entry.agent === 'openfilm'} /> : null}
       <TurnFooter entry={entry} items={items} running={running} last={isLast} />
       </div>
     </div>
@@ -532,8 +502,8 @@ function TurnAttachments({ items }: { items: TurnAttachment[] }) {
 /**
  * The agent's side of a turn.
  *
- * Fully open while running: watching it work is part of the product. Once finished it folds, as in Codex /
- * Claude Code: everything before the last piece of work (actions, narration, thinking, plans) becomes one line,
+ * The latest turn stays open as you watch it. In the history, everything before the last piece of work
+ * (actions, narration, thinking, plans) becomes one line,
  * "Worked 3m 40s · 14 steps", opened on click; its final paragraphs are the answer and stay out as text.
  * Unfolded, a two-minute turn is thirty or forty rows with the conclusion at the bottom, and scrolling back
  * means reading each turn top to bottom to find what it said.
@@ -542,25 +512,27 @@ function TurnBody({
   rows,
   collapsed,
   durationMs,
+  status,
 }: {
   rows: AgentActivityItem[] | null;
   collapsed: boolean;
   durationMs?: number;
+  status: React.ReactNode;
 }) {
   const split = React.useMemo(() => (rows && collapsed ? answerStart(rows) : -1), [rows, collapsed]);
   const work = React.useMemo(() => (rows && split >= 0 ? rows.slice(0, split) : null), [rows, split]);
   const answer = React.useMemo(() => (rows && split >= 0 ? rows.slice(split) : null), [rows, split]);
   // Loading/error feedback is separate and never hides an existing reply.
-  if (!rows || rows.length === 0) return null;
+  if (!rows || rows.length === 0) return status;
 
   /* No vertical rule: the process is part of the conversation. A line would say "this is something else", but
      it is the same thing as what the agent says. */
   if (!work || !answer) {
-    /* empty:hidden: as a turn starts the list holds only things not drawn yet (empty text, a running action); if
-       this wrapper still took a slot, the column would gain a gap and push the status line down 8px. */
+    // Status and tool rows share this block so one can take the same space as the other.
     return (
       <div className="min-w-0 w-full empty:hidden">
         <AgentActivityList items={rows} keyPrefix="turn" />
+        {status}
       </div>
     );
   }

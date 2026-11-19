@@ -15,7 +15,8 @@ export function useLoadedThumbs(wanted: ReadonlyMap<string, string>): ReadonlyMa
   const [state, setState] = React.useState<ThumbVersions>(NO_THUMBS);
   const loadedRef = React.useRef(state.loaded);
   loadedRef.current = state.loaded;
-  const pending = React.useRef(new Set<string>());
+  /* One request per address, with every clip key that needs the picture. */
+  const pending = React.useRef(new Map<string, Set<string>>());
   const wantedRef = React.useRef(wanted);
   wantedRef.current = wanted;
   /* a picture that did not load, how many times it has been asked for, and the next try waiting */
@@ -31,20 +32,31 @@ export function useLoadedThumbs(wanted: ReadonlyMap<string, string>): ReadonlyMa
     /* a clip wanted in another version holds the one it shows until the new one is in */
     setState((prev) => wantThumbs(prev, wanted, hasFailed));
     const load = (key: string, url: string) => {
-      if (loadedRef.current.get(key) === url || pending.current.has(url)) return;
-      pending.current.add(url);
-      /* in turn with Studio's other media requests (lib/media-queue): a picture no longer wanted when its turn comes
-         (another zoom) is not asked for */
-      void mediaImage(url, () => wantedRef.current.get(key) === url).then((ok) => {
+      if (loadedRef.current.get(key) === url || arrived.current.get(key) === url) return;
+      const queued = pending.current.get(url);
+      if (queued) {
+        queued.add(key);
+        return;
+      }
+      const keys = new Set([key]);
+      pending.current.set(url, keys);
+      /* At its turn, the request is still useful if any of its clips wants the picture. */
+      void mediaImage(url, () => {
+        for (const key of keys) if (wantedRef.current.get(key) === url) return true;
+        return false;
+      }).then((ok) => {
         pending.current.delete(url);
         if (ok === null) return;
-        if (ok) arrive(key, url);
-        else failed(key, url);
+        if (ok) arrive(keys, url);
+        else failed(keys, url);
       });
     };
-    const arrive = (key: string, url: string) => {
+    const arrive = (keys: ReadonlySet<string>, url: string) => {
       tries.current.delete(url);
-      arrived.current.set(key, url);
+      for (const key of keys) {
+        const current = wantedRef.current.get(key);
+        if (current == null || current === url) arrived.current.set(key, url);
+      }
       if (flush.current) return;
       flush.current = requestAnimationFrame(() => {
         flush.current = 0;
@@ -55,14 +67,14 @@ export function useLoadedThumbs(wanted: ReadonlyMap<string, string>): ReadonlyMa
     /* not there (yet): asked again a little later while it is still wanted, and the next time it is wanted. Waiting
        for the next zoom instead left a clip on the nearest other picture it had (a trimmed clip on its source's black
        first frame) for as long as nobody zoomed */
-    const failed = (key: string, url: string) => {
+    const failed = (keys: ReadonlySet<string>, url: string) => {
       const n = (tries.current.get(url) ?? 0) + 1;
       tries.current.set(url, n);
       if (n === 1) setState((prev) => failThumb(prev, wantedRef.current, hasFailed));
       if (n > 6) return;
       const timer = setTimeout(() => {
         retries.current.delete(timer);
-        if (wantedRef.current.get(key) === url) load(key, url);
+        for (const key of keys) if (wantedRef.current.get(key) === url) load(key, url);
       }, Math.min(8000, 1000 * 2 ** (n - 1)));
       retries.current.add(timer);
     };

@@ -23,12 +23,12 @@ const { appendFileSync } = require('node:fs');
 const args = process.argv.slice(2);
 if (args.includes('-encoders')) {
   const result = spawnSync(${JSON.stringify(real)}, args, { encoding: 'utf8' });
-  process.stdout.write(result.stdout + '\\n V..... ${hardware} fake hardware for regression\\n');
+  process.stdout.write(result.stdout + ${JSON.stringify(`\n V..... ${hardware} fake hardware for regression\n`)});
   process.exit(result.status);
 }
 if (args.includes(${JSON.stringify(hardware)})) {
   if (args.includes('image2pipe')) {
-    appendFileSync(${JSON.stringify(join(scratch, 'stalls'))}, 'blocked\\n');
+    appendFileSync(${JSON.stringify(join(scratch, 'stalls'))}, ${JSON.stringify('blocked\n')});
     process.stdin.pause();
     setInterval(() => {}, 1000);
   } else process.exit(0);
@@ -38,6 +38,8 @@ if (args.includes(${JSON.stringify(hardware)})) {
 }
 `);
     chmodSync(wrapper, 0o755);
+    /* Run the fixture once before starting the encoder's short inactivity deadline. */
+    execFileSync(wrapper, ['-version'], { timeout: 15_000, stdio: 'ignore' });
     writeFileSync(join(scratch, 'index.html'), '<!doctype html><body style="margin:0;background:#357"><script>window.film={duration:1,width:160,height:90,frame(){}}</script>');
     writeFileSync(join(scratch, 'noise.html'), '<!doctype html><body style="margin:0"><canvas width="512" height="288"></canvas><script>const c=document.querySelector("canvas").getContext("2d"),d=c.createImageData(512,288);let n=17;for(let i=0;i<d.data.length;i+=4){n=(Math.imul(n,1664525)+1013904223)>>>0;d.data[i]=n&255;d.data[i+1]=(n>>>8)&255;d.data[i+2]=(n>>>16)&255;d.data[i+3]=255;}c.putImageData(d,0,0);window.film={duration:1,width:512,height:288,frame(){}}</script>');
     const script = join(scratch, 'exercise.mjs');

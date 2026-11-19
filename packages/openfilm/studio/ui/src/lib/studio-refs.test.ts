@@ -74,6 +74,8 @@ test('I and O mark the ends of the range as editors do', () => {
   /* an in past the out starts again from there to the end */
   assert.deepEqual(markRange({ startMs: 2000, endMs: 5000 }, 'in', 6000, 10000), { startMs: 6000, endMs: 10000 });
   assert.equal(markRange(null, 'in', 10000, 10000), null);
+  assert.equal(markRange(null, 'in', 10001, 10000), null);
+  assert.deepEqual(markRange(null, 'out', 10001, 10000), { startMs: 0, endMs: 10000 });
 });
 
 test("the range's label says its ends, its length and its key", () => {

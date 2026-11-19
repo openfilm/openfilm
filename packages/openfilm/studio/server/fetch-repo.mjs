@@ -15,6 +15,7 @@ import { existsSync } from 'node:fs';
 import { lstat, mkdir, readdir, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { FILM_FILE } from '../../src/film-doc.mjs';
+import { requireOutsideInstallation } from '../../src/locations.mjs';
 import { SKILL_FILE, holdsSkills } from '../../src/skills.mjs';
 import { FetchError } from './fetch-error.mjs';
 import { downloadFiles, listFiles, resolveCommit } from './fetch-github.mjs';
@@ -231,6 +232,8 @@ export async function cloneInto({ cloneUrl, ref, folder, dir, signal, onLine }) 
  *   hosts?: import('./fetch-github.mjs').GitHubHosts, skill?: boolean }} options
  */
 export async function fetchFilm(source, { library, onProgress = () => {}, signal, maxBytes = MAX_BYTES, timeoutMs = TIMEOUT_MS, hosts, skill = false }) {
+  try { requireOutsideInstallation(library); }
+  catch (e) { throw new FetchError(/** @type {Error} */ (e).message, 400); }
   const where = source.host === 'github' ? 'GitHub' : 'GitLab';
   /* why it stopped, when it was stopped here (nothing coming, too big) or by the caller */
   /** @type {FetchError | null} */

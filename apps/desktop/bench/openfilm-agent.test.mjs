@@ -133,6 +133,13 @@ test('OpenFilm follows Claude under Your agents, shares account actions and neve
       const menu = page.getByRole('button', { name: 'Claude Sonnet 5.5', exact: true }).locator('..');
       await menu.getByRole('button', { name: 'Claude Sonnet 5.5', exact: true }).waitFor();
       assert.deepEqual(await menu.getByRole('button').allTextContents(), expectedOrder.filter((id) => id !== 'openai/gpt-6-luna').map((id) => OPENFILM_MODELS.find((m) => m.id === id).name));
+      const providerIcons = [];
+      for (const name of ['Gemini 4 Carbon', 'Hy4 Flash']) {
+        const icon = menu.getByRole('button', { name, exact: true }).locator('svg').first();
+        assert.equal(await icon.getAttribute('fill'), 'currentColor');
+        providerIcons.push(await icon.locator('path').getAttribute('d'));
+      }
+      assert.notEqual(...providerIcons, 'Gemini and Hy4 each use their own provider icon');
       assert.doesNotMatch(await page.locator('body').innerText(), /MiMo|GPT-6 Astra|Fable 5\.1/);
       await page.mouse.click(1050, 740);
       await info.click();
