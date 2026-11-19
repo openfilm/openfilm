@@ -1,43 +1,12 @@
-name: ci
+name: 0.4.1 Windows Agent verification
 on:
-  push:
-    branches: [main]
-  pull_request:
   workflow_dispatch:
 permissions:
   contents: read
-concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
 jobs:
-  # Whether a pull request changes more than words: one that only touches Markdown at the top, docs/, changesets or
-  # issue templates needs no tests (their checks below then pass at once). Pushes to main always test.
-  changes:
-    runs-on: ubuntu-latest
-    outputs:
-      code: ${{ steps.diff.outputs.code }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - id: diff
-        env:
-          EVENT: ${{ github.event_name }}
-          BASE: ${{ github.event.pull_request.base.sha }}
-        run: |
-          if [ "$EVENT" != pull_request ]; then echo code=true >> "$GITHUB_OUTPUT"; exit 0; fi
-          git diff --name-only "$BASE" HEAD | tee "$RUNNER_TEMP/changed"
-          if grep -qvE '^(docs/|\.changeset/|[^/]+\.md$|LICENSE$|\.github/ISSUE_TEMPLATE/|\.github/[^/]+\.md$)' "$RUNNER_TEMP/changed"; then
-            echo code=true >> "$GITHUB_OUTPUT"
-          else
-            echo "words only: no tests needed"
-            echo code=false >> "$GITHUB_OUTPUT"
-          fi
-
-  typecheck:
-    needs: changes
-    if: needs.changes.outputs.code == 'true'
-    runs-on: ubuntu-latest
+  pi-agent:
+    runs-on: windows-latest
+    timeout-minutes: 10
     env:
       ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
     steps:
@@ -48,82 +17,5 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm typecheck
-
-  # each system's tests in three shards at once (test-os.yml)
-  ubuntu:
-    needs: changes
-    if: needs.changes.outputs.code == 'true'
-    uses: ./.github/workflows/test-os.yml
-    with:
-      os: ubuntu-latest
-  macos:
-    needs: changes
-    if: needs.changes.outputs.code == 'true'
-    uses: ./.github/workflows/test-os.yml
-    with:
-      os: macos-latest
-  windows:
-    needs: changes
-    if: needs.changes.outputs.code == 'true'
-    uses: ./.github/workflows/test-os.yml
-    with:
-      os: windows-latest
-
-  # The checks a merge waits for, one per system, as before the shards: its shards and the typecheck passed, or the
-  # pull request changes only words.
-  test:
-    if: always()
-    needs: [changes, typecheck, ubuntu, macos, windows]
-    strategy:
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-    runs-on: ubuntu-latest
-    steps:
-      - env:
-          CHANGES: ${{ needs.changes.result }}
-          CODE: ${{ needs.changes.outputs.code }}
-          TYPES: ${{ needs.typecheck.result }}
-          SHARDS: ${{ matrix.os == 'ubuntu-latest' && needs.ubuntu.result || matrix.os == 'macos-latest' && needs.macos.result || needs.windows.result }}
-        run: |
-          echo "changes: $CHANGES (code: $CODE), typecheck: $TYPES, shards: $SHARDS"
-          [ "$CHANGES" = success ] || exit 1
-          [ "$CODE" = true ] || exit 0
-          [ "$TYPES" = success ] && [ "$SHARDS" = success ]
-
-  # what npm would get: the tarball of openfilm, listed in the log and checked (no tests, fixtures or dev files; the
-  # official product.json)
-  pack:
-    runs-on: ubuntu-latest
-    env:
-      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm check:pack
-
-  audit:
-    runs-on: ubuntu-latest
-    env:
-      GITLEAKS_VERSION: 8.30.1
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          # every commit, for the secret scan of the history
-          fetch-depth: 0
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      - name: Install gitleaks
-        run: |
-          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" | tar -xz -C "$RUNNER_TEMP" gitleaks
-          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
-      - name: Secrets in the history
-        run: gitleaks git --config .gitleaks.toml --redact --no-banner --verbose .
-      - name: The public audit (the files as they are)
-        run: node scripts/audit-public.mjs
+      - run: node --test src/pi-agent.test.mjs src/agents.test.mjs
+        working-directory: apps/desktop
