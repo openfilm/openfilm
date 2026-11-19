@@ -224,7 +224,14 @@ test('export progress stays in the title bar as the workspace changes', { timeou
 
 test('edit mode moves real panels into nested splits, supports undo and cancel, and never persists a draft', { timeout:60_000 },async()=>{
   await withWorkspace(async page=>{
-    const before=await profile(page),viewer=await rect(page.locator('[data-viewer-pane]'));
+    const before = await profile(page);
+    /* The viewer can fill the workspace before the timeline mounts below it. Measure the completed split. */
+    await page.waitForFunction(() => {
+      const view = document.querySelector('[data-viewer-pane]')?.getBoundingClientRect();
+      const timeline = document.querySelector('[data-workspace-timeline]')?.getBoundingClientRect();
+      return view && timeline && timeline.height > 0 && view.bottom <= timeline.top;
+    });
+    const viewer = await rect(page.locator('[data-viewer-pane]'));
     await beginEdit(page);
     assert.equal(await page.locator('[data-work-mode="edit"]').isDisabled(),true);
     await page.keyboard.press('Tab');
