@@ -15,4 +15,6 @@ description: Media for an OpenFilm film. Read it before you add music, a sound e
 
 The services and models are the person's choice: `get` uses the one they chose for each kind. Name another with `--via` or `--model` only when they ask, or when theirs cannot do the job (a picture changed in part needs a model that redraws where a mask says), and say which you used and why. Services, their keys, and which plugins and skills are on are theirs to change in Studio: tell them what to change.
 
-A paid run that timed out or did not download is recovered by running the exact same command again (the same output, prompt, model and files), never by making another: `--fresh` makes and pays for a new one, only when the person wants that.
+Music and sound effect generation can use the selected service's credits. If the person sets that kind to None in Studio, use existing audio or the free library. If a generation fails, tell the person what happened and wait before making another request or changing services. If the result is uncertain, collect the original job when recovery is available. Otherwise check the original request with the provider before trying again.
+
+To recover a paid job that supports recovery, use the exact same command (the same output, prompt, model and files). Use `--fresh` only when the person explicitly wants to pay for another take.

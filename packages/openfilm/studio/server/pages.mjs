@@ -138,6 +138,7 @@ export function filmServer({ editorOrigin, rootOf }) {
   const filesOf = (/** @type {string} */ root) => folderFiles(root, {
     inject: `<script>${HOST_FLAG}${PAGE_SCALE}</script>${scripts(BRIDGE)}`,
     timelineInject: `<script>${HOST_FLAG}</script>${scripts(BRIDGE, STAGE)}`,
+    staleRevisionPage: `<!doctype html>${scripts("parent.postMessage({ source: 'openfilm-film', type: 'revision-stale' }, __EDITOR__);")}`,
     headers: policy(),
     /* heavy footage is played from its proxy once it is made, while proxies are on, and footage the editor's browser
        does not decode whether they are or not (proxies.mjs); else from a copy made for footage a render's browser does

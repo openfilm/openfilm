@@ -161,6 +161,8 @@ export const ko: Words = {
     diagnosticsCopied: '복사됨',
     switchAccount: '계정 전환',
     signedInAs: '{account}(으)로 로그인되어 있습니다.',
+    modelTimeout: '모델 서비스의 응답 시간이 초과되었습니다. 다시 시도하거나 모델을 바꿔 주세요.',
+    modelTimeoutRetry: '모델 서비스의 응답 시간이 초과되어 다시 시도하는 중…',
     routeNoKey: '이 모델은 DeepSeek API 키가 필요하지만 이 컴퓨터에는 설정되어 있지 않습니다. DeepSeek 계정에만 로그인했다면 계정의 모델을 사용하세요.',
     routeNoKeyNoAccount: '이 모델은 DeepSeek API 키가 필요하지만 이 컴퓨터에는 설정되어 있지 않습니다. DeepSeek Harness에서 DeepSeek 계정에 로그인하거나 모델 설정에 API 키를 추가하세요.',
     useAccountModel: '{model} 사용',

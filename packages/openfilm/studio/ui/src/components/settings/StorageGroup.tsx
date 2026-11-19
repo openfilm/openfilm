@@ -15,12 +15,14 @@
 import React from 'react';
 import { ChevronRight, HardDrive } from 'lucide-react';
 import { useT } from '@/i18n';
-import { api, type ProjectUsage, type StorageUsage, type StudioLocation, type StudioLocations } from '@/api';
+import { api, type ProjectUsage, type StorageUsage, type StudioLocations } from '@/api';
 import { studioHost } from '@/lib/host';
+import { refreshSaved } from '@/lib/saved';
 import { ConfirmDialog } from '../ConfirmDialog';
 import { SettingsButton, SettingsField, SettingsGroup, SettingsItem, settingsError } from './ui';
 
 type Which = keyof StudioLocations;
+type Move = { which: 'projects'; folder: string | null } | { which: 'saved' };
 
 /** Bytes as the person reads a disk's free space: GB, or MB below one. */
 export function size(bytes: number): string {
@@ -177,37 +179,52 @@ export function StorageGroup({ titled = true }: { titled?: boolean }) {
   const [busy, setBusy] = React.useState<Which | null>(null);
   const [error, setError] = React.useState<{ which: Which; text: string } | null>(null);
   /* where no folder dialog can open (a browser on another system), the path is typed */
-  const [typing, setTyping] = React.useState<{ which: Which; text: string } | null>(null);
+  const [typing, setTyping] = React.useState<string | null>(null);
   /* a new folder for a library with projects in it: whether they move too */
-  const [asking, setAsking] = React.useState<{ which: Which; folder: string | null } | null>(null);
-  const [note, setNote] = React.useState<{ which: Which; text: string } | null>(null);
+  const [asking, setAsking] = React.useState<Move | null>(null);
+  const [projectNote, setProjectNote] = React.useState<string | null>(null);
+  const [savedNote, setSavedNote] = React.useState<string | null>(null);
   const load = React.useCallback(() => { void api.locations().then(setWhere).catch(() => {}); }, []);
   React.useEffect(load, [load]);
   /* measured once the page is open (every project's folder is read: a moment for a big library) */
   const [usage, setUsage] = React.useState<StorageUsage | null>(null);
   const [clearing, setClearing] = React.useState(false);
   const [cleared, setCleared] = React.useState<number | null>(null);
-  React.useEffect(() => { let live = true; void api.storage().then((u) => { if (live) setUsage(u); }, () => {}); return () => { live = false; }; }, []);
+  const projectsPath = where?.projects.path;
+  const savedPath = where?.saved.path;
+  React.useEffect(() => {
+    if (!projectsPath) return;
+    let live = true;
+    void api.storage().then((u) => { if (live) setUsage(u); }, () => {});
+    return () => { live = false; };
+  }, [projectsPath, savedPath]);
   const clear = async () => {
     setClearing(true);
     try { const done = await api.clearStorage(); setUsage(done); setCleared(done.freed); } catch { /* as it was */ } finally { setClearing(false); }
   };
   if (!where) return null;
+  const { projects, saved } = where;
 
-  const apply = async (which: Which, folder: string | null, move: boolean) => {
+  const apply = async ({ which, ...destination }: Move, move = false) => {
     setBusy(which);
     setError(null);
-    setNote(null);
+    setProjectNote(null);
+    setSavedNote(null);
     try {
-      const done = await api.moveLibrary(folder, move);
+      const done = 'folder' in destination ? await api.moveLibrary(destination.folder, move) : await api.moveSaved();
       setTyping(null);
       setWhere(done.locations);
+      if (done.locations.saved.path !== saved.path) refreshSaved();
       if (done.failed.length) setError({ which, text: t('settings.storage.moveFailed').replace('{names}', done.failed.map((f) => f.name).join(', ')) });
       if (done.moved) {
         const moved = t('settings.storage.moved').replace('{count}', String(done.moved));
         /* across disks, an old folder the trash would not take stays on the old disk: said, with where */
         const left = done.left?.length ? ' ' + t('settings.storage.moveLeft').replace('{paths}', () => done.left.map((f) => f.path).join(', ')) : '';
-        setNote({ which, text: moved + left });
+        setProjectNote(moved + left);
+      }
+      if (done.savedMove) {
+        const { recycled, from } = done.savedMove;
+        setSavedNote(t(recycled ? 'settings.storage.savedRecycled' : 'settings.storage.savedLeft').replace('{path}', () => from));
       }
     } catch (e) {
       setError({ which, text: e instanceof Error ? e.message : String(e) });
@@ -215,54 +232,62 @@ export function StorageGroup({ titled = true }: { titled?: boolean }) {
       setBusy(null);
     }
   };
-  const keep = (which: Which, folder: string | null) => {
-    const now = where[which];
-    if (now.count > 0 && (folder ?? now.default) !== now.path) setAsking({ which, folder });
-    else void apply(which, folder, false);
+  const keep = (folder: string | null) => {
+    const move: Move = { which: 'projects', folder };
+    if ((projects.count > 0 || saved.followsProjects) && (folder ?? projects.default) !== projects.path) setAsking(move);
+    else void apply(move);
   };
-  const change = async (which: Which) => {
-    const ask = { title: t(`settings.storage.${which}Pick`), button: t('settings.storage.pickButton'), at: where[which].path };
+  const change = async () => {
+    const ask = { title: t('settings.storage.projectsPick'), button: t('settings.storage.pickButton'), at: projects.path };
     try {
       const pick = studioHost?.folders?.pick;
       const picked = pick ? await pick(ask) : await api.pickFolder(ask.title, ask.at);
-      if (picked) keep(which, picked);
+      if (picked) keep(picked);
     } catch {
-      setTyping({ which, text: where[which].path });
+      setTyping(projects.path);
     }
   };
 
-  const row = (which: Which, place: StudioLocation) => (
+  const projectRow = (
     <SettingsItem
-      key={which}
-      title={t(`settings.storage.${which}`)}
+      title={t('settings.storage.projects')}
       description={(
         <>
-          {typing?.which === which ? (
-            <form className="mt-2 flex items-center gap-2" onSubmit={(e) => { e.preventDefault(); if (typing.text.trim()) keep(which, typing.text.trim()); }}>
-              <SettingsField autoFocus value={typing.text} onChange={(e) => setTyping({ which, text: e.target.value })} spellCheck={false}
-                aria-label={t(`settings.storage.${which}`)} className="font-mono text-[13px]"
+          {typing !== null ? (
+            <form className="mt-2 flex items-center gap-2" onSubmit={(e) => { e.preventDefault(); if (!busy && typing.trim()) keep(typing.trim()); }}>
+              <SettingsField autoFocus value={typing} onChange={(e) => setTyping(e.target.value)} spellCheck={false}
+                aria-label={t('settings.storage.projects')} className="font-mono text-[13px]"
                 onKeyDown={(e) => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setTyping(null); } }} />
-              <SettingsButton type="submit" variant="primary" disabled={busy === which || !typing.text.trim()}>{t('settings.storage.save')}</SettingsButton>
+              <SettingsButton type="submit" variant="primary" disabled={Boolean(busy) || !typing.trim()}>{t('settings.storage.save')}</SettingsButton>
             </form>
           ) : (
-            <span className="mt-1 block break-all font-mono text-[13px]" title={place.path}>{place.path}</span>
+            <span className="mt-1 block break-all font-mono text-[13px]" title={projects.path}>{projects.path}</span>
           )}
-          {place.free != null ? <span className="mt-0.5 block text-[13px]">{t('settings.storage.free').replace('{size}', size(place.free))}</span> : null}
-          {note?.which === which ? <span className="mt-1 block text-[13px]" role="status">{note.text}</span> : null}
-          {error?.which === which ? <span className={`mt-1 block ${settingsError}`} role="alert">{error.text}</span> : null}
+          {projects.free != null ? <span className="mt-0.5 block text-[13px]">{t('settings.storage.free').replace('{size}', size(projects.free))}</span> : null}
+          {projectNote ? <span className="mt-1 block text-[13px]" role="status">{projectNote}</span> : null}
+          {error?.which === 'projects' ? <span className={`mt-1 block ${settingsError}`} role="alert">{error.text}</span> : null}
         </>
       )}
       control={(
         <>
-          {place.chosen ? (
-            <SettingsButton variant="quiet" disabled={busy === which} onClick={() => keep(which, null)} title={place.default}>{t('settings.storage.reset')}</SettingsButton>
+          {projects.chosen ? (
+            <SettingsButton variant="quiet" disabled={Boolean(busy)} onClick={() => keep(null)} title={projects.default}>{t('settings.storage.reset')}</SettingsButton>
           ) : null}
-          <SettingsButton onClick={() => void api.openLocation(which).catch(() => {})}>{t('settings.storage.show')}</SettingsButton>
-          <SettingsButton disabled={busy === which} onClick={() => void change(which)}>{t('settings.storage.change')}</SettingsButton>
+          <SettingsButton disabled={Boolean(busy)} onClick={() => void api.openLocation('projects').catch(() => {})}>{t('settings.storage.show')}</SettingsButton>
+          <SettingsButton disabled={Boolean(busy)} onClick={() => void change()}>{t('settings.storage.change')}</SettingsButton>
         </>
       )}
     />
   );
+
+  const asksForProjects = asking?.which === 'projects' && projects.count > 0;
+  const description = asking?.which === 'saved'
+    ? t('settings.storage.savedMoveTo').replace('{path}', () => saved.target)
+    : asking && [
+      asksForProjects ? t('settings.storage.moveDesc').replace('{count}', String(projects.count))
+        .replace('{from}', () => projects.path).replace('{to}', () => asking.folder ?? projects.default) : '',
+      saved.followsProjects ? t('settings.storage.savedFollowsProjects') : '',
+    ].filter(Boolean).join(' ');
 
   return (
     <SettingsGroup title={titled ? t('settings.storage.group') : undefined}>
@@ -291,18 +316,32 @@ export function StorageGroup({ titled = true }: { titled?: boolean }) {
           </div>
         );
       })()}
-      {row('projects', where.projects)}
+      {projectRow}
+      <SettingsItem
+        title={t('settings.storage.savedFolder')}
+        description={(
+          <>
+            <span className="mt-1 block break-all font-mono text-[13px]">{saved.path}</span>
+            {busy ? <span className="mt-1 block text-[13px]" role="status">{t('settings.storage.moving')}</span> : null}
+            {savedNote ? <span className="mt-1 block text-[13px]" role="status">{savedNote}</span> : null}
+            {error?.which === 'saved' ? <span className={`mt-1 block ${settingsError}`} role="alert">{error.text}</span> : null}
+          </>
+        )}
+        control={(
+          <>
+            <SettingsButton disabled={Boolean(busy)} onClick={() => void api.openLocation('saved').catch(() => {})}>{t('settings.storage.show')}</SettingsButton>
+            {saved.path !== saved.target ? <SettingsButton disabled={Boolean(busy)} onClick={() => setAsking({ which: 'saved' })}>{t('settings.storage.savedMove')}</SettingsButton> : null}
+          </>
+        )}
+      />
       <ConfirmDialog
         open={!!asking}
-        title={t('settings.storage.moveTitle')}
-        description={asking ? t('settings.storage.moveDesc')
-          .replace('{count}', String(where[asking.which].count))
-          .replace('{from}', where[asking.which].path)
-          .replace('{to}', asking.folder ?? where[asking.which].default) : undefined}
-        confirmLabel={t('settings.storage.moveYes')}
-        altLabel={t('settings.storage.moveNo')}
-        onConfirm={() => { const a = asking; setAsking(null); if (a) void apply(a.which, a.folder, true); }}
-        onAlt={() => { const a = asking; setAsking(null); if (a) void apply(a.which, a.folder, false); }}
+        title={t(asksForProjects ? 'settings.storage.moveTitle' : 'settings.storage.savedMove')}
+        description={description || undefined}
+        confirmLabel={t(asksForProjects ? 'settings.storage.moveYes' : asking?.which === 'saved' ? 'settings.storage.savedMove' : 'settings.storage.change')}
+        altLabel={asksForProjects ? t('settings.storage.moveNo') : undefined}
+        onConfirm={() => { const a = asking; setAsking(null); if (a) void apply(a, asksForProjects); }}
+        onAlt={() => { const a = asking; setAsking(null); if (a) void apply(a); }}
         onCancel={() => setAsking(null)}
       />
     </SettingsGroup>

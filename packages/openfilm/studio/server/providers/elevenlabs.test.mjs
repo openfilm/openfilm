@@ -15,9 +15,9 @@ before(async () => {
     for await (const c of req) chunks.push(c);
     const call = { method: req.method, url: new URL(req.url, 'http://x'), headers: req.headers, body: Buffer.concat(chunks) };
     seen.push(call);
-    const [status, body] = await reply(call);
+    const [status, body, headers = {}] = await reply(call);
     if (Buffer.isBuffer(body)) res.writeHead(status, { 'content-type': 'audio/mpeg' }).end(body);
-    else res.writeHead(status, { 'content-type': 'application/json' }).end(JSON.stringify(body));
+    else res.writeHead(status, { 'content-type': 'application/json', ...headers }).end(JSON.stringify(body));
   });
   await new Promise((done) => server.listen(0, '127.0.0.1', done));
   process.env.OPENFILM_ELEVENLABS_URL = `http://127.0.0.1:${server.address().port}`;
@@ -131,4 +131,38 @@ test('a refused key says so without the service\'s words; an echoed key is blank
   await assert.rejects(elevenlabs.run('sfx', { out: 'x', prompt: 'y' }, ctx()), (e) => /did not accept your key/.test(e.message) && !e.message.includes(KEY));
   reply = () => [422, { detail: { message: `bad request for ${KEY}` } }];
   await assert.rejects(elevenlabs.run('sfx', { out: 'x', prompt: 'y' }, ctx()), (e) => e.message === 'ElevenLabs answered 422: bad request for •••');
+});
+
+test('voice lookup stays within the supplier term limit and invalid selection has a correction', async () => {
+  reply = () => [200, { voices: [{ voice_id: 'abc', name: 'Voice' }] }];
+  const prompt = Array.from({ length: 42 }, (_, i) => 'term' + i).join(' ');
+  await elevenlabs.run('voice', { prompt }, ctx());
+  assert.equal(seen.at(-1).url.searchParams.get('search').split(' ').length, 30);
+  const count = seen.length;
+  await assert.rejects(elevenlabs.run('tts', { text: 'hi', voice: 'audio/sample.mp3' }, ctx()), /--voice-sample/);
+  assert.equal(seen.length, count, 'a file path never goes to the speech endpoint as a voice ID');
+  reply = () => [404, { detail: { message: "A voice with voice_id 'missing' was not found." } }];
+  await assert.rejects(elevenlabs.run('tts', { out: 'hello', text: 'hi', voice: 'missing' }, ctx()), /Choose an ElevenLabs voice/);
+});
+
+test('Scribe retries one explicit overload and does not retry an uncertain submission', async () => {
+  const context = ctx({ 'voice.wav': Buffer.from('speech') });
+  const args = { src: 'voice.wav' };
+  let requests = 0;
+  reply = () => ++requests === 1
+    ? [429, { detail: { message: 'heavy traffic' } }, { 'retry-after': '0' }]
+    : [200, { text: 'hi', words: [] }];
+  const out = await elevenlabs.run('asr', args, context);
+  assert.equal(out.receipt.text, 'hi');
+  assert.equal(requests, 2);
+
+  requests = 0;
+  reply = () => { requests++; return [429, { detail: { message: 'heavy traffic' } }, { 'retry-after': '0' }]; };
+  await assert.rejects(elevenlabs.run('asr', args, context), /429/);
+  assert.equal(requests, 2);
+
+  requests = 0;
+  reply = () => { requests++; return [502, {}]; };
+  await assert.rejects(elevenlabs.run('asr', args, context), (error) => error.mediaUncertain === true);
+  assert.equal(requests, 1);
 });

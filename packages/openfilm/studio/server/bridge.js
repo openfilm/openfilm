@@ -15,7 +15,8 @@
  *            { type: 'pick', x, y, seq }          what is under this stage point
  *            { type: 'shown' }            this load is shown now, over the one it replaces: say when it is on screen
  *   film   → { source: 'openfilm-film', type: 'ready', duration, width, height, sounds, spans, origin }
- *            { type: 'seeked', t, seq }           the frame at t is on screen
+ *            { type: 'seeked', t, seq, drawn }    the seek finished or reached its time limit
+ *            { type: 'seek-ready', t, seq }       the same frame finished drawing after that limit
  *            { type: 'clock', ping, now }         this page's clock (performance.now) when the ping came
  *            { type: 'played', frames, drawn, late, rendered, ms, spans }   while playing, about once a second over
  *                                         `ms`: the screen's refreshes, the film's frames drawn, the refreshes that got
@@ -121,15 +122,22 @@
          for as long as they took. A frame that does not come within a moment is let go: one stuck page or video must
          not stop the picture. */
       const watch = editor()?.watch;
+      const drawingFrame = Promise.resolve(watch && !behind ? watch(t) : drawn(f, t));
       let timer;
+      let completed;
       try {
-        const completed = await Promise.race([
-          Promise.resolve(watch && !behind ? watch(t) : drawn(f, t)).then(() => true),
+        completed = await Promise.race([
+          drawingFrame.then((ready) => ready !== false),
           new Promise((done) => { timer = setTimeout(() => done(false), behind ? BEHIND_WAIT_MS : FRAME_WAIT_MS); }),
         ]);
         if (!completed && seek?.publish) throw new Error('The new film did not draw its first frame in time.');
       } finally { clearTimeout(timer); }
-      if (seek) post({ type: 'seeked', t, seq: seek.seq });
+      if (seek) {
+        post({ type: 'seeked', t, seq: seek.seq, drawn: completed });
+        if (!completed && !behind) void drawingFrame.then((ready) => {
+          if (ready !== false && !line && !next && asked === t) post({ type: 'seek-ready', t, seq: seek.seq });
+        }, () => {});
+      }
     } catch (e) { fail(e); }
     drawing = false;
     if (line) requestFrame(); else draw();

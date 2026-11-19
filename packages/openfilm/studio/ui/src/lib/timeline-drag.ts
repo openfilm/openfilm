@@ -228,14 +228,15 @@ export function applyDrag(
     const floor = follow?.length
       ? Math.min(block.startMs, ...follow.map((b) => b.startMs))
       : block.startMs;
-    const startMs = block.startMs + Math.max(shift, -floor);
+    const beforeStart = deltaMs < -floor;
+    const startMs = block.startMs + (beforeStart ? -floor : Math.max(shift, -floor));
     const durMs = block.endMs - block.startMs;
     const moves = (follow ?? []).map((b) => ({
       id: b.id,
       startMs: b.startMs + (startMs - block.startMs),
       endMs: b.endMs + (startMs - block.startMs),
     }));
-    return { startMs, endMs: startMs + durMs, snappedTo, moves };
+    return { startMs, endMs: startMs + durMs, snappedTo: beforeStart ? null : snappedTo, moves };
   }
 
   if (mode === 'trim-start') {
@@ -416,7 +417,7 @@ export interface Marquee {
  * wholly in empty space selects nothing.
  */
 export function marqueeHits(
-  lanes: readonly { blocks: readonly Block[] }[],
+  lanes: readonly { blocks: readonly Block[]; locked?: boolean }[],
   box: Marquee,
 ): string[] {
   const lo = Math.min(box.fromLane, box.toLane);
@@ -425,7 +426,9 @@ export function marqueeHits(
   const to = Math.max(box.fromMs, box.toMs);
   const out: string[] = [];
   for (let i = lo; i <= hi; i += 1) {
-    for (const b of lanes[i]?.blocks ?? []) {
+    const lane = lanes[i];
+    if (!lane || lane.locked) continue;
+    for (const b of lane.blocks) {
       if (b.startMs < to && b.endMs > from) out.push(b.id);
     }
   }

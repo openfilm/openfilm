@@ -111,6 +111,25 @@ function connectAll() {
 }
 beforeEach(async () => { calls.length = 0; refuse = null; rmSync(providersFile(), { force: true }); await connectAll(); });
 
+test('audio generation stays off with a connected provider, and an uncertain submission cannot be repeated', async () => {
+  const root = project();
+  const args = { out: 'score', prompt: 'A quiet piano piece' };
+  await changeSettings((s) => { s.use.music = ''; });
+  await assert.rejects(runGet(root, 'music', args, { via: 'elevenlabs' }), /is off in Settings/);
+  assert.equal(calls.length, 0);
+
+  await changeSettings((s) => { s.use.music = 'elevenlabs'; });
+  refuse = () => [502, { message: 'Bad gateway' }];
+  await assert.rejects(runGet(root, 'music', args), /may already have been charged/);
+  await assert.rejects(runGet(root, 'music', args), /An earlier ElevenLabs request may have been charged/);
+  assert.equal(calls.filter((c) => c.path === '/v1/music').length, 1);
+
+  refuse = null;
+  await runGet(root, 'music', { ...args, fresh: true });
+  assert.equal(calls.filter((c) => c.path === '/v1/music').length, 2);
+  assert.deepEqual(await pendingRuns(root), []);
+});
+
 let projects = 0;
 function project(film = { stage: { w: 1920, h: 1080 }, tracks: [] }) {
   const root = join(scratch, `p${++projects}`);

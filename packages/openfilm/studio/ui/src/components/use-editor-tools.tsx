@@ -130,7 +130,6 @@ export function useEditorTools({
     if (to) seek(to.ms);
   }, [seek, timeRef]);
   const markerActions = React.useMemo<MarkerActions>(() => ({
-    onSeek: (ms) => seek(ms),
     onChange: (id, change) => {
       const m = markersRef.current.find((x) => x.id === id);
       /* a clip marker moved is moved within its clip's file */
@@ -143,7 +142,7 @@ export function useEditorTools({
     onRemove: (id) => saveMarkers(removeMarker(markersRef.current, id)),
     naming,
     onNamed,
-  }), [seek, saveMarkers, naming, onNamed]);
+  }), [saveMarkers, naming, onNamed]);
 
   /** The editor's keys for markers (lib/keymap): true when it was one. */
   const onKey = React.useCallback((cmd: ActionId): boolean => {
@@ -294,7 +293,10 @@ export function useEditorTools({
     if (failed) { toast.showError(failed); return; }
     if (plan.shortMs > 0) toast.show(t('editorTools.replaceShort').replace('{s}', (plan.shortMs / 1000).toFixed(2)));
   }, [edit, toast, t]);
-  const onReplaceDrop = React.useCallback((block: TimelineBlock, file: ReplaceFile) => { void replace(block, file); }, [replace]);
+  const onReplaceDrop = React.useCallback(async (block: TimelineBlock, file: ReplaceFile) => {
+    await replace(block, file);
+    return null;
+  }, [replace]);
 
   /* a file from this computer: brought in first, then put in the clip's place once the listing has it with its length
      (probed after it lands); a file whose length never comes is used as it is after a while */
@@ -401,9 +403,9 @@ export function useEditorTools({
   const rulerMenu = React.useCallback((atMs: number): ContextMenuEntry[] => [
     { id: 'add-marker', label: t('editorTools.markerAdd'), icon: <MarkerGlyph size={14} />, shortcut: keyHint('add-marker'), onSelect: () => addMarkerHere(null, atMs) },
   ], [addMarkerHere, t, keyHint]);
-  const trackOverlay = React.useCallback((track: TimelineTrack, pxPerMs: number) => {
+  const trackOverlay = React.useCallback((track: TimelineTrack, pxPerMs: number, seekMarker: (ms: number) => void) => {
     const here = clipMarkersByTrack.get(track.lane);
-    return here ? <ClipMarkers placed={here} pxPerMs={pxPerMs} height={track.height ?? ownTrackHeight(track)} actions={markerActions} /> : null;
+    return here ? <ClipMarkers placed={here} pxPerMs={pxPerMs} height={track.height ?? ownTrackHeight(track)} actions={markerActions} onSeek={seekMarker} /> : null;
   }, [clipMarkersByTrack, markerActions]);
 
   /** the mix's level now, for the meters */

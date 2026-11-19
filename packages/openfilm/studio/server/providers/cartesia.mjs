@@ -37,8 +37,8 @@ export default {
   models: MODELS,
   async run(verb, args, ctx) {
     const base = serviceUrl('CARTESIA', 'https://api.cartesia.ai');
-    const send = (/** @type {string} */ path, /** @type {RequestInit} */ init = {}) =>
-      call(NAME, `${base}${path}`, { ...init, headers: { authorization: `Bearer ${ctx.key}`, 'cartesia-version': VERSION, ...init.headers } }, ctx);
+    const send = (/** @type {string} */ path, /** @type {RequestInit} */ init = {}, retryThrottle = false) =>
+      call(NAME, `${base}${path}`, { ...init, headers: { authorization: `Bearer ${ctx.key}`, 'cartesia-version': VERSION, ...init.headers } }, ctx, { retryThrottle });
 
     if (verb === 'voice') return voices(args, send);
     if (verb === 'tts') {
@@ -54,7 +54,7 @@ export default {
           model_id: model, transcript: said, voice: { id: voice }, ...(language ? { language } : {}),
           output_format: { container: 'raw', encoding: 'pcm_s16le', sample_rate: RATE }, add_timestamps: true,
         }),
-      });
+      }, true);
       /** @type {Buffer[]} */
       const pcm = [];
       /** @type {unknown[][]} */

@@ -165,6 +165,8 @@ export const zhCN: Words = {
     diagnosticsCopied: '已复制',
     switchAccount: '切换账号',
     signedInAs: '当前登录：{account}。',
+    modelTimeout: '模型服务响应超时。请重试或切换模型。',
+    modelTimeoutRetry: '模型服务响应超时，正在重试…',
     routeNoKey: '这个模型要用 DeepSeek 的 API key，这台电脑上还没有配置。只登录了 DeepSeek 账号的话，换成账号里的模型就行。',
     routeNoKeyNoAccount: '这个模型要用 DeepSeek 的 API key，这台电脑上还没有配置。请在 DeepSeek Harness 里登录 DeepSeek 账号，或在它的模型设置里填上 API key。',
     useAccountModel: '换成 {model}',

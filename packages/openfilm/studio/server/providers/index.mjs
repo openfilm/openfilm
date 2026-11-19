@@ -52,6 +52,7 @@ const OWN = [...BUILT_IN];
 
 /** The kinds of media the person chooses a provider and model for (Settings → Services). */
 const USE_VERBS = /** @type {Verb[]} */ (['tts', 'music', 'sfx', 'asr', 'cutout', 'image', 'image-search', 'video-search', 'video', 'translate', 'web-search']);
+export const isAudioGeneration = (/** @type {string} */ verb) => verb === 'music' || verb === 'sfx';
 
 export const listProviders = () => OWN;
 
@@ -95,7 +96,7 @@ async function named(id, verb, settings, strict) {
 function fill(s) {
   const connected = OWN.filter((p) => providerKey(p, s)).sort((a, b) => a.name.localeCompare(b.name));
   for (const verb of USE_VERBS) {
-    if (s.use[verb]) continue;
+    if (Object.hasOwn(s.use, verb)) continue;
     const next = connected.find((p) => /** @type {readonly string[]} */ (p.verbs).includes(verb));
     if (next) s.use[verb] = next.id;
   }
@@ -122,13 +123,14 @@ export async function localModelsChanged() {
 /**
  * Who serves `verb`: `via` (a provider id from `--via`), else the person's choice while it can. null:
  * nothing is chosen, or what is chosen cannot serve now.
- * @param {Verb} verb @param {{ via?: string | null, settings?: ProviderSettings }} [options]
+ * @param {Verb} verb @param {{ via?: string | null, settings?: ProviderSettings, recoverOnly?: boolean }} [options]
  * @returns {Promise<Provider | null>}
  */
-export async function chooseProvider(verb, { via, settings } = {}) {
+export async function chooseProvider(verb, { via, settings, recoverOnly = false } = {}) {
   const saved = settings ?? await providerSettings();
   /* every provider that speaks also lists its voices; one that searches the web reads its pages */
   const kind = /** @type {Verb} */ (kindOf(verb));
+  if (isAudioGeneration(kind) && saved.use[kind] === '' && !recoverOnly) return null;
   /* what the one it would be offers now */
   await OWN.find((p) => p.id === (via || saved.use[kind]))?.refresh?.();
   if (via) return named(via, kind, saved, true);
@@ -322,8 +324,11 @@ export async function providersRoute(req, res, parts, { openBrowser }) {
         delete s.accounts[provider.id];
         /* one connected without a kept key (the environment's, or none at all) stays off until connected again */
         if ((envKey(provider) || provider.ready) && !s.off.includes(provider.id)) s.off.push(provider.id);
-        /* what a provider that can no longer be used made goes to what else makes it */
-        if (!providerKey(provider, s)) for (const [verb, id] of Object.entries(s.use)) if (id === provider.id) delete s.use[verb];
+        /* Disconnecting the selected audio generator stops paid generation until another is chosen. */
+        if (!providerKey(provider, s)) for (const [verb, id] of Object.entries(s.use)) {
+          if (id !== provider.id) continue;
+          if (isAudioGeneration(verb)) s.use[verb] = ''; else delete s.use[verb];
+        }
         fill(s);
       });
       return json(res, 200, await state());
@@ -347,7 +352,7 @@ export async function providersRoute(req, res, parts, { openBrowser }) {
     const named = model == null || model === '' ? null : models.find((m) => m.id === model);
     if (model != null && model !== '' && !named) throw new HttpError(400, `${id ?? 'no provider'} has no model ${String(model)} for ${kind}`);
     await changeSettings((s) => {
-      if (id === null) delete s.use[kind]; else s.use[kind] = id;
+      if (id !== null || isAudioGeneration(kind)) s.use[kind] = id ?? ''; else delete s.use[kind];
       if (named && named !== models[0]) s.model[kind] = named.id; else delete s.model[kind];
     });
     return json(res, 200, await state());

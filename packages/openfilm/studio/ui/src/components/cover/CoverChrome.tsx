@@ -26,7 +26,7 @@ export function ShapeMark({ shape, size = 14 }: { shape: CoverShape; size?: numb
 }
 
 /**
- * In a column of the heads' side, right of the track heads and left of the line before the clips, by the main track: a square, the film's cover (its picture, or a
+ * At the start of the scrolling timeline, beside the main track: the film's cover (its picture, or a
  * dashed box with a pen and "Cover" while it has none). A click opens the cover design; its menu opens it, makes the
  * frame at the playhead the cover's picture, or exports the covers.
  */
@@ -44,7 +44,7 @@ export function CoverTile({ thumb, size, leftGap, onOpen, menu }: {
         className={`group absolute top-1/2 z-10 flex -translate-y-1/2 flex-col items-center justify-center overflow-hidden rounded-[5px] text-[10px] leading-none transition ${thumb
           ? 'bg-black text-[#e6e6e6] shadow-[0_0_0_1px_var(--border-strong)] hover:shadow-[0_0_0_1.5px_var(--accent)]'
           : 'gap-0.5 border border-dashed border-[var(--border-strong)] bg-[var(--bg-field)] text-[var(--editor-control)] hover:border-[var(--accent)]'}`}
-        style={{ width: size, height: size, left: `calc(100% + ${leftGap}px)` }}>
+        style={{ width: size, height: size, left: leftGap }}>
         {thumb ? (
           <>
             <img src={thumb} alt="" draggable={false} className="min-h-0 w-full flex-1 object-cover" />

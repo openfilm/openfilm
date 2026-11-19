@@ -26,7 +26,13 @@ async function service({ broke = false, fails = null, busyOnce = false, largest 
       /* a proxy in front of the service refusing a body past its size, with its own HTML page */
       if (body.length > largest) { res.writeHead(413, { 'content-type': 'text/html' }); res.end('<html><head><title>413 Request Entity Too Large</title></head><body><center><h1>413 Request Entity Too Large</h1></center><hr><center>openresty</center></body></html>'); return; }
       if (broke) { res.writeHead(402, { 'content-type': 'application/json' }); res.end(JSON.stringify({ error: { message: 'Insufficient Balance' } })); return; }
-      if (busyOnce && asked.length === 1) { res.writeHead(503, { 'content-type': 'application/json' }); res.end(JSON.stringify({ error: { message: 'The service is busy.' } })); return; }
+      if (busyOnce && asked.length === 1) {
+        const status = typeof busyOnce === 'number' ? busyOnce : 503;
+        const failure = status === 524 ? { status, error_name: 'origin_response_timeout', ray_id: 'test-ray' }
+          : { error: { message: 'The service is busy.' } };
+        res.writeHead(status, { 'content-type': 'application/json' }).end(JSON.stringify(failure));
+        return;
+      }
       if (fails) { res.writeHead(400, { 'content-type': 'application/json' }); res.end(JSON.stringify({ error: { message: fails } })); return; }
       res.writeHead(200, { 'content-type': 'text/event-stream' });
       const chunk = (choice, extra = {}) => `data: ${JSON.stringify({ id: 'c', object: 'chat.completion.chunk', created: 0, model, choices: [choice], ...extra })}\n\n`;
@@ -345,6 +351,29 @@ test('a service that fails and is tried again says so in the chat as a notice, a
     assert.equal(notices[0].severity, 'warning');
     assert.equal(notices[0].title, 'The model service failed; trying again (1 of 1).');
     assert.match(notices[0].description, /The service is busy/);
+  } finally {
+    session.close();
+    svc.close();
+  }
+});
+
+test('a Cloudflare 524 retries once and forwards a localizable notice without proxy JSON', { timeout: 60_000 }, async () => {
+  const svc = await service({ busyOnce: 524 });
+  const updates = [];
+  const session = new AgentSession({
+    agent: 'byok',
+    cwd: mkdtempSync(join(tmpdir(), 'of-pi-')),
+    harness: { home: mkdtempSync(join(tmpdir(), 'of-pi-home-')), models: [own('a', svc.url)], model: 'a', env: { OPENFILM_BYOK_KEY_a: 'sk' } },
+    onUpdate: (update) => updates.push(update),
+  });
+  try {
+    await session.start();
+    assert.equal(await session.prompt([{ type: 'text', text: 'hi' }]), 'end_turn');
+    assert.equal(svc.asked.length, 2);
+    const notices = updates.filter((update) => update.sessionUpdate === 'notice');
+    assert.equal(notices.length, 1);
+    assert.equal(notices[0]._meta?.openfilm?.noticeKey, 'composer.modelTimeoutRetry');
+    assert.equal(notices[0].description, undefined);
   } finally {
     session.close();
     svc.close();

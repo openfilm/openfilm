@@ -11,7 +11,7 @@ import { Icon, PATH_FULLSCREEN, PATH_FULLSCREEN_EXIT } from './controls-bar';
 
 /** A player button's look, at rest and pressed (its state not the default). */
 export const mediaButton = (on: boolean, size: number) =>
-  `flex shrink-0 items-center justify-center gap-1 rounded-[6px] px-1 text-[var(--editor-control)] outline-none transition focus-visible:ring-1 focus-visible:ring-[var(--accent)] disabled:pointer-events-none disabled:text-[var(--editor-control-disabled)] aria-disabled:text-[var(--editor-control-disabled)] aria-disabled:hover:bg-transparent ${
+  `flex shrink-0 items-center justify-center gap-1 rounded-[6px] px-1 text-[var(--editor-control)] outline-none transition focus-visible:ring-1 focus-visible:ring-[var(--accent)] disabled:pointer-events-none disabled:text-[var(--editor-control-disabled)] disabled:opacity-100 aria-disabled:text-[var(--editor-control-disabled)] aria-disabled:opacity-100 aria-disabled:hover:bg-transparent ${
     on ? 'bg-[var(--bg-pressed)]' : 'hover:bg-[var(--bg-hover)]'}` + ` ${size >= 22 ? 'h-8 min-w-8' : 'h-7 min-w-7'}`;
 
 export function SpeedFace({ speed }: { speed: number }) {

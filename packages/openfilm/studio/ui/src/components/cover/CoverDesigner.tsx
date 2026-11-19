@@ -526,7 +526,7 @@ function CoverEditor({ toast, projectId, open, list, filmTitle, busy, job, safe,
             {safe ? <CoverSafeArea stage={stage} /> : null}
           </Fitted>
           <button type="button" data-cover-ai-pill="" onClick={() => setAi(true)}
-            className="absolute bottom-3 right-6 z-20 flex h-9 items-center gap-2 rounded-full bg-[rgba(30,30,34,.92)] px-4 text-[12.5px] text-white shadow-[0_0_0_1px_rgba(0,193,205,.6),0_8px_24px_rgba(0,0,0,.4)] transition hover:bg-[rgba(40,40,46,.95)]">
+            className="absolute bottom-3 right-6 z-20 flex h-9 items-center gap-2 rounded-full bg-[rgba(30,30,34,.92)] px-4 text-[12.5px] text-white shadow-[0_0_0_1px_color-mix(in_srgb,var(--accent)_60%,transparent),0_8px_24px_rgba(0,0,0,.4)] transition hover:bg-[rgba(40,40,46,.95)]">
             <span className="text-[var(--accent)]">✦</span>{t('covers.aiPill')}
           </button>
         </div>

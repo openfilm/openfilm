@@ -69,8 +69,10 @@ import { carryMade, madeView } from './media-made.mjs';
 import { pluginOfSkill, pluginStates, pluginsDir, removePlugin, setPluginOn, setWorkbenchOrder, workbenchOrder } from '../../src/plugins.mjs';
 import { createReconnector, missingMedia, reconnect } from './media-reconnect.mjs';
 import { clearProjectCache, storage } from './storage.mjs';
+import { chooseStorage } from './saved-location.mjs';
+import { moveToTrash } from './trash.mjs';
 import { SavedError, TEXT_COMPONENT, TEXT_OWN_FONTS, bundlePoster, copyFromLibrary, libraryPath, savePack, libraryRel, libraryRoot as savedLibrary, bringClip, saveClip, saveFile, saveGroup, takeSaved } from './saved.mjs';
-import { addLibraryAsset, assetCatalog, assetUsage, catalogListing, existingLibraryAsset, moveAssetCatalog, refreshLibraryReferences, registerLibraryLinks, registerLibraryFolder, forgetLibraryPath, savedStarKey, starredListing, starredPaths } from './asset-library.mjs';
+import { addLibraryAsset, assetCatalog, assetUsage, catalogListing, existingLibraryAsset, moveAssetCatalog, refreshLibraryReferences, registerLibraryLinks, registerLibraryFolder, repairLibraryReferences, forgetLibraryPath, savedStarKey, starredListing, starredPaths } from './asset-library.mjs';
 import { defaultPlace, ensureShelf, readHidden, shelfMoved, shelfRemoved, writeShelf } from './library-places.mjs';
 import { FILM_FILE, clipKind, isPage } from '../../src/film-doc.mjs';
 import { listenLocal } from '../../src/host.mjs';
@@ -97,7 +99,7 @@ import { canvasMadeRoute } from './canvas-history.mjs';
 import { charactersRoute, projectCharactersRoute } from './canvas-characters.mjs';
 import { transitionPageRoutes } from './transition-pages.mjs';
 import { createAsks, getRoute, subtitleTranscriber, subtitleTranslator } from './get.mjs';
-import { LOCATION_KEYS, chooseFolder, locations, usableFolder } from '../../src/locations.mjs';
+import { chosenFolder, locations, savedRoot } from '../../src/locations.mjs';
 import { doctor } from '../../src/doctor.mjs';
 import { recentProblems } from '../../src/problems.mjs';
 import { exportDiagnostics } from './diagnostics.mjs';
@@ -141,6 +143,7 @@ export function personsSay(parts, method) {
   if (method === 'GET' || method === 'HEAD') return false;
   const [head] = parts;
   if (head === 'providers' || head === 'local-models' || head === 'prefs' || head === 'voices') return true;
+  if (head === 'locations') return method === 'PUT';
   if (head === 'plugins') return parts.length === 2;
   if (head === 'skills') return !(parts.length === 2 && parts[1] === 'catalog');
   return false;
@@ -275,6 +278,39 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     return stop;
   };
 
+  /** @type {Set<Promise<unknown>>} */
+  const savedRequests = new Set();
+  /** @type {Promise<unknown> | null} */
+  let movingStorage = null;
+
+  /** @param {unknown} asked @param {boolean} [move] */
+  async function changeStorage(asked, move = false) {
+    if (asked != null && (typeof asked !== 'string' || !isAbsolute(asked))) throw new HttpError(400, 'Choose a folder by its full path.');
+    if (movingStorage) throw new HttpError(409, 'The asset library is already moving.');
+    const to = typeof asked === 'string' ? resolve(asked) : asked === null ? null : chosenFolder('projectsFolder');
+    const change = (async () => {
+      await Promise.allSettled(savedRequests);
+      /** @type {string | null} */
+      let oldSaved = null;
+      const done = await moveLibrary(to, { move, choose: async (folder) => { oldSaved = await chooseStorage(folder); } });
+      let savedMove = null;
+      if (oldSaved) {
+        pages.folderUrl({ id: SAVED_ORIGIN_ID, path: savedRoot() });
+        let recycled = false;
+        try {
+          await refreshLibraryReferences('saved');
+          await moveToTrash(oldSaved);
+          recycled = true;
+        } catch { /* Keep the previous copy when references or the trash could not be updated. */ }
+        savedMove = { recycled, from: oldSaved };
+      }
+      return { ...done, savedMove, locations: locations() };
+    })();
+    movingStorage = change;
+    try { return await change; }
+    finally { movingStorage = null; }
+  }
+
   /** @param {Req} req @param {Res} res */
   async function route(req, res) {
     const url = new URL(req.url ?? '/', origin);
@@ -330,7 +366,20 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     if (caller === 'agent' && personsSay(parts, req.method ?? 'GET')) {
       throw new HttpError(403, "only the person changes this, in Studio's Settings: tell them what to change and why");
     }
+    const [head, group, action] = parts;
+    const usesSaved = head === 'saved' || (head === 'locations' && group === 'saved' && req.method === 'POST')
+      || (head === 'library' && group === 'packs' && action === 'save')
+      || (head === 'projects' && (action === 'saved' || (action === 'library' && parts[3] === 'add')
+        || (group && !action && req.method === 'GET' && (movingStorage || chosenFolder('savedFolder')))));
+    if (!usesSaved) return apiRoute(req, res, url, parts, caller);
+    while (movingStorage) await movingStorage.catch(() => {});
+    const run = apiRoute(req, res, url, parts, caller);
+    savedRequests.add(run);
+    try { return await run; } finally { savedRequests.delete(run); }
+  }
 
+  /** @param {Req} req @param {Res} res @param {URL} url @param {string[]} parts @param {'person' | 'agent'} caller */
+  async function apiRoute(req, res, url, parts, caller) {
     /* stop: another app is taking over this machine's Studio, or `openfilm open` starts it afresh (`whenIdle`: not
        while an export runs or media is made — it would be lost). `pages`: how many were open, to come back */
     if (parts[0] === 'quit' && parts.length === 1 && req.method === 'POST') {
@@ -636,11 +685,10 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     if (parts[0] === 'prefs' && parts.length === 1) {
       if (req.method === 'GET') return json(res, 200, readPrefs());
       if (req.method === 'PATCH') {
-        /* a folder chosen for new projects is checked, and made, before it is kept */
         const patch = /** @type {Record<string, unknown>} */ (await readJson(req) ?? {});
-        for (const key of Object.values(LOCATION_KEYS)) {
-          if (patch[key] == null) continue;
-          try { patch[key] = usableFolder(patch[key]); } catch (e) { throw new HttpError(400, /** @type {Error} */ (e).message); }
+        if (Object.hasOwn(patch, 'projectsFolder')) {
+          await changeStorage(patch.projectsFolder);
+          delete patch.projectsFolder;
         }
         return json(res, 200, writePrefs(patch));
       }
@@ -695,21 +743,18 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     }
     /* the person's media in numbers (media-index.mjs): places, files, the room they take and the room copies take */
     if (parts[0] === 'media-index' && parts.length === 1 && req.method === 'GET') return json(res, 200, { ...await mediaSummary(), scanning: mediaIndex.busy() });
-    /* the library moved (projects.mjs moveLibrary): { path } (null: the default), and with `move` its projects go too */
-    if (parts[0] === 'locations' && parts[1] === 'projects' && parts.length === 2 && req.method === 'PUT') {
-      const { path: asked, move } = /** @type {{ path?: unknown, move?: unknown }} */ (await readJson(req) ?? {});
-      let to = null;
-      if (asked != null) {
-        try { to = usableFolder(asked); } catch (e) { throw new HttpError(400, /** @type {Error} */ (e).message); }
+    if (parts[0] === 'locations' && parts.length === 2 && (parts[1] === 'projects' || parts[1] === 'saved')) {
+      if (req.method === 'PUT') {
+        if (parts[1] === 'saved') return json(res, 200, await changeStorage(undefined));
+        const { path: asked, move } = /** @type {{ path?: unknown, move?: unknown }} */ (await readJson(req) ?? {});
+        return json(res, 200, await changeStorage(asked ?? null, move === true));
       }
-      const done = await moveLibrary(to, { move: move === true, choose: (folder) => chooseFolder('projectsFolder', folder) });
-      return json(res, 200, { ...done, locations: locations() });
-    }
-    if (parts[0] === 'locations' && parts[1] === 'projects' && parts.length === 2 && req.method === 'POST') {
-      const folder = locations()[parts[1]].path;
-      mkdirSync(folder, { recursive: true });
-      openFile(folder);
-      return json(res, 200, { ok: true });
+      if (req.method === 'POST') {
+        const folder = parts[1] === 'saved' ? await savedLibrary() : locations().projects.path;
+        if (parts[1] === 'projects') mkdirSync(folder, { recursive: true });
+        openFile(folder);
+        return json(res, 200, { ok: true });
+      }
     }
     /* the system's file dialog (folder-picker.mjs pickFiles), several at once: { paths } (none: cancelled); 501 when
        this system has none */
@@ -1127,6 +1172,7 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     if (!rest) {
       /* `folder`: the project's files on the film's origin, where the preview loads them */
       if (req.method === 'GET') {
+        if (chosenFolder('savedFolder')) await notifyReferences(() => repairLibraryReferences(project.path));
         const film = await settleProjectFilm(project.path);
         requireProject({ film: false });
         /* opened: its card in the projects list gets a picture before the list first shows it */

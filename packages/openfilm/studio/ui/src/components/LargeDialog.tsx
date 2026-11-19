@@ -1,7 +1,7 @@
 /**
  * A large window with a side: Settings, Features. One frame, so every such window reads the same: its size
- * (dialog-chrome), the side on the left (264 px, the side's color: the panels' in the dark, rgb 24) with its search
- * and its places, the page on the right (the raised color, rgb 32) with Close in its corner. It is put on the
+ * (dialog-chrome), the side on the left (264 px, the panel color in dark mode) with its search
+ * and its places, the page on the right (the raised color) with Close in its corner. It is put on the
  * document's body, over the app's chat as well as Studio. Esc pressed in it is its own, before Studio's keys under it
  * (a menu open in it, a card over it or a field takes it first): `onEscape` (a page going back), else it closes; Tab
  * stays in it.

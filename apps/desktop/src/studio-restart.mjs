@@ -13,3 +13,35 @@ export function restartDelay(last, ran) {
   if (ran >= SETTLED_MS || !last) return RESTART_MS;
   return Math.min(RESTART_MAX_MS, last * 2);
 }
+
+/** Retry after a process exit or a failed restart. A deliberate quit cancels any pending attempt. */
+export function studioRestarts({ start, onRetry, onFailure }) {
+  let wait = 0;
+  let timer = null;
+  let stopped = false;
+
+  function afterExit(ran) {
+    if (stopped || timer !== null) return;
+    wait = restartDelay(wait, ran);
+    onRetry(wait);
+    timer = setTimeout(async () => {
+      timer = null;
+      try {
+        await start();
+      } catch (error) {
+        if (stopped) return;
+        onFailure(error);
+        afterExit(0);
+      }
+    }, wait);
+  }
+
+  return {
+    afterExit,
+    stop() {
+      stopped = true;
+      clearTimeout(timer);
+      timer = null;
+    },
+  };
+}

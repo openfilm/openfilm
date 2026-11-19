@@ -102,12 +102,12 @@
   /* the timeline's own: a well (meters), the playhead and the frame of a picked clip, and waveforms drawn lighter
      over a clip's own color (canvas reads these back from the element) */
   --tl-lane: #f1f1f3;
-  /* a track's band, the ground seen in the gaps between two (the panel itself), and the track of a picked clip: the
-     panel a quiet step darker (lighter in dark), the picked one a step further */
+  /* the track band, the panel between tracks, and the selected track body */
   --tl-row: #f7f7f8;
+  --tl-head: var(--tl-row);
   --tl-gap: var(--bg-panel);
-  --tl-lane-on: #f3f3f4;
-  --tl-empty: #f4f4f5;
+  --tl-row-on: #f3f3f4;
+  --tl-toolbar-divider: var(--border);
   --tl-empty-drop: #efeff1;
   --tl-playhead: #161619;
   --tl-select: #161619;
@@ -130,25 +130,25 @@
   color-scheme: dark;
 
   /* the window's ground (rgb 20): what shows between the panes; every pane's inside, its top bars, the viewer round
-     the picture and the canvas's board among them, the panels' (rgb 24) */
+     the picture and the canvas's board among them, uses the panel color */
   --bg-app: #141414;
-  --bg-titlebar: #202020;
-  --bg-panel: #181818;
-  --bg-raised: #202020;
-  /* the large windows: the side the panels' color (rgb 24), the page the raised one (rgb 32) */
+  --bg-titlebar: #202223;
+  --bg-panel: #191919;
+  --bg-raised: #202223;
+  /* large windows use the panel color for the sidebar and the raised color for the page */
   --dialog-side: var(--bg-panel);
   --dialog-main: var(--bg-raised);
-  --bg-viewer: #181818;
+  --bg-viewer: #191919;
   --dock-line: #000000;
   --bg-field: rgba(255, 255, 255, 0.08);
   --bg-hover: rgba(255, 255, 255, 0.06);
   --bg-pressed: rgba(255, 255, 255, 0.12);
-  --bg-selected: rgba(0, 193, 205, 0.16);
+  --bg-selected: color-mix(in srgb, var(--accent) 16%, transparent);
 
   --text: #e6e6e6;
   --text-muted: #a3a3a3;
   --text-faint: #717177;
-  --editor-control: #e6e6e6;
+  --editor-control: var(--text);
   --editor-control-disabled: #464646;
 
   --border: rgba(240, 240, 255, 0.075);
@@ -159,12 +159,12 @@
   --on-primary: #0a0a0c;
 
   /* what is picked: words in this cyan, plainly apart from the others' white */
-  --accent: #00c1cd;
-  --accent-soft: rgba(0, 193, 205, 0.14);
+  --accent: #00bec8;
+  --accent-soft: color-mix(in srgb, var(--accent) 14%, transparent);
   --on-accent: #00262a;
   --switch-on: #009aa4;
-  --bg-picked: rgba(0, 193, 205, 0.16);
-  --text-selection: rgba(0, 193, 205, 0.3);
+  --bg-picked: var(--bg-selected);
+  --text-selection: color-mix(in srgb, var(--accent) 30%, transparent);
 
   --ok: #4cc27a;
   --warn: #f0b03c;
@@ -183,10 +183,11 @@
   --clip-audio: #1c5757;
 
   --tl-lane: #151518;
-  --tl-row: #1c1c1c;
+  --tl-row: #1d1d1d;
+  --tl-head: #1e1e1e;
   --tl-gap: var(--bg-panel);
-  --tl-lane-on: #202020;
-  --tl-empty: #242424;
+  --tl-row-on: #232323;
+  --tl-toolbar-divider: #373737;
   --tl-empty-drop: #282828;
   --tl-playhead: #ffffff;
   --tl-select: #ffffff;
@@ -459,6 +460,8 @@ body.tl-pinning, body.tl-pinning * { cursor: crosshair !important; }
 
 /* The zoom slider: a narrow rounded thumb, the traveled part lit (`--pos` is set by the component). */
 .tl-zoom {
+  --zoom-fill: #e6e6e6;
+  --zoom-rail: #373737;
   -webkit-appearance: none;
   appearance: none;
   background: transparent;
@@ -468,10 +471,8 @@ body.tl-pinning, body.tl-pinning * { cursor: crosshair !important; }
   border-radius: 999px;
   background: linear-gradient(
     to right,
-    var(--accent) 0,
-    var(--accent) calc(var(--pos, 0) * 100%),
-    var(--border) calc(var(--pos, 0) * 100%),
-    var(--border) 100%
+    var(--zoom-fill) 0 calc(var(--pos, 0) * 100%),
+    var(--zoom-rail) calc(var(--pos, 0) * 100%) 100%
   );
 }
 .tl-zoom::-webkit-slider-thumb {
@@ -481,7 +482,7 @@ body.tl-pinning, body.tl-pinning * { cursor: crosshair !important; }
   height: 13px;
   margin-top: -5px;
   border-radius: 2px;
-  background: var(--accent);
+  background: var(--zoom-fill);
   cursor: pointer;
 }
 .tl-zoom::-moz-range-track {
@@ -489,10 +490,8 @@ body.tl-pinning, body.tl-pinning * { cursor: crosshair !important; }
   border-radius: 999px;
   background: linear-gradient(
     to right,
-    var(--accent) 0,
-    var(--accent) calc(var(--pos, 0) * 100%),
-    var(--border) calc(var(--pos, 0) * 100%),
-    var(--border) 100%
+    var(--zoom-fill) 0 calc(var(--pos, 0) * 100%),
+    var(--zoom-rail) calc(var(--pos, 0) * 100%) 100%
   );
 }
 .tl-zoom::-moz-range-thumb {
@@ -500,7 +499,7 @@ body.tl-pinning, body.tl-pinning * { cursor: crosshair !important; }
   height: 12px;
   border: 0;
   border-radius: 2px;
-  background: var(--text-muted);
+  background: var(--zoom-fill);
   cursor: pointer;
 }
 
@@ -593,8 +592,20 @@ body.tl-pinning, body.tl-pinning * { cursor: crosshair !important; }
    on a frame, the browser would open the file in it instead of Studio importing it */
 html[data-file-drag] iframe { pointer-events: none; }
 
-/* a clip about to be replaced by the file dragged over it with ⇧ (components/replace-drop) */
+/* Show the original clip under a tinted overlay while a replacement is aimed at it. */
 [data-replace-over] { outline: 2px solid var(--accent); outline-offset: -2px; }
+[data-drop-replace],
+[data-replace-over='replace'] > :first-child::after {
+  background: rgb(6 40 43 / 55%);
+  box-shadow: inset 0 0 0 2px var(--accent);
+  pointer-events: none;
+}
+[data-replace-over='replace'] > :first-child::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+}
 
 /* the canvas (components/canvas), drawn as the node canvases people know draw theirs: a near-black board with a fine
    dot grid; cards one step lighter with a grey line, a light grey line when selected; names in grey above them;
@@ -635,11 +646,11 @@ html[data-file-drag] iframe { pointer-events: none; }
   --cv-group: rgba(0, 0, 0, 0.08);
 }
 [data-theme='dark'] {
-  /* the board is a pane's inside, the panels' grey (rgb 24), as everything on it and over it; a group a step up */
-  --cv-bg: #181818;
+  /* the board, cards and floating surfaces use the panel color, with groups a step lighter */
+  --cv-bg: #191919;
   --cv-dot: #474747;
-  --cv-card: #181818;
-  --cv-card-2: #181818;
+  --cv-card: #191919;
+  --cv-card-2: #191919;
   --cv-line: #525252;
   --cv-line-hover: #6b6b6b;
   --cv-ring: #a8a8a8;
@@ -650,19 +661,19 @@ html[data-file-drag] iframe { pointer-events: none; }
   --cv-ink-3: rgba(255, 255, 255, 0.3);
   --cv-edge: #6b6b6b;
   --cv-edge-lit: #3b82f6;
-  --cv-float: #181818;
+  --cv-float: #191919;
   --cv-float-deep: #111111;
   --cv-float-line: rgba(255, 255, 255, 0.08);
   --cv-float-hover: rgba(255, 255, 255, 0.07);
   --cv-chip: rgba(255, 255, 255, 0.05);
   --cv-on: rgba(255, 255, 255, 0.16);
-  --cv-bar: #181818;
+  --cv-bar: #191919;
   --cv-bar-line: #363636;
   --cv-invert: #ffffff;
   --cv-on-invert: #000000;
   --cv-shadow: none;
   --cv-float-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08), 0 16px 24px -8px rgba(0, 0, 0, 0.06), 0 4px 8px -4px rgba(0, 0, 0, 0.04);
-  --cv-modal: #181818;
+  --cv-modal: #191919;
   --cv-sheet-back: #0f0f0f;
   --cv-sheet: #1c1c1c;
   --cv-group: rgba(255, 255, 255, 0.08);
@@ -850,7 +861,7 @@ html[data-file-drag] iframe { pointer-events: none; }
 [data-theme='dark'] .cv-checker,
 .cv-checker.cv-checker-night {
   background-color: #2c2c2c;
-  background-image: repeating-conic-gradient(#202020 0 25%, transparent 0 50%);
+  background-image: repeating-conic-gradient(#202223 0 25%, transparent 0 50%);
 }
 
 /* the Community's banner: the next thing fades in over the last (components/library/CommunityViews Hero) */

@@ -98,8 +98,14 @@ function fork({ port, env, secrets = null, onOpen, onBrowser, onAsk, onRelease, 
     });
     child.stdout?.on('data', (d) => log(String(d)));
     child.stderr?.on('data', (d) => log(String(d)));
-    const timer = setTimeout(() => { child.kill(); reject(new Error('Studio did not start in time')); }, START_WAIT_MS);
     let settled = false;
+    const timer = setTimeout(() => {
+      settled = true;
+      child.kill();
+      reject(new Error('Studio did not start in time'));
+    }, START_WAIT_MS);
+    /* Electron follows a fatal error with exit. The full V8 report can contain the environment. */
+    child.on('error', (type, location) => log(`${new Date().toISOString()} Studio ${type} at ${location}\n`));
     child.on('message', (message) => {
       if (message?.type === 'ready' && !settled) {
         settled = true;

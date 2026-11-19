@@ -148,6 +148,8 @@ export interface StudioHost {
     openSetup?: (id: HostAgentId) => Promise<{ ok: boolean; error?: string }>;
     /** The app's part of Settings → Developer's diagnostic report: the app, and each agent's program, version and state, as text. */
     report?: () => Promise<string>;
+    /** Use the desktop process to copy what it knows, even while Studio is disconnected. */
+    copyReport?: (options?: { offline?: boolean }) => Promise<{ ok: boolean }>;
     /**
      * One of the person's own models set up (no `id`) or changed: checked before it is kept. A key left empty keeps its
      * own, or takes the one of another model on the same address.

@@ -223,3 +223,15 @@ test('the byte guard includes UTF-8 text, system and tools, and leaves space for
   assert.equal(fitted.messages[0], messages[0], 'system and tools are left intact');
   assert.equal(fitImages([{ role: 'user', content: [{ type: 'image', data: 'x'.repeat(20) }] }], 0).kept, 0, 'a picture too large by itself is omitted');
 });
+
+test('Cloudflare and model gateway timeouts show a short message while diagnostics retain the original error', () => {
+  const errorMessage = '524 {"error_name":"origin_response_timeout", "ray_id":"example"}';
+  const notice = retryNotice({ errorMessage });
+  assert.match(notice.title, /took too long to respond/);
+  assert.equal(notice.description, undefined);
+  assert.equal(failureText('504 {"error":{"code":"upstream_timeout"}}'), 'The model service took too long to respond. Try again or switch models.');
+  assert.throws(() => stopReason({ stopReason: 'error', errorMessage }), (e) => {
+    assert.equal(e.details, errorMessage);
+    return true;
+  });
+});

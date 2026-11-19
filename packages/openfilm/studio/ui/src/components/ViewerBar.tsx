@@ -41,21 +41,17 @@ export function ViewerBar({
 }) {
   const t = useT();
   /* frames are counted at the project's rate: shown anew when it changes */
-  useTimecodeFps();
+  const fps = useTimecodeFps();
   const playable = totalMs > 0;
-  const hours = totalMs >= 3_600_000;
 
   /* `minmax(0,1fr)` rather than `1fr`: a 1fr column will not shrink below its content, and two full timecodes are 25
      characters — a narrow pane would push the play button over the timecode. These columns shrink and clip. */
   return (
     <div className="@container grid h-10 shrink-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 px-2">
-      {/* where we are is read constantly: body color, 12px; the length one step fainter. One line, never wrapped:
-          when it does not fit, the length is clipped first. No hour field for a film under an hour. */}
-      <span className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-[12px] tabular-nums text-[var(--text)]">
-        <LiveText clock={clock} timeMs={timeMs} format={(ms) => formatTimecode(ms, { hours })} />
-        <span className="text-[11px] text-[var(--text-faint)]">
-          {' / '}{formatTimecode(totalMs, { hours })}
-        </span>
+      {/* Both timecodes keep the hour field. The duration clips first in narrow panes. */}
+      <span className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-[11px] tabular-nums text-[var(--text)]">
+        <LiveText clock={clock} timeMs={timeMs} format={(ms) => formatTimecode(ms, { fps })} />
+        <span className="text-[var(--text-faint)]">{' / '}{formatTimecode(totalMs, { fps })}</span>
       </span>
       <Tooltip label={playing ? t('viewer.pause') : t('viewer.play')} action="play-pause">
         <button

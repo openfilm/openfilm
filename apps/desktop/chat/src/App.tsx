@@ -360,6 +360,7 @@ function ChatPane({ project, banners, selection, assetsOpen, assetsOverlay }: { 
   /* a file of the message being written, opened to look at */
   const [openedFile, setOpenedFile] = React.useState<AttachmentPreviewItem | null>(null);
   const attachInputRef = React.useRef<HTMLInputElement>(null);
+  const addButtonRef = React.useRef<HTMLButtonElement>(null);
   /* the composer's Add menu, and one of its lines (its key, or the character that opens the same, on the right) */
   const [addOpen, setAddOpen] = React.useState(false);
   const addItem = (icon: React.ReactNode, text: string, run: () => void, keys?: string) => (
@@ -1083,10 +1084,10 @@ function ChatPane({ project, banners, selection, assetsOpen, assetsOverlay }: { 
         <div className="flex items-end gap-1.5 py-2.5 pl-2 pr-2">
           {/* Add, at the start of the line as in other agent apps: files and pictures for this message, and what
               OpenFilm can do more (the Community's plugins and skills) */}
-          <Popover open={addOpen} onOpenChange={setAddOpen} placement="top" align="start" bare
+          <Popover open={addOpen} onOpenChange={setAddOpen} placement="top" align="start" anchorRef={addButtonRef} bare
             trigger={(
               <Tooltip label={addOpen ? undefined : t('project.addMenu')}>
-                <button type="button" aria-haspopup="menu" aria-expanded={addOpen} onClick={() => setAddOpen(!addOpen)} aria-label={t('project.addMenu')}
+                <button ref={addButtonRef} type="button" aria-haspopup="menu" aria-expanded={addOpen} onClick={() => setAddOpen(!addOpen)} aria-label={t('project.addMenu')}
                   className={`-my-[3px] flex h-7 w-7 shrink-0 items-center justify-center rounded-[8px] text-[var(--text-muted)] transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[var(--text)] ${addOpen ? 'bg-[var(--bg-hover)] text-[var(--text)]' : ''}`}>
                   <Plus size={18} strokeWidth={1.75} />
                 </button>
@@ -1306,7 +1307,8 @@ function ChatPane({ project, banners, selection, assetsOpen, assetsOverlay }: { 
                         {switchFor ? <CardButton weight="secondary" onClick={() => desktopBridge()?.openSettings?.('agents')}>{t('composer.switchAccount')}</CardButton> : null}
                         {onAccount && !onAccountPicked ? <CardButton weight="primary" onClick={pickAccountModel}>{t('composer.useAccountModel').replace('{model}', onAccount.name)}</CardButton> : null}
                       </>}>
-                      {keyless ? t(onAccount ? 'composer.routeNoKey' : 'composer.routeNoKeyNoAccount') : turnError}
+                      {keyless ? t(onAccount ? 'composer.routeNoKey' : 'composer.routeNoKeyNoAccount')
+                        : turnError === 'The model service took too long to respond. Try again or switch models.' ? t('composer.modelTimeout') : turnError}
                       {onAccountPicked ? ` ${t('composer.accountModelPicked').replace('{model}', onAccountPicked.name)}` : null}
                       {switchFor?.who ? ` ${t('composer.signedInAs').replace('{account}', switchFor.who)}` : null}
                     </Notice>

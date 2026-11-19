@@ -130,7 +130,7 @@ function SourceBar({ time, duration, playing, onToggle, onSeek, disabled, marks,
 }) {
   const t = useT();
   const marked = marks && (marks.in != null || marks.out != null)
-    ? `${formatTimecode((marks.in ?? 0) * 1000, { hours: false })} – ${formatTimecode((marks.out ?? duration) * 1000, { hours: false })}`
+    ? `${formatTimecode((marks.in ?? 0) * 1000)} – ${formatTimecode((marks.out ?? duration) * 1000)}`
     : null;
   return (
     <div className="shrink-0 pt-1">
@@ -142,7 +142,7 @@ function SourceBar({ time, duration, playing, onToggle, onSeek, disabled, marks,
         onPlayPause={onToggle}
         onFullscreen={onFullscreen}
         /* the part marked with I and O, while there is one (`,` and `.` put it on the film) */
-        extra={marked ? <span data-source-range="" className="shrink-0 text-[11px] tabular-nums text-[var(--accent)]">{marked}</span> : undefined}
+        extra={marked ? <span data-source-range="" className="min-w-0 truncate text-[11px] tabular-nums text-[var(--accent)]">{marked}</span> : undefined}
       />
     </div>
   );

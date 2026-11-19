@@ -433,7 +433,7 @@ function roll(c, want, rate) {
     return;
   }
   const drift = v.currentTime - want;
-  if (Math.abs(drift) > ROLL_SEEK || v.ended) { v.currentTime = want; c.steer = 0; c.off = 0; }
+  if (!v.seeking && (Math.abs(drift) > ROLL_SEEK || v.ended)) { v.currentTime = want; c.steer = 0; c.off = 0; }
   else if (Math.abs(drift) > ROLL_STEER) { c.off = (c.off ?? 0) + 1; if (c.off >= 2) c.steer = drift > 0 ? -1 : 1; }
   else { c.off = 0; if (Math.abs(drift) < ROLL_SETTLE) c.steer = 0; }
   /* the pace is written only when it changes (each write is work for the media pipeline), and nudged within those
@@ -469,22 +469,38 @@ async function glance(c, want) {
   let justLoaded = false;
   if (v.readyState < 2) {
     await wake(c);
-    if (c.lastWant !== want || !c.awake) return;
+    if (c.lastWant !== want || !c.awake) return false;
     justLoaded = true;
   }
   follow(c);
-  if (!justLoaded && !v.seeking && Math.abs(v.currentTime - want) < SAME_TIME && v.readyState >= 2) return;
-  v.currentTime = want;
-  await sought(v);
-  if (!videoEffectsOn(c)) void onScreen(c, want);
+  if (v.error) return true;
+  if (!justLoaded && Math.abs(v.currentTime - want) < SAME_TIME) {
+    if (!v.seeking && v.readyState >= 2) return true;
+  } else v.currentTime = want;
+  const decoded = await sought(v);
+  if (!decoded || c.lastWant !== want) return false;
+  if (!v.error && !videoEffectsOn(c)) void onScreen(c, want);
+  return true;
 }
 
 /** A seek done: its frame decoded (`seeked`, or the file's first data), or after a time limit. */
 const sought = (v) => new Promise((done) => {
-  if (!v.seeking && v.readyState >= 2) { done(undefined); return; }
-  v.addEventListener('seeked', done, { once: true });
-  v.addEventListener('loadeddata', done, { once: true });
-  setTimeout(done, 3000);
+  const ready = () => Boolean(v.error || (!v.seeking && v.readyState >= 2));
+  if (ready()) { done(true); return; }
+  const finish = () => {
+    clearTimeout(timer);
+    v.removeEventListener('seeked', onReady);
+    v.removeEventListener('loadeddata', onReady);
+    v.removeEventListener('canplay', onReady);
+    v.removeEventListener('error', finish);
+    done(ready());
+  };
+  const onReady = () => { if (ready()) finish(); };
+  const timer = setTimeout(finish, 3000);
+  v.addEventListener('seeked', onReady);
+  v.addEventListener('loadeddata', onReady);
+  v.addEventListener('canplay', onReady);
+  v.addEventListener('error', finish);
 });
 
 /** Follow the frames a clip's video puts on screen (its frame callback): `c.presented`, the last one's time. */
@@ -1478,8 +1494,9 @@ async function draw(t, live, play = null) {
   footagePlay = playing ? { rate: play.rate, now: play.now, t } : null;
   try {
     drawCaptions(t);
-    await Promise.all(clips.map((c) => drawClip(c, t, live, playing ? play : null, turn, coming, going)));
+    const drawn = await Promise.all(clips.map((c) => drawClip(c, t, live, playing ? play : null, turn, coming, going)));
     if (playing) idleFootage(t);
+    if (live && !playing) return drawn.every((ready) => ready !== false);
   } finally {
     /* the film drawn: a render not playing now goes */
     hideRenders(playing ? renderOn : null);
@@ -1532,7 +1549,11 @@ async function drawClip(c, t, live, play, turn, coming, going) {
     }
     const want = sourceAt(c.span, t - c.at, c.row);
     c.held = false;
-    if (live) { await glance(c, want); if (c.lastWant === want) { await drawVideoEffects(c, want); gradeLive(c); } return; }
+    if (live) {
+      if (!await glance(c, want)) return false;
+      if (c.lastWant === want) { await drawVideoEffects(c, want); gradeLive(c); }
+      return true;
+    }
     if (!c.el.paused) c.el.pause();
     c.lastWant = want;
     await loaded(c);

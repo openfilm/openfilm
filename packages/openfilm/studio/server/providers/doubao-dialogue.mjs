@@ -17,7 +17,7 @@ const TURN = 300;
 const SCRIPT = 10_000;
 
 /**
- * The pairs made to speak together (Doubao's own podcast voices); any two Doubao voices also can. Doubao publishes no
+ * The pairs made to speak together (Doubao's own podcast voices). Doubao publishes no
  * sample of these voices, so each pair's `sample` is a short dialogue of ours, made with them (library/pairs/).
  */
 export const DOUBAO_PAIRS = [
@@ -101,7 +101,11 @@ export async function doubaoDialogue(args, ctx) {
     let body = {};
     try { body = data ? JSON.parse(data) : {}; } catch { throw new Error(`Doubao sent an unreadable dialogue event (${event}). Request: ${requestId}.`); }
     const payload = body.payload ?? body;
-    if (event === '153') throw new Error(`Doubao could not make it: ${text(body.message) || text(payload.message) || body.code || 'the dialogue failed'}. Request: ${requestId}.`);
+    if (event === '153') {
+      const reason = text(body.message) || text(payload.message) || body.code || 'the dialogue failed';
+      const hint = /resource id.*mismatch.*speaker/i.test(String(reason)) ? ' Choose a pair of Doubao Podcast voices.' : '';
+      throw new Error(`Doubao could not make it: ${reason}. Request: ${requestId}.${hint}`);
+    }
     if (event === '151') throw new Error(`Doubao canceled the dialogue. Request: ${requestId}.`);
     /* a music round (intro, outro) has no speaker: its audio is kept, it is no line */
     if (event === '360') round = text(payload.speaker) ? { voice: text(payload.speaker), text: text(payload.text), at: bytes } : null;

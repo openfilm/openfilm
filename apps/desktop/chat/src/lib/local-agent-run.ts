@@ -443,7 +443,13 @@ export class LocalAgentTurn {
    * is not part of the reply, so it gets its own row.
    */
   private agentNotice(update: AcpUpdate): void {
-    const { title, description } = update as { title?: unknown; description?: unknown };
+    const { title, description, _meta } = update as {
+      title?: unknown; description?: unknown; _meta?: { openfilm?: { noticeKey?: unknown } };
+    };
+    if (_meta?.openfilm?.noticeKey === 'composer.modelTimeoutRetry') {
+      this.notice('composer.modelTimeoutRetry');
+      return;
+    }
     const text = [title, description]
       .filter((s): s is string => typeof s === 'string' && s.trim() !== '')
       .map((s) => s.trim())

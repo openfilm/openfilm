@@ -38,14 +38,13 @@ export type Target = {
 export type PreviewHandle = {
   /** Show the still moment t (the film stops playing). */
   seek(t: number): void;
+  /** Cue a frame before starting sound, sharing a seek already made to the same moment. */
+  cue?(t: number): Promise<boolean | null>;
   /** Play on this line (the player's, on this page's clock): the film draws its own frames from it until `seek`. */
   play?(anchor: Anchor): void;
   /** Stretches rendered to play in place of the film while it plays (studio/server/preview-cache.mjs); [] none. */
   renders?(list: PreviewRender[]): void;
   update(film: Film, head?: string): void;
-  /** Load a disk revision in the background and publish it with the editor once it has drawn. */
-  prepareRevision?(revision: Revision): void;
-  discardRevision?(): void;
   /** The caption tracks' files read again (one was written) and the moment shown drawn again. */
   captions?(): void;
   preview(clip: string, overrides: unknown[] | null): void;
@@ -110,6 +109,8 @@ type Props = {
   filmUnavailable?: boolean;
   /** The workbench supplies the initial and subsequent disk revisions. */
   managed?: boolean;
+  /** Draw this disk revision before publishing it with the timeline. */
+  revision?: Revision | null;
   /** An in-place edit requires the workbench to load the newly written revision. */
   onRevisionNeeded?: () => void;
   /** How playing went, about once a second while it plays. */
@@ -129,8 +130,11 @@ const CLOCK_PINGS = 5;
 const RESCALE_MS = 600;
 /** How often a load held back for a drag or a line typed in place looks whether it may be shown, ms. */
 const HOLD_POLL_MS = 100;
+/** Allow the decoder's seek deadline after any frame already being drawn. */
+const PLAY_CUE_MS = 4200;
+type StillSeek = { key: number; t: number; seq: number; drawn?: boolean; finish?: (ready?: boolean | null) => void };
 
-export const Preview = forwardRef<PreviewHandle, Props>(function Preview({ folder, stage, time, fps, onInfo, onKey, onError, onPlayed, onSpans, onUndecoded, onShown, waiting = false, filmUnavailable = false, managed = false, onRevisionNeeded, children }, ref) {
+export const Preview = forwardRef<PreviewHandle, Props>(function Preview({ folder, stage, time, fps, onInfo, onKey, onError, onPlayed, onSpans, onUndecoded, onShown, waiting = false, filmUnavailable = false, managed = false, revision, onRevisionNeeded, children }, ref) {
   const t = useT();
   const origin = new URL(folder).origin;
   const [frames, setFrames] = useState<PreviewFrame[]>(managed ? [] : [{ key: 1, ready: false }]);
@@ -195,6 +199,21 @@ export const Preview = forwardRef<PreviewHandle, Props>(function Preview({ folde
   const line = useRef<Anchor | null>(null);
   /* the still frame asked for last: drawn again when a page opens after it (see the stage's `woke`) */
   const lastSeek = useRef<number | null>(null);
+  const stillSeek = useRef<StillSeek | null>(null);
+  const requestSeek = (t: number) => {
+    const key = shownRef.current?.key;
+    const had = stillSeek.current;
+    const wasPlaying = line.current != null;
+    line.current = null;
+    lastSeek.current = t;
+    if (!wasPlaying && had && had.key === key && had.t === t && (had.drawn !== false || had.finish)) return had;
+    had?.finish?.();
+    if (key == null) { stillSeek.current = null; return null; }
+    const request: StillSeek = { key, t, seq: ++seq.current };
+    stillSeek.current = request;
+    post(key, { type: 'seek', t, seq: request.seq });
+    return request;
+  };
   const fpsRef = useRef(fps);
   fpsRef.current = fps;
   const clocks = useRef(new Map<number, { offset: number; rtt: number }>());
@@ -244,12 +263,24 @@ export const Preview = forwardRef<PreviewHandle, Props>(function Preview({ folde
   const reload = () => { if (onRevisionNeeded) onRevisionNeeded(); else load(); };
 
   useImperativeHandle(ref, () => ({
-    seek(t) {
-      line.current = null;
-      lastSeek.current = t;
-      post(shownRef.current?.key, { type: 'seek', t, seq: ++seq.current });
+    seek(t) { requestSeek(t); },
+    cue(t) {
+      const request = requestSeek(t);
+      if (!request || request.drawn) return Promise.resolve(true);
+      return new Promise<boolean | null>((resolve) => {
+        request.finish?.();
+        const finish = (ready: boolean | null = null) => {
+          clearTimeout(timer);
+          request.finish = undefined;
+          resolve(ready);
+        };
+        const timer = setTimeout(() => finish(false), PLAY_CUE_MS);
+        request.finish = finish;
+      });
     },
     play(anchor) {
+      stillSeek.current?.finish?.();
+      stillSeek.current = null;
       line.current = { ...anchor };
       tellPlay(shownRef.current?.key);
     },
@@ -272,8 +303,6 @@ export const Preview = forwardRef<PreviewHandle, Props>(function Preview({ folde
         post(key, { type: 'update', film, head: latestHead.current, seq: seq.current });
       }
     },
-    prepareRevision: load,
-    discardRevision: () => setFrames((list) => list.some((f) => f.revision) ? list.filter((f) => !f.revision) : list),
     captions() {
       for (const key of up.current) post(key, { type: 'captions' });
     },
@@ -397,14 +426,32 @@ export const Preview = forwardRef<PreviewHandle, Props>(function Preview({ folde
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [holding]);
 
+  const requestedFirstRevision = useRef(false);
   /* the folder (a project) changed: start over */
   useEffect(() => {
     updates.current = 0;
     latest.current = null;
     born.current.clear();
     up.current.clear();
+    requestedFirstRevision.current = false;
     setFrames(managed ? [] : [{ key: 1, ready: false }]);
+    return () => { stillSeek.current?.finish?.(); stillSeek.current = null; };
   }, [folder, managed]);
+
+  useEffect(() => {
+    if (!managed) return;
+    if (revision) {
+      requestedFirstRevision.current = true;
+      load(revision);
+    } else if (!requestedFirstRevision.current) {
+      /* A workbench can remount just the viewer after the project has already committed its revision. */
+      requestedFirstRevision.current = true;
+      onRevisionNeeded?.();
+    } else {
+      setFrames((list) => list.some((f) => f.revision) ? list.filter((f) => !f.revision) : list);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [folder, managed, revision, onRevisionNeeded]);
 
   useEffect(() => {
     const onMessage = (e: MessageEvent) => {
@@ -417,6 +464,10 @@ export const Preview = forwardRef<PreviewHandle, Props>(function Preview({ folde
       if (!frame || frame.leaving) return;
       if (m.type === 'painted') {
         if (key === shownRef.current?.key) requestAnimationFrame(() => setFrames(left));
+        return;
+      }
+      if (m.type === 'revision-stale') {
+        if (frame.revision) onRevisionNeeded?.();
         return;
       }
       if (m.type === 'ready') {
@@ -448,7 +499,13 @@ export const Preview = forwardRef<PreviewHandle, Props>(function Preview({ folde
         clocks.current.set(key, { offset: Number(m.now) - (Number(m.ping) + rtt / 2), rtt });
         /* playing on it: told the line again, on its clock as now read */
         if (line.current && key === shownRef.current?.key) tellPlay(key);
-      } else if (m.type === 'seeked') {
+      } else if (m.type === 'seeked' || m.type === 'seek-ready') {
+        const request = stillSeek.current;
+        if (request?.key === key && request.seq === Number(m.seq)) {
+          request.drawn = m.drawn !== false;
+          if (request.drawn) request.finish?.(true);
+        }
+        if (m.type === 'seek-ready') return;
         const swap = !frame.ready;
         /* a load behind the picture, ready while a drag or a line typed in place is under way, or before it has drawn
            the film as it is now: shown once it may be (the first load, with nothing shown yet, is shown at once) */

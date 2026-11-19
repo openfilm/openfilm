@@ -9,7 +9,7 @@ import { openProject } from './server/projects.mjs';
 import { startStudio } from './server/server.mjs';
 import { showWorkbench } from './show-workbench.mjs';
 
-test('the editor catalog shows upcoming editors, and Motion edits the same film from its own workspace', { timeout: 120_000 }, async () => {
+test('the Community keeps released editors visible and Motion can edit the same film in development', { timeout: 120_000 }, async () => {
   const scratch = await mkdtemp(join(tmpdir(), 'of-motion-workspace-'));
   const names = ['HOME', 'SHARED_HOME', 'LIBRARY', 'SAVED', 'EXPORTS'];
   const saved = new Map(names.map((name) => [`OPENFILM_${name}`, process.env[`OPENFILM_${name}`]]));
@@ -37,24 +37,28 @@ test('the editor catalog shows upcoming editors, and Motion edits the same film 
     await page.goto(`${studio.origin}/projects/${project.id}?key=${studio.key}`);
     await page.locator('[data-block-kind="caption"]').first().waitFor({ state: 'visible' });
     assert.equal(await page.locator('[data-timeline-view-item="motion"]').count(), 0);
-    /* Enable Motion from the editor catalog. Upcoming editors are visible without an install action. */
+    /* Only the four released editors are listed in Community. */
     await page.getByRole('button', { name: 'OpenFilm menu', exact: true }).click();
     await page.getByRole('menuitem', { name: 'Community', exact: true }).click();
     const community = page.getByRole('dialog', { name: 'Community' });
     await community.getByRole('button', { name: 'Plugins', exact: true }).click();
     const editors = community.locator('[data-community-shelf="Editors"]');
-    for (const title of ['Sound', '3D', 'Compositing']) {
-      const card = editors.locator(`[data-store-card="${title}"]`);
-      await card.getByText('Coming soon', { exact: true }).waitFor();
-      assert.equal(await card.getByRole('button', { name: `Get ${title}`, exact: true }).count(), 0);
+    await editors.waitFor();
+    for (const title of ['Sound', 'Motion', '3D', 'Compositing']) {
+      assert.equal(await editors.locator(`[data-store-card="${title}"]`).count(), 0);
     }
-    const getMotion = editors.getByRole('button', { name: 'Get Motion', exact: true });
-    const installed = page.waitForResponse((response) => response.url().endsWith('/api/plugins/motion') && response.request().method() === 'PUT');
-    await getMotion.click();
-    assert.equal((await installed).ok(), true);
-    await getMotion.waitFor({ state: 'detached' });
+    for (const title of ['Screening', 'Edit', 'Canvas', 'Color']) {
+      await editors.locator(`[data-store-card="${title}"]`).waitFor();
+    }
     await page.keyboard.press('Escape');
     await community.waitFor({ state: 'detached' });
+    const motionEnabled = await page.evaluate(async () => (await fetch('/api/plugins/motion', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ on: true }),
+    })).ok);
+    assert.equal(motionEnabled, true);
+    await page.reload();
     await showWorkbench(page, 'motion');
     await page.locator('[data-block="edit:timeline"]').waitFor();
     await page.reload();

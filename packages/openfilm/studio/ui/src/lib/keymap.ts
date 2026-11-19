@@ -313,7 +313,8 @@ function keyName(e: Pick<KeyPress, 'key' | 'code' | 'shiftKey' | 'altKey'>): str
   if (e.key === ' ' || e.code === 'Space') return 'Space';
   const letter = letterOf(e);
   if (/^[a-z]$/.test(letter)) return letter;
-  if (e.key === '+') return '+';
+  if (e.key === '+' || e.key === '＋' || e.code === 'NumpadAdd') return '+';
+  if (e.key === '−' || e.key === '－' || e.code === 'NumpadSubtract') return '-';
   /* punctuation the layout types where it is, unshifted: read as typed */
   if (e.key.length === 1 && !e.shiftKey && !e.altKey && PUNCTUATION.has(e.key)) return e.key;
   const byCode = CODE_KEYS[e.code ?? ''];

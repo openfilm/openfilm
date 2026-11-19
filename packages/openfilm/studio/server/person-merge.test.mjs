@@ -405,6 +405,35 @@ test('the store: past the caps, the first version stays, and a copy older than a
   }
 });
 
+test('the store: past the byte cap, eviction stops once only the first and last two versions remain', async () => {
+  const root = '/tmp/of-pe-byte-cap';
+  personEdits.configure({ bytes: 1 });
+  try {
+    const v0 = film([page('c0', { at: 1 }), page('c1', { at: 5 }), page('c2', { at: 9 })]);
+    const p = await project(root, v0);
+    p.edit([{ op: 'props', edits: [{ clip: 'c0', prop: 'box', value: { x: 123, y: 0, w: 640, h: 360 } }] }]);
+    await p.write(mod(p.now, (f) => { clip(f, 'c1').class = 'a1'; }));
+    p.edit([{ op: 'set', clip: 'c2', field: 'at', value: 20 }]);
+    await p.write(mod(p.now, (f) => { clip(f, 'c1').class = 'a2'; }));
+    const kept = personEdits.keptVersions(root);
+    assert.equal(kept.count, 3);
+    assert.ok(kept.hashes.includes(personEdits.versionHash(v0)));
+    const out = await p.write(mod(v0, (f) => { clip(f, 'c1').class = 'a3'; }));
+    assert.equal(clip(out, 'c0').box.x, 123);
+    assert.equal(clip(out, 'c2').at, 20);
+    assert.equal(clip(out, 'c1').class, 'a3');
+    /* tracked text files past the byte cap also stop evicting at three versions */
+    personEdits.filesWritten(root, { 'page.html': 'line 1\nline 2\n' }, { 'page.html': 'line 1\nperson\n' });
+    personEdits.filesWritten(root, { 'page.html': 'agent\nline 2\n' }, { 'page.html': 'agent\nperson 2\n' });
+    const merged = personEdits.mergeFileWrite(root, 'page.html', Buffer.from('line 1\nline 2\nagent tail\n'));
+    assert.ok(merged?.toString('utf8').includes('person 2'));
+    assert.ok(merged?.toString('utf8').includes('agent tail'));
+  } finally {
+    personEdits.configure({ bytes: 64 << 20 });
+    personEdits.forget(root);
+  }
+});
+
 test('the store: an agent\'s own value is no edit of the person\'s: its next write changes it, and it is not named (E)', async () => {
   const root = '/tmp/of-pe-e';
   const stale = film([page('t1', { overrides: [{ at: '#title', t: [0, 0] }] })]);

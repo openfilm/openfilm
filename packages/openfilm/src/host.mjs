@@ -91,9 +91,9 @@ const TYPES = {
  * `grade(file, luts, time)` says a video graded by LUT files (SPEC.md `--of-lut`), of which a clip plays `time` ([in,
  * out] source seconds, or null): the key of its graded copy (seekable.mjs gradeKey) and the source second it starts at
  * (`from`) once it is made, `making` while it is, null when it is played as it is. Without it, every video is.
- * @param {string} root @param {{ inject?: string, timelineInject?: string, headers?: Record<string, string>, swap?: (file: string, query?: URLSearchParams, source?: string) => string | null, missed?: (file: string) => void, grade?: Grade, timeline?: string, renderRanges?: [number, number][] }} [options]
+ * @param {string} root @param {{ inject?: string, timelineInject?: string, staleRevisionPage?: string, headers?: Record<string, string>, swap?: (file: string, query?: URLSearchParams, source?: string) => string | null, missed?: (file: string) => void, grade?: Grade, timeline?: string, renderRanges?: [number, number][] }} [options]
  */
-export function folderFiles(root, { inject = `<script>${HOST_FLAG}</script>`, timelineInject = inject, headers: extraHeaders = {}, swap, missed, grade, timeline, renderRanges } = {}) {
+export function folderFiles(root, { inject = `<script>${HOST_FLAG}</script>`, timelineInject = inject, staleRevisionPage, headers: extraHeaders = {}, swap, missed, grade, timeline, renderRanges } = {}) {
   root = resolve(root);
   const rootFilm = join(root, FILM_FILE);
   const scope = renderRanges ? `<script>window.filmHost.renderRanges=${JSON.stringify(renderRanges)}</script>` : '';
@@ -206,7 +206,7 @@ export function folderFiles(root, { inject = `<script>${HOST_FLAG}</script>`, ti
     if (type.startsWith('text/html') && (revision || query?.get('film-host') !== '0')) {
       const html = readFileSync(file, 'utf8');
       if (revision && createHash('sha256').update(html).digest('hex').slice(0, 16) !== revision) {
-        res.writeHead(409, headers).end('The film has changed.');
+        res.writeHead(409, headers).end(staleRevisionPage ?? 'The film has changed.');
         return true;
       }
       if (query?.get('film-host') === '0') { res.writeHead(200, headers).end(html); return true; }

@@ -44,7 +44,11 @@ export async function doubaoTts(args, ctx) {
   const consume = (/** @type {string} */ line) => {
     if (!line.trim()) return;
     const event = JSON.parse(line);
-    if (event.code !== 0 && event.code !== 20000000) throw new Error(`Doubao synthesis failed (${event.code ?? 'unknown'}). Request: ${requestId}.`);
+    const code = event.code;
+    if (code !== 0 && code !== 20000000) {
+      const hint = code === 55000000 ? ' Doubao reported an internal speech service error. Try again shortly.' : '';
+      throw new Error(`Doubao synthesis failed (${code ?? 'unknown'}). Request: ${requestId}.${hint}`);
+    }
     if (typeof event.data === 'string' && event.data) pcm.push(Buffer.from(event.data, 'base64'));
     for (const w of event.sentence?.words ?? []) {
       if (typeof w.word !== 'string' || !w.word.trim() || !Number.isFinite(w.startTime) || !Number.isFinite(w.endTime) || w.startTime < 0 || w.endTime < w.startTime) continue;
