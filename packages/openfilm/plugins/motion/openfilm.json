@@ -1,0 +1,47 @@
+{
+  "order": 5,
+  "icon": "spline",
+  "title": {
+    "en": "Motion",
+    "zh-CN": "动效",
+    "ja": "モーション",
+    "ko": "모션",
+    "es": "Movimiento"
+  },
+  "summary": {
+    "en": "Layers and keyframes: animation adjusted by hand.",
+    "zh-CN": "图层和关键帧：亲手精细地调动效。",
+    "ja": "レイヤーとキーフレーム：アニメーションを手で細かく調整します。",
+    "ko": "레이어와 키프레임: 애니메이션을 손으로 세밀하게 조정합니다.",
+    "es": "Capas y fotogramas clave: animación ajustada a mano."
+  },
+  "details": {
+    "en": "When to use it: you want to set exactly how something moves, keyframe by keyframe.\nHow to use it: switch to Motion above the timeline; layers are laid out a row each, every property with its keyframes and easing.\nWhat your agent does: it can write the animation for you, for you to fine-tune.",
+    "zh-CN": "什么时候用：某个元素要怎么动，你想自己一帧一帧调到位。\n怎么用：在时间线上方切到动效，图层一行一行排开，每个属性加关键帧和缓动。\n智能体能做什么：也能替你写好动画，你再细调。",
+    "ja": "使うとき：何かの動きを、キーフレームごとに自分で決めたいとき。\n使い方：タイムラインの上でモーションに切り替え。レイヤーが一行ずつ並び、各プロパティにキーフレームとイージング。\nエージェントにできること：アニメーションを書いておき、あなたが細かく調整できます。",
+    "ko": "언제 쓰나요: 요소가 어떻게 움직일지 키프레임 단위로 직접 정하고 싶을 때.\n쓰는 법: 타임라인 위에서 모션으로 전환하면 레이어가 한 줄씩 놓이고, 속성마다 키프레임과 이징을 넣습니다.\n에이전트가 하는 일: 애니메이션을 대신 써 두면 직접 다듬을 수 있습니다.",
+    "es": "Cuándo usarlo: quieres fijar exactamente cómo se mueve algo, fotograma clave a fotograma clave.\nCómo usarlo: cambia a Animación sobre la línea de tiempo; las capas van una por fila, cada propiedad con sus fotogramas clave y su suavizado.\nQué hace tu agente: puede escribir la animación para que tú la afines."
+  },
+  "about": "a clip's layers and keyframes, adjusted by hand",
+  "category": "picture",
+  "difficulty": 4,
+  "ease": 2,
+  "cost": "free",
+  "audience": {
+    "en": "Designers who tune animation by hand",
+    "zh-CN": "想亲手精调动画的设计师",
+    "ja": "アニメーションを手で詰めたいデザイナー",
+    "ko": "애니메이션을 직접 다듬는 디자이너",
+    "es": "Diseñadores que ajustan la animación a mano"
+  },
+  "workbench": "motion",
+  "blocks": "edit",
+  "on": false,
+  "beta": true,
+  "skills": [
+    "motion"
+  ],
+  "requires": [
+    "film"
+  ]
+}

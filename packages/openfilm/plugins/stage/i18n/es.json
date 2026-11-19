@@ -1,0 +1,19 @@
+{
+  "camera": "cámara",
+  "viewfinder": "Visor",
+  "above": "Desde arriba",
+  "time": "Tiempo",
+  "play": "Reproducir",
+  "pause": "Pausa",
+  "dragHint": "Arrastra una figura o el espacio vacío (la cámara); la rueda acerca y aleja la cámara. Tu cambio va al chat para el agente.",
+  "waiting": "Movido aquí: en el chat para el agente",
+  "notStarted": "Este plano no arrancó: pide al agente que lo revise.",
+  "copied": "Copiado: pégalo en el chat de tu agente",
+  "emptyTitle": "Aún no hay planos",
+  "emptyHint": "Describe un plano en el chat, por ejemplo: \"una habitación pequeña, ella entra por la puerta de atrás y camina hasta la ventana, la cámara se acerca de plano general a plano medio\". El agente lo construye aquí.",
+  "noShots": "Los planos que haga el agente aparecen aquí.",
+  "makeVideo": "Hacer vídeo",
+  "making": "Preparando…",
+  "made": "En el lienzo: elige un modelo y pulsa Generar",
+  "makeFailed": "No se pudo hacer:"
+}
