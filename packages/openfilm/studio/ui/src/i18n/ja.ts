@@ -275,7 +275,7 @@ export const ja: Words = {
   connection: {
     lost: 'Studio との接続が切れました。再接続しています…',
     gone: 'Studio が停止しました。ターミナルでこのコマンドを実行するか、エージェントに OpenFilm を開き直してもらってください。このページは自動で再接続します。',
-    goneApp: 'Studio が停止しました。OpenFilm アプリを終了して開き直すと復旧します。',
+    goneApp: 'Studio との接続がまだ復旧していません。OpenFilm は再接続を試みています。',
     copied: 'コピーしました',
     lockedTitle: 'このブラウザーは Studio にサインインしていません',
     lockedBody: 'Studio は動いていますが、キー付きのアドレスで一度開いたブラウザーしか受け付けません。`openfilm open`（開発中は `pnpm dev`）が表示した ?key= 付きの完全なアドレスを開いてください。一度開けば、このブラウザーは Studio のアドレスをそのまま使えます。',

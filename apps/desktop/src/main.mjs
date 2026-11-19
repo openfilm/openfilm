@@ -13,6 +13,7 @@ import { BaseWindow, Menu, Notification, WebContentsView, app, clipboard, dialog
 import { appendFileSync, existsSync, mkdirSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { problemLine, problemsFile, recentProblems, recordProblem } from 'openfilm/problems';
 import { FLAVOR, IDENTITY, PRODUCT_NAME } from './flavor.mjs';
 import { folderDialogOptions, programDialogOptions } from './folder-dialog.mjs';
 import { childEnvironment, lastPathSource, loginShellEnvironment } from './environment.mjs';
@@ -43,7 +44,7 @@ import { PATH_SEP } from './environment.mjs';
 import { firstWindowsApps } from './windows-apps.mjs';
 import { createTabs, projectGone } from './tabs.mjs';
 import { turnNotice } from './turn-notices.mjs';
-import { restartDelay } from './studio-restart.mjs';
+import { studioRestarts } from './studio-restart.mjs';
 import { PROTOCOL, createLinks, linkFromArgv } from './deep-links.mjs';
 
 const here = (path) => fileURLToPath(new URL(path, import.meta.url));
@@ -76,8 +77,13 @@ if (windows) app.setAppUserModelId(IDENTITY.bundleId);
 app.setPath('userData', IDENTITY.userData ?? join(app.getPath('appData'), PRODUCT_NAME));
 const DATA = app.getPath('userData');
 const LOGS = join(DATA, 'logs');
+const STUDIO_HOME = IDENTITY.studioHome ?? process.env.OPENFILM_HOME ?? join(app.getPath('home'), '.openfilm');
+const STUDIO_PROBLEMS = problemsFile(STUDIO_HOME);
 mkdirSync(LOGS, { recursive: true });
 const log = (line) => { try { appendFileSync(join(LOGS, 'studio.log'), line); } catch { /* no log */ } };
+const studioProblem = (step, what, code) => {
+  recordProblem({ area: 'studio', step, what, code, version: app.getVersion() }, { file: STUDIO_PROBLEMS });
+};
 
 /* `openfilm://` links (deep-links.mjs): a page of openfilm.dev opens the app on what it names. Registered as the app
    that opens them (in development, this Electron with this app's folder); macOS sends one as `open-url`, even before
@@ -144,6 +150,11 @@ const tellFfmpeg = (state) => { ffmpegFound = state; broadcast('desktop:ffmpeg',
 /** @type {ReturnType<typeof startUpdates> | null} */
 let updates = null;
 let quitting = false;
+let studioRestartsOnExit;
+function markQuitting() {
+  quitting = true;
+  studioRestartsOnExit?.stop();
+}
 let cancelWindowClose = () => {};
 /** @type {ReturnType<typeof registerLocalAgentIpc> | null} */
 let localAgents = null;
@@ -216,7 +227,12 @@ function makeView(tabId) {
   v.setBounds({ x: 0, y: 0, width, height });
   guard(v.webContents, (url) => Boolean(studio) && url.startsWith(`${studio.origin}/`));
   /* what went wrong with the page, for the log (logs/studio.log) */
-  v.webContents.on('render-process-gone', (_event, details) => log(`page: renderer gone (${details.reason}, ${details.exitCode})\n`));
+  v.webContents.on('render-process-gone', (_event, { reason, exitCode }) => {
+    if (reason === 'clean-exit' || quitting) return;
+    const what = `Page renderer exited (${reason}, ${exitCode})`;
+    log(`${new Date().toISOString()} ${what}\n`);
+    studioProblem('page renderer', what, String(exitCode));
+  });
   v.webContents.on('did-fail-load', (_event, code, description, url, mainFrame) => { if (mainFrame && code !== -3 && pagePresentation?.wantedId() === tabId) log(`page: ${description} (${code}) loading ${url.replace(/key=[^&]+/, 'key=…')}\n`); });
   v.webContents.on('unresponsive', () => { unresponsivePages.add(v); log('page: not responding\n'); });
   v.webContents.on('responsive', () => unresponsivePages.delete(v));
@@ -434,14 +450,33 @@ async function tellTabsWorking({ working = agentFolders.working, asking = agentF
   if (tabs.setAgents(ids(agentFolders.working), ids(agentFolders.asking))) tellTabs();
 }
 
-async function studioApi(path, method = 'GET', body = undefined) {
+async function studioApi(path, method = 'GET', body = undefined, signal = undefined) {
   const res = await fetch(`${studio.origin}${path}`, {
     method,
+    signal,
     headers: { 'x-studio-key': studio.key, ...(body ? { 'content-type': 'application/json' } : {}) },
     ...(body ? { body: JSON.stringify(body) } : {}),
   });
   if (!res.ok) throw new Error((await res.json().catch(() => null))?.error ?? `Studio answered ${res.status}`);
   return res.json();
+}
+
+/** A report the main process can copy without calling the Studio utility or an agent. */
+function offlineStudioReport() {
+  let recent;
+  try {
+    recent = recentProblems({ file: STUDIO_PROBLEMS, days: 7 }).filter((p) => p.area === 'studio').slice(-12).map(problemLine);
+  } catch {
+    recent = ['The local problem log could not be read.'];
+  }
+  return [
+    `OpenFilm ${app.getVersion()} (${FLAVOR}) · ${process.platform} ${process.arch} · Electron ${process.versions.electron}`,
+    `Report copied at ${new Date().toISOString()}`,
+    `Studio utility process: ${studio?.child.pid == null ? 'not running' : 'present'}`,
+    '',
+    'Recent Studio problems:',
+    ...(recent.length ? recent : ['No Studio problems recorded in the last 7 days.']),
+  ].join('\n');
 }
 
 /**
@@ -529,7 +564,7 @@ async function noticeTurn({ kind, agent, cwd, meta, error }) {
 
 /** Tell Studio which folders the chat's agents are working in now. */
 function tellWorking(/** @type {string[]} */ folders) {
-  studio?.child.postMessage({ type: 'working', folders });
+  if (studio?.child.pid != null) studio.child.postMessage({ type: 'working', folders });
   void tellTabsWorking({ working: folders });
 }
 
@@ -558,16 +593,14 @@ function answerStudio(message, reply) {
     .finally(() => asked.delete(message.id));
 }
 
-/** when the running Studio started, and the wait before it did (studio-restart.mjs) */
-let startedAt = 0;
-let restartWait = 0;
 /** Studio's own key and the vault of the person's service keys, opened from the keychain once (studio-secrets.mjs) */
 let secrets;
 
 async function runStudio(env) {
-  startedAt = Date.now();
+  if (quitting) return;
   if (secrets === undefined) secrets = studioSecrets({ dataDir: DATA, available: safeStorage.isEncryptionAvailable(), seal, unseal, log });
-  studio = await startWindowStudio({
+  let startedAt;
+  const next = await startWindowStudio({
     secrets,
     onAsk: answerStudio,
     /* a project renamed: the chat's agents between turns in its folder stop (their next turn resumes them) */
@@ -589,19 +622,25 @@ async function runStudio(env) {
     },
     onExit: (code) => {
       if (quitting) return;
-      /* stopping again and again at once: started again later each time (studio-restart.mjs) */
-      restartWait = restartDelay(restartWait, Date.now() - startedAt);
-      log(`Studio stopped (${code}); starting it again in ${restartWait / 1000} s\n`);
-      setTimeout(() => void runStudio(env).catch((error) => log(`Studio did not start again: ${error.message}\n`)), restartWait);
+      const what = `Studio process exited (${code})`;
+      log(`${new Date().toISOString()} ${what}\n`);
+      studioProblem('utility process', what, String(code));
+      studioRestartsOnExit.afterExit(startedAt ? Date.now() - startedAt : 0);
     },
   });
+  if (quitting) { await next.quit(); return; }
+  startedAt = Date.now();
+  studio = next;
   /* a Studio started again hears where the agents are working */
   tellWorking(localAgents?.working() ?? []);
   /* the first time, the tabs; a Studio started again: each page stays where it was */
   if (!tabs) { await openTabs(); return; }
   for (const [id, v] of views) {
-    const at = v.webContents.getURL();
-    await v.webContents.loadURL(pageAddress(tabs.get(id), at.startsWith('http') ? new URL(at).pathname : null));
+    const page = v.webContents;
+    if (page.isDestroyed()) continue;
+    const at = page.getURL();
+    /* A tab may close or navigate during recovery. Each remaining tab still gets the new Studio address. */
+    void page.loadURL(pageAddress(tabs.get(id), at.startsWith('http') ? new URL(at).pathname : null)).catch(() => {});
   }
 }
 
@@ -628,7 +667,7 @@ async function start() {
     },
     /* what before-quit would do, done first (`quitting`), so the quit Squirrel starts is not held up or cancelled */
     beforeInstall: async () => {
-      quitting = true;
+      markQuitting();
       agentCatalogs?.close();
       localAgents?.closeAll();
       closeEverySession();
@@ -647,7 +686,7 @@ async function start() {
   const env = childEnvironment({
     shell: shellEnv,
     extra: {
-      OPENFILM_HOME: IDENTITY.studioHome ?? process.env.OPENFILM_HOME ?? join(app.getPath('home'), '.openfilm'),
+      OPENFILM_HOME: STUDIO_HOME,
       ...(app.isPackaged ? { OPENFILM_INSTALL_DIR: mac ? dirname(dirname(process.resourcesPath)) : dirname(process.execPath) } : {}),
       ...(FLAVOR !== 'release' ? { OPENFILM_ACCOUNT_DEVICE: PRODUCT_NAME } : {}),
       ...((IDENTITY.library ?? process.env.OPENFILM_LIBRARY) ? { OPENFILM_LIBRARY: IDENTITY.library ?? process.env.OPENFILM_LIBRARY } : {}),
@@ -962,14 +1001,13 @@ async function start() {
   agentHandle('desktop:agents:report', appReport);
   /* the chat's "Copy diagnostic report" by a turn that failed: what Studio's report has (`openfilm doctor`, with the
      last week's problems) and the app's agents, on the clipboard (the chat's page may not be let write it) */
-  agentHandle('desktop:diagnostics:copy', async () => {
-    const [computer, own] = await Promise.all([
-      studioApi('/api/doctor').then((r) => String(r.text ?? ''), () => ''),
+  agentHandle('desktop:diagnostics:copy', async ({ offline }) => {
+    const [computer, own] = offline === true ? ['', ''] : await Promise.all([
+      studioApi('/api/doctor', 'GET', undefined, AbortSignal.timeout(3000)).then((r) => String(r.text ?? ''), () => ''),
       appReport().catch(() => ''),
     ]);
-    const text = [computer, own].filter(Boolean).join('\n\n────────\n\n');
-    if (!text) return { ok: false };
-    clipboard.writeText(text);
+    const report = [computer || offlineStudioReport(), own].filter(Boolean).join('\n\n────────\n\n');
+    clipboard.writeText(report);
     return { ok: true };
   });
   agentHandle('desktop:agents:shown', ({ id, shown }) => { roster.setShown(String(id), shown === true); return { ok: true }; });
@@ -1043,10 +1081,21 @@ async function start() {
     }).then(() => tellFfmpeg(true), (error) => { log(`ffmpeg did not download: ${error.message}\n`); tellFfmpeg({ state: 'failed', message: error.message }); })
       .finally(() => { ffmpegFetching = false; });
   }
+  studioRestartsOnExit = studioRestarts({
+    start: () => runStudio(env),
+    onRetry: (wait) => log(`${new Date().toISOString()} Retrying Studio in ${wait / 1000} s\n`),
+    onFailure: (error) => {
+      const what = `Studio restart failed: ${error.message ?? error}`;
+      log(`${new Date().toISOString()} ${what}\n`);
+      studioProblem('restart', what, error.code);
+    },
+  });
   try {
     await runStudio(env);
   } catch (error) {
+    if (quitting) return;
     log(`Studio did not start: ${error.stack ?? error}\n`);
+    studioProblem('startup', `Studio could not start: ${error.message ?? error}`, error.code);
     const v = makeView('failed');
     v.setVisible(true);
     void v.webContents.loadFile(here('./failed.html'), { query: { message: String(error.message ?? error) } });
@@ -1058,9 +1107,15 @@ process.on('SIGINT', () => app.quit());
 process.on('SIGTERM', () => app.quit());
 app.on('activate', () => focusWindow());
 app.on('window-all-closed', () => app.quit());
+app.on('child-process-gone', (_event, details) => {
+  if (quitting || details.type !== 'Utility' || details.reason === 'clean-exit') return;
+  if (details.name !== 'OpenFilm Studio' && details.serviceName !== 'OpenFilm Studio') return;
+  const { reason, exitCode, systemErrorCode } = details;
+  studioProblem('Electron utility process', `Studio process lost (${reason}, ${exitCode}${systemErrorCode == null ? '' : `, system error ${systemErrorCode}`})`, String(exitCode));
+});
 app.on('before-quit', (event) => {
   quitAfterStudio(event, {
-    quitting, markQuitting: () => { quitting = true; }, studio,
+    quitting, markQuitting, studio,
     /* and the ones opened only to ask (signed in? its options?), which belong to no chat */
     closeAgents: () => { agentUpdates?.stop(); agentCatalogs?.close(); localAgents?.closeAll(); closeEverySession(); }, quit: () => app.quit(),
   });

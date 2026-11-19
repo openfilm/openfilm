@@ -282,7 +282,7 @@ export const en = {
   connection: {
     lost: 'Lost the connection to Studio. Reconnecting…',
     gone: 'Studio has stopped. Run this in a terminal, or ask your agent to open OpenFilm again: this page reconnects by itself.',
-    goneApp: 'Studio has stopped. Quit and reopen the OpenFilm app to bring it back.',
+    goneApp: 'The connection to Studio is still down. OpenFilm will keep trying to reconnect.',
     copied: 'Copied',
     lockedTitle: 'This browser isn’t signed in to Studio',
     lockedBody: 'Studio is running, but it only lets in a browser that opened it once with its key. Open the full address `openfilm open` (or `pnpm dev`) printed, the one with ?key= in it; after that, this browser can use Studio’s address as it is.',

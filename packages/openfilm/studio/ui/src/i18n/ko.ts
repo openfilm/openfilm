@@ -273,7 +273,7 @@ export const ko: Words = {
   connection: {
     lost: 'Studio와의 연결이 끊겼습니다. 다시 연결하는 중…',
     gone: 'Studio가 멈췄습니다. 터미널에서 이 명령을 실행하거나 에이전트에게 OpenFilm을 다시 열어 달라고 하세요. 이 페이지는 자동으로 다시 연결됩니다.',
-    goneApp: 'Studio가 멈췄습니다. OpenFilm 앱을 종료했다가 다시 열면 복구됩니다.',
+    goneApp: 'Studio와의 연결이 아직 복구되지 않았습니다. OpenFilm이 계속 재연결을 시도합니다.',
     copied: '복사됨',
     lockedTitle: '이 브라우저는 Studio에 로그인되어 있지 않습니다',
     lockedBody: 'Studio는 실행 중이지만, 키가 붙은 주소로 한 번 연 브라우저만 받아들입니다. `openfilm open`(개발 중에는 `pnpm dev`)이 출력한 ?key= 가 붙은 전체 주소를 여세요. 한 번 열면 이 브라우저는 Studio 주소를 그대로 쓸 수 있습니다.',

@@ -163,7 +163,7 @@ export const api = {
   /** the newest openfilm, run in the background (`openfilm update`): Studio starts again on it; refused (ApiError, `body.code`) while busy */
   update: () => call<{ update: NonNullable<StudioVersion['update']> }>('update', { method: 'POST', json: {} }),
   /** `openfilm doctor`, run by this Studio: the report to paste into an issue (src/doctor.mjs) */
-  doctor: () => call<{ ok: boolean; text: string }>('doctor'),
+  doctor: (signal?: AbortSignal) => call<{ ok: boolean; text: string }>('doctor', { signal }),
   /** what went wrong in the last two weeks, newest first (src/problems.mjs) */
   problems: () => call<{ problems: StudioProblem[] }>('diagnostics/problems').then((r) => r.problems),
   /** the diagnostic file (server/diagnostics.mjs): `report` and the rest, zipped into the exports folder and shown there */

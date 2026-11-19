@@ -281,7 +281,7 @@ export const zhCN: Words = {
   connection: {
     lost: '与 Studio 的连接中断了，正在重新连接…',
     gone: 'Studio 已停止运行。在终端运行下面这条命令，或让智能体重新打开 OpenFilm，这个页面会自动重新连上。',
-    goneApp: 'Studio 已停止运行。退出并重新打开 OpenFilm 应用即可恢复。',
+    goneApp: '与 Studio 的连接仍未恢复，OpenFilm 会继续尝试重新连接。',
     copied: '已复制',
     lockedTitle: '这个浏览器还没有登录 Studio',
     lockedBody: 'Studio 正在运行，但只接受用带 key 的地址打开过一次的浏览器。请打开 `openfilm open`（开发时是 `pnpm dev`）打印的完整地址，也就是带 ?key= 的那个；打开一次之后，这个浏览器就能直接用 Studio 的地址了。',
