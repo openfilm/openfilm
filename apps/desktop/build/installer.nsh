@@ -4,7 +4,8 @@
     Push $1
     ${If} $0 != ""
       InitPluginsDir
-      File "/oname=$PLUGINSDIR\openfilm-protect-install.ps1" "${BUILD_RESOURCES_DIR}/protect-install.ps1"
+      # Use NSIS path syntax. The macOS compiler translates this separator for its host.
+      File "/oname=$PLUGINSDIR\openfilm-protect-install.ps1" "${BUILD_RESOURCES_DIR}\protect-install.ps1"
       System::Call 'kernel32::SetEnvironmentVariableW(w "OPENFILM_INSTALL_CHECK_PATH", w r0) i.r1'
       ${If} $1 != 0
         nsExec::Exec '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$PLUGINSDIR\openfilm-protect-install.ps1" -AppFile "${APP_EXECUTABLE_FILENAME}" -UninstallFile "${UNINSTALL_FILENAME}"'
