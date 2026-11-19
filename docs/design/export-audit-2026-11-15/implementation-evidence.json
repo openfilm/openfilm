@@ -1,0 +1,2998 @@
+{
+  "baseline": {
+    "seconds": 680.151,
+    "bytes": 5846462918,
+    "peakLogicalOutputAndCacheBytes": 6945263555,
+    "cacheHits": 0,
+    "renderJobs": 0,
+    "mediaStats": []
+  },
+  "cold": {
+    "seconds": 464.007,
+    "bytes": 2936610530,
+    "peakLogicalOutputAndCacheBytes": 3462837942,
+    "cacheHits": 0,
+    "renderJobs": 33,
+    "mediaStats": [
+      {
+        "clip": "a-pip-2",
+        "cached": false,
+        "bytes": 172839263,
+        "seconds": 112.932993708,
+        "renderSeconds": 87.260129083,
+        "postSeconds": 24.896198917000003,
+        "crop": {
+          "x": 654,
+          "y": 68,
+          "w": 424,
+          "h": 424
+        },
+        "alphaSpans": [
+          {
+            "opaque": false,
+            "from": 0,
+            "to": 1088
+          }
+        ],
+        "parts": null,
+        "rgbProfile": "jianying-macos-11.8.0-rgb-tv2",
+        "cacheWriteSeconds": 0.679885792000001
+      },
+      {
+        "clip": "captions-91f5ba12",
+        "cached": false,
+        "bytes": 1555888,
+        "seconds": 131.315131583,
+        "renderSeconds": 128.744549208,
+        "postSeconds": 2.4971079579999786,
+        "crop": {
+          "x": 134,
+          "y": 1666,
+          "w": 810,
+          "h": 56
+        },
+        "alphaSpans": [
+          {
+            "opaque": false,
+            "from": 0,
+            "to": 4028
+          }
+        ],
+        "parts": null,
+        "rgbProfile": "jianying-macos-11.8.0-rgb-tv2",
+        "cacheWriteSeconds": 0.004609666999982437
+      },
+      {
+        "clip": "a-full-1",
+        "cached": false,
+        "bytes": 39483201,
+        "seconds": 52.47473666600001,
+        "renderSeconds": 52.116896999999994,
+        "postSeconds": 0.20307720800000242,
+        "crop": null,
+        "parts": null,
+        "rgbProfile": "jianying-macos-11.8.0-rgb-tv2",
+        "cacheWriteSeconds": 0.10044250000000465
+      },
+      {
+        "clip": "a-pip-1",
+        "cached": false,
+        "bytes": 301184840,
+        "seconds": 166.282674791,
+        "renderSeconds": 125.664005041,
+        "postSeconds": 40.167861208999994,
+        "crop": {
+          "x": 654,
+          "y": 68,
+          "w": 424,
+          "h": 424
+        },
+        "alphaSpans": [
+          {
+            "opaque": false,
+            "from": 0,
+            "to": 1896
+          }
+        ],
+        "parts": null,
+        "rgbProfile": "jianying-macos-11.8.0-rgb-tv2",
+        "cacheWriteSeconds": 0.3620141669999866
+      },
+      {
+        "clip": "a-full-3",
+        "cached": false,
+        "bytes": 37338823,
+        "seconds": 49.95704033399999,
+        "renderSeconds": 49.14471354200001,
+        "postSeconds": 0.5045473340000026,
+        "crop": null,
+        "parts": null,
+        "rgbProfile": "jianying-macos-11.8.0-rgb-tv2",
+        "cacheWriteSeconds": 0.23277241600002163
+      },
+      {
+        "clip": "p18",
+        "cached": false,
+        "bytes": 6665057,
+        "seconds": 50.93629024999999,
+        "renderSeconds": 22.997394791999977,
+        "postSeconds": 27.815303625000002,
+        "crop": null,
+        "alphaSpans": [
+          {
+            "opaque": false,
+            "from": 0,
+            "to": 4
+          },
+          {
+            "opaque": true,
+            "from": 4,
+            "to": 255
+          }
+        ],
+        "parts": [
+          {
+            "opaque": false,
+            "from": 0,
+            "to": 4,
+            "suffix": ""
+          },
+          {
+            "opaque": true,
+            "from": 4,
+            "to": 255,
+            "suffix": ".part-1"
+          }
+        ],
+        "rgbProfile": "jianying-macos-11.8.0-rgb-tv2",
+        "cacheWriteSeconds": 0.06001974999997765
+      },
+      {
+        "clip": "p05",
+        "cached": false,
+        "bytes": 76542038,
+        "seconds": 74.90542537500002,
+        "renderSeconds": 38.260998709000006,
+        "postSeconds": 36.406696874999994,
+        "crop": null,
+        "alphaSpans": [
+          {
+            "opaque": false,
+            "from": 0,
+            "to": 8
+          },
+          {
+            "opaque": true,
+            "from": 8,
+            "to": 266
+          }
+        ],
+        "parts": [
+          {
+            "opaque": false,
+            "from": 0,
+            "to": 8,
+            "suffix": ""
+          },
+          {
+            "opaque": true,
+            "from": 8,
+            "to": 266,
+            "suffix": ".part-1"
+          }
+        ],
+        "rgbProfile": "jianying-macos-11.8.0-rgb-tv2",
+        "cacheWriteSeconds": 0.10085316700002295
+      },
+      {
+        "clip": "p13",
+        "cached": false,
+        "bytes": 52661140,
+        "seconds": 67.65561337499999,
+        "renderSeconds": 31.741680040999984,
+        "postSeconds": 35.736588750000024,
+        "crop": null,
+        "alphaSpans": [
+          {
+            "opaque": false,
+            "from": 0,
+            "to": 6
+          },
+          {
+            "opaque": true,
+            "from": 6,
+            "to": 244
+          }
+        ],
+        "parts": [
+          {
+            "opaque": false,
+            "from": 0,
+            "to": 6,
+            "suffix": ""
+          },
+          {
+            "opaque": true,
+            "from": 6,
+            "to": 244,
+            "suffix": ".part-1"
+          }
+        ],
+        "rgbProfile": "jianying-macos-11.8.0-rgb-tv2",
+        "cacheWriteSeconds": 0.06755316700000549
+      },
+      {
+        "clip": "p16",
+        "cached": false,
+        "bytes": 231125405,
+        "seconds": 84.43587258299999,
+        "renderSeconds": 34.591319667,
+        "postSeconds": 49.28545883400002,
+        "crop": null,
+        "alphaSpans": [
+          {
+            "opaque": false,
+            "from": 0,
+            "to": 5
+          },
+          {
+            "opaque": true,
+            "from": 5,
+            "to": 232
+          }
+        ],
+        "parts": [
+          {
+            "opaque": false,
+            "from": 0,
+            "to": 5,
+            "suffix": ""
+          },
+          {
+            "opaque": true,
+            "from": 5,
+            "to": 232,
+            "suffix": ".part-1"
+          }
+        ],
+        "rgbProfile": "jianying-macos-11.8.0-rgb-tv2",
+        "cacheWriteSeconds": 0.35745658299996286
+      },
+      {
+        "clip": "p07",
+        "cached": false,
+        "bytes": 11171062,
+        "seconds": 53.24800441699999,
+        "renderSeconds": 28.767268666999996,
+        "postSeconds": 24.12195275,
+        "crop": null,
+        "alphaSpans": [
+          {
+            "opaque": false,
+            "from": 0,
+            "to": 4
+          },
+          {
+            "opaque": true,
+            "from": 4,
+            "to": 212
+          }
+        ],
+        "parts": [
+          {
+            "opaque": false,
+            "from": 0,
+            "to": 4,
+            "suffix": ""
+          },
+          {
+            "opaque": true,
+            "from": 4,
+            "to": 212,
+            "suffix": ".part-1"
+          }
+        ],
+        "rgbProfile": "jianying-macos-11.8.0-rgb-tv2",
+        "cacheWriteSeconds": 0.2142607919999864
+      },
+      {
+        "clip": "p12",
+        "cached": false,
+        "bytes": 132705176,
+        "seconds": 68.92723095799997,
+        "renderSeconds": 34.59229545800001,
+        "postSeconds": 33.923233999999994,
+        "crop": null,
+        "alphaSpans": [
+          {
+            "opaque": false,
+            "from": 0,
+            "to": 4
+          },
+          {
+            "opaque": true,
+            "from": 4,
+            "to": 213
+          }
+        ],
+        "parts": [
+          {
+            "opaque": false,
+            "from": 0,
+            "to": 4,
+            "suffix": ""
+          },
+          {
+            "opaque": true,
+            "from": 4,
+            "to": 213,
+            "suffix": ".part-1"
+          }
+        ],
+        "rgbProfile": "jianying-macos-11.8.0-rgb-tv2",
+        "cacheWriteSeconds": 0.27241083299997265
+      },
+      {
+        "clip": "p15",
+        "cached": false,
+        "bytes": 199960114,
+        "seconds": 25.004755082999996,
+        "renderSeconds": 20.833983667000023,
+        "postSeconds": 3.5761818750000094,
+        "crop": null,
+        "alphaSpans": [
+          {
+            "opaque": false,
+            "from": 0,
+            "to": 181
+          }
+        ],
+        "parts": null,
+        "rgbProfile": "jianying-macos-11.8.0-rgb-tv2",
+        "cacheWriteSeconds": 0.5091895829999703
+      },
+      {
+        "clip": "a-full-2",
+        "cached": false,
+        "bytes": 15853314,
+        "seconds": 28.56136700000003,
+        "renderSeconds": 28.16890083400003,
+        "postSeconds": 0.19908575000002748,
+        "crop": null,
+        "parts": null,
+        "rgbProfile": "jianying-macos-11.8.0-rgb-tv2",
+        "cacheWriteSeconds": 0.10210841599997365
+      },
+      {
+        "clip": "p19",
+        "cached": false,
+        "bytes": 10670234,
+        "seconds": 39.67390999999997,
+        "renderSeconds": 17.976425832999986,
+        "postSeconds": 21.597207083999994,
+        "crop": null,
+        "alphaSpans": [
+          {
+            "opaque": false,
+            "from": 0,
+            "to": 8
+          },
+          {
+            "opaque": true,
+            "from": 8,
+            "to": 207
+          }
+        ],
+        "parts": [
+          {
+            "opaque": false,
+            "from": 0,
+            "to": 8,
+            "suffix": ""
+          },
+          {
+            "opaque": true,
+            "from": 8,
+            "to": 207,
+            "suffix": ".part-1"
+          }
+        ],
+        "rgbProfile": "jianying-macos-11.8.0-rgb-tv2",
+        "cacheWriteSeconds": 0.028008499999996276
+      },
+      {
+        "clip": "p09",
+        "cached": false,
+        "bytes": 2188743,
+        "seconds": 28.765100875000005,
+        "renderSeconds": 11.309665291999991,
+        "postSeconds": 17.373925292,
+        "crop": null,
+        "alphaSpans": [
+          {
+            "opaque": false,
+            "from": 0,
+            "to": 5
+          },
+          {
+            "opaque": true,
+            "from": 5,
+            "to": 178
+          }
+        ],
+        "parts": [
+          {
+            "opaque": false,
+            "from": 0,
+            "to": 5,
+            "suffix": ""
+          },
+          {
+            "opaque": true,
+            "from": 5,
+            "to": 178,
+            "suffix": ".part-1"
+          }
+        ],
+        "rgbProfile": "jianying-macos-11.8.0-rgb-tv2",
+        "cacheWriteSeconds": 0.0034332500000018628
+      },
+      {
+        "clip": "p01",
+        "cached": false,
+        "bytes": 169795258,
+        "seconds": 17.17242637499998,
+        "renderSeconds": 13.994775499999989,
+        "postSeconds": 2.924894666999986,
+        "crop": null,
+        "alphaSpans": [
+          {
+            "opaque": false,
+            "from": 0,
+            "to": 163
+          }
+        ],
+        "parts": null,
+        "rgbProfile": "jianying-macos-11.8.0-rgb-tv2",
+        "cacheWriteSeconds": 0.20088858299999265
+      },
+      {
+        "clip": "p14",
+        "cached": false,
+        "bytes": 5626597,
+        "seconds": 27.947961083000003,
+        "renderSeconds": 13.208065125000022,
+        "postSeconds": 14.671744124999968,
+        "crop": null,
+        "alphaSpans": [
+          {
+            "opaque": false,
+            "from": 0,
+            "to": 4
+          },
+          {
+            "opaque": true,
+            "from": 4,
+            "to": 175
+          }
+        ],
+        "parts": [
+          {
+            "opaque": false,
+            "from": 0,
+            "to": 4,
+            "suffix": ""
+          },
+          {
+            "opaque": true,
+            "from": 4,
+            "to": 175,
+            "suffix": ".part-1"
+          }
+        ],
+        "rgbProfile": "jianying-macos-11.8.0-rgb-tv2",
+        "cacheWriteSeconds": 0.008022167000046465
+      },
+      {
+        "clip": "p23",
+        "cached": false,
+        "bytes": 114171793,
+        "seconds": 16.141853166999994,
+        "renderSeconds": 13.008499458999955,
+        "postSeconds": 2.9909562910000096,
+        "crop": null,
+        "alphaSpans": [
+          {
+            "opaque": false,
+            "from": 0,
+            "to": 160
+          }
+        ],
+        "parts": null,
+        "rgbProfile": "jianying-macos-11.8.0-rgb-tv2",
+        "cacheWriteSeconds": 0.0896011249999865
+      },
+      {
+        "clip": "p22",
+        "cached": false,
+        "bytes": 166459665,
+        "seconds": 14.499988416000036,
+        "renderSeconds": 11.823305500000016,
+        "postSeconds": 2.482772416999971,
+        "crop": null,
+        "alphaSpans": [
+          {
+            "opaque": false,
+            "from": 0,
+            "to": 156
+          }
+        ],
+        "parts": null,
+        "rgbProfile": "jianying-macos-11.8.0-rgb-tv2",
+        "cacheWriteSeconds": 0.15613745899999049
+      },
+      {
+        "clip": "p02",
+        "cached": false,
+        "bytes": 482605937,
+        "seconds": 31.37837050000002,
+        "renderSeconds": 25.96232929100003,
+        "postSeconds": 4.559332124999957,
+        "crop": null,
+        "alphaSpans": [
+          {
+            "opaque": false,
+            "from": 0,
+            "to": 153
+          }
+        ],
+        "parts": null,
+        "rgbProfile": "jianying-macos-11.8.0-rgb-tv2",
+        "cacheWriteSeconds": 0.7299236669999664
+      },
+      {
+        "clip": "p10",
+        "cached": false,
+        "bytes": 5759817,
+        "seconds": 25.430073708000013,
+        "renderSeconds": 8.233256457999989,
+        "postSeconds": 17.14482899999997,
+        "crop": null,
+        "alphaSpans": [
+          {
+            "opaque": false,
+            "from": 0,
+            "to": 4
+          },
+          {
+            "opaque": true,
+            "from": 4,
+            "to": 142
+          }
+        ],
+        "parts": [
+          {
+            "opaque": false,
+            "from": 0,
+            "to": 4,
+            "suffix": ""
+          },
+          {
+            "opaque": true,
+            "from": 4,
+            "to": 142,
+            "suffix": ".part-1"
+          }
+        ],
+        "rgbProfile": "jianying-macos-11.8.0-rgb-tv2",
+        "cacheWriteSeconds": 0.0105824169999687
+      },
+      {
+        "clip": "p03",
+        "cached": false,
+        "bytes": 120087453,
+        "seconds": 14.287292917000013,
+        "renderSeconds": 11.941731583999994,
+        "postSeconds": 2.119698166999966,
+        "crop": null,
+        "alphaSpans": [
+          {
+            "opaque": false,
+            "from": 0,
+            "to": 140
+          }
+        ],
+        "parts": null,
+        "rgbProfile": "jianying-macos-11.8.0-rgb-tv2",
+        "cacheWriteSeconds": 0.17095624999998835
+      },
+      {
+        "clip": "p20",
+        "cached": false,
+        "bytes": 119470753,
+        "seconds": 44.858585875000045,
+        "renderSeconds": 22.515964209000057,
+        "postSeconds": 22.131251917000046,
+        "crop": null,
+        "alphaSpans": [
+          {
+            "opaque": false,
+            "from": 0,
+            "to": 4
+          },
+          {
+            "opaque": true,
+            "from": 4,
+            "to": 149
+          }
+        ],
+        "parts": [
+          {
+            "opaque": false,
+            "from": 0,
+            "to": 4,
+            "suffix": ""
+          },
+          {
+            "opaque": true,
+            "from": 4,
+            "to": 149,
+            "suffix": ".part-1"
+          }
+        ],
+        "rgbProfile": "jianying-macos-11.8.0-rgb-tv2",
+        "cacheWriteSeconds": 0.10075662500003818
+      },
+      {
+        "clip": "p21",
+        "cached": false,
+        "bytes": 5854934,
+        "seconds": 24.33717750000005,
+        "renderSeconds": 11.174563791000052,
+        "postSeconds": 13.116671166000014,
+        "crop": null,
+        "alphaSpans": [
+          {
+            "opaque": false,
+            "from": 0,
+            "to": 4
+          },
+          {
+            "opaque": true,
+            "from": 4,
+            "to": 131
+          }
+        ],
+        "parts": [
+          {
+            "opaque": false,
+            "from": 0,
+            "to": 4,
+            "suffix": ""
+          },
+          {
+            "opaque": true,
+            "from": 4,
+            "to": 131,
+            "suffix": ".part-1"
+          }
+        ],
+        "rgbProfile": "jianying-macos-11.8.0-rgb-tv2",
+        "cacheWriteSeconds": 0.00800062499998603
+      },
+      {
+        "clip": "p08",
+        "cached": false,
+        "bytes": 7285070,
+        "seconds": 18.84912579099997,
+        "renderSeconds": 7.21733566599997,
+        "postSeconds": 11.59080575,
+        "crop": null,
+        "alphaSpans": [
+          {
+            "opaque": false,
+            "from": 0,
+            "to": 4
+          },
+          {
+            "opaque": true,
+            "from": 4,
+            "to": 127
+          }
+        ],
+        "parts": [
+          {
+            "opaque": false,
+            "from": 0,
+            "to": 4,
+            "suffix": ""
+          },
+          {
+            "opaque": true,
+            "from": 4,
+            "to": 127,
+            "suffix": ".part-1"
+          }
+        ],
+        "rgbProfile": "jianying-macos-11.8.0-rgb-tv2",
+        "cacheWriteSeconds": 0.006500416999973823
+      },
+      {
+        "clip": "p06",
+        "cached": false,
+        "bytes": 7878791,
+        "seconds": 16.127213500000014,
+        "renderSeconds": 6.78720641699998,
+        "postSeconds": 9.299101416999997,
+        "crop": null,
+        "alphaSpans": [
+          {
+            "opaque": false,
+            "from": 0,
+            "to": 4
+          },
+          {
+            "opaque": true,
+            "from": 4,
+            "to": 116
+          }
+        ],
+        "parts": [
+          {
+            "opaque": false,
+            "from": 0,
+            "to": 4,
+            "suffix": ""
+          },
+          {
+            "opaque": true,
+            "from": 4,
+            "to": 116,
+            "suffix": ".part-1"
+          }
+        ],
+        "rgbProfile": "jianying-macos-11.8.0-rgb-tv2",
+        "cacheWriteSeconds": 0.006657833000004757
+      },
+      {
+        "clip": "p17",
+        "cached": false,
+        "bytes": 9070604,
+        "seconds": 14.84075445899996,
+        "renderSeconds": 6.872535875000001,
+        "postSeconds": 7.919477749999962,
+        "crop": null,
+        "alphaSpans": [
+          {
+            "opaque": false,
+            "from": 0,
+            "to": 4
+          },
+          {
+            "opaque": true,
+            "from": 4,
+            "to": 114
+          }
+        ],
+        "parts": [
+          {
+            "opaque": false,
+            "from": 0,
+            "to": 4,
+            "suffix": ""
+          },
+          {
+            "opaque": true,
+            "from": 4,
+            "to": 114,
+            "suffix": ".part-1"
+          }
+        ],
+        "rgbProfile": "jianying-macos-11.8.0-rgb-tv2",
+        "cacheWriteSeconds": 0.012769458999973721
+      },
+      {
+        "clip": "p11",
+        "cached": false,
+        "bytes": 93070699,
+        "seconds": 30.01387033300003,
+        "renderSeconds": 15.802409916000034,
+        "postSeconds": 14.043722584000031,
+        "crop": null,
+        "alphaSpans": [
+          {
+            "opaque": false,
+            "from": 0,
+            "to": 3
+          },
+          {
+            "opaque": true,
+            "from": 3,
+            "to": 124
+          }
+        ],
+        "parts": [
+          {
+            "opaque": false,
+            "from": 0,
+            "to": 3,
+            "suffix": ""
+          },
+          {
+            "opaque": true,
+            "from": 3,
+            "to": 124,
+            "suffix": ".part-1"
+          }
+        ],
+        "rgbProfile": "jianying-macos-11.8.0-rgb-tv2",
+        "cacheWriteSeconds": 0.10518029099999694
+      },
+      {
+        "clip": "p04",
+        "cached": false,
+        "bytes": 2316076,
+        "seconds": 12.50197445899999,
+        "renderSeconds": 5.180668791999982,
+        "postSeconds": 7.277851916999963,
+        "crop": null,
+        "alphaSpans": [
+          {
+            "opaque": false,
+            "from": 0,
+            "to": 4
+          },
+          {
+            "opaque": true,
+            "from": 4,
+            "to": 99
+          }
+        ],
+        "parts": [
+          {
+            "opaque": false,
+            "from": 0,
+            "to": 4,
+            "suffix": ""
+          },
+          {
+            "opaque": true,
+            "from": 4,
+            "to": 99,
+            "suffix": ".part-1"
+          }
+        ],
+        "rgbProfile": "jianying-macos-11.8.0-rgb-tv2",
+        "cacheWriteSeconds": 0.002524582999991253
+      },
+      {
+        "clip": "avatar-loop",
+        "cached": false,
+        "bytes": 8213607,
+        "seconds": 6.696126917000045,
+        "renderSeconds": 5.190940833000001,
+        "postSeconds": 1.4658690420000349,
+        "crop": {
+          "x": 390,
+          "y": 470,
+          "w": 300,
+          "h": 300
+        },
+        "alphaSpans": [
+          {
+            "opaque": false,
+            "from": 0,
+            "to": 60
+          }
+        ],
+        "parts": null,
+        "rgbProfile": "jianying-macos-11.8.0-rgb-tv2",
+        "cacheWriteSeconds": 0.012223041000019294
+      },
+      {
+        "clip": "p24",
+        "cached": false,
+        "bytes": 57819999,
+        "seconds": 8.96201133399998,
+        "renderSeconds": 6.943626666999946,
+        "postSeconds": 1.91056579100003,
+        "crop": null,
+        "alphaSpans": [
+          {
+            "opaque": false,
+            "from": 0,
+            "to": 91
+          }
+        ],
+        "parts": null,
+        "rgbProfile": "jianying-macos-11.8.0-rgb-tv2",
+        "cacheWriteSeconds": 0.06455441599996993
+      },
+      {
+        "clip": "cover",
+        "cached": false,
+        "bytes": 69542,
+        "seconds": 0.7320299579999991,
+        "renderSeconds": 0.6819137079999782,
+        "postSeconds": 6.029200000921264e-05,
+        "crop": null,
+        "parts": null,
+        "rgbProfile": "jianying-macos-11.8.0-rgb-tv2",
+        "cacheWriteSeconds": 0.0029640830000280402
+      },
+      {
+        "clip": "p25",
+        "cached": false,
+        "bytes": 2778577,
+        "seconds": 7.320644749999977,
+        "renderSeconds": 3.727140707999992,
+        "postSeconds": 3.5613247090000075,
+        "crop": null,
+        "alphaSpans": [
+          {
+            "opaque": false,
+            "from": 0,
+            "to": 4
+          },
+          {
+            "opaque": true,
+            "from": 4,
+            "to": 60
+          }
+        ],
+        "parts": [
+          {
+            "opaque": false,
+            "from": 0,
+            "to": 4,
+            "suffix": ""
+          },
+          {
+            "opaque": true,
+            "from": 4,
+            "to": 60,
+            "suffix": ".part-1"
+          }
+        ],
+        "rgbProfile": "jianying-macos-11.8.0-rgb-tv2",
+        "cacheWriteSeconds": 0.0020535839999793097
+      }
+    ]
+  },
+  "warm": {
+    "seconds": 17.309,
+    "bytes": 2936610540,
+    "peakLogicalOutputAndCacheBytes": 3101229407,
+    "cacheHits": 33,
+    "renderJobs": 33,
+    "mediaStats": [
+      {
+        "clip": "captions-dee4b3e7",
+        "cached": true,
+        "bytes": 1555888,
+        "seconds": 0.011775125000000117,
+        "crop": {
+          "x": 134,
+          "y": 1666,
+          "w": 810,
+          "h": 56
+        },
+        "parts": null
+      },
+      {
+        "clip": "a-pip-2",
+        "cached": true,
+        "bytes": 172839263,
+        "seconds": 2.167807625,
+        "crop": {
+          "x": 654,
+          "y": 68,
+          "w": 424,
+          "h": 424
+        },
+        "parts": null
+      },
+      {
+        "clip": "a-full-1",
+        "cached": true,
+        "bytes": 39483201,
+        "seconds": 0.4966735840000001,
+        "crop": null,
+        "parts": null
+      },
+      {
+        "clip": "a-full-3",
+        "cached": true,
+        "bytes": 37338823,
+        "seconds": 0.3563954590000003,
+        "crop": null,
+        "parts": null
+      },
+      {
+        "clip": "a-pip-1",
+        "cached": true,
+        "bytes": 301184840,
+        "seconds": 3.361098042,
+        "crop": {
+          "x": 654,
+          "y": 68,
+          "w": 424,
+          "h": 424
+        },
+        "parts": null
+      },
+      {
+        "clip": "p18",
+        "cached": true,
+        "bytes": 6665057,
+        "seconds": 0.09707312499999989,
+        "crop": null,
+        "parts": [
+          {
+            "opaque": false,
+            "from": 0,
+            "to": 4,
+            "suffix": ""
+          },
+          {
+            "opaque": true,
+            "from": 4,
+            "to": 255,
+            "suffix": ".part-1"
+          }
+        ]
+      },
+      {
+        "clip": "p05",
+        "cached": true,
+        "bytes": 76542038,
+        "seconds": 0.7074307499999996,
+        "crop": null,
+        "parts": [
+          {
+            "opaque": false,
+            "from": 0,
+            "to": 8,
+            "suffix": ""
+          },
+          {
+            "opaque": true,
+            "from": 8,
+            "to": 266,
+            "suffix": ".part-1"
+          }
+        ]
+      },
+      {
+        "clip": "p13",
+        "cached": true,
+        "bytes": 52661140,
+        "seconds": 0.44755641699999976,
+        "crop": null,
+        "parts": [
+          {
+            "opaque": false,
+            "from": 0,
+            "to": 6,
+            "suffix": ""
+          },
+          {
+            "opaque": true,
+            "from": 6,
+            "to": 244,
+            "suffix": ".part-1"
+          }
+        ]
+      },
+      {
+        "clip": "p12",
+        "cached": true,
+        "bytes": 132705176,
+        "seconds": 1.5498116250000002,
+        "crop": null,
+        "parts": [
+          {
+            "opaque": false,
+            "from": 0,
+            "to": 4,
+            "suffix": ""
+          },
+          {
+            "opaque": true,
+            "from": 4,
+            "to": 213,
+            "suffix": ".part-1"
+          }
+        ]
+      },
+      {
+        "clip": "p07",
+        "cached": true,
+        "bytes": 11171062,
+        "seconds": 0.16864029200000005,
+        "crop": null,
+        "parts": [
+          {
+            "opaque": false,
+            "from": 0,
+            "to": 4,
+            "suffix": ""
+          },
+          {
+            "opaque": true,
+            "from": 4,
+            "to": 212,
+            "suffix": ".part-1"
+          }
+        ]
+      },
+      {
+        "clip": "p19",
+        "cached": true,
+        "bytes": 10670234,
+        "seconds": 0.20094108299999972,
+        "crop": null,
+        "parts": [
+          {
+            "opaque": false,
+            "from": 0,
+            "to": 8,
+            "suffix": ""
+          },
+          {
+            "opaque": true,
+            "from": 8,
+            "to": 207,
+            "suffix": ".part-1"
+          }
+        ]
+      },
+      {
+        "clip": "p16",
+        "cached": true,
+        "bytes": 231125405,
+        "seconds": 2.4954057499999998,
+        "crop": null,
+        "parts": [
+          {
+            "opaque": false,
+            "from": 0,
+            "to": 5,
+            "suffix": ""
+          },
+          {
+            "opaque": true,
+            "from": 5,
+            "to": 232,
+            "suffix": ".part-1"
+          }
+        ]
+      },
+      {
+        "clip": "a-full-2",
+        "cached": true,
+        "bytes": 15853314,
+        "seconds": 0.1396189170000016,
+        "crop": null,
+        "parts": null
+      },
+      {
+        "clip": "p09",
+        "cached": true,
+        "bytes": 2188743,
+        "seconds": 0.026317000000000916,
+        "crop": null,
+        "parts": [
+          {
+            "opaque": false,
+            "from": 0,
+            "to": 5,
+            "suffix": ""
+          },
+          {
+            "opaque": true,
+            "from": 5,
+            "to": 178,
+            "suffix": ".part-1"
+          }
+        ]
+      },
+      {
+        "clip": "p14",
+        "cached": true,
+        "bytes": 5626597,
+        "seconds": 0.07796945799999958,
+        "crop": null,
+        "parts": [
+          {
+            "opaque": false,
+            "from": 0,
+            "to": 4,
+            "suffix": ""
+          },
+          {
+            "opaque": true,
+            "from": 4,
+            "to": 175,
+            "suffix": ".part-1"
+          }
+        ]
+      },
+      {
+        "clip": "p15",
+        "cached": true,
+        "bytes": 199960114,
+        "seconds": 2.158117791999999,
+        "crop": null,
+        "parts": null
+      },
+      {
+        "clip": "p01",
+        "cached": true,
+        "bytes": 169795258,
+        "seconds": 2.390306375,
+        "crop": null,
+        "parts": null
+      },
+      {
+        "clip": "p23",
+        "cached": true,
+        "bytes": 114171793,
+        "seconds": 1.1766124999999992,
+        "crop": null,
+        "parts": null
+      },
+      {
+        "clip": "p22",
+        "cached": true,
+        "bytes": 166459665,
+        "seconds": 1.6371816249999993,
+        "crop": null,
+        "parts": null
+      },
+      {
+        "clip": "p20",
+        "cached": true,
+        "bytes": 119470753,
+        "seconds": 1.167735125000001,
+        "crop": null,
+        "parts": [
+          {
+            "opaque": false,
+            "from": 0,
+            "to": 4,
+            "suffix": ""
+          },
+          {
+            "opaque": true,
+            "from": 4,
+            "to": 149,
+            "suffix": ".part-1"
+          }
+        ]
+      },
+      {
+        "clip": "p10",
+        "cached": true,
+        "bytes": 5759817,
+        "seconds": 0.07663308300000063,
+        "crop": null,
+        "parts": [
+          {
+            "opaque": false,
+            "from": 0,
+            "to": 4,
+            "suffix": ""
+          },
+          {
+            "opaque": true,
+            "from": 4,
+            "to": 142,
+            "suffix": ".part-1"
+          }
+        ]
+      },
+      {
+        "clip": "p03",
+        "cached": true,
+        "bytes": 120087453,
+        "seconds": 1.1193871660000005,
+        "crop": null,
+        "parts": null
+      },
+      {
+        "clip": "p21",
+        "cached": true,
+        "bytes": 5854934,
+        "seconds": 0.051683750000000146,
+        "crop": null,
+        "parts": [
+          {
+            "opaque": false,
+            "from": 0,
+            "to": 4,
+            "suffix": ""
+          },
+          {
+            "opaque": true,
+            "from": 4,
+            "to": 131,
+            "suffix": ".part-1"
+          }
+        ]
+      },
+      {
+        "clip": "p08",
+        "cached": true,
+        "bytes": 7285070,
+        "seconds": 0.07638933299999917,
+        "crop": null,
+        "parts": [
+          {
+            "opaque": false,
+            "from": 0,
+            "to": 4,
+            "suffix": ""
+          },
+          {
+            "opaque": true,
+            "from": 4,
+            "to": 127,
+            "suffix": ".part-1"
+          }
+        ]
+      },
+      {
+        "clip": "p11",
+        "cached": true,
+        "bytes": 93070699,
+        "seconds": 0.6198096669999995,
+        "crop": null,
+        "parts": [
+          {
+            "opaque": false,
+            "from": 0,
+            "to": 3,
+            "suffix": ""
+          },
+          {
+            "opaque": true,
+            "from": 3,
+            "to": 124,
+            "suffix": ".part-1"
+          }
+        ]
+      },
+      {
+        "clip": "p02",
+        "cached": true,
+        "bytes": 482605937,
+        "seconds": 4.502687792000001,
+        "crop": null,
+        "parts": null
+      },
+      {
+        "clip": "p06",
+        "cached": true,
+        "bytes": 7878791,
+        "seconds": 0.05675070899999991,
+        "crop": null,
+        "parts": [
+          {
+            "opaque": false,
+            "from": 0,
+            "to": 4,
+            "suffix": ""
+          },
+          {
+            "opaque": true,
+            "from": 4,
+            "to": 116,
+            "suffix": ".part-1"
+          }
+        ]
+      },
+      {
+        "clip": "p04",
+        "cached": true,
+        "bytes": 2316076,
+        "seconds": 0.02302058300000135,
+        "crop": null,
+        "parts": [
+          {
+            "opaque": false,
+            "from": 0,
+            "to": 4,
+            "suffix": ""
+          },
+          {
+            "opaque": true,
+            "from": 4,
+            "to": 99,
+            "suffix": ".part-1"
+          }
+        ]
+      },
+      {
+        "clip": "p17",
+        "cached": true,
+        "bytes": 9070604,
+        "seconds": 0.0703543750000008,
+        "crop": null,
+        "parts": [
+          {
+            "opaque": false,
+            "from": 0,
+            "to": 4,
+            "suffix": ""
+          },
+          {
+            "opaque": true,
+            "from": 4,
+            "to": 114,
+            "suffix": ".part-1"
+          }
+        ]
+      },
+      {
+        "clip": "avatar-loop",
+        "cached": true,
+        "bytes": 8213607,
+        "seconds": 0.06891800000000148,
+        "crop": {
+          "x": 390,
+          "y": 470,
+          "w": 300,
+          "h": 300
+        },
+        "parts": null
+      },
+      {
+        "clip": "p25",
+        "cached": true,
+        "bytes": 2778577,
+        "seconds": 0.025495957999999517,
+        "crop": null,
+        "parts": [
+          {
+            "opaque": false,
+            "from": 0,
+            "to": 4,
+            "suffix": ""
+          },
+          {
+            "opaque": true,
+            "from": 4,
+            "to": 60,
+            "suffix": ".part-1"
+          }
+        ]
+      },
+      {
+        "clip": "cover",
+        "cached": true,
+        "bytes": 69542,
+        "seconds": 0.013147832999999082,
+        "crop": null,
+        "parts": null
+      },
+      {
+        "clip": "p24",
+        "cached": true,
+        "bytes": 57819999,
+        "seconds": 0.351854374999999,
+        "crop": null,
+        "parts": null
+      }
+    ]
+  },
+  "onePageEdit": {
+    "seconds": 22.248,
+    "bytes": 2936617874,
+    "peakLogicalOutputAndCacheBytes": 3159568257,
+    "cacheHits": 32,
+    "renderJobs": 33,
+    "mediaStats": [
+      {
+        "clip": "captions-e01ab732",
+        "cached": true,
+        "bytes": 1555888,
+        "seconds": 0.011222625000000335,
+        "crop": {
+          "x": 134,
+          "y": 1666,
+          "w": 810,
+          "h": 56
+        },
+        "parts": null
+      },
+      {
+        "clip": "a-pip-2",
+        "cached": true,
+        "bytes": 172839263,
+        "seconds": 1.3360263749999999,
+        "crop": {
+          "x": 654,
+          "y": 68,
+          "w": 424,
+          "h": 424
+        },
+        "parts": null
+      },
+      {
+        "clip": "a-full-1",
+        "cached": true,
+        "bytes": 39483201,
+        "seconds": 0.34676516699999954,
+        "crop": null,
+        "parts": null
+      },
+      {
+        "clip": "a-full-3",
+        "cached": true,
+        "bytes": 37338823,
+        "seconds": 0.23984420799999953,
+        "crop": null,
+        "parts": null
+      },
+      {
+        "clip": "a-pip-1",
+        "cached": true,
+        "bytes": 301184840,
+        "seconds": 2.225758875,
+        "crop": {
+          "x": 654,
+          "y": 68,
+          "w": 424,
+          "h": 424
+        },
+        "parts": null
+      },
+      {
+        "clip": "p18",
+        "cached": true,
+        "bytes": 6665057,
+        "seconds": 0.05815162499999951,
+        "crop": null,
+        "parts": [
+          {
+            "opaque": false,
+            "from": 0,
+            "to": 4,
+            "suffix": ""
+          },
+          {
+            "opaque": true,
+            "from": 4,
+            "to": 255,
+            "suffix": ".part-1"
+          }
+        ]
+      },
+      {
+        "clip": "p05",
+        "cached": true,
+        "bytes": 76542038,
+        "seconds": 0.4637581250000003,
+        "crop": null,
+        "parts": [
+          {
+            "opaque": false,
+            "from": 0,
+            "to": 8,
+            "suffix": ""
+          },
+          {
+            "opaque": true,
+            "from": 8,
+            "to": 266,
+            "suffix": ".part-1"
+          }
+        ]
+      },
+      {
+        "clip": "p13",
+        "cached": true,
+        "bytes": 52661140,
+        "seconds": 0.6593020409999999,
+        "crop": null,
+        "parts": [
+          {
+            "opaque": false,
+            "from": 0,
+            "to": 6,
+            "suffix": ""
+          },
+          {
+            "opaque": true,
+            "from": 6,
+            "to": 244,
+            "suffix": ".part-1"
+          }
+        ]
+      },
+      {
+        "clip": "p12",
+        "cached": true,
+        "bytes": 132705176,
+        "seconds": 0.8976128330000002,
+        "crop": null,
+        "parts": [
+          {
+            "opaque": false,
+            "from": 0,
+            "to": 4,
+            "suffix": ""
+          },
+          {
+            "opaque": true,
+            "from": 4,
+            "to": 213,
+            "suffix": ".part-1"
+          }
+        ]
+      },
+      {
+        "clip": "p07",
+        "cached": true,
+        "bytes": 11171062,
+        "seconds": 0.05854429199999959,
+        "crop": null,
+        "parts": [
+          {
+            "opaque": false,
+            "from": 0,
+            "to": 4,
+            "suffix": ""
+          },
+          {
+            "opaque": true,
+            "from": 4,
+            "to": 212,
+            "suffix": ".part-1"
+          }
+        ]
+      },
+      {
+        "clip": "p19",
+        "cached": true,
+        "bytes": 10670234,
+        "seconds": 0.061221708000000034,
+        "crop": null,
+        "parts": [
+          {
+            "opaque": false,
+            "from": 0,
+            "to": 8,
+            "suffix": ""
+          },
+          {
+            "opaque": true,
+            "from": 8,
+            "to": 207,
+            "suffix": ".part-1"
+          }
+        ]
+      },
+      {
+        "clip": "p16",
+        "cached": true,
+        "bytes": 231125405,
+        "seconds": 1.663605584,
+        "crop": null,
+        "parts": [
+          {
+            "opaque": false,
+            "from": 0,
+            "to": 5,
+            "suffix": ""
+          },
+          {
+            "opaque": true,
+            "from": 5,
+            "to": 232,
+            "suffix": ".part-1"
+          }
+        ]
+      },
+      {
+        "clip": "a-full-2",
+        "cached": true,
+        "bytes": 15853314,
+        "seconds": 0.06031079200000022,
+        "crop": null,
+        "parts": null
+      },
+      {
+        "clip": "p09",
+        "cached": true,
+        "bytes": 2188743,
+        "seconds": 0.010971540999999889,
+        "crop": null,
+        "parts": [
+          {
+            "opaque": false,
+            "from": 0,
+            "to": 5,
+            "suffix": ""
+          },
+          {
+            "opaque": true,
+            "from": 5,
+            "to": 178,
+            "suffix": ".part-1"
+          }
+        ]
+      },
+      {
+        "clip": "p14",
+        "cached": true,
+        "bytes": 5626597,
+        "seconds": 0.02882750000000033,
+        "crop": null,
+        "parts": [
+          {
+            "opaque": false,
+            "from": 0,
+            "to": 4,
+            "suffix": ""
+          },
+          {
+            "opaque": true,
+            "from": 4,
+            "to": 175,
+            "suffix": ".part-1"
+          }
+        ]
+      },
+      {
+        "clip": "p15",
+        "cached": true,
+        "bytes": 199960114,
+        "seconds": 1.113622209,
+        "crop": null,
+        "parts": null
+      },
+      {
+        "clip": "p01",
+        "cached": true,
+        "bytes": 169795258,
+        "seconds": 0.9514450830000005,
+        "crop": null,
+        "parts": null
+      },
+      {
+        "clip": "p23",
+        "cached": true,
+        "bytes": 114171793,
+        "seconds": 1.2524201249999996,
+        "crop": null,
+        "parts": null
+      },
+      {
+        "clip": "p22",
+        "cached": true,
+        "bytes": 166459665,
+        "seconds": 1.5669918339999995,
+        "crop": null,
+        "parts": null
+      },
+      {
+        "clip": "p20",
+        "cached": true,
+        "bytes": 119470753,
+        "seconds": 1.2282753329999996,
+        "crop": null,
+        "parts": [
+          {
+            "opaque": false,
+            "from": 0,
+            "to": 4,
+            "suffix": ""
+          },
+          {
+            "opaque": true,
+            "from": 4,
+            "to": 149,
+            "suffix": ".part-1"
+          }
+        ]
+      },
+      {
+        "clip": "p10",
+        "cached": true,
+        "bytes": 5759817,
+        "seconds": 0.05753195799999958,
+        "crop": null,
+        "parts": [
+          {
+            "opaque": false,
+            "from": 0,
+            "to": 4,
+            "suffix": ""
+          },
+          {
+            "opaque": true,
+            "from": 4,
+            "to": 142,
+            "suffix": ".part-1"
+          }
+        ]
+      },
+      {
+        "clip": "p03",
+        "cached": true,
+        "bytes": 120087453,
+        "seconds": 0.7037355000000007,
+        "crop": null,
+        "parts": null
+      },
+      {
+        "clip": "p21",
+        "cached": true,
+        "bytes": 5854934,
+        "seconds": 0.03444391600000017,
+        "crop": null,
+        "parts": [
+          {
+            "opaque": false,
+            "from": 0,
+            "to": 4,
+            "suffix": ""
+          },
+          {
+            "opaque": true,
+            "from": 4,
+            "to": 131,
+            "suffix": ".part-1"
+          }
+        ]
+      },
+      {
+        "clip": "p08",
+        "cached": true,
+        "bytes": 7285070,
+        "seconds": 0.04132245799999873,
+        "crop": null,
+        "parts": [
+          {
+            "opaque": false,
+            "from": 0,
+            "to": 4,
+            "suffix": ""
+          },
+          {
+            "opaque": true,
+            "from": 4,
+            "to": 127,
+            "suffix": ".part-1"
+          }
+        ]
+      },
+      {
+        "clip": "p11",
+        "cached": true,
+        "bytes": 93070699,
+        "seconds": 0.4893245000000006,
+        "crop": null,
+        "parts": [
+          {
+            "opaque": false,
+            "from": 0,
+            "to": 3,
+            "suffix": ""
+          },
+          {
+            "opaque": true,
+            "from": 3,
+            "to": 124,
+            "suffix": ".part-1"
+          }
+        ]
+      },
+      {
+        "clip": "p06",
+        "cached": true,
+        "bytes": 7878791,
+        "seconds": 0.03955204199999934,
+        "crop": null,
+        "parts": [
+          {
+            "opaque": false,
+            "from": 0,
+            "to": 4,
+            "suffix": ""
+          },
+          {
+            "opaque": true,
+            "from": 4,
+            "to": 116,
+            "suffix": ".part-1"
+          }
+        ]
+      },
+      {
+        "clip": "p17",
+        "cached": true,
+        "bytes": 9070604,
+        "seconds": 0.04608491600000161,
+        "crop": null,
+        "parts": [
+          {
+            "opaque": false,
+            "from": 0,
+            "to": 4,
+            "suffix": ""
+          },
+          {
+            "opaque": true,
+            "from": 4,
+            "to": 114,
+            "suffix": ".part-1"
+          }
+        ]
+      },
+      {
+        "clip": "p04",
+        "cached": true,
+        "bytes": 2316076,
+        "seconds": 0.014593665999998848,
+        "crop": null,
+        "parts": [
+          {
+            "opaque": false,
+            "from": 0,
+            "to": 4,
+            "suffix": ""
+          },
+          {
+            "opaque": true,
+            "from": 4,
+            "to": 99,
+            "suffix": ".part-1"
+          }
+        ]
+      },
+      {
+        "clip": "p24",
+        "cached": true,
+        "bytes": 57819999,
+        "seconds": 0.25725258399999984,
+        "crop": null,
+        "parts": null
+      },
+      {
+        "clip": "avatar-loop",
+        "cached": true,
+        "bytes": 8213607,
+        "seconds": 0.03686258299999827,
+        "crop": {
+          "x": 390,
+          "y": 470,
+          "w": 300,
+          "h": 300
+        },
+        "parts": null
+      },
+      {
+        "clip": "p02",
+        "cached": true,
+        "bytes": 482605937,
+        "seconds": 3.4173193329999996,
+        "crop": null,
+        "parts": null
+      },
+      {
+        "clip": "cover",
+        "cached": true,
+        "bytes": 69542,
+        "seconds": 0.005122375000000829,
+        "crop": null,
+        "parts": null
+      },
+      {
+        "clip": "p25",
+        "cached": false,
+        "bytes": 2785911,
+        "seconds": 9.482972166000001,
+        "renderSeconds": 4.799747833,
+        "postSeconds": 4.637732625000001,
+        "crop": null,
+        "alphaSpans": [
+          {
+            "opaque": false,
+            "from": 0,
+            "to": 4
+          },
+          {
+            "opaque": true,
+            "from": 4,
+            "to": 60
+          }
+        ],
+        "parts": [
+          {
+            "opaque": false,
+            "from": 0,
+            "to": 4,
+            "suffix": ""
+          },
+          {
+            "opaque": true,
+            "from": 4,
+            "to": 60,
+            "suffix": ".part-1"
+          }
+        ],
+        "rgbProfile": "jianying-macos-11.8.0-rgb-tv2",
+        "cacheWriteSeconds": 0.003407208000000537
+      }
+    ]
+  },
+  "independentRenderComparison": {
+    "fps": 30,
+    "canvas": {
+      "width": 1080,
+      "height": 1920,
+      "ratio": "original"
+    },
+    "results": [
+      {
+        "name": "a-full-1.mov",
+        "parts": [
+          "a-full-1.mov"
+        ],
+        "expectedFrames": 456,
+        "actualFrames": 456,
+        "differentFrames": 0,
+        "firstDifferences": [],
+        "audioMatches": true
+      },
+      {
+        "name": "a-full-2.mov",
+        "parts": [
+          "a-full-2.mov"
+        ],
+        "expectedFrames": 181,
+        "actualFrames": 181,
+        "differentFrames": 0,
+        "firstDifferences": [],
+        "audioMatches": true
+      },
+      {
+        "name": "a-full-3.mov",
+        "parts": [
+          "a-full-3.mov"
+        ],
+        "expectedFrames": 407,
+        "actualFrames": 407,
+        "differentFrames": 0,
+        "firstDifferences": [],
+        "audioMatches": true
+      },
+      {
+        "name": "a-pip-1.mov",
+        "parts": [
+          "a-pip-1.mov"
+        ],
+        "expectedFrames": 1896,
+        "actualFrames": 1896,
+        "differentFrames": 0,
+        "firstDifferences": [],
+        "audioMatches": true
+      },
+      {
+        "name": "a-pip-2.mov",
+        "parts": [
+          "a-pip-2.mov"
+        ],
+        "expectedFrames": 1088,
+        "actualFrames": 1088,
+        "differentFrames": 0,
+        "firstDifferences": [],
+        "audioMatches": true
+      },
+      {
+        "name": "avatar-loop.mov",
+        "parts": [
+          "avatar-loop.mov"
+        ],
+        "expectedFrames": 60,
+        "actualFrames": 60,
+        "differentFrames": 0,
+        "firstDifferences": []
+      },
+      {
+        "name": "captions-ccbadb0b.mov",
+        "parts": [
+          "captions-91f5ba12.mov"
+        ],
+        "expectedFrames": 4028,
+        "actualFrames": 4028,
+        "differentFrames": 0,
+        "firstDifferences": []
+      },
+      {
+        "name": "cover.mov",
+        "parts": [
+          "cover.mov"
+        ],
+        "expectedFrames": 1,
+        "actualFrames": 1,
+        "differentFrames": 0,
+        "firstDifferences": []
+      },
+      {
+        "name": "cover_first_frame.mov",
+        "parts": [
+          "封面首帧.png"
+        ],
+        "expectedFrames": 1,
+        "actualFrames": 1,
+        "differentFrames": 1,
+        "firstDifferences": [
+          0
+        ]
+      },
+      {
+        "name": "p01.mov",
+        "parts": [
+          "p01.mov"
+        ],
+        "expectedFrames": 163,
+        "actualFrames": 163,
+        "differentFrames": 0,
+        "firstDifferences": []
+      },
+      {
+        "name": "p02.mov",
+        "parts": [
+          "p02.mov"
+        ],
+        "expectedFrames": 153,
+        "actualFrames": 153,
+        "differentFrames": 1,
+        "firstDifferences": [
+          1
+        ]
+      },
+      {
+        "name": "p03.mov",
+        "parts": [
+          "p03.mov"
+        ],
+        "expectedFrames": 140,
+        "actualFrames": 140,
+        "differentFrames": 0,
+        "firstDifferences": []
+      },
+      {
+        "name": "p04.mov",
+        "parts": [
+          "p04.mov",
+          "p04.part-1.mov"
+        ],
+        "expectedFrames": 99,
+        "actualFrames": 99,
+        "differentFrames": 0,
+        "firstDifferences": []
+      },
+      {
+        "name": "p05.mov",
+        "parts": [
+          "p05.mov",
+          "p05.part-1.mov"
+        ],
+        "expectedFrames": 266,
+        "actualFrames": 266,
+        "differentFrames": 0,
+        "firstDifferences": []
+      },
+      {
+        "name": "p06.mov",
+        "parts": [
+          "p06.mov",
+          "p06.part-1.mov"
+        ],
+        "expectedFrames": 116,
+        "actualFrames": 116,
+        "differentFrames": 0,
+        "firstDifferences": []
+      },
+      {
+        "name": "p07.mov",
+        "parts": [
+          "p07.mov",
+          "p07.part-1.mov"
+        ],
+        "expectedFrames": 212,
+        "actualFrames": 212,
+        "differentFrames": 0,
+        "firstDifferences": []
+      },
+      {
+        "name": "p08.mov",
+        "parts": [
+          "p08.mov",
+          "p08.part-1.mov"
+        ],
+        "expectedFrames": 127,
+        "actualFrames": 127,
+        "differentFrames": 0,
+        "firstDifferences": []
+      },
+      {
+        "name": "p09.mov",
+        "parts": [
+          "p09.mov",
+          "p09.part-1.mov"
+        ],
+        "expectedFrames": 178,
+        "actualFrames": 178,
+        "differentFrames": 148,
+        "firstDifferences": [
+          30,
+          31,
+          32,
+          33,
+          34,
+          35,
+          36,
+          37,
+          38,
+          39,
+          40,
+          41
+        ]
+      },
+      {
+        "name": "p10.mov",
+        "parts": [
+          "p10.mov",
+          "p10.part-1.mov"
+        ],
+        "expectedFrames": 142,
+        "actualFrames": 142,
+        "differentFrames": 0,
+        "firstDifferences": []
+      },
+      {
+        "name": "p11.mov",
+        "parts": [
+          "p11.mov",
+          "p11.part-1.mov"
+        ],
+        "expectedFrames": 124,
+        "actualFrames": 124,
+        "differentFrames": 8,
+        "firstDifferences": [
+          1,
+          2,
+          3,
+          105,
+          107,
+          109,
+          111,
+          113
+        ]
+      },
+      {
+        "name": "p12.mov",
+        "parts": [
+          "p12.mov",
+          "p12.part-1.mov"
+        ],
+        "expectedFrames": 213,
+        "actualFrames": 213,
+        "differentFrames": 182,
+        "firstDifferences": [
+          23,
+          26,
+          27,
+          34,
+          35,
+          36,
+          37,
+          38,
+          39,
+          40,
+          41,
+          42
+        ]
+      },
+      {
+        "name": "p13.mov",
+        "parts": [
+          "p13.mov",
+          "p13.part-1.mov"
+        ],
+        "expectedFrames": 244,
+        "actualFrames": 244,
+        "differentFrames": 0,
+        "firstDifferences": []
+      },
+      {
+        "name": "p14.mov",
+        "parts": [
+          "p14.mov",
+          "p14.part-1.mov"
+        ],
+        "expectedFrames": 175,
+        "actualFrames": 175,
+        "differentFrames": 0,
+        "firstDifferences": []
+      },
+      {
+        "name": "p15.mov",
+        "parts": [
+          "p15.mov"
+        ],
+        "expectedFrames": 181,
+        "actualFrames": 181,
+        "differentFrames": 0,
+        "firstDifferences": []
+      },
+      {
+        "name": "p16.mov",
+        "parts": [
+          "p16.mov",
+          "p16.part-1.mov"
+        ],
+        "expectedFrames": 232,
+        "actualFrames": 232,
+        "differentFrames": 0,
+        "firstDifferences": []
+      },
+      {
+        "name": "p17.mov",
+        "parts": [
+          "p17.mov",
+          "p17.part-1.mov"
+        ],
+        "expectedFrames": 114,
+        "actualFrames": 114,
+        "differentFrames": 0,
+        "firstDifferences": []
+      },
+      {
+        "name": "p18.mov",
+        "parts": [
+          "p18.mov",
+          "p18.part-1.mov"
+        ],
+        "expectedFrames": 255,
+        "actualFrames": 255,
+        "differentFrames": 0,
+        "firstDifferences": []
+      },
+      {
+        "name": "p19.mov",
+        "parts": [
+          "p19.mov",
+          "p19.part-1.mov"
+        ],
+        "expectedFrames": 207,
+        "actualFrames": 207,
+        "differentFrames": 0,
+        "firstDifferences": []
+      },
+      {
+        "name": "p20.mov",
+        "parts": [
+          "p20.mov",
+          "p20.part-1.mov"
+        ],
+        "expectedFrames": 149,
+        "actualFrames": 149,
+        "differentFrames": 0,
+        "firstDifferences": []
+      },
+      {
+        "name": "p21.mov",
+        "parts": [
+          "p21.mov",
+          "p21.part-1.mov"
+        ],
+        "expectedFrames": 131,
+        "actualFrames": 131,
+        "differentFrames": 0,
+        "firstDifferences": []
+      },
+      {
+        "name": "p22.mov",
+        "parts": [
+          "p22.mov"
+        ],
+        "expectedFrames": 156,
+        "actualFrames": 156,
+        "differentFrames": 5,
+        "firstDifferences": [
+          0,
+          64,
+          89,
+          91,
+          95
+        ]
+      },
+      {
+        "name": "p23.mov",
+        "parts": [
+          "p23.mov"
+        ],
+        "expectedFrames": 160,
+        "actualFrames": 160,
+        "differentFrames": 0,
+        "firstDifferences": []
+      },
+      {
+        "name": "p24.mov",
+        "parts": [
+          "p24.mov"
+        ],
+        "expectedFrames": 91,
+        "actualFrames": 91,
+        "differentFrames": 0,
+        "firstDifferences": []
+      },
+      {
+        "name": "p25.mov",
+        "parts": [
+          "p25.mov",
+          "p25.part-1.mov"
+        ],
+        "expectedFrames": 60,
+        "actualFrames": 60,
+        "differentFrames": 0,
+        "firstDifferences": []
+      }
+    ]
+  },
+  "editorReadback": {
+    "file": "/Users/river/Movies/OpenFilm RGB Range QA 1115.mov",
+    "pngControl": {
+      "frames": 60,
+      "mae": 1.7064661190414951,
+      "rmse": 4.7489709499627955,
+      "max": 220,
+      "meanRgbDelta": [
+        -0.3478148067772634,
+        -0.34499463091563787,
+        -0.3272172952031893
+      ],
+      "differentSamples": 236639219,
+      "totalSamples": 373248000
+    },
+    "pngVsRgbTv": {
+      "frames": 60,
+      "mae": 1.824503820516118,
+      "rmse": 3.1009915179879255,
+      "max": 201,
+      "meanRgbDelta": [
+        -0.18925886541923867,
+        -0.45092261445473253,
+        -0.37683004597479425
+      ],
+      "differentSamples": 290053879,
+      "totalSamples": 373248000
+    },
+    "pipControl": {
+      "frames": 30,
+      "mae": 0.11659591478052127,
+      "rmse": 1.0155650570576944,
+      "max": 182,
+      "meanRgbDelta": [
+        -0.004801343878600823,
+        -0.002867380401234568,
+        -0.0014983281893004114
+      ],
+      "differentSamples": 8598947,
+      "totalSamples": 186624000
+    },
+    "fullVsCrop": {
+      "frames": 30,
+      "mae": 0.17336908972050755,
+      "rmse": 1.0805695618796134,
+      "max": 188,
+      "meanRgbDelta": [
+        -0.011098894032921811,
+        -0.0008133680555555556,
+        -0.016462593235596706
+      ],
+      "differentSamples": 12063606,
+      "totalSamples": 186624000
+    }
+  },
+  "rendererRoundingExample": {
+    "frame": 30,
+    "bytes": 8294400,
+    "mae": 2.4112654320987655e-07,
+    "rmse": 0.0004910463758239914,
+    "max": 1,
+    "differentSamples": 2,
+    "bbox": [
+      109,
+      406,
+      109,
+      406
+    ]
+  },
+  "originalMediaIntegrity": [
+    {
+      "name": "a-roll.mp4",
+      "source": "/tmp/openfilm-export-perf-20261115/T12/assets/a-roll.mp4",
+      "sha256": "277ca45f778359554205ac3fb52c6153d65096adc8af9d47f39a78b3d08a7108",
+      "originalSha256": "277ca45f778359554205ac3fb52c6153d65096adc8af9d47f39a78b3d08a7108"
+    },
+    {
+      "name": "avatar-loop.mp4",
+      "source": "/tmp/openfilm-export-perf-20261115/T12/assets/avatar-loop.mp4",
+      "sha256": "b85afa9f48f22f3ba5ca0e15d93f5d21c6df0245a1f3ae53a083100f8c306820",
+      "originalSha256": "b85afa9f48f22f3ba5ca0e15d93f5d21c6df0245a1f3ae53a083100f8c306820"
+    },
+    {
+      "name": "bgm.wav",
+      "source": "/tmp/openfilm-export-perf-20261115/T12/assets/bgm.wav",
+      "sha256": "c6387b91e6834db6f064ac39933eed3ef6608c13ccf357d5d165559c69e62d01",
+      "originalSha256": "c6387b91e6834db6f064ac39933eed3ef6608c13ccf357d5d165559c69e62d01"
+    },
+    {
+      "name": "check_mark_0.3s.wav",
+      "source": "/tmp/openfilm-export-perf-20261115/T12/assets/sfx/check_mark_0.3s.wav",
+      "sha256": "2e1fe5aa0ed42431e776467484a707c9e6211494a6c138ac0918acb8a52656ff",
+      "originalSha256": "2e1fe5aa0ed42431e776467484a707c9e6211494a6c138ac0918acb8a52656ff"
+    },
+    {
+      "name": "impact_deep_1.8s.wav",
+      "source": "/tmp/openfilm-export-perf-20261115/T12/assets/sfx/impact_deep_1.8s.wav",
+      "sha256": "cd02f60c969443dcbee968ad780b91d18be51247c22497370b6cc18f69562cb9",
+      "originalSha256": "cd02f60c969443dcbee968ad780b91d18be51247c22497370b6cc18f69562cb9"
+    },
+    {
+      "name": "paper_flip_0.5s.wav",
+      "source": "/tmp/openfilm-export-perf-20261115/T12/assets/sfx/paper_flip_0.5s.wav",
+      "sha256": "187dbae2585785535a7bb4a901c5c39873d799e398a32030149d65c75ea86f99",
+      "originalSha256": "187dbae2585785535a7bb4a901c5c39873d799e398a32030149d65c75ea86f99"
+    },
+    {
+      "name": "riser_1.6s.wav",
+      "source": "/tmp/openfilm-export-perf-20261115/T12/assets/sfx/riser_1.6s.wav",
+      "sha256": "53be5e672d067d87fca199ee4d8774d3d32af8726eee7995c7ce19b910453867",
+      "originalSha256": "53be5e672d067d87fca199ee4d8774d3d32af8726eee7995c7ce19b910453867"
+    },
+    {
+      "name": "stamp_slam_0.6s.wav",
+      "source": "/tmp/openfilm-export-perf-20261115/T12/assets/sfx/stamp_slam_0.6s.wav",
+      "sha256": "e147037bce8fedb9f0a9ab22f51d5bd09cf68d37525b0898261baecd37832e40",
+      "originalSha256": "e147037bce8fedb9f0a9ab22f51d5bd09cf68d37525b0898261baecd37832e40"
+    },
+    {
+      "name": "ui_tick_0.15s.wav",
+      "source": "/tmp/openfilm-export-perf-20261115/T12/assets/sfx/ui_tick_0.15s.wav",
+      "sha256": "3f8e5fd0d6a1933d88615bb595efa67db592bf82e6bbdbcfd982605bfd875edd",
+      "originalSha256": "3f8e5fd0d6a1933d88615bb595efa67db592bf82e6bbdbcfd982605bfd875edd"
+    },
+    {
+      "name": "vo.wav",
+      "source": "/tmp/openfilm-export-perf-20261115/T12/assets/vo.wav",
+      "sha256": "ce9dccfdd86a9d2b5ce715a010412918db866f05d9063cf086e35781777f39b1",
+      "originalSha256": "ce9dccfdd86a9d2b5ce715a010412918db866f05d9063cf086e35781777f39b1"
+    },
+    {
+      "name": "whoosh_short_0.97s.wav",
+      "source": "/tmp/openfilm-export-perf-20261115/T12/assets/sfx/whoosh_short_0.97s.wav",
+      "sha256": "59693737e97e5cbd66f58a934d8c54394e299b1722e823e8c224ba0fb323598c",
+      "originalSha256": "59693737e97e5cbd66f58a934d8c54394e299b1722e823e8c224ba0fb323598c"
+    },
+    {
+      "name": "封面首帧.png",
+      "source": "/tmp/openfilm-export-perf-20261115/T12/assets/封面首帧.png",
+      "sha256": "dbbdad503b59c746dc438264760610d607a596f523d35faa80863dee04b167a8",
+      "originalSha256": "dbbdad503b59c746dc438264760610d607a596f523d35faa80863dee04b167a8"
+    }
+  ],
+  "fullJianyingExport": {
+    "programs": [],
+    "stream_groups": [],
+    "streams": [
+      {
+        "codec_name": "h264",
+        "width": 1080,
+        "height": 1920,
+        "pix_fmt": "yuv420p",
+        "avg_frame_rate": "30/1",
+        "nb_frames": "4028"
+      },
+      {
+        "codec_name": "aac",
+        "sample_rate": "44100",
+        "channels": 2,
+        "avg_frame_rate": "0/0",
+        "nb_frames": "5785"
+      }
+    ],
+    "format": {
+      "duration": "134.266667",
+      "size": "199899564"
+    }
+  },
+  "note": "Single runs on Apple M5 16 GiB, 1080x1920 30 fps. Peak sizes are logical file sizes sampled once per second, not physical APFS allocation. Independent browser re-renders are not all bit-identical; inspect the comparison and repeatability evidence.",
+  "rendererRepeatability": [
+    {
+      "name": "p09",
+      "originalFrames": 178,
+      "oldEngineIsolatedFrames": 178,
+      "oldEngineRepeatDifferences": [
+        60,
+        61,
+        62,
+        63,
+        64,
+        65,
+        66,
+        67,
+        68,
+        69,
+        70,
+        71,
+        72,
+        73,
+        74,
+        75,
+        76,
+        77,
+        78,
+        79,
+        80,
+        81,
+        82,
+        83,
+        84,
+        85,
+        86,
+        87,
+        88,
+        89,
+        150,
+        151,
+        152,
+        153,
+        154,
+        155,
+        156,
+        157,
+        158,
+        159,
+        160,
+        161,
+        162,
+        163,
+        164,
+        165,
+        166,
+        167,
+        168,
+        169,
+        170,
+        171,
+        172,
+        173,
+        174,
+        175,
+        176,
+        177
+      ],
+      "isolatedVsCandidateDifferences": [
+        30,
+        31,
+        32,
+        33,
+        34,
+        35,
+        36,
+        37,
+        38,
+        39,
+        40,
+        41,
+        42,
+        43,
+        44,
+        45,
+        46,
+        47,
+        48,
+        49,
+        50,
+        51,
+        52,
+        53,
+        54,
+        55,
+        56,
+        57,
+        58,
+        59,
+        90,
+        91,
+        92,
+        93,
+        94,
+        95,
+        96,
+        97,
+        98,
+        99,
+        100,
+        101,
+        102,
+        103,
+        104,
+        105,
+        106,
+        107,
+        108,
+        109,
+        110,
+        111,
+        112,
+        113,
+        114,
+        115,
+        116,
+        117,
+        118,
+        119,
+        120,
+        121,
+        122,
+        123,
+        124,
+        125,
+        126,
+        127,
+        128,
+        129,
+        130,
+        131,
+        132,
+        133,
+        134,
+        135,
+        136,
+        137,
+        138,
+        139,
+        140,
+        141,
+        142,
+        143,
+        144,
+        145,
+        146,
+        147,
+        148,
+        149
+      ]
+    },
+    {
+      "name": "p12",
+      "originalFrames": 213,
+      "oldEngineIsolatedFrames": 212,
+      "oldEngineRepeatDifferences": [
+        23,
+        26,
+        27,
+        34,
+        35,
+        36,
+        37,
+        38,
+        39,
+        40,
+        41,
+        42,
+        43,
+        44,
+        45,
+        46,
+        47,
+        48,
+        49,
+        50,
+        51,
+        52,
+        53,
+        54,
+        55,
+        56,
+        57,
+        58,
+        59,
+        60,
+        61,
+        62,
+        63,
+        64,
+        65,
+        66,
+        67,
+        68,
+        69,
+        70,
+        71,
+        72,
+        73,
+        74,
+        75,
+        76,
+        77,
+        78,
+        79,
+        80,
+        81,
+        82,
+        83,
+        84,
+        85,
+        86,
+        87,
+        88,
+        89,
+        90,
+        91,
+        92,
+        93,
+        94,
+        95,
+        96,
+        97,
+        98,
+        99,
+        100,
+        101,
+        102,
+        103,
+        104,
+        105,
+        106,
+        107,
+        108,
+        109,
+        110,
+        111,
+        112,
+        113,
+        114,
+        115,
+        116,
+        117,
+        118,
+        119,
+        120,
+        121,
+        122,
+        123,
+        124,
+        125,
+        126,
+        127,
+        128,
+        129,
+        130,
+        131,
+        132,
+        133,
+        134,
+        135,
+        136,
+        137,
+        138,
+        139,
+        140,
+        141,
+        142,
+        143,
+        144,
+        145,
+        146,
+        147,
+        148,
+        149,
+        150,
+        151,
+        152,
+        153,
+        154,
+        155,
+        156,
+        157,
+        158,
+        159,
+        160,
+        161,
+        162,
+        163,
+        164,
+        165,
+        166,
+        167,
+        168,
+        169,
+        170,
+        171,
+        172,
+        173,
+        174,
+        175,
+        176,
+        177,
+        178,
+        179,
+        180,
+        181,
+        182,
+        183,
+        184,
+        185,
+        186,
+        187,
+        188,
+        189,
+        190,
+        191,
+        192,
+        193,
+        194,
+        195,
+        196,
+        197,
+        198,
+        199,
+        200,
+        201,
+        202,
+        203,
+        204,
+        205,
+        206,
+        207,
+        208,
+        209,
+        210,
+        211
+      ],
+      "isolatedVsCandidateDifferences": []
+    }
+  ],
+  "deliveredDraftBytesAfterEditorImport": 2939706202,
+  "sourceClockCoverage": {
+    "opaqueRgbFrames": 2961,
+    "transparentHeadFrames": 83,
+    "croppedFramesMatchingBaseline": 7072,
+    "fullFootageFramesMatchingBaseline": 1044
+  },
+  "fullDecodeChecks": {
+    "completed": true,
+    "blackIntervalMinimumSeconds": 0.1,
+    "blackIntervals": [],
+    "silenceMinimumSeconds": 2,
+    "silenceThresholdDb": -50,
+    "silenceIntervals": []
+  },
+  "validation": {
+    "fullRelatedRegressionTests": {
+      "tests": 144,
+      "passed": 144
+    },
+    "finalGuardRegressionTests": {
+      "tests": 27,
+      "passed": 27
+    },
+    "distinctCoveredTests": 147,
+    "typecheckPassed": true,
+    "workingTreeWhitespaceCheckPassed": true,
+    "externalSourcesDoNotCache": true,
+    "localCacheHitAndInvalidationVerified": true,
+    "editsDuringExportDoNotMislabelCache": true
+  }
+}

@@ -1,0 +1,1681 @@
+{
+  "scope": {
+    "pr": 348,
+    "issue": 88,
+    "discussion": 28,
+    "localHead": "defa3db2ccdf0c137f5bc8388b973ca0191aa704",
+    "remoteMain": "0bc08008d933af7d42ef73a53cae384e2f54e6eb",
+    "machine": "Apple M5, 16 GiB, ffmpeg 8.1.1",
+    "scopeNote": "Full item inventory and topical screening; export-related implementation review, not a line-by-line review of every PR diff."
+  },
+  "project": "社区体检T12",
+  "sizeBytes": 5585786936,
+  "draftProbes": [
+    {
+      "file": "media/cover_first_frame.mov",
+      "bytes": 69542,
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "index": 0,
+          "codec_name": "h264",
+          "codec_type": "video",
+          "width": 1080,
+          "height": 1920,
+          "pix_fmt": "yuv420p",
+          "color_range": "tv",
+          "color_space": "bt709",
+          "color_transfer": "bt709",
+          "color_primaries": "bt709",
+          "r_frame_rate": "30/1",
+          "avg_frame_rate": "30/1",
+          "nb_frames": "1"
+        }
+      ],
+      "format": {
+        "duration": "0.033333",
+        "size": "69542",
+        "bit_rate": "16690246"
+      }
+    },
+    {
+      "file": "media/cover.mov",
+      "bytes": 69542,
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "index": 0,
+          "codec_name": "h264",
+          "codec_type": "video",
+          "width": 1080,
+          "height": 1920,
+          "pix_fmt": "yuv420p",
+          "color_range": "tv",
+          "color_space": "bt709",
+          "color_transfer": "bt709",
+          "color_primaries": "bt709",
+          "r_frame_rate": "30/1",
+          "avg_frame_rate": "30/1",
+          "nb_frames": "1"
+        }
+      ],
+      "format": {
+        "duration": "0.033333",
+        "size": "69542",
+        "bit_rate": "16690246"
+      }
+    },
+    {
+      "file": "media/a-full-1.mov",
+      "bytes": 39483201,
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "index": 0,
+          "codec_name": "h264",
+          "codec_type": "video",
+          "width": 1080,
+          "height": 1920,
+          "pix_fmt": "yuv420p",
+          "color_range": "tv",
+          "color_space": "bt709",
+          "color_transfer": "bt709",
+          "color_primaries": "bt709",
+          "r_frame_rate": "30/1",
+          "avg_frame_rate": "30/1",
+          "nb_frames": "456"
+        },
+        {
+          "index": 1,
+          "codec_name": "pcm_s16le",
+          "codec_type": "audio",
+          "r_frame_rate": "0/0",
+          "avg_frame_rate": "0/0",
+          "nb_frames": "729600"
+        }
+      ],
+      "format": {
+        "duration": "15.200000",
+        "size": "39483201",
+        "bit_rate": "20780632"
+      }
+    },
+    {
+      "file": "media/a-full-2.mov",
+      "bytes": 15853314,
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "index": 0,
+          "codec_name": "h264",
+          "codec_type": "video",
+          "width": 1080,
+          "height": 1920,
+          "pix_fmt": "yuv420p",
+          "color_range": "tv",
+          "color_space": "bt709",
+          "color_transfer": "bt709",
+          "color_primaries": "bt709",
+          "r_frame_rate": "30/1",
+          "avg_frame_rate": "30/1",
+          "nb_frames": "181"
+        },
+        {
+          "index": 1,
+          "codec_name": "pcm_s16le",
+          "codec_type": "audio",
+          "r_frame_rate": "0/0",
+          "avg_frame_rate": "0/0",
+          "nb_frames": "289600"
+        }
+      ],
+      "format": {
+        "duration": "6.033333",
+        "size": "15853314",
+        "bit_rate": "21020970"
+      }
+    },
+    {
+      "file": "media/p18.mov",
+      "bytes": 186618793,
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "index": 0,
+          "codec_name": "png",
+          "codec_type": "video",
+          "width": 1080,
+          "height": 1920,
+          "pix_fmt": "rgba",
+          "color_range": "pc",
+          "color_space": "gbr",
+          "r_frame_rate": "30/1",
+          "avg_frame_rate": "30/1",
+          "nb_frames": "255"
+        }
+      ],
+      "format": {
+        "duration": "8.500000",
+        "size": "186618793",
+        "bit_rate": "175641216"
+      }
+    },
+    {
+      "file": "media/p24.mov",
+      "bytes": 54414693,
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "index": 0,
+          "codec_name": "png",
+          "codec_type": "video",
+          "width": 1080,
+          "height": 1920,
+          "pix_fmt": "rgba",
+          "color_range": "pc",
+          "color_space": "gbr",
+          "r_frame_rate": "30/1",
+          "avg_frame_rate": "30/1",
+          "nb_frames": "91"
+        }
+      ],
+      "format": {
+        "duration": "3.033333",
+        "size": "54414693",
+        "bit_rate": "143511294"
+      }
+    },
+    {
+      "file": "media/p25.mov",
+      "bytes": 18535899,
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "index": 0,
+          "codec_name": "png",
+          "codec_type": "video",
+          "width": 1080,
+          "height": 1920,
+          "pix_fmt": "rgba",
+          "color_range": "pc",
+          "color_space": "gbr",
+          "r_frame_rate": "30/1",
+          "avg_frame_rate": "30/1",
+          "nb_frames": "60"
+        }
+      ],
+      "format": {
+        "duration": "2.000000",
+        "size": "18535899",
+        "bit_rate": "74143596"
+      }
+    },
+    {
+      "file": "media/p19.mov",
+      "bytes": 79347454,
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "index": 0,
+          "codec_name": "png",
+          "codec_type": "video",
+          "width": 1080,
+          "height": 1920,
+          "pix_fmt": "rgba",
+          "color_range": "pc",
+          "color_space": "gbr",
+          "r_frame_rate": "30/1",
+          "avg_frame_rate": "30/1",
+          "nb_frames": "207"
+        }
+      ],
+      "format": {
+        "duration": "6.900000",
+        "size": "79347454",
+        "bit_rate": "91997048"
+      }
+    },
+    {
+      "file": "media/a-full-3.mov",
+      "bytes": 37338823,
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "index": 0,
+          "codec_name": "h264",
+          "codec_type": "video",
+          "width": 1080,
+          "height": 1920,
+          "pix_fmt": "yuv420p",
+          "color_range": "tv",
+          "color_space": "bt709",
+          "color_transfer": "bt709",
+          "color_primaries": "bt709",
+          "r_frame_rate": "30/1",
+          "avg_frame_rate": "30/1",
+          "nb_frames": "407"
+        },
+        {
+          "index": 1,
+          "codec_name": "pcm_s16le",
+          "codec_type": "audio",
+          "r_frame_rate": "0/0",
+          "avg_frame_rate": "0/0",
+          "nb_frames": "651200"
+        }
+      ],
+      "format": {
+        "duration": "13.566667",
+        "size": "37338823",
+        "bit_rate": "22017978"
+      }
+    },
+    {
+      "file": "media/p21.mov",
+      "bytes": 95406275,
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "index": 0,
+          "codec_name": "png",
+          "codec_type": "video",
+          "width": 1080,
+          "height": 1920,
+          "pix_fmt": "rgba",
+          "color_range": "pc",
+          "color_space": "gbr",
+          "r_frame_rate": "30/1",
+          "avg_frame_rate": "30/1",
+          "nb_frames": "131"
+        }
+      ],
+      "format": {
+        "duration": "4.366667",
+        "size": "95406275",
+        "bit_rate": "174790108"
+      }
+    },
+    {
+      "file": "media/p09.mov",
+      "bytes": 42189292,
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "index": 0,
+          "codec_name": "png",
+          "codec_type": "video",
+          "width": 1080,
+          "height": 1920,
+          "pix_fmt": "rgba",
+          "color_range": "pc",
+          "color_space": "gbr",
+          "r_frame_rate": "30/1",
+          "avg_frame_rate": "30/1",
+          "nb_frames": "178"
+        }
+      ],
+      "format": {
+        "duration": "5.933333",
+        "size": "42189292",
+        "bit_rate": "56884441"
+      }
+    },
+    {
+      "file": "media/avatar-loop.mov",
+      "bytes": 10245202,
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "index": 0,
+          "codec_name": "png",
+          "codec_type": "video",
+          "width": 1080,
+          "height": 1920,
+          "pix_fmt": "rgba",
+          "color_range": "pc",
+          "color_space": "gbr",
+          "r_frame_rate": "30/1",
+          "avg_frame_rate": "30/1",
+          "nb_frames": "60"
+        }
+      ],
+      "format": {
+        "duration": "2.000000",
+        "size": "10245202",
+        "bit_rate": "40980808"
+      }
+    },
+    {
+      "file": "media/p08.mov",
+      "bytes": 40472619,
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "index": 0,
+          "codec_name": "png",
+          "codec_type": "video",
+          "width": 1080,
+          "height": 1920,
+          "pix_fmt": "rgba",
+          "color_range": "pc",
+          "color_space": "gbr",
+          "r_frame_rate": "30/1",
+          "avg_frame_rate": "30/1",
+          "nb_frames": "127"
+        }
+      ],
+      "format": {
+        "duration": "4.233333",
+        "size": "40472619",
+        "bit_rate": "76483695"
+      }
+    },
+    {
+      "file": "media/p20.mov",
+      "bytes": 361974399,
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "index": 0,
+          "codec_name": "png",
+          "codec_type": "video",
+          "width": 1080,
+          "height": 1920,
+          "pix_fmt": "rgba",
+          "color_range": "pc",
+          "color_space": "gbr",
+          "r_frame_rate": "30/1",
+          "avg_frame_rate": "30/1",
+          "nb_frames": "149"
+        }
+      ],
+      "format": {
+        "duration": "4.966667",
+        "size": "361974399",
+        "bit_rate": "583045972"
+      }
+    },
+    {
+      "file": "media/p22.mov",
+      "bytes": 164571546,
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "index": 0,
+          "codec_name": "png",
+          "codec_type": "video",
+          "width": 1080,
+          "height": 1920,
+          "pix_fmt": "rgba",
+          "color_range": "pc",
+          "color_space": "gbr",
+          "r_frame_rate": "30/1",
+          "avg_frame_rate": "30/1",
+          "nb_frames": "156"
+        }
+      ],
+      "format": {
+        "duration": "5.200000",
+        "size": "164571546",
+        "bit_rate": "253186993"
+      }
+    },
+    {
+      "file": "media/p23.mov",
+      "bytes": 105285077,
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "index": 0,
+          "codec_name": "png",
+          "codec_type": "video",
+          "width": 1080,
+          "height": 1920,
+          "pix_fmt": "rgba",
+          "color_range": "pc",
+          "color_space": "gbr",
+          "r_frame_rate": "30/1",
+          "avg_frame_rate": "30/1",
+          "nb_frames": "160"
+        }
+      ],
+      "format": {
+        "duration": "5.333333",
+        "size": "105285077",
+        "bit_rate": "157927625"
+      }
+    },
+    {
+      "file": "media/p12.mov",
+      "bytes": 470171553,
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "index": 0,
+          "codec_name": "png",
+          "codec_type": "video",
+          "width": 1080,
+          "height": 1920,
+          "pix_fmt": "rgba",
+          "color_range": "pc",
+          "color_space": "gbr",
+          "r_frame_rate": "30/1",
+          "avg_frame_rate": "30/1",
+          "nb_frames": "213"
+        }
+      ],
+      "format": {
+        "duration": "7.100000",
+        "size": "470171553",
+        "bit_rate": "529770763"
+      }
+    },
+    {
+      "file": "media/p06.mov",
+      "bytes": 43610368,
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "index": 0,
+          "codec_name": "png",
+          "codec_type": "video",
+          "width": 1080,
+          "height": 1920,
+          "pix_fmt": "rgba",
+          "color_range": "pc",
+          "color_space": "gbr",
+          "r_frame_rate": "30/1",
+          "avg_frame_rate": "30/1",
+          "nb_frames": "116"
+        }
+      ],
+      "format": {
+        "duration": "3.866667",
+        "size": "43610368",
+        "bit_rate": "90228339"
+      }
+    },
+    {
+      "file": "media/a-pip-1.mov",
+      "bytes": 347657924,
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "index": 0,
+          "codec_name": "png",
+          "codec_type": "video",
+          "width": 1080,
+          "height": 1920,
+          "pix_fmt": "rgba",
+          "color_range": "pc",
+          "color_space": "gbr",
+          "r_frame_rate": "30/1",
+          "avg_frame_rate": "30/1",
+          "nb_frames": "1896"
+        },
+        {
+          "index": 1,
+          "codec_name": "pcm_s16le",
+          "codec_type": "audio",
+          "r_frame_rate": "0/0",
+          "avg_frame_rate": "0/0",
+          "nb_frames": "3033600"
+        }
+      ],
+      "format": {
+        "duration": "63.200000",
+        "size": "347657924",
+        "bit_rate": "44007332"
+      }
+    },
+    {
+      "file": "media/p07.mov",
+      "bytes": 314695551,
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "index": 0,
+          "codec_name": "png",
+          "codec_type": "video",
+          "width": 1080,
+          "height": 1920,
+          "pix_fmt": "rgba",
+          "color_range": "pc",
+          "color_space": "gbr",
+          "r_frame_rate": "30/1",
+          "avg_frame_rate": "30/1",
+          "nb_frames": "212"
+        }
+      ],
+      "format": {
+        "duration": "7.066667",
+        "size": "314695551",
+        "bit_rate": "356259097"
+      }
+    },
+    {
+      "file": "media/p13.mov",
+      "bytes": 335929126,
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "index": 0,
+          "codec_name": "png",
+          "codec_type": "video",
+          "width": 1080,
+          "height": 1920,
+          "pix_fmt": "rgba",
+          "color_range": "pc",
+          "color_space": "gbr",
+          "r_frame_rate": "30/1",
+          "avg_frame_rate": "30/1",
+          "nb_frames": "244"
+        }
+      ],
+      "format": {
+        "duration": "8.133333",
+        "size": "335929126",
+        "bit_rate": "330422104"
+      }
+    },
+    {
+      "file": "media/p05.mov",
+      "bytes": 473636933,
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "index": 0,
+          "codec_name": "png",
+          "codec_type": "video",
+          "width": 1080,
+          "height": 1920,
+          "pix_fmt": "rgba",
+          "color_range": "pc",
+          "color_space": "gbr",
+          "r_frame_rate": "30/1",
+          "avg_frame_rate": "30/1",
+          "nb_frames": "266"
+        }
+      ],
+      "format": {
+        "duration": "8.866667",
+        "size": "473636933",
+        "bit_rate": "427341577"
+      }
+    },
+    {
+      "file": "media/p11.mov",
+      "bytes": 257554779,
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "index": 0,
+          "codec_name": "png",
+          "codec_type": "video",
+          "width": 1080,
+          "height": 1920,
+          "pix_fmt": "rgba",
+          "color_range": "pc",
+          "color_space": "gbr",
+          "r_frame_rate": "30/1",
+          "avg_frame_rate": "30/1",
+          "nb_frames": "124"
+        }
+      ],
+      "format": {
+        "duration": "4.133333",
+        "size": "257554779",
+        "bit_rate": "498493160"
+      }
+    },
+    {
+      "file": "media/a-pip-2.mov",
+      "bytes": 199329217,
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "index": 0,
+          "codec_name": "png",
+          "codec_type": "video",
+          "width": 1080,
+          "height": 1920,
+          "pix_fmt": "rgba",
+          "color_range": "pc",
+          "color_space": "gbr",
+          "r_frame_rate": "30/1",
+          "avg_frame_rate": "30/1",
+          "nb_frames": "1088"
+        },
+        {
+          "index": 1,
+          "codec_name": "pcm_s16le",
+          "codec_type": "audio",
+          "r_frame_rate": "0/0",
+          "avg_frame_rate": "0/0",
+          "nb_frames": "1740800"
+        }
+      ],
+      "format": {
+        "duration": "36.266667",
+        "size": "199329217",
+        "bit_rate": "43969679"
+      }
+    },
+    {
+      "file": "media/p10.mov",
+      "bytes": 45650173,
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "index": 0,
+          "codec_name": "png",
+          "codec_type": "video",
+          "width": 1080,
+          "height": 1920,
+          "pix_fmt": "rgba",
+          "color_range": "pc",
+          "color_space": "gbr",
+          "r_frame_rate": "30/1",
+          "avg_frame_rate": "30/1",
+          "nb_frames": "142"
+        }
+      ],
+      "format": {
+        "duration": "4.733333",
+        "size": "45650173",
+        "bit_rate": "77155227"
+      }
+    },
+    {
+      "file": "media/p04.mov",
+      "bytes": 23737055,
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "index": 0,
+          "codec_name": "png",
+          "codec_type": "video",
+          "width": 1080,
+          "height": 1920,
+          "pix_fmt": "rgba",
+          "color_range": "pc",
+          "color_space": "gbr",
+          "r_frame_rate": "30/1",
+          "avg_frame_rate": "30/1",
+          "nb_frames": "99"
+        }
+      ],
+      "format": {
+        "duration": "3.300000",
+        "size": "23737055",
+        "bit_rate": "57544375"
+      }
+    },
+    {
+      "file": "media/p14.mov",
+      "bytes": 63004831,
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "index": 0,
+          "codec_name": "png",
+          "codec_type": "video",
+          "width": 1080,
+          "height": 1920,
+          "pix_fmt": "rgba",
+          "color_range": "pc",
+          "color_space": "gbr",
+          "r_frame_rate": "30/1",
+          "avg_frame_rate": "30/1",
+          "nb_frames": "175"
+        }
+      ],
+      "format": {
+        "duration": "5.833333",
+        "size": "63004831",
+        "bit_rate": "86406630"
+      }
+    },
+    {
+      "file": "media/p15.mov",
+      "bytes": 199363028,
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "index": 0,
+          "codec_name": "png",
+          "codec_type": "video",
+          "width": 1080,
+          "height": 1920,
+          "pix_fmt": "rgba",
+          "color_range": "pc",
+          "color_space": "gbr",
+          "r_frame_rate": "30/1",
+          "avg_frame_rate": "30/1",
+          "nb_frames": "181"
+        }
+      ],
+      "format": {
+        "duration": "6.033333",
+        "size": "199363028",
+        "bit_rate": "264348781"
+      }
+    },
+    {
+      "file": "media/p01.mov",
+      "bytes": 173479638,
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "index": 0,
+          "codec_name": "png",
+          "codec_type": "video",
+          "width": 1080,
+          "height": 1920,
+          "pix_fmt": "rgba",
+          "color_range": "pc",
+          "color_space": "gbr",
+          "r_frame_rate": "30/1",
+          "avg_frame_rate": "30/1",
+          "nb_frames": "163"
+        }
+      ],
+      "format": {
+        "duration": "5.433333",
+        "size": "173479638",
+        "bit_rate": "255430157"
+      }
+    },
+    {
+      "file": "media/captions-f3f65df4.mov",
+      "bytes": 2551756,
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "index": 0,
+          "codec_name": "png",
+          "codec_type": "video",
+          "width": 1080,
+          "height": 1920,
+          "pix_fmt": "rgba",
+          "color_range": "pc",
+          "color_space": "gbr",
+          "r_frame_rate": "30/1",
+          "avg_frame_rate": "1245/2014",
+          "nb_frames": "83"
+        }
+      ],
+      "format": {
+        "duration": "134.266667",
+        "size": "2551756",
+        "bit_rate": "152041"
+      }
+    },
+    {
+      "file": "media/p17.mov",
+      "bytes": 52779447,
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "index": 0,
+          "codec_name": "png",
+          "codec_type": "video",
+          "width": 1080,
+          "height": 1920,
+          "pix_fmt": "rgba",
+          "color_range": "pc",
+          "color_space": "gbr",
+          "r_frame_rate": "30/1",
+          "avg_frame_rate": "30/1",
+          "nb_frames": "114"
+        }
+      ],
+      "format": {
+        "duration": "3.800000",
+        "size": "52779447",
+        "bit_rate": "111114625"
+      }
+    },
+    {
+      "file": "media/p03.mov",
+      "bytes": 147322516,
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "index": 0,
+          "codec_name": "png",
+          "codec_type": "video",
+          "width": 1080,
+          "height": 1920,
+          "pix_fmt": "rgba",
+          "color_range": "pc",
+          "color_space": "gbr",
+          "r_frame_rate": "30/1",
+          "avg_frame_rate": "30/1",
+          "nb_frames": "140"
+        }
+      ],
+      "format": {
+        "duration": "4.666667",
+        "size": "147322516",
+        "bit_rate": "252552866"
+      }
+    },
+    {
+      "file": "media/p02.mov",
+      "bytes": 595841246,
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "index": 0,
+          "codec_name": "png",
+          "codec_type": "video",
+          "width": 1080,
+          "height": 1920,
+          "pix_fmt": "rgba",
+          "color_range": "pc",
+          "color_space": "gbr",
+          "r_frame_rate": "30/1",
+          "avg_frame_rate": "30/1",
+          "nb_frames": "153"
+        }
+      ],
+      "format": {
+        "duration": "5.100000",
+        "size": "595841246",
+        "bit_rate": "934652934"
+      }
+    },
+    {
+      "file": "media/p16.mov",
+      "bytes": 583775177,
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "index": 0,
+          "codec_name": "png",
+          "codec_type": "video",
+          "width": 1080,
+          "height": 1920,
+          "pix_fmt": "rgba",
+          "color_range": "pc",
+          "color_space": "gbr",
+          "r_frame_rate": "30/1",
+          "avg_frame_rate": "30/1",
+          "nb_frames": "232"
+        }
+      ],
+      "format": {
+        "duration": "7.733333",
+        "size": "583775177",
+        "bit_rate": "603905381"
+      }
+    }
+  ],
+  "pageAlphaSpans": [
+    {
+      "file": "media/p18.mov",
+      "frames": 255,
+      "opaque": 251,
+      "bytes": 186618793,
+      "opaquePacketBytes": 184592615,
+      "runs": [
+        {
+          "start": 0,
+          "end": 4,
+          "opaque": false
+        },
+        {
+          "start": 4,
+          "end": 255,
+          "opaque": true
+        }
+      ],
+      "seconds": 2.89
+    },
+    {
+      "file": "media/p24.mov",
+      "frames": 91,
+      "opaque": 0,
+      "bytes": 54414693,
+      "opaquePacketBytes": 0,
+      "runs": [
+        {
+          "start": 0,
+          "end": 91,
+          "opaque": false
+        }
+      ],
+      "seconds": 1.34
+    },
+    {
+      "file": "media/p25.mov",
+      "frames": 60,
+      "opaque": 56,
+      "bytes": 18535899,
+      "opaquePacketBytes": 17102467,
+      "runs": [
+        {
+          "start": 0,
+          "end": 4,
+          "opaque": false
+        },
+        {
+          "start": 4,
+          "end": 60,
+          "opaque": true
+        }
+      ],
+      "seconds": 0.73
+    },
+    {
+      "file": "media/p19.mov",
+      "frames": 207,
+      "opaque": 199,
+      "bytes": 79347454,
+      "opaquePacketBytes": 78544278,
+      "runs": [
+        {
+          "start": 0,
+          "end": 8,
+          "opaque": false
+        },
+        {
+          "start": 8,
+          "end": 207,
+          "opaque": true
+        }
+      ],
+      "seconds": 2.74
+    },
+    {
+      "file": "media/p21.mov",
+      "frames": 131,
+      "opaque": 127,
+      "bytes": 95406275,
+      "opaquePacketBytes": 93320307,
+      "runs": [
+        {
+          "start": 0,
+          "end": 4,
+          "opaque": false
+        },
+        {
+          "start": 4,
+          "end": 131,
+          "opaque": true
+        }
+      ],
+      "seconds": 2.0
+    },
+    {
+      "file": "media/p09.mov",
+      "frames": 178,
+      "opaque": 173,
+      "bytes": 42189292,
+      "opaquePacketBytes": 41475978,
+      "runs": [
+        {
+          "start": 0,
+          "end": 5,
+          "opaque": false
+        },
+        {
+          "start": 5,
+          "end": 178,
+          "opaque": true
+        }
+      ],
+      "seconds": 1.8
+    },
+    {
+      "file": "media/p08.mov",
+      "frames": 127,
+      "opaque": 123,
+      "bytes": 40472619,
+      "opaquePacketBytes": 39528106,
+      "runs": [
+        {
+          "start": 0,
+          "end": 4,
+          "opaque": false
+        },
+        {
+          "start": 4,
+          "end": 127,
+          "opaque": true
+        }
+      ],
+      "seconds": 1.34
+    },
+    {
+      "file": "media/p20.mov",
+      "frames": 149,
+      "opaque": 145,
+      "bytes": 361974399,
+      "opaquePacketBytes": 353903066,
+      "runs": [
+        {
+          "start": 0,
+          "end": 4,
+          "opaque": false
+        },
+        {
+          "start": 4,
+          "end": 149,
+          "opaque": true
+        }
+      ],
+      "seconds": 1.89
+    },
+    {
+      "file": "media/p22.mov",
+      "frames": 156,
+      "opaque": 0,
+      "bytes": 164571546,
+      "opaquePacketBytes": 0,
+      "runs": [
+        {
+          "start": 0,
+          "end": 156,
+          "opaque": false
+        }
+      ],
+      "seconds": 1.78
+    },
+    {
+      "file": "media/p23.mov",
+      "frames": 160,
+      "opaque": 0,
+      "bytes": 105285077,
+      "opaquePacketBytes": 0,
+      "runs": [
+        {
+          "start": 0,
+          "end": 160,
+          "opaque": false
+        }
+      ],
+      "seconds": 2.0
+    },
+    {
+      "file": "media/p12.mov",
+      "frames": 213,
+      "opaque": 209,
+      "bytes": 470171553,
+      "opaquePacketBytes": 462772887,
+      "runs": [
+        {
+          "start": 0,
+          "end": 4,
+          "opaque": false
+        },
+        {
+          "start": 4,
+          "end": 213,
+          "opaque": true
+        }
+      ],
+      "seconds": 2.39
+    },
+    {
+      "file": "media/p06.mov",
+      "frames": 116,
+      "opaque": 112,
+      "bytes": 43610368,
+      "opaquePacketBytes": 42776995,
+      "runs": [
+        {
+          "start": 0,
+          "end": 4,
+          "opaque": false
+        },
+        {
+          "start": 4,
+          "end": 116,
+          "opaque": true
+        }
+      ],
+      "seconds": 1.33
+    },
+    {
+      "file": "media/p07.mov",
+      "frames": 212,
+      "opaque": 208,
+      "bytes": 314695551,
+      "opaquePacketBytes": 309795595,
+      "runs": [
+        {
+          "start": 0,
+          "end": 4,
+          "opaque": false
+        },
+        {
+          "start": 4,
+          "end": 212,
+          "opaque": true
+        }
+      ],
+      "seconds": 2.46
+    },
+    {
+      "file": "media/p13.mov",
+      "frames": 244,
+      "opaque": 238,
+      "bytes": 335929126,
+      "opaquePacketBytes": 328107535,
+      "runs": [
+        {
+          "start": 0,
+          "end": 6,
+          "opaque": false
+        },
+        {
+          "start": 6,
+          "end": 244,
+          "opaque": true
+        }
+      ],
+      "seconds": 2.77
+    },
+    {
+      "file": "media/p05.mov",
+      "frames": 266,
+      "opaque": 258,
+      "bytes": 473636933,
+      "opaquePacketBytes": 468577039,
+      "runs": [
+        {
+          "start": 0,
+          "end": 8,
+          "opaque": false
+        },
+        {
+          "start": 8,
+          "end": 266,
+          "opaque": true
+        }
+      ],
+      "seconds": 3.28
+    },
+    {
+      "file": "media/p11.mov",
+      "frames": 124,
+      "opaque": 121,
+      "bytes": 257554779,
+      "opaquePacketBytes": 251872667,
+      "runs": [
+        {
+          "start": 0,
+          "end": 3,
+          "opaque": false
+        },
+        {
+          "start": 3,
+          "end": 124,
+          "opaque": true
+        }
+      ],
+      "seconds": 1.6
+    },
+    {
+      "file": "media/p10.mov",
+      "frames": 142,
+      "opaque": 138,
+      "bytes": 45650173,
+      "opaquePacketBytes": 44863013,
+      "runs": [
+        {
+          "start": 0,
+          "end": 4,
+          "opaque": false
+        },
+        {
+          "start": 4,
+          "end": 142,
+          "opaque": true
+        }
+      ],
+      "seconds": 1.65
+    },
+    {
+      "file": "media/p04.mov",
+      "frames": 99,
+      "opaque": 95,
+      "bytes": 23737055,
+      "opaquePacketBytes": 22946371,
+      "runs": [
+        {
+          "start": 0,
+          "end": 4,
+          "opaque": false
+        },
+        {
+          "start": 4,
+          "end": 99,
+          "opaque": true
+        }
+      ],
+      "seconds": 1.13
+    },
+    {
+      "file": "media/p14.mov",
+      "frames": 175,
+      "opaque": 171,
+      "bytes": 63004831,
+      "opaquePacketBytes": 62338913,
+      "runs": [
+        {
+          "start": 0,
+          "end": 4,
+          "opaque": false
+        },
+        {
+          "start": 4,
+          "end": 175,
+          "opaque": true
+        }
+      ],
+      "seconds": 1.95
+    },
+    {
+      "file": "media/p15.mov",
+      "frames": 181,
+      "opaque": 0,
+      "bytes": 199363028,
+      "opaquePacketBytes": 0,
+      "runs": [
+        {
+          "start": 0,
+          "end": 181,
+          "opaque": false
+        }
+      ],
+      "seconds": 2.0
+    },
+    {
+      "file": "media/p01.mov",
+      "frames": 163,
+      "opaque": 0,
+      "bytes": 173479638,
+      "opaquePacketBytes": 0,
+      "runs": [
+        {
+          "start": 0,
+          "end": 163,
+          "opaque": false
+        }
+      ],
+      "seconds": 1.96
+    },
+    {
+      "file": "media/p17.mov",
+      "frames": 114,
+      "opaque": 110,
+      "bytes": 52779447,
+      "opaquePacketBytes": 51950257,
+      "runs": [
+        {
+          "start": 0,
+          "end": 4,
+          "opaque": false
+        },
+        {
+          "start": 4,
+          "end": 114,
+          "opaque": true
+        }
+      ],
+      "seconds": 1.3
+    },
+    {
+      "file": "media/p03.mov",
+      "frames": 140,
+      "opaque": 0,
+      "bytes": 147322516,
+      "opaquePacketBytes": 0,
+      "runs": [
+        {
+          "start": 0,
+          "end": 140,
+          "opaque": false
+        }
+      ],
+      "seconds": 1.62
+    },
+    {
+      "file": "media/p02.mov",
+      "frames": 153,
+      "opaque": 0,
+      "bytes": 595841246,
+      "opaquePacketBytes": 0,
+      "runs": [
+        {
+          "start": 0,
+          "end": 153,
+          "opaque": false
+        }
+      ],
+      "seconds": 2.48
+    },
+    {
+      "file": "media/p16.mov",
+      "frames": 232,
+      "opaque": 227,
+      "bytes": 583775177,
+      "opaquePacketBytes": 573342540,
+      "runs": [
+        {
+          "start": 0,
+          "end": 5,
+          "opaque": false
+        },
+        {
+          "start": 5,
+          "end": 232,
+          "opaque": true
+        }
+      ],
+      "seconds": 2.92
+    }
+  ],
+  "experiments": {
+    "pngCompression": [
+      {
+        "name": "default",
+        "seconds": 6.057,
+        "bytes": 125642166
+      },
+      {
+        "name": "sub1",
+        "seconds": 1.051,
+        "bytes": 129184093
+      },
+      {
+        "name": "mixed6",
+        "seconds": 6.545,
+        "bytes": 122063308
+      }
+    ],
+    "pixelVerification": {
+      "sourceFrames": 153,
+      "dedupFramesAt30": 153,
+      "exactCfrFrameHashesAndTimestamps": true,
+      "default": true,
+      "sub1": true,
+      "mixed6": true
+    },
+    "currentKeepChanges": {
+      "seconds": 14.026803875,
+      "bytes": 595841246
+    },
+    "corpusDedup": {
+      "pngFiles": 29,
+      "frames": 7215,
+      "kept": 6325,
+      "droppedBytes": 403832295,
+      "files": [
+        {
+          "file": "media/p18.mov",
+          "frames": 255,
+          "kept": 203,
+          "droppedBytes": 36481257
+        },
+        {
+          "file": "media/p24.mov",
+          "frames": 91,
+          "kept": 91,
+          "droppedBytes": 0
+        },
+        {
+          "file": "media/p25.mov",
+          "frames": 60,
+          "kept": 60,
+          "droppedBytes": 0
+        },
+        {
+          "file": "media/p19.mov",
+          "frames": 207,
+          "kept": 195,
+          "droppedBytes": 2833836
+        },
+        {
+          "file": "media/p21.mov",
+          "frames": 131,
+          "kept": 127,
+          "droppedBytes": 2822370
+        },
+        {
+          "file": "media/p09.mov",
+          "frames": 178,
+          "kept": 136,
+          "droppedBytes": 10168849
+        },
+        {
+          "file": "media/avatar-loop.mov",
+          "frames": 60,
+          "kept": 48,
+          "droppedBytes": 2041118
+        },
+        {
+          "file": "media/p08.mov",
+          "frames": 127,
+          "kept": 113,
+          "droppedBytes": 3336149
+        },
+        {
+          "file": "media/p20.mov",
+          "frames": 149,
+          "kept": 149,
+          "droppedBytes": 0
+        },
+        {
+          "file": "media/p22.mov",
+          "frames": 156,
+          "kept": 156,
+          "droppedBytes": 0
+        },
+        {
+          "file": "media/p23.mov",
+          "frames": 160,
+          "kept": 160,
+          "droppedBytes": 0
+        },
+        {
+          "file": "media/p12.mov",
+          "frames": 213,
+          "kept": 213,
+          "droppedBytes": 0
+        },
+        {
+          "file": "media/p06.mov",
+          "frames": 116,
+          "kept": 116,
+          "droppedBytes": 0
+        },
+        {
+          "file": "media/a-pip-1.mov",
+          "frames": 1896,
+          "kept": 1517,
+          "droppedBytes": 67963216
+        },
+        {
+          "file": "media/p07.mov",
+          "frames": 212,
+          "kept": 157,
+          "droppedBytes": 82765031
+        },
+        {
+          "file": "media/p13.mov",
+          "frames": 244,
+          "kept": 244,
+          "droppedBytes": 0
+        },
+        {
+          "file": "media/p05.mov",
+          "frames": 266,
+          "kept": 266,
+          "droppedBytes": 0
+        },
+        {
+          "file": "media/p11.mov",
+          "frames": 124,
+          "kept": 124,
+          "droppedBytes": 0
+        },
+        {
+          "file": "media/a-pip-2.mov",
+          "frames": 1088,
+          "kept": 871,
+          "droppedBytes": 38879385
+        },
+        {
+          "file": "media/p10.mov",
+          "frames": 142,
+          "kept": 131,
+          "droppedBytes": 2467022
+        },
+        {
+          "file": "media/p04.mov",
+          "frames": 99,
+          "kept": 95,
+          "droppedBytes": 968058
+        },
+        {
+          "file": "media/p14.mov",
+          "frames": 175,
+          "kept": 148,
+          "droppedBytes": 7841654
+        },
+        {
+          "file": "media/p15.mov",
+          "frames": 181,
+          "kept": 181,
+          "droppedBytes": 0
+        },
+        {
+          "file": "media/p01.mov",
+          "frames": 163,
+          "kept": 156,
+          "droppedBytes": 6864992
+        },
+        {
+          "file": "media/captions-f3f65df4.mov",
+          "frames": 83,
+          "kept": 83,
+          "droppedBytes": 0
+        },
+        {
+          "file": "media/p17.mov",
+          "frames": 114,
+          "kept": 114,
+          "droppedBytes": 0
+        },
+        {
+          "file": "media/p03.mov",
+          "frames": 140,
+          "kept": 114,
+          "droppedBytes": 26370123
+        },
+        {
+          "file": "media/p02.mov",
+          "frames": 153,
+          "kept": 125,
+          "droppedBytes": 112029235
+        },
+        {
+          "file": "media/p16.mov",
+          "frames": 232,
+          "kept": 232,
+          "droppedBytes": 0
+        }
+      ]
+    },
+    "pipBoundingBox": {
+      "x1": 654,
+      "y1": 68,
+      "x2": 1077,
+      "y2": 491,
+      "frames": 1896,
+      "seconds": 16.091
+    },
+    "pipCrop": {
+      "variants": [
+        {
+          "name": "pip-full",
+          "seconds": 1.428,
+          "bytes": 10586055
+        },
+        {
+          "name": "pip-cropped",
+          "seconds": 0.757,
+          "bytes": 9248008
+        }
+      ],
+      "restoredExact": true,
+      "innerCropRgbaExact": true,
+      "fullFrameAlphaExact": true,
+      "comparisonVideoOnly": true
+    },
+    "p16Crf14": {
+      "name": "p16-opaque-crf14",
+      "seconds": 13.89,
+      "bytes": 8693736
+    },
+    "p16Qtrle": {
+      "name": "p16-lossless-qtrle",
+      "seconds": 3.486,
+      "bytes": 1150551825
+    },
+    "p16Crf8": {
+      "bytes": 32868676,
+      "seconds": 23.431706792092882
+    },
+    "p16Crf14Vmaf": {
+      "min": 95.522174,
+      "max": 99.037748,
+      "mean": 96.995676,
+      "harmonic_mean": 96.993135
+    },
+    "p16Crf8Vmaf": {
+      "min": 97.032918,
+      "max": 99.723975,
+      "mean": 97.752391,
+      "harmonic_mean": 97.750423
+    }
+  }
+}
