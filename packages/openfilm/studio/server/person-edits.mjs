@@ -78,7 +78,7 @@ import { compare, hashOf, keepFilm, keptClips, keptHash, keptSize, keptValue, li
 
 /** How many of a file's versions are kept, besides anchors (those go only past the bytes); how many bytes of a project's. */
 let VERSIONS_KEPT = 200;
-const BYTES_KEPT = 64 << 20;
+let BYTES_KEPT = 64 << 20;
 /** A film of this many clips is merged in a worker, so Studio answers meanwhile; a merge there past this long has failed. */
 const CLIPS_IN_WORKER = 1000;
 let MERGE_MS = 60_000;
@@ -105,13 +105,14 @@ let workerModule = new URL('./person-merge-worker.mjs', import.meta.url);
 
 /**
  * Where the texts a merge read and wrote are kept aside. For tests: how many versions of a file are kept besides
- * anchors (`versions`), the merge run here (`merge`), the worker's module (`worker`), how long a merge there may take.
- * @param {{ keep?: (root: string, files: Record<string, string | Buffer>, message: string) => Promise<unknown>, versions?: number,
+ * anchors (`versions`), how many bytes of a project's (`bytes`), the merge run here (`merge`), the worker's module (`worker`), how long a merge there may take.
+ * @param {{ keep?: (root: string, files: Record<string, string | Buffer>, message: string) => Promise<unknown>, versions?: number, bytes?: number,
  *   merge?: typeof mergeWrite, worker?: URL, mergeMs?: number }} o
  */
-export function configure({ keep: aside, versions, merge, worker: module, mergeMs }) {
+export function configure({ keep: aside, versions, bytes, merge, worker: module, mergeMs }) {
   if (aside) keep = async (root, files, message) => { await aside(root, files, message); };
   if (versions) VERSIONS_KEPT = versions;
+  if (bytes) BYTES_KEPT = bytes;
   if (merge) merging = merge;
   if (module) { workerModule = module; void worker?.terminate(); }
   if (mergeMs) MERGE_MS = mergeMs;
@@ -156,8 +157,10 @@ function addVersion(s, kept, { film, data = null, person = false, changed, ancho
   kept.versions.push({ hash, ...(film ? { film } : { data: data == null ? null : deflateRawSync(data) }), size, person, anchor: anchor || !kept.versions.length, ...(changed ? { changed } : {}) });
   /* the oldest version that may go, but never the first nor the last two; its bytes, or -1 when none may. The one
      after it knows a version before it was let go */
+  const mayDrop = (/** @type {Kept} */ k, /** @type {boolean | null} */ anchors) => (/** @type {Version} */ v, /** @type {number} */ n) =>
+    n > 0 && n < k.versions.length - 2 && (anchors == null || v.anchor === anchors);
   const drop = (/** @type {Kept} */ k, /** @type {boolean | null} */ anchors) => {
-    const i = k.versions.findIndex((v, n) => n > 0 && n < k.versions.length - 2 && (anchors == null || v.anchor === anchors));
+    const i = k.versions.findIndex(mayDrop(k, anchors));
     if (i < 0) return -1;
     k.versions[i + 1].gap = true;
     return k.versions.splice(i, 1)[0].size;
@@ -168,10 +171,12 @@ function addVersion(s, kept, { film, data = null, person = false, changed, ancho
   let total = all().reduce((n, k) => n + k.versions.reduce((m, v) => m + v.size, 0), 0);
   for (const anchors of [false, null]) {
     while (total > BYTES_KEPT) {
-      const most = all().filter((k) => k.versions.some((v, n) => n < k.versions.length - 2 && (anchors == null || v.anchor === anchors)))
+      const most = all().filter((k) => k.versions.some(mayDrop(k, anchors)))
         .reduce((a, b) => (!a || b.versions.length > a.versions.length ? b : a), /** @type {Kept | null} */ (null));
       if (!most) break;
-      total -= drop(most, anchors);
+      const freed = drop(most, anchors);
+      if (freed < 0) break;
+      total -= freed;
     }
   }
 }
