@@ -10,8 +10,13 @@ import { join } from 'node:path';
 import { AgentSession } from './agents.mjs';
 import { agentOffer } from './openfilm-agent.mjs';
 
+const commandTool = process.platform === 'win32' ? 'powershell' : 'bash';
+const appendProgress = (word) => commandTool === 'powershell'
+  ? `Add-Content -LiteralPath progress.txt -Value '${word}' -Encoding Ascii -ErrorAction Stop`
+  : `echo '${word}' >> progress.txt`;
+
 /** A service on the Chat Completions API that answers "ok" and notes the model each request named (and each request, and its key). */
-async function service({ broke = false, fails = null, busyOnce = false, hold = null, disconnectAt = [], interruptToolAt = 0, largest = Infinity, reads = 0, bash = null } = {}) {
+async function service({ broke = false, fails = null, busyOnce = false, hold = null, disconnectAt = [], interruptToolAt = 0, largest = Infinity, reads = 0, command = null } = {}) {
   const asked = [];
   const bodies = [];
   const keys = [];
@@ -39,7 +44,7 @@ async function service({ broke = false, fails = null, busyOnce = false, hold = n
       const chunk = (choice, extra = {}) => `data: ${JSON.stringify({ id: 'c', object: 'chat.completion.chunk', created: 0, model, choices: [choice], ...extra })}\n\n`;
       if (asked.length === interruptToolAt) {
         res.write(chunk({ index: 0, delta: { role: 'assistant', tool_calls: [{
-          index: 0, id: 'incomplete-tool', type: 'function', function: { name: 'bash', arguments: '{"command":"echo interrupted >> progress.txt"}' },
+          index: 0, id: 'incomplete-tool', type: 'function', function: { name: commandTool, arguments: JSON.stringify({ command: appendProgress('interrupted') }) },
         }] }, finish_reason: null }));
         setTimeout(() => res.destroy(), 50);
         return;
@@ -49,10 +54,10 @@ async function service({ broke = false, fails = null, busyOnce = false, hold = n
         hold.started(() => res.destroy());
         return;
       }
-      /* `bash`: the first answer runs that command */
-      if (bash && asked.length === 1) {
+      /* When given a command, the first answer runs it through that platform's tool. */
+      if (command && asked.length === 1) {
         res.end(chunk({ index: 0, delta: { role: 'assistant', tool_calls: [{
-          index: 0, id: 'bash-1', type: 'function', function: { name: 'bash', arguments: JSON.stringify({ command: bash }) },
+          index: 0, id: 'command-1', type: 'function', function: { name: commandTool, arguments: JSON.stringify({ command }) },
         }] }, finish_reason: null })
           + chunk({ index: 0, delta: {}, finish_reason: 'tool_calls' }) + 'data: [DONE]\n\n');
         return;
@@ -108,9 +113,10 @@ test('OpenFilm runs Pi on the shared account, switches cloud models and sends Op
 test('a paused Pi turn resumes with the selected model and retries disconnects without replaying tools', { timeout: 30_000 }, async () => {
   let firstStarted;
   const began = new Promise((resolve) => { firstStarted = resolve; });
-  const svc = await service({ hold: { at: 2, started: firstStarted }, interruptToolAt: 3, disconnectAt: [4], bash: 'echo first >> progress.txt' });
+  const svc = await service({ hold: { at: 2, started: firstStarted }, interruptToolAt: 3, disconnectAt: [4], command: appendProgress('first') });
   const cwd = mkdtempSync(join(tmpdir(), 'of-pi-pause-'));
   const home = mkdtempSync(join(tmpdir(), 'of-pi-pause-home-'));
+  const progress = () => readFileSync(join(cwd, 'progress.txt'), 'utf8').replaceAll('\r\n', '\n');
   const updates = [];
   const opts = { agent: 'byok', cwd, harness: { home, models: [own('test', svc.url), own('other', svc.url)], env: { OPENFILM_BYOK_KEY_test: 'test-key', OPENFILM_BYOK_KEY_other: 'test-key' } }, onUpdate: (update) => updates.push(update) };
   let agent = new AgentSession(opts);
@@ -118,6 +124,7 @@ test('a paused Pi turn resumes with the selected model and retries disconnects w
     const { sessionId } = await agent.start();
     const pending = agent.prompt([{ type: 'text', text: 'Original edit request' }], { turnId: 'original' });
     await began;
+    assert.equal(progress(), 'first\n', 'the first command finished before pausing');
     await agent.cancel();
     assert.equal(await pending, 'cancelled');
     agent.close();
@@ -134,7 +141,7 @@ test('a paused Pi turn resumes with the selected model and retries disconnects w
     }
     assert.equal(updates.filter((update) => update._meta?.openfilm?.noticeKey === 'composer.modelConnectionRetry').length, 2);
     assert.equal(updates.filter((update) => update.sessionUpdate === 'tool_call').length, 1);
-    assert.equal(readFileSync(join(cwd, 'progress.txt'), 'utf8'), 'first\n');
+    assert.equal(progress(), 'first\n', 'the first command ran exactly once and the interrupted command never ran');
     await assert.rejects(agent.prompt([], { turnId: 'original', recover: true }), /already finished/);
   } finally {
     agent.close();
@@ -366,7 +373,7 @@ test('a service with no balance left is named for the model the turn was on, not
 test("the app's own agent's key goes to its model's service, never to a command it runs: not in its environment, nor Pi's", { timeout: 60_000, skip: process.platform === 'win32' }, async () => {
   const KEY = `sk-hidden-${randomBytes(8).toString('hex')}`;
   /* what a command sees: its own environment, and Pi's as another program of this user reads it (ps; the BSD form, read on Linux too) */
-  const svc = await service({ bash: 'env > seen.txt; ps ewwp $PPID >> seen.txt 2>&1; echo done >> seen.txt' });
+  const svc = await service({ command: 'env > seen.txt; ps ewwp $PPID >> seen.txt 2>&1; echo done >> seen.txt' });
   const cwd = mkdtempSync(join(tmpdir(), 'of-pi-env-'));
   const session = new AgentSession({
     agent: 'byok', cwd,
