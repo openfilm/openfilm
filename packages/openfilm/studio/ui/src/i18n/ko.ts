@@ -894,7 +894,6 @@ export const ko: Words = {
     previewMissing: '미디어를 찾을 수 없음: {file}',
     previewPreparing: "이 클립을 재생할 수 있도록 준비 중… {p}%",
     previewPreparingWait: "이 클립을 재생할 수 있도록 준비 중…",
-    previewCue: '현재 위치의 프레임을 불러오는 중…',
     previewPrepareFailed: "이 클립은 여기서 재생할 수 없습니다: {reason}",
     previewPreparingWhy: "이 브라우저는 {file}을(를) 디코딩할 수 없어 Studio가 재생 가능한 사본을 만들고 있습니다. 내보내기에는 원본을 사용합니다.",
     ungraded: '원본(보정 전)',

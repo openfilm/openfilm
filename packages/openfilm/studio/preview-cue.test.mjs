@@ -60,17 +60,26 @@ test('seeking past a loading chapter responds at once, and playback can still wa
     await page.evaluate(() => window.studioCommand({ type: 'seek', time: 14 }));
     await page.waitForFunction(() => window.slowSeeks === 1);
     await viewer.getByRole('button', { name: 'Play', exact: true }).click();
+    const ruler = page.locator('[data-timeline] [role="slider"][aria-valuemax]').first();
     /* A play after the bridge reports a slow seek keeps waiting for that seek. */
     await page.waitForTimeout(4_300);
-    assert.equal(await page.locator('[data-preview-cue]').isVisible(), true);
+    assert.equal(await ruler.getAttribute('aria-valuenow'), '14000');
+    assert.equal(await page.locator('[data-preview-cue]').count(), 0);
     assert.equal(await page.evaluate(() => window.slowSeeks), 1);
     const nextChapter = page.waitForRequest((request) => request.resourceType() === 'document' && new URL(request.url()).pathname.endsWith('/next.html'));
     chapter.resolve();
-    const ruler = page.locator('[data-timeline] [role="slider"][aria-valuemax]').first();
     await page.waitForFunction(() => Number(document.querySelector('[data-timeline] [role="slider"][aria-valuemax]')?.getAttribute('aria-valuenow')) > 14_200);
     await nextChapter;
     assert.ok(Number(await ruler.getAttribute('aria-valuenow')) < 16_000, 'the next page opens well ahead of its cut');
-    assert.equal(await page.locator('[data-preview-cue]').isVisible(), false);
+    await viewer.getByRole('button', { name: 'Pause', exact: true }).click();
+    const box = await ruler.boundingBox();
+    await ruler.dispatchEvent('pointerdown', { button: 0, pointerId: 41, clientX: box.x + 20, clientY: box.y + 5 });
+    await page.waitForFunction(() => document.body.classList.contains('tl-scrubbing'));
+    await ruler.dispatchEvent('pointercancel', { pointerId: 41 });
+    await page.waitForFunction(() => !document.body.classList.contains('tl-scrubbing'));
+    await page.evaluate(() => window.studioCommand({ type: 'seek', time: 15 }));
+    await viewer.getByRole('button', { name: 'Play', exact: true }).click();
+    await page.waitForFunction(() => Number(document.querySelector('[data-timeline] [role="slider"][aria-valuemax]')?.getAttribute('aria-valuenow')) > 15_200, {}, { timeout: 3_000 });
     await viewer.getByRole('button', { name: 'Pause', exact: true }).click();
   } finally {
     chapter.resolve();

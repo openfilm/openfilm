@@ -396,7 +396,10 @@ export function ProjectView({ projectId, onProject }: {
   /* the player never says 0 (it divides by its length): an empty film is 0.001 s long, here 0 */
   const drawnMs = (info?.duration ?? 0) > 0.001 ? Math.round(info!.duration * 1000) : 0;
   /* the picture at t: at the film's very end (where nothing plays any more) its last frame, not black */
-  const pictureAt = (t: number) => { const d = player.current.duration; return d > 0 ? Math.min(t, d - 1e-3) : t; };
+  const pictureAt = React.useCallback((t: number) => {
+    const d = player.current.duration;
+    return d > 0 ? Math.min(t, d - 1e-3) : t;
+  }, []);
 
   React.useEffect(() => {
     if (!playing) return undefined;
@@ -442,7 +445,7 @@ export function ProjectView({ projectId, onProject }: {
     };
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
-  }, [playing]);
+  }, [pictureAt, playing]);
 
   /* After a jump or a pause, cue the target picture before starting the audio clock. A later seek or pause can
      supersede the cue while the decoder is working. */
@@ -461,18 +464,18 @@ export function ProjectView({ projectId, onProject }: {
       if (playPending.current !== request) return;
       playPending.current = null;
       setPreparingPlayback(false);
-      if (!ready) {
+      if (ready === null) {
         stopAtRef.current = null;
-        if (ready === false) showToast(t('assetDrawer.previewTimeout'));
         return;
       }
+      /* A decoder that cannot cue a still frame can resume on the normal playback clock. */
       p.play(playAt);
       setPlaying(true);
     };
     const cue = preview.current?.cue?.(pictureAt(playAt));
     if (cue) void cue.then(start);
     else start(true);
-  }, [showToast, t]);
+  }, [pictureAt]);
   const seek = React.useCallback((ms: number) => {
     const p = player.current;
     const t = Math.max(0, Math.min(ms / 1000, p.duration || ms / 1000));
@@ -484,7 +487,7 @@ export function ProjectView({ projectId, onProject }: {
     setTimeMs(t * 1000);
     preview.current?.seek(pictureAt(t));
     for (const fn of listeners.current) fn();
-  }, [startPlayback]);
+  }, [pictureAt, startPlayback]);
   /* ── J / K / L: the shuttle. 1×, 2× and 4× forward are the player's own (with sound); backwards, the picture alone
      is sought along at that rate, silent, as a scrub is (the player plays forward only, at most 4×) ── */
   const shuttleRateRef = React.useRef(0);
@@ -517,7 +520,7 @@ export function ProjectView({ projectId, onProject }: {
     setTimeMs(player.current.time() * 1000);
     preview.current?.seek(pictureAt(player.current.time()));
     for (const fn of listeners.current) fn();
-  }, [stopPlayback]);
+  }, [pictureAt, stopPlayback]);
   pauseRef.current = pause;
   const toggle = React.useCallback(() => {
     stopShuttle();
@@ -581,20 +584,35 @@ export function ProjectView({ projectId, onProject }: {
   const scrubTold = React.useRef(0);
   const scrubPreview = React.useCallback((ms: number) => {
     const wasPlaying = stopPlayback();
-    const t = Math.max(0, Math.min(ms / 1000, player.current.duration || ms / 1000));
+    const seconds = snapToFrame(ms) / 1000;
+    const t = Math.max(0, Math.min(seconds, player.current.duration || seconds));
     player.current.seek(t);
-    preview.current?.seek(pictureAt(t));
+    preview.current?.scrub(pictureAt(t));
     for (const fn of listeners.current) fn();
     const now = performance.now();
     if (wasPlaying || now - scrubTold.current > 100) { scrubTold.current = now; setTimeMs(t * 1000); }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stopPlayback]);
+  }, [pictureAt, stopPlayback]);
   const scrubCommit = React.useCallback((ms: number) => { stopPlayback(); seek(ms); }, [stopPlayback, seek]);
+  const fullscreenScrubResume = React.useRef<{ playing: boolean; stopAt: number | null } | null>(null);
+  const fullscreenScrubPreview = React.useCallback((ms: number) => {
+    fullscreenScrubResume.current ??= { playing: player.current.playing || Boolean(playPending.current), stopAt: stopAtRef.current };
+    scrubPreview(ms);
+  }, [scrubPreview]);
+  const fullscreenScrubCommit = React.useCallback((ms: number) => {
+    const resume = fullscreenScrubResume.current;
+    fullscreenScrubResume.current = null;
+    const at = snapToFrame(ms);
+    if (resume?.playing && at / 1000 < player.current.duration - 1e-3) {
+      stopAtRef.current = resume.stopAt;
+      startPlayback(at / 1000);
+    } else seek(at);
+  }, [seek, startPlayback]);
   /* Skimming shows a silent frame without moving the playback clock or the edit's playhead. */
   const skimPreview = React.useCallback((ms: number | null) => {
     if (player.current.playing || playPending.current || shuttleFrame.current) return;
-    preview.current?.seek(pictureAt(ms == null ? player.current.time() : ms / 1000));
-  }, []);
+    if (ms == null) preview.current?.seek(pictureAt(player.current.time()));
+    else preview.current?.scrub(pictureAt(ms / 1000));
+  }, [pictureAt]);
 
   /* a seek asked for past the film's end as it was (the end of a clip just put on): made once the film is that long */
   const seekWhenLonger = React.useRef<number | null>(null);
@@ -4858,10 +4876,14 @@ export function ProjectView({ projectId, onProject }: {
   const stageFullRef = React.useRef<HTMLDivElement>(null);
   const [fullscreen, setFullscreen] = React.useState(false);
   React.useEffect(() => {
-    const onChange = () => setFullscreen(document.fullscreenElement === stageFullRef.current && !!stageFullRef.current);
+    const onChange = () => {
+      const active = document.fullscreenElement === stageFullRef.current && !!stageFullRef.current;
+      if (!active && fullscreenScrubResume.current !== null) fullscreenScrubCommit(player.current.time() * 1000);
+      setFullscreen(active);
+    };
     document.addEventListener('fullscreenchange', onChange);
     return () => document.removeEventListener('fullscreenchange', onChange);
-  }, []);
+  }, [fullscreenScrubCommit]);
   const toggleFullscreen = React.useCallback(() => {
     if (document.fullscreenElement) void document.exitFullscreen();
     else void stageFullRef.current?.requestFullscreen();
@@ -5538,11 +5560,6 @@ export function ProjectView({ projectId, onProject }: {
                       <ViewerZoom store={viewerZoom} frame={frameBox} off={fullscreen}
                         className={`relative bg-black ${frameBox.inner.left < -0.5 || frameBox.inner.top < -0.5 ? 'overflow-hidden' : 'overflow-visible'}`}
                         notices={<>
-                          {preparingPlayback && !preparingHere ? (
-                            <div role="status" data-preview-cue="" className="pointer-events-none absolute bottom-2 left-1/2 z-10 -translate-x-1/2 rounded-md bg-black/75 px-2 py-1 text-center text-[11px] text-white">
-                              {t('project.previewCue')}
-                            </div>
-                          ) : null}
                           {/* a clip under the playhead whose file is gone plays as nothing (src/timeline.mjs, film-missing):
                               said here, over the picture, with what to do; in sight at any zoom */}
                           {statsOn && playing && played ? (
@@ -5658,8 +5675,8 @@ export function ProjectView({ projectId, onProject }: {
                           muted={muted}
                           rate={rate}
                           onToggle={toggle}
-                          onScrubPreview={(ms) => seek(ms)}
-                          onScrubCommit={(ms) => seek(ms)}
+                          onScrubPreview={fullscreenScrubPreview}
+                          onScrubCommit={fullscreenScrubCommit}
                           onVolume={(v) => { player.current.setVolume(v); setVolumeState(player.current.volume); setMutedState(player.current.muted); }}
                           onToggleMute={() => { player.current.setMuted(!player.current.muted); setMutedState(player.current.muted); }}
                           onRate={setSpeed}

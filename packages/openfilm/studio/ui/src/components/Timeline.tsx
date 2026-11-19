@@ -1234,6 +1234,8 @@ export const Timeline = React.memo(function Timeline({
   }, [selectOne]);
   /* scrubbing: the knob is filled while held, hollow at rest */
   const [scrubbing, setScrubbing] = React.useState(false);
+  const scrubCleanup = React.useRef<(() => void) | null>(null);
+  React.useEffect(() => () => scrubCleanup.current?.(), []);
   /**
    * The line's own time while scrubbing (null = follow `timeMs`). The line follows every frame from this local state
    * (only the timeline re-renders); the editor and the picture are told every SCRUB_TELL_MS.
@@ -1901,6 +1903,8 @@ export const Timeline = React.memo(function Timeline({
   const startScrub = React.useCallback((e: React.PointerEvent) => {
     if (e.button !== 0 || !playable) return;
     e.preventDefault();
+    scrubCleanup.current?.();
+    const pointer = e.pointerId;
     const targets = snap ? snapTargetsFor(allBlocks, '', 0, undefined, snapPointsMs).filter((t) => t.kind !== 'playhead') : [];
     const timeAt = (clientX: number): number => {
       const raw = msAtClientX(clientX);
@@ -1935,28 +1939,39 @@ export const Timeline = React.memo(function Timeline({
     /* auto-scroll at the edges, then recompute the time under the pointer */
     const edge = edgeAutoScroll(scrollRef, () => { if (!raf) raf = requestAnimationFrame(flush); });
     const move = (ev: PointerEvent) => {
+      if (ev.pointerId !== pointer) return;
       atX = ev.clientX;
       if (!raf) raf = requestAnimationFrame(flush);
       edge.at(ev.clientX);
     };
-    const up = (ev: PointerEvent) => {
+    const cleanup = () => {
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', cancel);
+      window.removeEventListener('blur', finish);
       edge.stop();
-      /* a frame still pending is settled now: the last bit of movement counts */
-      if (raf) {
-        cancelAnimationFrame(raf);
-        raf = 0;
-        at = timeAt(atX);
-      }
+      if (raf) cancelAnimationFrame(raf);
       document.body.classList.remove('tl-scrubbing');
+      scrubCleanup.current = null;
+    };
+    const finish = () => {
+      cleanup();
       setScrubbing(false);
       setScrubMs(null);
-      onScrubCommit(at);
-      warmPlayheadAt(ev.clientX, ev.clientY, at);
+      onScrubCommit(timeAt(atX));
     };
+    const up = (ev: PointerEvent) => {
+      if (ev.pointerId !== pointer) return;
+      atX = ev.clientX;
+      finish();
+      warmPlayheadAt(atX, ev.clientY, timeAt(atX));
+    };
+    const cancel = (ev: PointerEvent) => { if (ev.pointerId === pointer) finish(); };
+    scrubCleanup.current = cleanup;
     window.addEventListener('pointermove', move, { passive: true });
     window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', cancel);
+    window.addEventListener('blur', finish);
   }, [msAtClientX, onScrubCommit, onScrubPreview, playable, warmPlayheadAt, snap, allBlocks, snapPointsMs, pxPerMs, totalMs, movePlayheadAt]);
 
   /** The range being pulled on the ruler, before it is the editor's (drawn from here, not re-rendering the editor). */

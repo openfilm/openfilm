@@ -909,7 +909,6 @@ export const zhCN: Words = {
     previewMissing: '找不到素材：{file}',
     previewPreparing: "素材优化中，即将可以播放… {p}%",
     previewPreparingWait: "素材优化中，即将可以播放…",
-    previewCue: '正在加载当前位置的画面…',
     previewPrepareFailed: "这个片段无法在这里播放：{reason}",
     previewPreparingWhy: "这个浏览器无法解码 {file}，Studio 正在制作一份能播放的副本。导出仍使用原文件。",
     ungraded: '原片（未调色）',

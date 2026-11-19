@@ -38,6 +38,8 @@ export type Target = {
 export type PreviewHandle = {
   /** Show the still moment t (the film stops playing). */
   seek(t: number): void;
+  /** Follow a drag or hover (the film stops playing), without waiting for cold chapters. */
+  scrub(t: number): void;
   /** Cue a frame before starting sound, sharing a seek already made to the same moment. */
   cue?(t: number): Promise<boolean | null>;
   /** Play on this line (the player's, on this page's clock): the film draws its own frames from it until `seek`. */
@@ -132,7 +134,7 @@ const RESCALE_MS = 600;
 const HOLD_POLL_MS = 100;
 /** A cold page can need several seconds to load its own images, fonts and videos. */
 const PLAY_CUE_MS = 12_000;
-type StillSeek = { key: number; t: number; seq: number; drawn?: boolean; finish?: (ready?: boolean | null) => void };
+type StillSeek = { key: number; t: number; seq: number; scrub: boolean; drawn?: boolean; finish?: (ready?: boolean | null) => void };
 
 export const Preview = forwardRef<PreviewHandle, Props>(function Preview({ folder, stage, time, fps, onInfo, onKey, onError, onPlayed, onSpans, onUndecoded, onShown, waiting = false, filmUnavailable = false, managed = false, revision, onRevisionNeeded, children }, ref) {
   const t = useT();
@@ -197,21 +199,19 @@ export const Preview = forwardRef<PreviewHandle, Props>(function Preview({ folde
    * taken from the one answered soonest (the time a message takes is the error, a fraction of a millisecond).
    */
   const line = useRef<Anchor | null>(null);
-  /* the still frame asked for last: drawn again when a page opens after it (see the stage's `woke`) */
-  const lastSeek = useRef<number | null>(null);
   const stillSeek = useRef<StillSeek | null>(null);
-  const requestSeek = (t: number, reuseWaiting = false) => {
+  const requestSeek = (t: number, scrub = false) => {
     const key = shownRef.current?.key;
     const had = stillSeek.current;
     const wasPlaying = line.current != null;
     line.current = null;
-    lastSeek.current = t;
-    if (!wasPlaying && had && had.key === key && had.t === t && (had.drawn !== false || had.finish || reuseWaiting)) return had;
+    /* Keep a same-position exact seek during a drag, and upgrade from a scrub when the position is committed. */
+    if (!wasPlaying && had && had.key === key && had.t === t && (scrub || !had.scrub)) return had;
     had?.finish?.();
     if (key == null) { stillSeek.current = null; return null; }
-    const request: StillSeek = { key, t, seq: ++seq.current };
+    const request: StillSeek = { key, t, seq: ++seq.current, scrub };
     stillSeek.current = request;
-    post(key, { type: 'seek', t, seq: request.seq });
+    post(key, { type: 'seek', t, seq: request.seq, ...(scrub ? { scrub } : {}) });
     return request;
   };
   const fpsRef = useRef(fps);
@@ -264,8 +264,9 @@ export const Preview = forwardRef<PreviewHandle, Props>(function Preview({ folde
 
   useImperativeHandle(ref, () => ({
     seek(t) { requestSeek(t); },
+    scrub(t) { requestSeek(t, true); },
     cue(t) {
-      const request = requestSeek(t, true);
+      const request = requestSeek(t);
       if (!request || request.drawn) return Promise.resolve(true);
       return new Promise<boolean | null>((resolve) => {
         request.finish?.();
@@ -404,7 +405,7 @@ export const Preview = forwardRef<PreviewHandle, Props>(function Preview({ folde
       request.seq = seek;
       request.drawn = undefined;
     }
-    post(key, { type: 'seek', t: wanted, seq: seek });
+    post(key, { type: 'seek', t: wanted, seq: seek, ...(request?.scrub ? { scrub: true } : {}) });
   };
   const showRef = useRef(show);
   showRef.current = show;
@@ -525,8 +526,12 @@ export const Preview = forwardRef<PreviewHandle, Props>(function Preview({ folde
         if (request?.key === key && request.seq === Number(m.seekSeq ?? m.seq)) {
           request.drawn = m.drawn !== false;
           if (request.drawn) request.finish?.(true);
+          else if (m.terminal) {
+            stillSeek.current = null;
+            request.finish?.(false);
+          }
         }
-        if (m.type === 'seek-ready') return;
+        if (m.type === 'seek-ready' || m.terminal) return;
         const swap = !frame.ready;
         /* a load behind the picture, ready while a drag or a line typed in place is under way, or before it has drawn
            the film as it is now: shown once it may be (the first load, with nothing shown yet, is shown at once) */
@@ -578,12 +583,6 @@ export const Preview = forwardRef<PreviewHandle, Props>(function Preview({ folde
             ctrlKey: Boolean(m.ctrlKey), metaKey: Boolean(m.metaKey), shiftKey: Boolean(m.shiftKey), buttons: Number(m.buttons) || 0,
             bubbles: true, cancelable: true,
           }));
-        } else if (m.event === 'woke') {
-          /* An active cue already waits for this page. Only redraw a still that is no longer being cued. */
-          const request = stillSeek.current;
-          if (!line.current && lastSeek.current != null && !(request?.key === key && request.finish)) {
-            post(key, { type: 'seek', t: lastSeek.current, seq: ++seq.current });
-          }
         } else if (m.event === 'typing') {
           const size = m.size && typeof m.size === 'object' && Number.isFinite(Number(m.size.w)) && Number.isFinite(Number(m.size.h))
             ? { w: Number(m.size.w), h: Number(m.size.h) } : undefined;

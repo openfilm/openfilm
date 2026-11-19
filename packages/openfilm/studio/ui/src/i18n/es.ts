@@ -896,7 +896,6 @@ export const es: Words = {
     previewMissing: 'No se encuentra el medio: {file}',
     previewPreparing: "Preparando este clip para reproducirlo… {p} %",
     previewPreparingWait: "Preparando este clip para reproducirlo…",
-    previewCue: 'Cargando el fotograma actual…',
     previewPrepareFailed: "Este clip no se puede reproducir aquí: {reason}",
     previewPreparingWhy: "Este navegador no puede decodificar {file}, así que Studio crea una copia que sí puede reproducir. Las exportaciones usan el original.",
     ungraded: 'Original (sin color)',
