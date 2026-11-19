@@ -4,7 +4,7 @@
  * message carries what was said so far: each message and the agent's reply, newest kept when it is long.
  */
 import type { SavedTurn } from '@/lib/chat-store';
-import { readFileChanges, type TurnFileChanges } from './file-changes';
+import { readFileChanges, type TurnFileChanges } from './file-changes.ts';
 
 /** at most this many characters of what was said before, and of one reply in it */
 export const SO_FAR_MAX = 24_000;
