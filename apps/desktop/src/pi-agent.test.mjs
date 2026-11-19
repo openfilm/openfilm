@@ -121,6 +121,7 @@ test('a paused Pi turn resumes with the selected model and retries disconnects w
     await agent.cancel();
     assert.equal(await pending, 'cancelled');
     agent.close();
+    await agent.ended();
     agent = new AgentSession({ ...opts, resume: sessionId });
     assert.equal((await agent.start()).resumed, true);
     await agent.setConfigOption('model', 'other');
@@ -138,6 +139,7 @@ test('a paused Pi turn resumes with the selected model and retries disconnects w
   } finally {
     agent.close();
     svc.close();
+    await agent.ended();
     rmSync(cwd, { recursive: true, force: true });
     rmSync(home, { recursive: true, force: true });
   }
@@ -175,6 +177,7 @@ test('a dropped model stream keeps the partial reply and surfaces the interrupti
   } finally {
     session.close();
     svc.close();
+    await session.ended();
     rmSync(cwd, { recursive: true, force: true });
     rmSync(home, { recursive: true, force: true });
   }
