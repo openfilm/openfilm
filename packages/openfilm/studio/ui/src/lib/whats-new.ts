@@ -18,477 +18,317 @@ export interface ReleaseNote { kind: NoteKind; text: string }
 export interface ReleaseNotes { version: string; date: string; notes: Record<Language, ReleaseNote[]> }
 
 export const RELEASE: ReleaseNotes = {
-  "version": "0.4.0",
-  "date": "2026-11-18",
+  "version": "0.4.1",
+  "date": "2026-11-19",
   "notes": {
     "en": [
       {
         "kind": "new",
-        "text": "Plugins: Edit, Canvas and the new Screening editor are plugins you turn on or off, and anyone can make one."
+        "text": "Mark a timeline range with I and O or the Time Range menu, then export just that range."
       },
       {
         "kind": "new",
-        "text": "The Community (early testing): find, add and publish plugins, skills, library packs and examples. A project's own skills reach your agent only after you allow them."
-      },
-      {
-        "kind": "new",
-        "text": "Clips and the elements of a page move by keyframes, with masks, text animated letter by letter or word by word, and 3D placement."
-      },
-      {
-        "kind": "new",
-        "text": "Animate effects: blur, glow, brightness, contrast, saturation, grayscale, hue and invert, around an anchor point you choose."
-      },
-      {
-        "kind": "new",
-        "text": "Grade footage with .cube, OpenColorIO and ASC color files at its own bit depth, and try the Color editor (beta)."
-      },
-      {
-        "kind": "new",
-        "text": "Connectors let your agent reach Dropbox, Frame.io, Notion, Vimeo, Adobe and Canva."
-      },
-      {
-        "kind": "new",
-        "text": "Links to a clip, a moment, a stretch or a canvas node open in Studio wherever they come from."
-      },
-      {
-        "kind": "new",
-        "text": "Export to a bitrate or a file size. Sound is brought to -14 LUFS by default and kept from clipping."
-      },
-      {
-        "kind": "new",
-        "text": "My voices: make a voice from your own recording. Voice-over can be a dialogue in two voices."
-      },
-      {
-        "kind": "new",
-        "text": "Remove a video's background and retouch faces on your computer, in preview and in export."
-      },
-      {
-        "kind": "new",
-        "text": "Preview the timeline by moving the mouse (S), and zoom it with + and -."
-      },
-      {
-        "kind": "new",
-        "text": "Projects work like a file browser: folders, grid and detail views, drag and drop, and batch moves."
-      },
-      {
-        "kind": "new",
-        "text": "New models: Seedance 2.5 Flash and Seedream 5.5, Doubao's full voice list and speech recognition 2.0, and Google pictures from reference images."
+        "text": "Stop a task and continue with the selected model. Switch agents to pass the request and saved progress to the next agent in the same conversation."
       },
       {
         "kind": "improved",
-        "text": "Exports of footage are several times faster, and exports on the graphics chip are smaller and sharper."
+        "text": "Drag a clip onto the center of another to preview a replacement, then confirm it. Drop by an edge to insert, and use the timeline boundary to collapse track controls."
       },
       {
         "kind": "improved",
-        "text": "Media from this computer no longer takes room twice, and moved or renamed media is found again."
+        "text": "Linked clips follow the main track during a drag. Selecting a marker previews its frame, and playback starts from the marker."
       },
       {
         "kind": "improved",
-        "text": "A picture, clip or voice a service made shows its prompt, model and service."
+        "text": "Library menus open the first Community subcategory and mark media already on the timeline."
       },
       {
         "kind": "improved",
-        "text": "Agents get a short system prompt and the skills of the plugins you have on. Model lists and agent updates are checked in the background."
+        "text": "Turn off music or sound-effect generation in Services. OpenFilm keeps track of paid requests whose outcomes are uncertain so it can recover them."
       },
       {
         "kind": "improved",
-        "text": "Service keys are sealed with your system's keychain, and Studio uses your proxy."
-      },
-      {
-        "kind": "improved",
-        "text": "A paid generation is not lost or paid twice when the app restarts."
+        "text": "Long films open and scrub more smoothly. Studio can use playback copies for hard-to-decode footage and restores the preview when moving between editors."
       },
       {
         "kind": "fixed",
-        "text": "Drafts for other editing apps keep subtitle styles, separate audio rows and a talking head's own sound."
+        "text": "After a timeline jump, Play waits for the selected frame and starts as soon as it is ready, even when the chapter takes several seconds to load."
+      },
+      {
+        "kind": "improved",
+        "text": "New timeline jumps take priority while a chapter loads. Studio starts preparing the next page earlier during playback."
+      },
+      {
+        "kind": "improved",
+        "text": "Exports keep the timeline as it was when queued. Progress shows the current stage, including mixing, muxing and saving."
       },
       {
         "kind": "fixed",
-        "text": "Local models install and run in the desktop app, on Windows too."
+        "text": "The chat stays steady as processing, commands and replies come in. The conversation title opens history and new-chat actions."
       },
       {
         "kind": "fixed",
-        "text": "Recordings of hours open, play and show their waveform. Caption tracks survive the agent's writes, and a corrected caption word keeps its timing."
+        "text": "OpenFilm retries interrupted model requests and shows connection details if a request fails. Studio can reconnect after a failed restart and copy diagnostics while disconnected."
       },
       {
         "kind": "fixed",
-        "text": "Many smaller fixes. The changelog on GitHub lists every change."
+        "text": "On Windows, closing the window while a task, export or generation is running minimizes it. Installer updates protect projects and media."
+      },
+      {
+        "kind": "fixed",
+        "text": "The project list can recover from a damaged index, and personal assets can move with the projects folder."
+      },
+      {
+        "kind": "fixed",
+        "text": "Doubao has more voice previews. Seedream sends small reference images directly, and completed media failures stop polling."
       }
     ],
     "zh-CN": [
       {
         "kind": "new",
-        "text": "插件：剪辑、画布和新的放映都是插件，可以单独打开或关闭；任何人都能做插件。"
+        "text": "用 I、O 或「时间区域」菜单选定片段，只导出标记的时间范围。"
       },
       {
         "kind": "new",
-        "text": "社区（测试版）：查找、添加和发布插件、技能、素材包和示例。项目自带的技能要你允许后，智能体才会读到。"
-      },
-      {
-        "kind": "new",
-        "text": "片段和页面里的元素可以用关键帧动起来，支持蒙版、按字或按词的文字动画，以及 3D 摆放。"
-      },
-      {
-        "kind": "new",
-        "text": "效果可以做动画：模糊、发光、亮度、对比度、饱和度、灰度、色相和反相，并可选择变换中心点。"
-      },
-      {
-        "kind": "new",
-        "text": "用 .cube、OpenColorIO 和 ASC 色彩文件按素材原有位深调色，也可以试用调色编辑器（测试版）。"
-      },
-      {
-        "kind": "new",
-        "text": "连接器让智能体能用上 Dropbox、Frame.io、Notion、Vimeo、Adobe 和 Canva。"
-      },
-      {
-        "kind": "new",
-        "text": "指向某个片段、某一时刻、某一段或画布节点的链接，无论从哪里点开都会在 Studio 里打开。"
-      },
-      {
-        "kind": "new",
-        "text": "导出可以指定码率或文件大小；声音默认调到 -14 LUFS，并防止爆音。"
-      },
-      {
-        "kind": "new",
-        "text": "我的声音：用你自己的录音做一个声音。配音也可以是两个声音的对话。"
-      },
-      {
-        "kind": "new",
-        "text": "在本机去除视频背景、修饰人脸，预览和导出都生效。"
-      },
-      {
-        "kind": "new",
-        "text": "移动鼠标即可预览时间线（S 键开关），用 + 和 - 缩放时间线。"
-      },
-      {
-        "kind": "new",
-        "text": "项目管理像文件浏览器：文件夹、大图和详细列表、拖放和批量移动。"
-      },
-      {
-        "kind": "new",
-        "text": "新模型：Seedance 2.5 Flash 和 Seedream 5.5，豆包完整音色列表和语音识别 2.0，Google 按参考图生成图片。"
+        "text": "停止任务后可用当前选择的模型继续。切换智能体时，原请求和已记录的进度会交给新智能体，在同一轮接着做。"
       },
       {
         "kind": "improved",
-        "text": "以素材为主的片子导出快好几倍；用显卡导出的文件更小、画面更清晰。"
+        "text": "把片段拖到另一个片段中间可预览并确认替换，拖到边缘可插入。也可以从时间轴边界收起轨道控制。"
       },
       {
         "kind": "improved",
-        "text": "从本机导入的素材不再占两份空间，移动或改名的素材也能自动找回。"
+        "text": "拖动主轨时，关联片段实时跟随。选择标记可预览画面，播放时从标记位置开始。"
       },
       {
         "kind": "improved",
-        "text": "服务生成的图片、视频或配音会显示它的提示词、模型和服务商。"
+        "text": "打开社区分类会选中第一个子分类。时间轴上已使用的素材会标为「已添加」。"
       },
       {
         "kind": "improved",
-        "text": "智能体拿到的是一份简短的系统提示，加上已打开插件自带的技能；模型列表和智能体更新在后台检查。"
+        "text": "可以在服务设置里关闭音乐或音效生成。付费请求结果未明时，OpenFilm 会保留原请求以便恢复。"
       },
       {
         "kind": "improved",
-        "text": "服务的密钥用系统钥匙串加密保存，Studio 也会走你设置的代理。"
-      },
-      {
-        "kind": "improved",
-        "text": "付费生成在应用重启后不会丢失，也不会重复扣费。"
+        "text": "长项目打开和拖动预览更流畅。难解码的素材可用播放副本，切换编辑器后会恢复预览。"
       },
       {
         "kind": "fixed",
-        "text": "导出给其他剪辑软件的草稿保留字幕样式、独立的音频轨，以及口播视频自带的声音。"
+        "text": "跳转时间轴后，点播放会等待当前位置的画面。即使章节需要几秒加载，画面就绪后也会自动播放。"
+      },
+      {
+        "kind": "improved",
+        "text": "章节加载期间继续点时间轴，新的跳转优先响应。顺序播放时，Studio 会更早准备下一页。"
+      },
+      {
+        "kind": "improved",
+        "text": "导出以加入队列时的时间轴为准，进度会显示混音、封装、保存等阶段。"
       },
       {
         "kind": "fixed",
-        "text": "桌面端可以安装和运行本地模型，Windows 上也可以。"
+        "text": "思考、运行命令和回复切换时，聊天位置更稳定。点击会话标题可打开历史或新建会话。"
       },
       {
         "kind": "fixed",
-        "text": "几个小时的录音也能打开、播放并显示波形；智能体写入后字幕轨不会丢失；改正字幕里的词会保留它的时间。"
+        "text": "模型连接中断可自动重试，失败时可查看连接详情。Studio 重启失败后可重连，断线期间也能复制诊断信息。"
       },
       {
         "kind": "fixed",
-        "text": "还有许多小修复，GitHub 上的更新日志列出了全部改动。"
+        "text": "Windows 上关闭窗口时，运行中的任务、导出和生成会继续。安装更新时会保护项目和个人素材。"
+      },
+      {
+        "kind": "fixed",
+        "text": "项目索引损坏时可以恢复列表，个人素材库也可以随项目文件夹移动。"
+      },
+      {
+        "kind": "fixed",
+        "text": "豆包语音补充了试听。Seedream 可直接发送小参考图，媒体任务确认失败后会停止轮询。"
       }
     ],
     "ja": [
       {
         "kind": "new",
-        "text": "プラグイン：編集、キャンバス、新しい試写はプラグインになり、個別にオン・オフできます。誰でもプラグインを作れます。"
+        "text": "I と O キー、または「時間範囲」メニューでタイムラインの範囲を設定し、その範囲だけを書き出せます。"
       },
       {
         "kind": "new",
-        "text": "コミュニティ（テスト版）：プラグイン、スキル、素材パック、サンプルを探して追加・公開できます。プロジェクト付属のスキルは、許可するまでエージェントに読まれません。"
-      },
-      {
-        "kind": "new",
-        "text": "クリップやページ内の要素をキーフレームで動かせます。マスク、文字・単語単位のテキストアニメーション、3D 配置にも対応。"
-      },
-      {
-        "kind": "new",
-        "text": "エフェクトをアニメーションできます：ぼかし、グロー、明るさ、コントラスト、彩度、グレースケール、色相、反転。基準点も選べます。"
-      },
-      {
-        "kind": "new",
-        "text": ".cube、OpenColorIO、ASC のカラーファイルで素材本来のビット深度のままグレーディングでき、カラーエディター（ベータ）も試せます。"
-      },
-      {
-        "kind": "new",
-        "text": "コネクタで、エージェントが Dropbox、Frame.io、Notion、Vimeo、Adobe、Canva を使えます。"
-      },
-      {
-        "kind": "new",
-        "text": "クリップ、時刻、区間、キャンバスのノードへのリンクは、どこから開いても Studio で開きます。"
-      },
-      {
-        "kind": "new",
-        "text": "ビットレートやファイルサイズを指定して書き出せます。音声は既定で -14 LUFS に整え、音割れを防ぎます。"
-      },
-      {
-        "kind": "new",
-        "text": "マイボイス：自分の録音から声を作れます。ナレーションを 2 人の声の対話にもできます。"
-      },
-      {
-        "kind": "new",
-        "text": "動画の背景除去と顔のレタッチをこのコンピューターで行い、プレビューと書き出しの両方に反映します。"
-      },
-      {
-        "kind": "new",
-        "text": "マウスを動かしてタイムラインをプレビュー（S キー）、+ と - でズームできます。"
-      },
-      {
-        "kind": "new",
-        "text": "プロジェクト管理がファイルブラウザーのようになりました：フォルダー、アイコン・詳細表示、ドラッグ＆ドロップ、一括移動。"
-      },
-      {
-        "kind": "new",
-        "text": "新しいモデル：Seedance 2.5 Flash と Seedream 5.5、Doubao の全ボイスと音声認識 2.0、参照画像からの Google 画像生成。"
+        "text": "停止したタスクを選択中のモデルで再開できます。エージェントを切り替えると、同じ会話で元の依頼と進捗が引き継がれます。"
       },
       {
         "kind": "improved",
-        "text": "素材中心の書き出しが数倍速くなり、グラフィックチップでの書き出しは小さく、画質も向上しました。"
+        "text": "クリップの中央にドラッグして置換をプレビューし、確認できます。端にドロップすると挿入し、タイムラインの境界からトラック操作を折りたためます。"
       },
       {
         "kind": "improved",
-        "text": "このコンピューターから取り込んだ素材が容量を二重に使わなくなり、移動・名前変更した素材も自動で見つけ直します。"
+        "text": "メイントラックをドラッグすると連結されたクリップも追従します。マーカーを選ぶとそのフレームを確認でき、再生もそこから始まります。"
       },
       {
         "kind": "improved",
-        "text": "サービスが作った画像、クリップ、音声は、プロンプト、モデル、サービスを表示します。"
+        "text": "コミュニティのカテゴリを開くと最初のサブカテゴリが選ばれ、タイムラインで使っている素材には追加済みの印が付きます。"
       },
       {
         "kind": "improved",
-        "text": "エージェントには短いシステムプロンプトと、オンのプラグインのスキルが渡ります。モデル一覧とエージェントの更新はバックグラウンドで確認します。"
+        "text": "サービス設定で音楽や効果音の生成をオフにできます。結果が不明な有料リクエストは復旧できるように保持します。"
       },
       {
         "kind": "improved",
-        "text": "サービスのキーはシステムのキーチェーンで保護され、Studio はプロキシ設定に従います。"
-      },
-      {
-        "kind": "improved",
-        "text": "有料の生成は、アプリを再起動しても失われず、二重に課金されません。"
+        "text": "長い作品の表示やスクラブが滑らかになりました。デコードしにくい素材には再生用コピーを使え、エディター切り替え後もプレビューが復帰します。"
       },
       {
         "kind": "fixed",
-        "text": "他の編集アプリ向けの下書きで、字幕スタイル、別々の音声トラック、トーキングヘッドの音声が保たれます。"
+        "text": "タイムラインを移動して再生すると、選んだ位置のフレームが表示できるまで待機します。読み込みに数秒かかる章も、準備ができると再生が始まります。"
+      },
+      {
+        "kind": "improved",
+        "text": "章の読み込み中も、新しいタイムライン移動が優先されます。再生中は次のページの準備を早めに開始します。"
+      },
+      {
+        "kind": "improved",
+        "text": "書き出しにはキューに追加した時点のタイムラインが使われ、ミキシング、結合、保存などの進捗が表示されます。"
       },
       {
         "kind": "fixed",
-        "text": "デスクトップアプリでローカルモデルをインストール・実行できます。Windows でも動きます。"
+        "text": "処理、コマンド実行、返信の切り替え時にチャットが安定しました。会話のタイトルから履歴や新規チャットを開けます。"
       },
       {
         "kind": "fixed",
-        "text": "数時間の録音も開いて再生でき、波形も表示されます。エージェントが書き込んでも字幕トラックは消えず、修正した字幕の単語はタイミングを保ちます。"
+        "text": "モデル接続が切れたときに再試行し、失敗時は接続の詳細を表示します。Studio の再起動失敗後にも再接続でき、オフラインでも診断情報をコピーできます。"
       },
       {
         "kind": "fixed",
-        "text": "その他多数の修正。GitHub の変更履歴にすべての変更があります。"
+        "text": "Windows ではタスクや書き出し、生成の実行中にウィンドウを閉じると最小化されます。更新時はプロジェクトや個人の素材が保護されます。"
+      },
+      {
+        "kind": "fixed",
+        "text": "プロジェクト一覧はインデックスが壊れても復旧でき、個人の素材ライブラリをプロジェクトフォルダと一緒に移動できます。"
+      },
+      {
+        "kind": "fixed",
+        "text": "Doubao の音声サンプルが増えました。Seedream の小さい参照画像は直接送信され、失敗が確定したメディア生成は状態確認を終了します。"
       }
     ],
     "ko": [
       {
         "kind": "new",
-        "text": "플러그인: 편집, 캔버스, 새로운 시사는 각각 켜고 끌 수 있는 플러그인입니다. 누구나 플러그인을 만들 수 있습니다."
+        "text": "I와 O 또는 시간 범위 메뉴로 타임라인 구간을 지정하고 그 구간만 내보낼 수 있습니다."
       },
       {
         "kind": "new",
-        "text": "커뮤니티(테스트 버전): 플러그인, 스킬, 소재 팩, 예제를 찾아 추가하고 게시할 수 있습니다. 프로젝트에 딸린 스킬은 허용해야만 에이전트가 읽습니다."
-      },
-      {
-        "kind": "new",
-        "text": "클립과 페이지 요소를 키프레임으로 움직일 수 있습니다. 마스크, 글자·단어 단위 텍스트 애니메이션, 3D 배치도 지원합니다."
-      },
-      {
-        "kind": "new",
-        "text": "효과를 애니메이션할 수 있습니다: 흐림, 글로우, 밝기, 대비, 채도, 흑백, 색조, 반전. 기준점도 고를 수 있습니다."
-      },
-      {
-        "kind": "new",
-        "text": ".cube, OpenColorIO, ASC 색상 파일로 소재 본래의 비트 심도 그대로 색 보정하고, 컬러 편집기(베타)도 써 볼 수 있습니다."
-      },
-      {
-        "kind": "new",
-        "text": "커넥터로 에이전트가 Dropbox, Frame.io, Notion, Vimeo, Adobe, Canva를 쓸 수 있습니다."
-      },
-      {
-        "kind": "new",
-        "text": "클립, 시점, 구간, 캔버스 노드로 가는 링크는 어디서 열어도 Studio에서 열립니다."
-      },
-      {
-        "kind": "new",
-        "text": "비트레이트나 파일 크기를 정해 내보낼 수 있습니다. 소리는 기본으로 -14 LUFS에 맞추고 클리핑을 막습니다."
-      },
-      {
-        "kind": "new",
-        "text": "내 목소리: 내 녹음으로 목소리를 만들 수 있습니다. 내레이션을 두 목소리의 대화로도 만들 수 있습니다."
-      },
-      {
-        "kind": "new",
-        "text": "영상 배경 제거와 얼굴 보정을 이 컴퓨터에서 처리하고, 미리보기와 내보내기에 모두 적용합니다."
-      },
-      {
-        "kind": "new",
-        "text": "마우스를 움직여 타임라인을 미리 보고(S 키), + 와 - 로 확대·축소할 수 있습니다."
-      },
-      {
-        "kind": "new",
-        "text": "프로젝트 관리가 파일 탐색기처럼 바뀌었습니다: 폴더, 아이콘·자세히 보기, 끌어 놓기, 일괄 이동."
-      },
-      {
-        "kind": "new",
-        "text": "새 모델: Seedance 2.5 Flash와 Seedream 5.5, Doubao 전체 음성 목록과 음성 인식 2.0, 참조 이미지로 만드는 Google 그림."
+        "text": "중지한 작업을 현재 선택한 모델로 이어갈 수 있습니다. 에이전트를 바꾸면 원래 요청과 저장한 진행 내역을 같은 대화에서 인계합니다."
       },
       {
         "kind": "improved",
-        "text": "소재 위주의 내보내기가 몇 배 빨라졌고, 그래픽 칩으로 내보낸 파일은 더 작고 선명합니다."
+        "text": "클립 중앙에 드래그하면 교체를 미리 보고 확인할 수 있습니다. 가장자리에 놓으면 삽입되며 타임라인 경계에서 트랙 컨트롤을 접을 수 있습니다."
       },
       {
         "kind": "improved",
-        "text": "이 컴퓨터에서 가져온 소재가 공간을 두 번 차지하지 않고, 옮기거나 이름을 바꾼 소재도 다시 찾아냅니다."
+        "text": "메인 트랙을 드래그하면 연결된 클립이 따라 움직입니다. 마커를 선택하면 해당 프레임이 보이고 그 지점에서 재생됩니다."
       },
       {
         "kind": "improved",
-        "text": "서비스가 만든 그림, 클립, 음성은 프롬프트, 모델, 서비스를 보여 줍니다."
+        "text": "커뮤니티 분류를 열면 첫 하위 분류가 선택되며 타임라인에 사용된 소재에 추가됨 표시가 붙습니다."
       },
       {
         "kind": "improved",
-        "text": "에이전트는 짧은 시스템 프롬프트와 켜 둔 플러그인의 스킬을 받습니다. 모델 목록과 에이전트 업데이트는 백그라운드에서 확인합니다."
+        "text": "서비스 설정에서 음악이나 효과음 생성을 끌 수 있습니다. 결과가 불확실한 유료 요청은 복구할 수 있도록 보관합니다."
       },
       {
         "kind": "improved",
-        "text": "서비스 키는 시스템 키체인으로 보호되고, Studio는 프록시 설정을 따릅니다."
-      },
-      {
-        "kind": "improved",
-        "text": "유료 생성은 앱을 다시 시작해도 사라지거나 두 번 결제되지 않습니다."
+        "text": "긴 프로젝트를 더 부드럽게 열고 탐색할 수 있습니다. 디코딩하기 어려운 소재에는 재생용 복사본을 쓰고 편집기 전환 후 미리보기를 복구합니다."
       },
       {
         "kind": "fixed",
-        "text": "다른 편집 앱용 초안에서 자막 스타일, 분리된 오디오 트랙, 토킹 헤드의 소리가 유지됩니다."
+        "text": "타임라인을 이동한 뒤 재생을 누르면 선택한 위치의 프레임을 기다립니다. 챕터를 불러오는 데 몇 초가 걸려도 준비되면 재생이 시작됩니다."
+      },
+      {
+        "kind": "improved",
+        "text": "챕터를 불러오는 동안에도 새 타임라인 이동이 우선됩니다. 재생 중에는 다음 페이지를 더 일찍 준비합니다."
+      },
+      {
+        "kind": "improved",
+        "text": "내보내기는 대기열에 추가한 시점의 타임라인을 사용하며 믹싱, 파일 결합, 저장 등 현재 단계를 표시합니다."
       },
       {
         "kind": "fixed",
-        "text": "데스크톱 앱에서 로컬 모델을 설치하고 실행할 수 있습니다. Windows에서도 됩니다."
+        "text": "처리 중, 명령 실행, 답변 사이를 전환할 때 대화 위치가 안정적입니다. 대화 제목을 눌러 기록을 열거나 새 대화를 시작할 수 있습니다."
       },
       {
         "kind": "fixed",
-        "text": "몇 시간짜리 녹음도 열고 재생하며 파형을 보여 줍니다. 에이전트가 써도 자막 트랙이 사라지지 않고, 고친 자막 단어는 타이밍을 유지합니다."
+        "text": "모델 연결이 끊기면 재시도하고 실패 시 연결 상세 정보를 표시합니다. Studio 재시작 실패 후에도 다시 연결하고 오프라인에서 진단 정보를 복사할 수 있습니다."
       },
       {
         "kind": "fixed",
-        "text": "그 밖의 많은 수정. GitHub 변경 기록에 모든 변경이 있습니다."
+        "text": "Windows에서 작업, 내보내기 또는 생성 중 창을 닫으면 최소화됩니다. 업데이트 시 프로젝트와 개인 소재를 보호합니다."
+      },
+      {
+        "kind": "fixed",
+        "text": "인덱스가 손상돼도 프로젝트 목록을 복구할 수 있고 개인 소재 라이브러리를 프로젝트 폴더와 함께 옮길 수 있습니다."
+      },
+      {
+        "kind": "fixed",
+        "text": "Doubao 음성 미리듣기가 늘었습니다. Seedream의 작은 참조 이미지는 직접 전송하고 실패한 미디어 작업은 상태 조회를 마칩니다."
       }
     ],
     "es": [
       {
         "kind": "new",
-        "text": "Plugins: Edición, Lienzo y la nueva Proyección son plugins que activas o desactivas, y cualquiera puede crear uno."
+        "text": "Marca un intervalo de la línea de tiempo con I y O o desde el menú Intervalo de tiempo y exporta solo ese tramo."
       },
       {
         "kind": "new",
-        "text": "La Comunidad (en pruebas): busca, añade y publica plugins, habilidades, paquetes de la biblioteca y ejemplos. Las habilidades propias de un proyecto solo llegan a tu agente cuando las permites."
-      },
-      {
-        "kind": "new",
-        "text": "Los clips y los elementos de una página se mueven con fotogramas clave, con máscaras, texto animado por letras o palabras y colocación en 3D."
-      },
-      {
-        "kind": "new",
-        "text": "Anima efectos: desenfoque, brillo difuso, luminosidad, contraste, saturación, escala de grises, tono e inversión, alrededor del punto de anclaje que elijas."
-      },
-      {
-        "kind": "new",
-        "text": "Etalona con archivos de color .cube, OpenColorIO y ASC a la profundidad de bits original, y prueba el editor de Color (beta)."
-      },
-      {
-        "kind": "new",
-        "text": "Los conectores dejan que tu agente use Dropbox, Frame.io, Notion, Vimeo, Adobe y Canva."
-      },
-      {
-        "kind": "new",
-        "text": "Los enlaces a un clip, un momento, un tramo o un nodo del lienzo se abren en Studio vengan de donde vengan."
-      },
-      {
-        "kind": "new",
-        "text": "Exporta a una tasa de bits o un tamaño de archivo. El sonido se lleva a -14 LUFS por defecto y se evita que sature."
-      },
-      {
-        "kind": "new",
-        "text": "Mis voces: crea una voz a partir de tu propia grabación. La locución puede ser un diálogo a dos voces."
-      },
-      {
-        "kind": "new",
-        "text": "Quita el fondo de un vídeo y retoca caras en tu ordenador, en la vista previa y al exportar."
-      },
-      {
-        "kind": "new",
-        "text": "Previsualiza la línea de tiempo moviendo el ratón (S) y haz zoom con + y -."
-      },
-      {
-        "kind": "new",
-        "text": "Los proyectos funcionan como un explorador de archivos: carpetas, vistas de iconos y detalles, arrastrar y soltar, y movimientos por lotes."
-      },
-      {
-        "kind": "new",
-        "text": "Modelos nuevos: Seedance 2.5 Flash y Seedream 5.5, la lista completa de voces de Doubao y su reconocimiento de voz 2.0, e imágenes de Google a partir de imágenes de referencia."
+        "text": "Detén una tarea y continúala con el modelo seleccionado. Al cambiar de agente, el nuevo recibe la solicitud y el progreso en la misma conversación."
       },
       {
         "kind": "improved",
-        "text": "Las exportaciones de metraje son varias veces más rápidas, y las del chip gráfico ocupan menos y se ven mejor."
+        "text": "Arrastra un clip al centro de otro para previsualizar y confirmar el reemplazo. Suéltalo en un borde para insertar y usa el límite de la línea de tiempo para plegar los controles de pista."
       },
       {
         "kind": "improved",
-        "text": "El material de este ordenador ya no ocupa el doble, y el material movido o renombrado se vuelve a encontrar."
+        "text": "Los clips vinculados siguen a la pista principal al arrastrarla. Al seleccionar un marcador se muestra su fotograma y la reproducción comienza ahí."
       },
       {
         "kind": "improved",
-        "text": "Una imagen, un clip o una voz que hizo un servicio muestran su prompt, su modelo y su servicio."
+        "text": "Las categorías de la Comunidad abren su primera subcategoría y la biblioteca marca los archivos ya usados en la línea de tiempo."
       },
       {
         "kind": "improved",
-        "text": "Los agentes reciben un prompt de sistema breve y las habilidades de los plugins activos. Las listas de modelos y las actualizaciones de agentes se comprueban en segundo plano."
+        "text": "Desactiva la generación de música o efectos sonoros desde Servicios. OpenFilm conserva las solicitudes de pago de resultado incierto para poder recuperarlas."
       },
       {
         "kind": "improved",
-        "text": "Las claves de los servicios se guardan selladas con el llavero del sistema, y Studio usa tu proxy."
-      },
-      {
-        "kind": "improved",
-        "text": "Una generación de pago no se pierde ni se cobra dos veces si la app se reinicia."
+        "text": "Los proyectos largos se abren y recorren con mayor fluidez. Studio puede usar copias de reproducción para archivos difíciles de decodificar y recupera la vista previa al cambiar de editor."
       },
       {
         "kind": "fixed",
-        "text": "Los borradores para otras apps de edición conservan el estilo de los subtítulos, las pistas de audio separadas y el sonido propio de una persona hablando a cámara."
+        "text": "Al saltar en la línea de tiempo, Reproducir espera el fotograma elegido y comienza en cuanto esté listo, aunque el capítulo tarde varios segundos en cargar."
+      },
+      {
+        "kind": "improved",
+        "text": "Los saltos nuevos en la línea de tiempo tienen prioridad mientras se abre un capítulo. Durante la reproducción, Studio prepara antes la página siguiente."
+      },
+      {
+        "kind": "improved",
+        "text": "La exportación usa la línea de tiempo tal como estaba al entrar en la cola. El progreso muestra las etapas de mezcla, multiplexado y guardado."
       },
       {
         "kind": "fixed",
-        "text": "Los modelos locales se instalan y funcionan en la app de escritorio, también en Windows."
+        "text": "El chat mantiene su posición al pasar del procesamiento a los comandos y las respuestas. El título de la conversación abre el historial y la opción de iniciar un chat."
       },
       {
         "kind": "fixed",
-        "text": "Las grabaciones de horas se abren, se reproducen y muestran su forma de onda. Las pistas de subtítulos sobreviven a lo que escribe el agente, y una palabra corregida conserva su tiempo."
+        "text": "OpenFilm reintenta las solicitudes interrumpidas y muestra los detalles de conexión si fallan. Studio puede reconectarse tras un reinicio fallido y copiar el diagnóstico sin conexión."
       },
       {
         "kind": "fixed",
-        "text": "Muchas correcciones menores. El registro de cambios en GitHub recoge cada cambio."
+        "text": "En Windows, cerrar la ventana durante una tarea, exportación o generación minimiza la aplicación. Las actualizaciones protegen los proyectos y los archivos personales."
+      },
+      {
+        "kind": "fixed",
+        "text": "La lista de proyectos puede recuperarse si se daña el índice y la biblioteca personal puede moverse junto con la carpeta de proyectos."
+      },
+      {
+        "kind": "fixed",
+        "text": "Doubao tiene más muestras de voz. Seedream envía directamente las imágenes de referencia pequeñas y se deja de consultar una generación con fallo definitivo."
       }
     ]
   }

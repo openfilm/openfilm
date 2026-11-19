@@ -1,5 +1,44 @@
 # @openfilm/desktop
 
+## 0.4.1
+
+### Patch Changes
+
+- 5dbf5ef: Stop and continue an interrupted task from the same conversation. Continue uses the model and effort selected in the composer. Another agent can pick up the original request and saved progress, with the switch marked in the conversation. For OpenFilm and own-key agents, interrupted model requests can retry from the latest completed tool result. Connection details show the failed stage, duration, retry count and any error code or request ID available.
+
+  Keep the chat steady as processing, tool commands and replies appear. The status clock stays aligned, the completed reply stays in place, and the conversation title opens history and new-chat actions without a status badge. Improve attachment menu spacing, message colors and keyboard focus when switching conversations.
+
+- 896e9dc: Export the timeline shown when you click Export, even if you keep editing while the job queues or runs. The export dialog loads its settings and progress without scanning the project folder. A trimmed clip outside a selected range can stay offline. Video exports mix audio while drawing the picture, prepare pages as needed, and fall back sooner when a hardware encoder stalls. On Apple silicon, Auto can use more drawing workers when enough memory is available. PNG stills use the browser's image directly when it already has the requested dimensions, and editing-project exports probe media in parallel. Closing the window on Windows minimizes it while an export is running.
+
+  The export queue shows each stage and its elapsed time, including audio mixing, loudness adjustment, muxing and saving. Percentages appear when work in that stage can be measured.
+
+- 5dbf5ef: Export the range marked on the timeline. Use I and O or the Time Range menu to mark it, then open Export with Command+M or Ctrl+M.
+- 0896bd4: Set music or sound effects to None to turn off generation while keeping other services connected. Disconnecting the selected service keeps that kind of generation off. If a request's outcome is uncertain, OpenFilm preserves the original request and avoids submitting the same paid take again.
+- 0896bd4: Stop polling finished media failures, send small Seedream reference images directly, retry explicit voice service overloads once, and give clearer model timeout and voice selection errors.
+- 0896bd4: Restore the viewer when switching workspaces and retry when the film changes while its first frame is loading.
+- 0896bd4: Protect existing projects and personal media during Windows updates and uninstalls by checking installation folders before removing app files. Keep new projects outside the app's installation directory and recover the project list from a local backup if its index is damaged.
+- 0896bd4: Storage settings now move the personal asset library with the projects folder, including across drives. If you already changed the projects folder, use Move asset library in Storage to bring your existing assets with it.
+- 0896bd4: Keep retrying after a failed Studio restart and let users copy local diagnostics while Studio is disconnected.
+- 0896bd4: On Windows, closing the window during an agent turn, export, or media generation minimizes the app so the work can finish.
+- Updated dependencies [896e9dc]
+- Updated dependencies [896e9dc]
+- Updated dependencies [896e9dc]
+- Updated dependencies [5dbf5ef]
+- Updated dependencies [a50aded]
+- Updated dependencies [0896bd4]
+- Updated dependencies [5dbf5ef]
+- Updated dependencies [0896bd4]
+- Updated dependencies [0896bd4]
+- Updated dependencies [0896bd4]
+- Updated dependencies [5b0bed4]
+- Updated dependencies [52bcc68]
+- Updated dependencies [0896bd4]
+- Updated dependencies [0896bd4]
+- Updated dependencies [0896bd4]
+- Updated dependencies [5dbf5ef]
+- Updated dependencies [d1ea8fb]
+  - openfilm@0.4.1
+
 ## 0.4.0
 
 ### Minor Changes
