@@ -82,7 +82,7 @@ before(async () => {
   base = `http://127.0.0.1:${service.address().port}`;
   Object.assign(process.env, {
     OPENFILM_HOME: join(scratch, 'home'), OPENFILM_LIBRARY: join(scratch, 'library'),
-    OPENFILM_ELEVENLABS_URL: base, OPENFILM_FAL_URL: base, OPENFILM_OPENAI_URL: base, OPENFILM_MIMO_URL: base, OPENFILM_GROQ_URL: base,
+    OPENFILM_ELEVENLABS_URL: base, OPENFILM_FAL_URL: base, OPENFILM_OPENAI_URL: base, OPENFILM_MIMO_URL: base, OPENFILM_GROQ_URL: base, OPENFILM_CARTESIA_URL: base,
   });
   for (const p of [...listProviders(), { env: 'GOOGLE_API_KEY' }]) delete process.env[p.env];
 });
@@ -110,6 +110,25 @@ function connectAll() {
   });
 }
 beforeEach(async () => { calls.length = 0; refuse = null; rmSync(providersFile(), { force: true }); await connectAll(); });
+
+test('audio generation stays off with a connected provider, and an uncertain submission cannot be repeated', async () => {
+  const root = project();
+  const args = { out: 'score', prompt: 'A quiet piano piece' };
+  await changeSettings((s) => { s.use.music = ''; });
+  await assert.rejects(runGet(root, 'music', args, { via: 'elevenlabs' }), /is off in Settings/);
+  assert.equal(calls.length, 0);
+
+  await changeSettings((s) => { s.use.music = 'elevenlabs'; });
+  refuse = () => [502, { message: 'Bad gateway' }];
+  await assert.rejects(runGet(root, 'music', args), /may already have been charged/);
+  await assert.rejects(runGet(root, 'music', args), /An earlier ElevenLabs request may have been charged/);
+  assert.equal(calls.filter((c) => c.path === '/v1/music').length, 1);
+
+  refuse = null;
+  await runGet(root, 'music', { ...args, fresh: true });
+  assert.equal(calls.filter((c) => c.path === '/v1/music').length, 2);
+  assert.deepEqual(await pendingRuns(root), []);
+});
 
 let projects = 0;
 function project(film = { stage: { w: 1920, h: 1080 }, tracks: [] }) {
@@ -150,6 +169,29 @@ test('tts: the file lands, its timed words a WebVTT beside it, and the receipt s
   const voices = JSON.parse(await runGet(root, 'voice', {}));
   assert.deepEqual(voices.voices.map((v) => v.voiceId), ['v-1']);
   assert.equal(calls.at(-1).path, '/v2/voices');
+});
+
+test('tts sends the performance tags to the voice provider and saves only the timed dialogue in WebVTT', async () => {
+  const root = project();
+  const said = '<emotion value="calm"/><speed ratio="1.05"/><volume ratio="1.0"/>Man, listen. <break time="400ms" />[laughter] Here we go.';
+  const words = ['<emotion', 'value="calm"/><speed', 'ratio="1.05"/><volume', 'ratio="1.0"/>Man,', 'listen.',
+    '<break', 'time="400ms" />', '[laughter]', 'Here', 'we', 'go.'];
+  const start = [0, 0, 0, 0.2, 0.4, 0.8, 0.8, 1.2, 1.6, 1.8, 2];
+  const end = [0, 0, 0, 0.35, 0.8, 1.2, 1.2, 1.6, 1.75, 1.95, 2.3];
+  refuse = () => [200, Buffer.from([
+    { type: 'chunk', data: Buffer.alloc(44100 * 2 * 3).toString('base64') },
+    { type: 'timestamps', word_timestamps: { words, start, end } },
+  ].map((event) => `data: ${JSON.stringify(event)}\n\n`).join(''))];
+
+  const receipt = JSON.parse(await runGet(root, 'tts', { out: 'directed', text: said, voice: 'v-1' }, { via: 'cartesia' }));
+  assert.equal(JSON.parse(calls[0].body).transcript, said);
+  assert.equal(receipt.transcript, 'assets/audio/vo/directed.vtt');
+  assert.doesNotMatch(readFileSync(join(root, receipt.transcript), 'utf8'), /&lt;|laughter|ratio=/);
+  const { lines } = await readTranscript(root, receipt.src);
+  assert.deepEqual(lines.map(({ text, startMs, marks }) => ({ text, startMs, marks })), [
+    { text: 'Man, listen.', startMs: 200, marks: [{ index: 0, startMs: 200 }, { index: 5, startMs: 400 }] },
+    { text: 'Here we go.', startMs: 1600, marks: [{ index: 0, startMs: 1600 }, { index: 5, startMs: 1800 }, { index: 8, startMs: 2000 }] },
+  ]);
 });
 
 test('a file is never written through a link the project brings under assets/', { skip: process.platform === 'win32' }, async () => {

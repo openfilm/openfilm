@@ -166,7 +166,8 @@ const PREMIERE: Partial<Record<ActionId, Binding>> = {
   'nudge-forward': { mac: ['mod+ArrowRight'], other: ['alt+ArrowRight'] },
   /* Snap in Timeline */
   'toggle-snap': ['s'],
-  'zoom-in': ['='],
+  /* Zoom In is the = key, which types + with ⇧ (and the keypad's +) */
+  'zoom-in': ['=', '+'],
   'zoom-out': ['-'],
   /* Zoom to Sequence */
   'zoom-fit': ['\\'],
@@ -233,8 +234,9 @@ const FINAL_CUT: Partial<Record<ActionId, Binding>> = {
   'nudge-forward': ['.'],
   /* Snapping */
   'toggle-snap': ['n'],
-  'zoom-in': ['mod++', 'mod+='],
-  'zoom-out': ['mod+-'],
+  /* ⌘+ / ⌘−; plain + / − as well, as in Studio's other schemes (the app has no other use for them) */
+  'zoom-in': ['mod++', 'mod+=', '+', '='],
+  'zoom-out': ['mod+-', '-'],
   'zoom-fit': ['shift+z'],
   'add-marker': ['m'],
   'next-marker': ["ctrl+'"],
@@ -311,7 +313,8 @@ function keyName(e: Pick<KeyPress, 'key' | 'code' | 'shiftKey' | 'altKey'>): str
   if (e.key === ' ' || e.code === 'Space') return 'Space';
   const letter = letterOf(e);
   if (/^[a-z]$/.test(letter)) return letter;
-  if (e.key === '+') return '+';
+  if (e.key === '+' || e.key === '＋' || e.code === 'NumpadAdd') return '+';
+  if (e.key === '−' || e.key === '－' || e.code === 'NumpadSubtract') return '-';
   /* punctuation the layout types where it is, unshifted: read as typed */
   if (e.key.length === 1 && !e.shiftKey && !e.altKey && PUNCTUATION.has(e.key)) return e.key;
   const byCode = CODE_KEYS[e.code ?? ''];

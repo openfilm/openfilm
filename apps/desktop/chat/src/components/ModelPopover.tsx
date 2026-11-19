@@ -41,6 +41,15 @@ const ROW_BASE =
   'flex min-h-[28px] w-full items-center gap-2 rounded-[6px] px-2.5 text-[13px] font-normal tracking-normal text-left outline-none transition';
 const ROW = `${ROW_BASE} hover:bg-[var(--bg-hover)] focus-visible:bg-[var(--bg-hover)]`;
 
+/** The monochrome mark for each model provider. */
+const MODEL_PROVIDER_ICONS = new Map<string, React.ReactNode>([
+  ['anthropic', <AgentIcon id="claude" size={14} />],
+  ['openai', <AgentIcon id="codex" size={14} />],
+  ['google', <AgentIcon id="gemini" size={14} />],
+  ['tencent', <AgentIcon id="hunyuan" size={14} />],
+  ['deepseek', <AgentIcon id="deepseek" size={14} />],
+]);
+
 type Option = MenuOption;
 
 /** A row's choices: those the agent offers there, or its one value when that is all it has (a "default" too). */
@@ -240,7 +249,11 @@ export function ModelPopover({ placement = 'bottom', align = 'start', agent: con
           <button key={String(choice.value)} type="button" onMouseDown={keepFocus}
             disabled={choice.disabled} title={choice.disabled ? t('composer.modelUnavailableInfo') : undefined}
             onClick={() => pickChoice(choosing, choice.value)} className={`${ROW} disabled:cursor-default disabled:opacity-50`}>
-            {agent === 'openfilm' && choosing.category === 'model' ? <span className="flex w-4 shrink-0 justify-center text-[var(--text-muted)]"><AgentIcon id={String(choice.value).startsWith('anthropic/') ? 'claude' : String(choice.value).startsWith('openai/') ? 'codex' : 'deepseek'} size={14} /></span> : null}
+            {agent === 'openfilm' && choosing.category === 'model' ? (
+              <span aria-hidden className="flex w-4 shrink-0 justify-center text-[var(--text-muted)]">
+                {MODEL_PROVIDER_ICONS.get(String(choice.value).split('/', 1)[0])}
+              </span>
+            ) : null}
             <span className="min-w-0 flex-1 truncate text-[var(--text)]">{choice.name}</span>
             {choice.disabled ? <span className="text-[11px] text-[var(--text-muted)]">{t('composer.modelUnavailable')}</span> : null}
             <Check size={13} className={`ml-2 shrink-0 text-[var(--text)] ${selected ? '' : 'invisible'}`} />

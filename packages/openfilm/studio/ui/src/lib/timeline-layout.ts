@@ -46,14 +46,10 @@ const LIBRARY_PAGES = 'saved/openfilm/';
  */
 /** The narrowest view: 1 s = 30 frames. */
 export const VIEW_SPAN_MIN_MS = 1000;
-/**
- * What an empty timeline (length 0: a new project, just cleared) shows across.
- *
- * It used to borrow VIEW_SPAN_MIN_MS, so the whole empty track was one second: dropping in the middle landed at
- * 0.5 s and an 8 s clip spread over ten thousand pixels — it looked like "it jumps back to the start". 30 s fits a
- * first short clip and makes the drop position mean something.
- */
-export const VIEW_SPAN_EMPTY_MS = 30_000;
+/** The time shown across a new or cleared timeline, before the first clip sets the length. */
+export const VIEW_SPAN_EMPTY_MS = 18_000;
+/** How far a short film can zoom out. */
+const VIEW_SPAN_MAX_FLOOR_MS = 30_000;
 /** The widest view, as a multiple of the film's length. */
 export const VIEW_SPAN_MAX_FACTOR = 4;
 /** Widest zoom: the film takes a quarter of the view. */
@@ -66,7 +62,7 @@ export const ZOOM_STEP = 1.6;
 
 /** The most time one view can show. */
 export function viewSpanMaxMs(totalMs: number): number {
-  return Math.max(Math.max(0, totalMs) * VIEW_SPAN_MAX_FACTOR, VIEW_SPAN_EMPTY_MS);
+  return Math.max(Math.max(0, totalMs) * VIEW_SPAN_MAX_FACTOR, VIEW_SPAN_MAX_FLOOR_MS);
 }
 
 /** The lowest zoom (relative to fitting the film). */
@@ -261,6 +257,7 @@ export interface RulerSteps {
 
 /* the least room between two labels: 64 px was too tight for `00:12` */
 const MIN_LABEL_PX = 96;
+const MIN_FRAME_LABEL_PX = 150;
 const MIN_TICK_PX = 12;
 
 /** Steps coarser than a second: seconds, whole minutes, quarter hours. */
@@ -285,14 +282,15 @@ function coarsestStep(ladder: readonly number[], msPerFrame: number, pxPerMs: nu
   return found ?? ladder[ladder.length - 1]!;
 }
 
-export function rulerSteps(pxPerMs: number, fps = DISPLAY_FPS): RulerSteps {
+export function rulerSteps(pxPerMs: number, fps = DISPLAY_FPS, empty = false): RulerSteps {
   const perSec = framesPerSecond(fps);
   if (!(pxPerMs > 0)) return { labelMs: 1000, tickMs: 1000, fps, labelFrames: perSec, tickFrames: perSec };
   /* a frame's nominal length: a second is perSec of them */
   const msPerFrame = 1000 / perSec;
   /* from 2: a label every frame leaves no room for a tick between labels */
-  const labels = frameStepLadder(fps, 2);
-  const ticks = frameStepLadder(fps, 1);
+  const labels = empty ? SECOND_STEPS.filter((s) => s >= 3).map((s) => s * perSec)
+    : frameStepLadder(fps, 2).filter((n) => n >= perSec || n * msPerFrame * pxPerMs >= MIN_FRAME_LABEL_PX);
+  const ticks = frameStepLadder(fps, empty ? Math.ceil(perSec / 2) : 1);
   const labelFrames = coarsestStep(labels, msPerFrame, pxPerMs, MIN_LABEL_PX);
   const wanted = coarsestStep(ticks, msPerFrame, pxPerMs, MIN_TICK_PX);
 

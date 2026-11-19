@@ -198,7 +198,19 @@ export function builtInItem(path: string | null | undefined): LibraryItem | null
 export function fromLibrary(path: string, items: readonly LibraryItem[] | null = index?.items ?? null): boolean {
   if (path.startsWith(`saved/${BUILT_IN}/`)) return true;
   const sound = /^assets\/([^/]+)$/.exec(path)?.[1];
-  return Boolean(sound && items?.some((item) => item.kind === 'sound' && item.id.endsWith(`/${sound}`)));
+  return Boolean(sound && items && soundNamesOf(items).has(sound));
+}
+
+/** The names of the library's sounds (each item's id after its last `/`), gathered once a list: an editor asks of every
+    file of a project as it draws. */
+const soundNames = new WeakMap<readonly LibraryItem[], Set<string>>();
+function soundNamesOf(items: readonly LibraryItem[]): Set<string> {
+  let names = soundNames.get(items);
+  if (!names) {
+    names = new Set(items.filter((item) => item.kind === 'sound').map((item) => item.id.slice(item.id.lastIndexOf('/') + 1)));
+    soundNames.set(items, names);
+  }
+  return names;
 }
 
 /** Its name in `lang`, else English. */

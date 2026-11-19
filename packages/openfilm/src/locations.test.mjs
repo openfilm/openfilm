@@ -1,11 +1,11 @@
 import { test, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { exportsRoot, libraryDefault, libraryProjects, libraryRoot, locations, usableFolder } from './locations.mjs';
 
-const KEYS = ['OPENFILM_HOME', 'OPENFILM_LIBRARY', 'OPENFILM_EXPORTS', 'OPENFILM_SHARED_HOME'];
+const KEYS = ['OPENFILM_HOME', 'OPENFILM_LIBRARY', 'OPENFILM_EXPORTS', 'OPENFILM_SHARED_HOME', 'OPENFILM_SAVED', 'OPENFILM_INSTALL_DIR'];
 let saved;
 let home;
 beforeEach(() => {
@@ -15,6 +15,8 @@ beforeEach(() => {
   delete process.env.OPENFILM_LIBRARY;
   delete process.env.OPENFILM_EXPORTS;
   delete process.env.OPENFILM_SHARED_HOME;
+  delete process.env.OPENFILM_SAVED;
+  delete process.env.OPENFILM_INSTALL_DIR;
 });
 afterEach(() => {
   for (const k of KEYS) { if (saved[k] === undefined) delete process.env[k]; else process.env[k] = saved[k]; }
@@ -52,7 +54,8 @@ test('each folder for Settings: where it is, its default, whether chosen, and fr
   assert.equal(now.projects.chosen, true);
   assert.notEqual(now.projects.default, projects);
   assert.ok(now.projects.free > 0, 'measured on the disk above a folder not made yet');
-  assert.deepEqual(Object.keys(now), ['projects'], 'only where new projects go is a setting');
+  assert.equal(now.saved.target, join(projects, 'Saved'));
+  assert.notEqual(now.saved.path, now.saved.target, 'the existing library stays readable until it moves');
 });
 
 test('a folder offered is made and kept by its full path; a disk, Studio\'s own home or a relative path is refused', () => {
@@ -62,6 +65,20 @@ test('a folder offered is made and kept by its full path; a disk, Studio\'s own 
   assert.throws(() => usableFolder('Projects'), /full path/);
   assert.throws(() => usableFolder(process.platform === 'win32' ? 'C:\\' : '/'), /not the disk itself/);
   assert.throws(() => usableFolder(join(home, 'inside')), /own settings/);
+});
+
+test('projects storage cannot be in the installed app, even through a junction and before the folder exists', () => {
+  const root = mkdtempSync(join(tmpdir(), 'of-install-location-'));
+  const installed = join(root, 'OpenFilm');
+  const alias = join(root, 'Shortcut');
+  mkdirSync(installed);
+  symlinkSync(installed, alias, process.platform === 'win32' ? 'junction' : 'dir');
+  process.env.OPENFILM_INSTALL_DIR = installed;
+  assert.throws(() => usableFolder(installed), /installation directory/);
+  assert.throws(() => usableFolder(join(alias, 'new', 'Projects')), /installation directory/);
+  assert.equal(existsSync(join(installed, 'new')), false);
+  const safe = join(root, 'OpenFilm Projects');
+  assert.equal(usableFolder(safe), safe);
 });
 
 test('a library\'s projects are its folders that hold a film; Settings counts them', () => {

@@ -46,9 +46,11 @@ import {
   type ExportVideoCodec,
 } from '@/lib/export-spec';
 import {
+  exportCaptions,
+  exportProjectSizes,
+  exportSettings,
   formatBytes,
   formatFilmTime,
-  listExports,
   probeFps,
   PROJECT_PARTS,
   startExports,
@@ -231,6 +233,9 @@ export interface ExportCenterProps {
   open: boolean;
   onClose: () => void;
   projectId: string;
+  /** Save pending edits before choosing the displayed revision to export. */
+  savedRevision?: () => Promise<string | undefined>;
+  refreshPreview?: () => void;
   title: string;
   /** The film's length. */
   durationMs: number;
@@ -265,8 +270,8 @@ export interface ExportCenterProps {
   missingFiles?: readonly string[];
 }
 
-/** What draws or plays the film, and so needs every file it uses. */
-const RENDERS: ReadonlySet<Dest> = new Set(['video', 'alpha', 'gif', 'audio', 'images']);
+/** Delivery types that draw the project's picture. */
+const PICTURE_EXPORTS: ReadonlySet<Dest> = new Set(['video', 'alpha', 'gif', 'images']);
 
 export function ExportCenter(props: ExportCenterProps) {
   const { open, onClose } = props;
@@ -320,7 +325,23 @@ export function ExportCenter(props: ExportCenterProps) {
     setExportName(props.title);
     setNameTyped(false);
     setRange(false);
-    void listExports(props.projectId).then((r) => { setCan(r.can); setRenderAuto(r.render?.auto ?? null); setDraftApps({ jianying: Boolean(r.drafts?.jianying), capcut: Boolean(r.drafts?.capcut) }); setDefaultFolder(r.folder); setCaptionCount(r.subtitles ?? 0); setCaptionTracks(Boolean(r.captionTracks)); setProjectSizes(r.project ?? null); }).catch(() => {});
+    setCaptionCount(null);
+    setCaptionTracks(false);
+    setProjectSizes(null);
+    const life = new AbortController();
+    void exportSettings(props.projectId, life.signal).then((r) => {
+      if (life.signal.aborted) return;
+      setCan(r.can);
+      setRenderAuto(r.render.auto);
+      setDraftApps(r.drafts);
+      setDefaultFolder(r.folder);
+    }).catch(() => {});
+    void exportCaptions(props.projectId, life.signal).then((r) => {
+      if (life.signal.aborted) return;
+      setCaptionCount(r.subtitles);
+      setCaptionTracks(r.captionTracks);
+    }).catch(() => {});
+    return () => life.abort();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
@@ -404,6 +425,14 @@ export function ExportCenter(props: ExportCenterProps) {
   };
 
   const dest: Dest = DESTS.some((d) => d.id === s.dest) ? s.dest : 'video';
+  React.useEffect(() => {
+    if (!open || dest !== 'project') return undefined;
+    const life = new AbortController();
+    void exportProjectSizes(props.projectId, life.signal).then((sizes) => {
+      if (!life.signal.aborted) setProjectSizes(sizes);
+    }).catch(() => {});
+    return () => life.abort();
+  }, [open, dest, props.projectId]);
   const imageDocument = s.images.as === 'pdf' || s.images.as === 'pptx';
   const alphaBlock = blocks.find((b) => b.clipId === s.alpha.source);
   const canRange = totalMs > 0 && (dest === 'video' || dest === 'gif' || dest === 'audio' || dest === 'subtitles' || (dest === 'alpha' && !alphaBlock));
@@ -454,7 +483,7 @@ export function ExportCenter(props: ExportCenterProps) {
   /* ── the exports this screen asks for ── */
   const baseRequests = React.useMemo((): ExportRequest[] => {
     /* subtitles drawn into the picture: only a film that has some */
-    const burn = (on: boolean) => (captions > 0 && on && !captionTracks ? { burnSubtitles: true } : {});
+    const burn = (on: boolean) => (on && !captionTracks ? { burnSubtitles: true } : {});
     switch (dest) {
       case 'video': {
         const v = s.video;
@@ -463,7 +492,7 @@ export function ExportCenter(props: ExportCenterProps) {
           ...(videoTarget === 'bitrate' ? { bitrate: Math.round(v.targetMbps * 1e6) } : videoTarget === 'size' ? {} : { quality: v.quality }),
           audio: v.audio, label: selectedVideoPreset?.name ?? codecName(videoCodec), ...burn(v.burn),
           ...(selectedVideoPreset ? { preset: selectedVideoPreset.name } : {}),
-          ...(captions > 0 && v.sidecar !== 'none' && videoCodec !== 'png' ? { sidecar: v.sidecar } : {}),
+          ...((captionCount == null || captions > 0) && v.sidecar !== 'none' && videoCodec !== 'png' ? { sidecar: v.sidecar } : {}),
           ...(v.audio && v.loudness != null && videoCodec !== 'png' ? { loudness: v.loudness } : {}),
           ...(coverFirst && firstCover && (videoCodec === 'h264' || videoCodec === 'hevc') ? { cover: firstCover } : {}),
         }];
@@ -504,7 +533,7 @@ export function ExportCenter(props: ExportCenterProps) {
         }];
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dest, s, can, nleApp, nleAlpha, draftApp, props.frame, blocks, nleSourceFps, captions, captionTracks, projectParts, moments, coverFirst, firstCover]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [dest, s, can, nleApp, nleAlpha, draftApp, props.frame, blocks, nleSourceFps, captions, captionCount, captionTracks, projectParts, moments, coverFirst, firstCover]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* the sound a video's size target leaves room for: none when the film is known to have none */
   const targetAudio = (r: ExportRequest) => (r.kind === 'video' && r.audio && !knownSilent ? targetAudioBps(r.codec) : 0);
@@ -564,6 +593,7 @@ export function ExportCenter(props: ExportCenterProps) {
   const sizeCap = dest === 'video' && videoTarget === 'size' && requests.length === 1 ? `≤ ${Number(s.video.targetMB.toFixed(2))} MB` : '';
 
   const folder = s.folder || defaultFolder;
+  const folderLabel = folderName(folder) || t('exportCenter.defaultFolder');
 
   const fileCount = requests.reduce((n, r) => {
     if (r.kind === 'stills' && r.as === 'files') return n + (r.at?.length ?? 1);
@@ -572,14 +602,13 @@ export function ExportCenter(props: ExportCenterProps) {
     return n + 1;
   }, 0);
 
-  /* files the film uses that are gone: said first, by name, before anything is queued (it would stop at them) */
+  /* The preview's missing-file report is advisory. A selection may render without those sources. */
   const missing = props.missingFiles ?? [];
-  const missingReason = missing.length && RENDERS.has(dest)
+  const missingReason = missing.length && PICTURE_EXPORTS.has(dest) && !(canRange && range)
     ? t('exportCenter.missingMedia').replace('{n}', String(missing.length))
       .replace('{files}', missing.slice(0, 3).map((f) => f.split('/').pop()).join(', ') + (missing.length > 3 ? ', …' : ''))
     : null;
   const emptyReason = ((): string | null => {
-    if (missingReason) return missingReason;
     if (!totalMs && dest !== 'project') return t('exportCenter.emptyFilm');
     if (rangeInvalid) return rangeError;
     if (dest === 'video' && videoTarget) {
@@ -601,25 +630,27 @@ export function ExportCenter(props: ExportCenterProps) {
   const queue = async (jobs: ExportRequest[]) => {
     if (working || rangeInvalid) return;
     setResult(null);
-    if (!folder) {
-      setResult({ ok: false, text: t('exportCenter.noFolder') });
-      return;
-    }
     setWorking(t('exportCenter.queueing'));
     try {
       /* the name typed here, unless there is none or its field is hidden (a draft is named by its app): every way out
          of this screen comes through here */
       const typed = nameTyped && !toDrafts ? exportName.trim() : '';
       const named = typed ? jobs.map((job, index) => ({ ...job, name: typed + (canRange && range && rangeDelivery === 'separate' && (parsedRanges?.length ?? 0) > 1 ? ` - ${String(index + 1).padStart(2, '0')}` : '') })) : jobs;
-      const queued = await startExports(props.projectId, named, s.folder || undefined);
+      const revision = named.some((job) => job.kind !== 'project') ? await props.savedRevision?.() : undefined;
+      const queued = await startExports(props.projectId, named, s.folder || undefined, revision);
       props.onQueued?.(queued);
       /* the ticked covers, as pictures beside the video */
       if (dest === 'video' && props.covers && coversTicked.length) {
-        void coversApi.draw(props.covers.projectId, [...coversTicked], 'jpg', { folder, reveal: false }).catch(() => {});
+        void coversApi.draw(props.covers.projectId, [...coversTicked], 'jpg', { folder: folder || undefined, reveal: false }).catch(() => {});
       }
       onClose();
     } catch (e) {
-      setResult({ ok: false, text: e instanceof TypeError ? t('exportCenter.engineDown') : (e instanceof Error ? e.message : String(e)) });
+      if (e instanceof Error && 'code' in e && e.code === 'export-preview-expired') {
+        props.refreshPreview?.();
+        setResult({ ok: false, text: t('exportCenter.previewRefreshing') });
+      } else {
+        setResult({ ok: false, text: e instanceof TypeError ? t('exportCenter.engineDown') : (e instanceof Error ? e.message : String(e)) });
+      }
     } finally {
       setWorking(null);
     }
@@ -654,7 +685,7 @@ export function ExportCenter(props: ExportCenterProps) {
 
   const primaryLabel = working
     ?? (fileCount > 1 ? t('exportCenter.exportN').replace('{n}', String(fileCount)) : t('exportCenter.export'));
-  const disabled = Boolean(working) || Boolean(emptyReason) || !folder;
+  const disabled = Boolean(working) || Boolean(emptyReason) || (dest === 'nle' && s.nle.app === 'auto' && !can);
 
   return createPortal(
     <div
@@ -1305,11 +1336,11 @@ export function ExportCenter(props: ExportCenterProps) {
                   onClick={() => void changeFolder()}
                   disabled={picking}
                   title={folder}
-                  aria-label={`${t('exportCenter.saveTo')}: ${folder || '—'}. ${t('exportCenter.change')}`}
+                  aria-label={`${t('exportCenter.saveTo')}: ${folder || folderLabel}. ${t('exportCenter.change')}`}
                   className="flex h-10 min-w-0 max-w-[45%] shrink-0 items-center gap-2 rounded-lg border border-[var(--border)] pl-3 pr-2.5 text-[13px] text-[var(--text)] outline-none transition hover:border-[var(--border-strong)] hover:bg-[var(--bg-hover)] focus-visible:border-[var(--accent)] disabled:opacity-60"
                 >
                   {picking ? <Loader2 size={15} className="shrink-0 animate-spin text-[var(--text-muted)]" /> : <FolderOpen size={15} className="shrink-0 text-[var(--text-muted)]" />}
-                  <span className="min-w-0 truncate">{folderName(folder) || '—'}</span>
+                  <span className="min-w-0 truncate">{folderLabel}</span>
                   <ChevronDown size={12} aria-hidden className="shrink-0 text-[var(--text-faint)]" />
                 </button>
               )}
@@ -1335,7 +1366,9 @@ export function ExportCenter(props: ExportCenterProps) {
                 {result ? (
                   <span className={result.ok ? 'text-[var(--ok)]' : 'text-[var(--err)]'}>{result.text}</span>
                 ) : emptyReason ? (
-                  <span data-export-reason="" className={missingReason ? 'text-[var(--warn)]' : 'text-[var(--text-faint)]'}>{emptyReason}</span>
+                  <span data-export-reason="" className="text-[var(--text-faint)]">{emptyReason}</span>
+                ) : missingReason ? (
+                  <span className="text-[var(--warn)]">{missingReason}</span>
                 ) : (
                   <>
                     {/* a project is not a length of film: its size only */}

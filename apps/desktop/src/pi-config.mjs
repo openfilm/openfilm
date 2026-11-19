@@ -238,6 +238,8 @@ export const WAIT_MINUTES = 15;
 
 /* what the model service's client says when no answer came in time */
 const TIMED_OUT = /request timed out|headers timeout|body timeout/i;
+const GATEWAY_TIMEOUT = /^\s*(?:504|524)\b|origin_response_timeout|upstream_timeout|timed out waiting for Volcengine|error 524: a timeout occurred/i;
+const GATEWAY_TIMEOUT_HINT = 'The model service took too long to respond. Try again or switch models.';
 /* a conversation longer than the model takes: as Pi says it, then as services commonly do */
 const PI_OVERFLOW = /^context overflow recovery failed/i;
 const OVERFLOW = /context (?:length|window|size)|prompt (?:is )?too long/i;
@@ -246,6 +248,7 @@ const CONTEXT_HINT = "The model's context may be smaller than set in Settings: l
 /** Why a turn failed, in plain words where Pi's own are technical; anything else as Pi said it. */
 export function failureText(said) {
   const text = String(said ?? '').trim();
+  if (GATEWAY_TIMEOUT.test(text)) return GATEWAY_TIMEOUT_HINT;
   if (TIMED_OUT.test(text)) return 'The model request timed out. Check the connection to the service, then try again.';
   if (PI_OVERFLOW.test(text)) return `${text} ${CONTEXT_HINT}`;
   if (OVERFLOW.test(text)) return `The conversation is too long for the model. ${CONTEXT_HINT}`;
@@ -260,6 +263,7 @@ export function failureText(said) {
 export function retryNotice(event) {
   const said = String(event?.errorMessage ?? '').trim();
   const again = `trying again (${event?.attempt ?? 1} of ${event?.maxAttempts ?? 1}).`;
+  if (GATEWAY_TIMEOUT.test(said)) return { sessionUpdate: 'notice', severity: 'warning', title: `The model service took too long to respond; ${again}`, _meta: { openfilm: { noticeKey: 'composer.modelTimeoutRetry' } } };
   if (TOO_LARGE.test(said)) return { sessionUpdate: 'notice', severity: 'warning', title: `The request was too large for the model service; ${again.replace(/\.$/, '')} with half of the older pictures left out.` };
   if (TIMED_OUT.test(said)) return { sessionUpdate: 'notice', severity: 'warning', title: `The model request timed out; ${again}`, description: said };
   return { sessionUpdate: 'notice', severity: 'warning', title: `The model service failed; ${again}`, ...(said ? { description: said } : {}) };

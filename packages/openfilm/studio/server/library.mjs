@@ -38,6 +38,7 @@ import { setSharedPref, sharedHome, sharedPref } from '../../src/locations.mjs';
 import { SKILL_UID } from '../../src/skills.mjs';
 import { ownVoiceKeys } from './voice-store.mjs';
 import { DOUBAO_PAIRS } from './providers/doubao-dialogue.mjs';
+import { doubaoSampleUrl } from './providers/doubao-samples.mjs';
 
 export { refreshCommunity };
 
@@ -324,12 +325,7 @@ export function withPairs(voices) {
 function officialVoiceSample(/** @type {string} */ rel) {
   if (!rel.startsWith('voices/doubao/')) return null;
   const voice = /** @type {{ voices: { provider: string, sample?: string, sampleSource?: string }[] }} */ (libraryVoices()).voices.find((v) => v.provider === 'doubao' && v.sample === rel);
-  if (!voice?.sampleSource) return null;
-  try {
-    const url = new URL(voice.sampleSource);
-    return url.protocol === 'https:' && url.hostname === 'lf3-static.bytednsdoc.com' && !url.username && !url.password
-      && url.pathname.startsWith('/obj/eden-cn/lm_hz_ihsph/ljhwZthlaukjlkulzlp/portal/bigtts/') ? url.href : null;
-  } catch { return null; }
+  return typeof voice?.sampleSource === 'string' ? doubaoSampleUrl(voice.sampleSource) : null;
 }
 
 /** A voice's id among the starred things: `voice:<service>/<its id there>`. */

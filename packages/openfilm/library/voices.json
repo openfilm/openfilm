@@ -40899,8 +40899,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/en_male_bruce_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260812135611-484512265785.wav",
    "featured": false,
    "uses": null
   },
@@ -40916,7 +40916,7 @@
    "tags": [
     "外语音色"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_en_male_alastor_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -40939,8 +40939,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/en_male_alberto_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260902112532-257169121658.wav",
    "featured": false,
    "uses": null
   },
@@ -40962,8 +40962,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/en_male_alex_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260812135639-840828958085.wav",
    "featured": false,
    "uses": null
   },
@@ -40986,8 +40986,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/en_male_father-christmas_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260902112516-62711392310.wav",
    "featured": false,
    "uses": null
   },
@@ -41008,8 +41008,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/en_female_allison_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260812140355-1235416731399.wav",
    "featured": false,
    "uses": null
   },
@@ -41031,8 +41031,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/ru_female_af07_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260813040439-814305198857.wav",
    "featured": false,
    "uses": null
   },
@@ -41056,8 +41056,8 @@
     "不支持双向流",
     "双向流调用会直接报错"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/es_male_angel_uranus_bigtts.mp3",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20261014033934-204307577183.mp3",
    "featured": false,
    "uses": null
   },
@@ -41078,8 +41078,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/th_male_angpao_uranus_bigtts.mp3",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20261014034654-992092294409.mp3",
    "featured": false,
    "uses": null
   },
@@ -41101,8 +41101,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/tl_female_annika_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260902114515-998879150284.wav",
    "featured": false,
    "uses": null
   },
@@ -41124,8 +41124,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/ja_female_bv521_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260812143853-1729062367120.wav",
    "featured": false,
    "uses": null
   },
@@ -41147,8 +41147,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/pt_male_bv531_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260813034205-408865746901.wav",
    "featured": false,
    "uses": null
   },
@@ -41170,8 +41170,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/en_male_hades_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260812141532-696880694219.wav",
    "featured": false,
    "uses": null
   },
@@ -41188,7 +41188,7 @@
     "外语音色",
     "豆包同款"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_en_male_big_boogie_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -41214,8 +41214,8 @@
     "不支持双向流",
     "双向流调用会直接报错"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/en_male_bill_jones_corey_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260812141433-477062632595.wav",
    "featured": false,
    "uses": null
   },
@@ -41237,8 +41237,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/en_female_nadia_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260812135157-566436208791.wav",
    "featured": false,
    "uses": null
   },
@@ -41260,8 +41260,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/en_male_jidongchuanjiaoshi_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260812141653-1594833122100.wav",
    "featured": false,
    "uses": null
   },
@@ -41283,8 +41283,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/en_male_cowboy-bob_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260812140958-253982741782.wav",
    "featured": false,
    "uses": null
   },
@@ -41306,8 +41306,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/ja_female_bv024_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260902113519-381695473402.wav",
    "featured": false,
    "uses": null
   },
@@ -41329,8 +41329,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/en_male_brad_pitt_p1_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260812141452-101140770855.wav",
    "featured": false,
    "uses": null
   },
@@ -41352,8 +41352,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/en_female_brittney_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260812142018-1175394545635.wav",
    "featured": false,
    "uses": null
   },
@@ -41377,8 +41377,8 @@
     "不支持双向流",
     "双向流调用会直接报错"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/th_female_cake_uranus_bigtts.mp3",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20261014034717-420783435250.mp3",
    "featured": false,
    "uses": null
   },
@@ -41400,8 +41400,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/fr_female_fr_f47_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260902113300-455736122027.wav",
    "featured": false,
    "uses": null
   },
@@ -41417,7 +41417,7 @@
    "tags": [
     "外语音色"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_en_male_cartoon_chef_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -41440,8 +41440,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/id_female_bv161narration_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260812144126-1512369530902.wav",
    "featured": false,
    "uses": null
   },
@@ -41463,8 +41463,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/id_female_cesna_uranus_bigtts.mp3",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20261014034205-1078271383112.mp3",
    "featured": false,
    "uses": null
   },
@@ -41480,7 +41480,7 @@
    "tags": [
     "外语音色"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_en_female_charlie_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -41503,8 +41503,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/en_female_authoritative-british_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260812142230-282129010135.wav",
    "featured": false,
    "uses": null
   },
@@ -41526,8 +41526,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/en_male_michael-mouse_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260812142336-390497613572.wav",
    "featured": false,
    "uses": null
   },
@@ -41548,8 +41548,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/id_female_f20_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260902113349-835338128536.wav",
    "featured": false,
    "uses": null
   },
@@ -41565,7 +41565,7 @@
    "tags": [
     "外语音色"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_en_male_chucky_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -41588,8 +41588,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/id_female_bv161_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260812143943-905879694950.wav",
    "featured": false,
    "uses": null
   },
@@ -41613,8 +41613,8 @@
     "不支持双向流",
     "双向流调用会直接报错"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/en_male_valentino_corey_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260902112641-895533999334.wav",
    "featured": false,
    "uses": null
   },
@@ -41630,7 +41630,7 @@
    "tags": [
     "外语音色"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_en_male_clown_man_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -41653,8 +41653,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/id_female_bv164_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260812143943-1566112291380.wav",
    "featured": false,
    "uses": null
   },
@@ -41676,8 +41676,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/es_male_dani_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260902113142-218384461943.wav",
    "featured": false,
    "uses": null
   },
@@ -41699,8 +41699,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/en_male_david_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260812140320-119333422466.wav",
    "featured": false,
    "uses": null
   },
@@ -41722,8 +41722,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/mx_male_ht_mx_m012_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260813033415-391948044900.wav",
    "featured": false,
    "uses": null
   },
@@ -41745,8 +41745,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/pt_female_bv173_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260813034236-18158909797.wav",
    "featured": false,
    "uses": null
   },
@@ -41768,8 +41768,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/mx_male_bv165dialogue_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260813033432-1017515702720.wav",
    "featured": false,
    "uses": null
   },
@@ -41791,8 +41791,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/ar_female_dina_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260902113027-1680556459659.wav",
    "featured": false,
    "uses": null
   },
@@ -41814,8 +41814,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/en_male_yangguangjieshuonan_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260812135654-493733909658.wav",
    "featured": false,
    "uses": null
   },
@@ -41837,8 +41837,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/tl_male_ed_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260813031122-1274071255060.wav",
    "featured": false,
    "uses": null
   },
@@ -41862,8 +41862,8 @@
     "不支持双向流",
     "双向流调用会直接报错"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/pt_male_eduardo-s_uranus_bigtts.mp3",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20261014034618-679434962122.mp3",
    "featured": false,
    "uses": null
   },
@@ -41885,8 +41885,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/en_female_pleasant-female_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260812142001-376515827960.wav",
    "featured": false,
    "uses": null
   },
@@ -41908,8 +41908,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/pt_female_bv173dialogue_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260902114147-1457463094957.wav",
    "featured": false,
    "uses": null
   },
@@ -41930,8 +41930,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/id_male_bv164dialogue_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260812144112-594106527515.wav",
    "featured": false,
    "uses": null
   },
@@ -41952,8 +41952,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/th_female_elle_uranus_bigtts.mp3",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20261014034704-1768536154632.mp3",
    "featured": false,
    "uses": null
   },
@@ -41975,8 +41975,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/pt_female_bv173narrator_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260813034220-825797756465.wav",
    "featured": false,
    "uses": null
   },
@@ -42001,8 +42001,8 @@
     "不支持双向流",
     "双向流调用会直接报错"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/it_male_enzo_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260813040406-452313271841.wav",
    "featured": false,
    "uses": null
   },
@@ -42026,8 +42026,8 @@
     "不支持双向流",
     "双向流调用会直接报错"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/it_male_enzo2_uranus_bigtts.mp3",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20261014034410-314369574459.mp3",
    "featured": false,
    "uses": null
   },
@@ -42043,7 +42043,7 @@
    "tags": [
     "外语音色"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_en_male_ethan_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -42065,8 +42065,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/ar_female_fatma_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260902113055-871666535346.wav",
    "featured": false,
    "uses": null
   },
@@ -42091,8 +42091,8 @@
     "不支持双向流",
     "双向流调用会直接报错"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/mx_male_felipe_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260902113820-485208638368.wav",
    "featured": false,
    "uses": null
   },
@@ -42114,8 +42114,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/en_male_fernando-martinez_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260812140013-190273807530.wav",
    "featured": false,
    "uses": null
   },
@@ -42139,8 +42139,8 @@
     "不支持双向流",
     "双向流调用会直接报错"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/es_male_francisc_uranus_bigtts.mp3",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20261014033940-822901617240.mp3",
    "featured": false,
    "uses": null
   },
@@ -42163,8 +42163,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/mx_female_bv166narrator_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260813033440-144847128241.wav",
    "featured": false,
    "uses": null
   },
@@ -42181,7 +42181,7 @@
     "外语音色",
     "豆包同款"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_en_male_frosty_man_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -42204,8 +42204,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/en_male_godfather_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260812140410-466341655815.wav",
    "featured": false,
    "uses": null
   },
@@ -42226,8 +42226,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/en_male_gollum_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260902112823-1251247677009.wav",
    "featured": false,
    "uses": null
   },
@@ -42249,8 +42249,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/es_female_bv084_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260902113157-1055502356552.wav",
    "featured": false,
    "uses": null
   },
@@ -42271,8 +42271,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/es_male_guillem_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260902113124-523507754665.wav",
    "featured": false,
    "uses": null
   },
@@ -42294,8 +42294,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/ms_male_ham_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260902113736-1671966762664.wav",
    "featured": false,
    "uses": null
   },
@@ -42317,8 +42317,8 @@
     "指令遵循",
     "上下文遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/id_male_han_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260812143910-1025625891183.wav",
    "featured": false,
    "uses": null
   },
@@ -42341,8 +42341,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/ja_female_bv522_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260902113544-535384193247.wav",
    "featured": false,
    "uses": null
   },
@@ -42364,8 +42364,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/en_male_michael_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260902112245-602144329640.wav",
    "featured": false,
    "uses": null
   },
@@ -42387,8 +42387,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/vi_female_f01507b_uranus_bigtts.mp3",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20261014034901-170350844158.mp3",
    "featured": false,
    "uses": null
   },
@@ -42409,8 +42409,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/en_male_evil-guy-oxley_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260812140432-252324088452.wav",
    "featured": false,
    "uses": null
   },
@@ -42432,8 +42432,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/en_female_hayley_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260812135425-1467433606159.wav",
    "featured": false,
    "uses": null
   },
@@ -42454,8 +42454,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/ms_male_hazeem_uranus_bigtts.mp3",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20261014034520-1202840729809.mp3",
    "featured": false,
    "uses": null
   },
@@ -42478,8 +42478,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/tl_female_hervie_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260813031112-734875882128.wav",
    "featured": false,
    "uses": null
   },
@@ -42501,8 +42501,8 @@
     "情感变化",
     "上下文遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/en_female_female_tutor_ms-jenny_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260812141330-1561908753001.wav",
    "featured": false,
    "uses": null
   },
@@ -42524,8 +42524,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/vi_female_hong_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260902114648-1720038904310.wav",
    "featured": false,
    "uses": null
   },
@@ -42547,8 +42547,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/id_male_bv160narration_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260812144118-425511759060.wav",
    "featured": false,
    "uses": null
   },
@@ -42570,8 +42570,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/id_male_ikbal_uranus_bigtts.mp3",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20261014034210-1454592649292.mp3",
    "featured": false,
    "uses": null
   },
@@ -42593,8 +42593,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/mx_female_bv065_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260813033326-626898954057.wav",
    "featured": false,
    "uses": null
   },
@@ -42616,8 +42616,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/ru_female_irinae_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260902114238-1080334830999.wav",
    "featured": false,
    "uses": null
   },
@@ -42639,8 +42639,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/th_female_bv568_fear_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260902114450-318071719140.wav",
    "featured": false,
    "uses": null
   },
@@ -42661,8 +42661,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/en_female_lana_del_rey_parky_s_p1_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260812140515-1459670874119.wav",
    "featured": false,
    "uses": null
   },
@@ -42685,8 +42685,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/en_male_jamie_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260812135408-719229071308.wav",
    "featured": false,
    "uses": null
   },
@@ -42707,8 +42707,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/en_female_jane_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260902112404-1011524852973.wav",
    "featured": false,
    "uses": null
   },
@@ -42729,8 +42729,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/en_male_excited-male-voice_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260812142218-770612490823.wav",
    "featured": false,
    "uses": null
   },
@@ -42752,8 +42752,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/ko_male_bv545_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260902113647-173821292587.wav",
    "featured": false,
    "uses": null
   },
@@ -42775,8 +42775,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/en_female_jenny_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260812141557-1287841536184.wav",
    "featured": false,
    "uses": null
   },
@@ -42792,7 +42792,7 @@
    "tags": [
     "外语音色"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_en_male_jigsaw_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -42815,8 +42815,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/en_male_jimmy_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260812142158-658844092062.wav",
    "featured": false,
    "uses": null
   },
@@ -42839,8 +42839,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/en_female_joanne_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260812141425-1585940149486.wav",
    "featured": false,
    "uses": null
   },
@@ -42865,8 +42865,8 @@
     "不支持双向流",
     "双向流调用会直接报错"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/en_male_cowboy_john_b_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260812142146-250936435204.wav",
    "featured": false,
    "uses": null
   },
@@ -42888,8 +42888,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/en_male_joker_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260902112328-356713551851.wav",
    "featured": false,
    "uses": null
   },
@@ -42913,8 +42913,8 @@
     "不支持双向流",
     "双向流调用会直接报错"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/tl_male_jonathan-palad_uranus_bigtts.mp3",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20261014034839-958513213132.mp3",
    "featured": false,
    "uses": null
   },
@@ -42935,8 +42935,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/en_male_bill-jones_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260812141954-1286656740372.wav",
    "featured": false,
    "uses": null
   },
@@ -42957,8 +42957,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/en_male_josh_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260812140130-1278375401109.wav",
    "featured": false,
    "uses": null
   },
@@ -42983,8 +42983,8 @@
     "不支持双向流",
     "双向流调用会直接报错"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/en_male_josh_coery_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260812140308-89032612307.wav",
    "featured": false,
    "uses": null
   },
@@ -43006,8 +43006,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/id_male_bv160dialogue_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260902113405-975496163481.wav",
    "featured": false,
    "uses": null
   },
@@ -43028,8 +43028,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/en_male_diyuwenrounan_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260902112218-1683295024357.wav",
    "featured": false,
    "uses": null
   },
@@ -43050,8 +43050,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/en_female_xinwenjieshuonv_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260812142224-478329543480.wav",
    "featured": false,
    "uses": null
   },
@@ -43073,8 +43073,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/ja_male_bv524_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260902113531-301951853227.wav",
    "featured": false,
    "uses": null
   },
@@ -43096,8 +43096,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/en_male_kevin_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260812135225-335389250698.wav",
    "featured": false,
    "uses": null
   },
@@ -43114,7 +43114,7 @@
     "外语音色",
     "豆包同款"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_en_male_kevin_mccallister_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -43136,8 +43136,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/en_male_knightley_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260812135952-1390971360481.wav",
    "featured": false,
    "uses": null
   },
@@ -43158,8 +43158,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/ru_female_sophie_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260813040415-1365644098554.wav",
    "featured": false,
    "uses": null
   },
@@ -43181,8 +43181,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/id_male_m08_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260812143946-1467579978768.wav",
    "featured": false,
    "uses": null
   },
@@ -43203,8 +43203,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/en_male_chandler_p1_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260812142132-936396896366.wav",
    "featured": false,
    "uses": null
   },
@@ -43226,8 +43226,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/mx_female_leslie_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260902113829-951353160798.wav",
    "featured": false,
    "uses": null
   },
@@ -43249,8 +43249,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/ja_female_bv523_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260902113556-1211188745740.wav",
    "featured": false,
    "uses": null
   },
@@ -43272,8 +43272,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/vi_female_ling_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260902114600-319719388711.wav",
    "featured": false,
    "uses": null
   },
@@ -43294,8 +43294,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/vi_female_linh_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260902114608-323718302955.wav",
    "featured": false,
    "uses": null
   },
@@ -43317,8 +43317,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/pt_female_bv173emotion_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260902114127-381920750001.wav",
    "featured": false,
    "uses": null
   },
@@ -43342,8 +43342,8 @@
     "不支持双向流",
     "双向流调用会直接报错"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/it_male_luca_uranus_bigtts.mp3",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20261014034405-314759291862.mp3",
    "featured": false,
    "uses": null
   },
@@ -43365,8 +43365,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/mx_female_bv166dialogue_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260902113915-175250220116.wav",
    "featured": false,
    "uses": null
   },
@@ -43388,8 +43388,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/th_female_bv568_sad_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260902114441-896528638892.wav",
    "featured": false,
    "uses": null
   },
@@ -43410,8 +43410,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/en_female_lana_del_rey_kelley_d_p1_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260902112718-1084167131772.wav",
    "featured": false,
    "uses": null
   },
@@ -43433,8 +43433,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/mx_male_marcelo_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260813033259-458061572683.wav",
    "featured": false,
    "uses": null
   },
@@ -43456,8 +43456,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/mx_male_bv165narrator_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260902113848-1124839646615.wav",
    "featured": false,
    "uses": null
   },
@@ -43479,8 +43479,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/en_male_marcus_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260812140220-573753353646.wav",
    "featured": false,
    "uses": null
   },
@@ -43502,8 +43502,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/en_female_authoritative-informative_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260812141647-1030207862432.wav",
    "featured": false,
    "uses": null
   },
@@ -43525,8 +43525,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/pt_female_mari_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260902113930-662609426592.wav",
    "featured": false,
    "uses": null
   },
@@ -43547,8 +43547,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/es_male_mariano_uranus_bigtts.mp3",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20261014033953-1325959361764.mp3",
    "featured": false,
    "uses": null
   },
@@ -43570,8 +43570,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/es_female_ht_mx_f6_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260902113209-561609544062.wav",
    "featured": false,
    "uses": null
   },
@@ -43593,8 +43593,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/fr_male_fr_m29_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260902113329-538761090738.wav",
    "featured": false,
    "uses": null
   },
@@ -43615,8 +43615,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/en_female_wenrouzhishijieshuonv_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260812140457-1206978628584.wav",
    "featured": false,
    "uses": null
   },
@@ -43638,8 +43638,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/en_female_mel_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260812142031-990478358205.wav",
    "featured": false,
    "uses": null
   },
@@ -43656,7 +43656,7 @@
     "外语音色",
     "豆包同款"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_en_male_michael_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -43682,8 +43682,8 @@
     "不支持双向流",
     "双向流调用会直接报错"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/en_male_michael_kevin_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260812140239-552835515742.wav",
    "featured": false,
    "uses": null
   },
@@ -43707,8 +43707,8 @@
     "不支持双向流",
     "双向流调用会直接报错"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/mx_male_migu_uranus_bigtts.mp3",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20261014034559-1166915415521.mp3",
    "featured": false,
    "uses": null
   },
@@ -43730,8 +43730,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/th_female_bv568_neutral_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260902114347-948998393418.wav",
    "featured": false,
    "uses": null
   },
@@ -43753,8 +43753,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/pt_male_bv172narrator_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260902114055-1704886494754.wav",
    "featured": false,
    "uses": null
   },
@@ -43776,8 +43776,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/ko_male_m03_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260902113700-345578642088.wav",
    "featured": false,
    "uses": null
   },
@@ -43802,8 +43802,8 @@
     "不支持双向流",
     "双向流调用会直接报错"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/ja_female_minimi_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260902113506-1112130646568.wav",
    "featured": false,
    "uses": null
   },
@@ -43825,8 +43825,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/ko_female_bv546_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260902113630-1383554152032.wav",
    "featured": false,
    "uses": null
   },
@@ -43847,8 +43847,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/en_female_myra_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260812141701-23813566020.wav",
    "featured": false,
    "uses": null
   },
@@ -43870,8 +43870,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/ms_male_naim_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260902113724-1390168825190.wav",
    "featured": false,
    "uses": null
   },
@@ -43896,8 +43896,8 @@
     "不支持双向流",
     "双向流调用会直接报错"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/en_female_natasha_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260812142138-1234309873658.wav",
    "featured": false,
    "uses": null
   },
@@ -43913,7 +43913,7 @@
    "tags": [
     "外语音色"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_en_male_noah_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -43936,8 +43936,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/en_male_deep-voice_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260812142152-337745107764.wav",
    "featured": false,
    "uses": null
   },
@@ -43961,8 +43961,8 @@
     "不支持双向流",
     "双向流调用会直接报错"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/th_male_paran_uranus_bigtts.mp3",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20261014034728-1606522239447.mp3",
    "featured": false,
    "uses": null
   },
@@ -43984,8 +43984,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/vi_female_partner_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260812144504-442015548259.wav",
    "featured": false,
    "uses": null
   },
@@ -44007,8 +44007,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/ru_male_pavel_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260813040422-635094849077.wav",
    "featured": false,
    "uses": null
   },
@@ -44030,8 +44030,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/th_female_bv568_suprise_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260902114407-1433396697669.wav",
    "featured": false,
    "uses": null
   },
@@ -44053,8 +44053,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/id_female_phulia_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260812143918-468136004889.wav",
    "featured": false,
    "uses": null
   },
@@ -44076,8 +44076,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/ja_female_bv520_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260812143847-124536447491.wav",
    "featured": false,
    "uses": null
   },
@@ -44101,8 +44101,8 @@
     "不支持双向流",
     "双向流调用会直接报错"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/id_female_prisma_uranus_bigtts.mp3",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20261014034231-1326614906026.mp3",
    "featured": false,
    "uses": null
   },
@@ -44123,8 +44123,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/ms_female_qis_uranus_bigtts.mp3",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20261014034527-466313176401.mp3",
    "featured": false,
    "uses": null
   },
@@ -44145,8 +44145,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/en_female_rachel_p1_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260812140755-832871475982.wav",
    "featured": false,
    "uses": null
   },
@@ -44168,8 +44168,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/pt_male_rael_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260902114030-1470340410842.wav",
    "featured": false,
    "uses": null
   },
@@ -44191,8 +44191,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/id_male_bv160_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260812143928-1638320964261.wav",
    "featured": false,
    "uses": null
   },
@@ -44213,8 +44213,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/es_female_romina_uranus_bigtts.mp3",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20261014034008-609274065136.mp3",
    "featured": false,
    "uses": null
   },
@@ -44235,8 +44235,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/en_male_ronald_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260812135907-1636867644896.wav",
    "featured": false,
    "uses": null
   },
@@ -44258,8 +44258,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/id_male_bv164narration_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260812144053-1539223295964.wav",
    "featured": false,
    "uses": null
   },
@@ -44281,8 +44281,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/en_male_motivational-coach_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260812140157-684020766269.wav",
    "featured": false,
    "uses": null
   },
@@ -44304,8 +44304,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/mx_female_bv166emotion_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260813033450-1166533037234.wav",
    "featured": false,
    "uses": null
   },
@@ -44327,8 +44327,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/en_male_adam-imitation_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260812141441-1231703896081.wav",
    "featured": false,
    "uses": null
   },
@@ -44351,8 +44351,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/vi_female_ruan_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260902114548-959421129182.wav",
    "featured": false,
    "uses": null
   },
@@ -44374,8 +44374,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/en_male_russell_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260812141629-1440123010330.wav",
    "featured": false,
    "uses": null
   },
@@ -44399,8 +44399,8 @@
     "不支持双向流",
     "双向流调用会直接报错"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/en_male_ryan_uranus_bigtts.mp3",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20261014033835-508603119651.mp3",
    "featured": false,
    "uses": null
   },
@@ -44422,8 +44422,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/pt_male_bv172_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260813034256-1201456630282.wav",
    "featured": false,
    "uses": null
   },
@@ -44444,8 +44444,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/en_female_scarlet_p1_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260812142010-1104040283124.wav",
    "featured": false,
    "uses": null
   },
@@ -44471,8 +44471,8 @@
     "不支持双向流",
     "双向流调用会直接报错"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/ko_male_shane_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260902113616-1740166096497.wav",
    "featured": false,
    "uses": null
   },
@@ -44493,8 +44493,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/en_female_sharron_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260902112858-1036113408199.wav",
    "featured": false,
    "uses": null
   },
@@ -44516,8 +44516,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/ja_female_shirou_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260812143812-1093904563273.wav",
    "featured": false,
    "uses": null
   },
@@ -44538,8 +44538,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/ru_male_vlad_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260813040450-1049294021556.wav",
    "featured": false,
    "uses": null
   },
@@ -44561,8 +44561,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/en_male_simba_p1_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260812140143-681607778263.wav",
    "featured": false,
    "uses": null
   },
@@ -44584,8 +44584,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/fr_female_fr_bv078_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260902113221-1047091589590.wav",
    "featured": false,
    "uses": null
   },
@@ -44606,8 +44606,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/en_female_skye_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260812135541-1555904357610.wav",
    "featured": false,
    "uses": null
   },
@@ -44629,8 +44629,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/pt_female_bv530_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260813034155-1070088686249.wav",
    "featured": false,
    "uses": null
   },
@@ -44652,8 +44652,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/de_female_bv081_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260813040246-902455655093.wav",
    "featured": false,
    "uses": null
   },
@@ -44678,8 +44678,8 @@
     "不支持双向流",
     "双向流调用会直接报错"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/en_female_myra_cmb_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260812142242-539072841077.wav",
    "featured": false,
    "uses": null
   },
@@ -44704,8 +44704,8 @@
     "不支持双向流",
     "双向流调用会直接报错"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/de_male_sven_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260902113110-965469736354.wav",
    "featured": false,
    "uses": null
   },
@@ -44727,8 +44727,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/id_female_bv161dialogue_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260902113430-256610044177.wav",
    "featured": false,
    "uses": null
   },
@@ -44745,7 +44745,7 @@
     "外语音色",
     "豆包同款"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_en_male_the_grinch_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -44771,8 +44771,8 @@
     "不支持双向流",
     "双向流调用会直接报错"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/pt_male_martins_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260902114012-631967429877.wav",
    "featured": false,
    "uses": null
   },
@@ -44794,8 +44794,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/en_male_tom_hiddleston_p1_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260902112658-602064658913.wav",
    "featured": false,
    "uses": null
   },
@@ -44820,8 +44820,8 @@
     "不支持双向流",
     "双向流调用会直接报错"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/fr_male_usseau_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260902113247-886960701418.wav",
    "featured": false,
    "uses": null
   },
@@ -44843,8 +44843,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/th_female_bv568_hate_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260902114415-1002008097353.wav",
    "featured": false,
    "uses": null
   },
@@ -44866,8 +44866,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/en_male_valentino_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260812140256-153881849623.wav",
    "featured": false,
    "uses": null
   },
@@ -44889,8 +44889,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/th_female_bv568_angry_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260902114359-843882402018.wav",
    "featured": false,
    "uses": null
   },
@@ -44912,8 +44912,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/pt_male_bv172emotion_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260902114204-493183768348.wav",
    "featured": false,
    "uses": null
   },
@@ -44934,8 +44934,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/pt_male_bv172dialogue_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260902114109-1732778975023.wav",
    "featured": false,
    "uses": null
   },
@@ -44957,8 +44957,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/vi_female_wu_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260902114638-1050422919510.wav",
    "featured": false,
    "uses": null
   },
@@ -44980,8 +44980,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/vi_male_wumg_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260902114656-960419004557.wav",
    "featured": false,
    "uses": null
   },
@@ -44997,7 +44997,7 @@
    "tags": [
     "外语音色"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_en_male_xavier_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -45020,8 +45020,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/ar_male_youssef_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260902113042-1710665000955.wav",
    "featured": false,
    "uses": null
   },
@@ -45045,8 +45045,8 @@
     "不支持双向流",
     "双向流调用会直接报错"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/ja_male_yusuke_uranus_bigtts.mp3",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20261014034446-384364523098.mp3",
    "featured": false,
    "uses": null
   },
@@ -45068,8 +45068,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/th_female_bv568_happy_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260902114432-1317113694991.wav",
    "featured": false,
    "uses": null
   },
@@ -45085,7 +45085,7 @@
    "tags": [
     "外语音色"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_en_male_zayne_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -45108,8 +45108,8 @@
     "情感变化",
     "指令遵循"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/en_female_zendaya_p1_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260812142328-806946409618.wav",
    "featured": false,
    "uses": null
   },
@@ -45134,8 +45134,8 @@
     "不支持双向流",
     "双向流调用会直接报错"
    ],
-   "sample": null,
-   "sampleSource": null,
+   "sample": "voices/doubao/en_female_brittney_pimintel_uranus_bigtts.wav",
+   "sampleSource": "https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260902112428-1405161473843.wav",
    "featured": false,
    "uses": null
   },
@@ -45151,7 +45151,7 @@
    "tags": [
     "角色扮演"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_bujiqingnian_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -45168,7 +45168,7 @@
    "tags": [
     "角色扮演"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_zhongerqingnian_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -45185,7 +45185,7 @@
    "tags": [
     "客服场景"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_female_guaiqiaokeer_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -45202,7 +45202,7 @@
    "tags": [
     "客服场景"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_qinqiexiaozhuo_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -45219,7 +45219,7 @@
    "tags": [
     "角色扮演"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_qinqieqingnian_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -45236,7 +45236,7 @@
    "tags": [
     "角色扮演"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_zhangjianxiake_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -45253,7 +45253,7 @@
    "tags": [
     "角色扮演"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_zhangjianjunzi_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -45272,7 +45272,7 @@
     "豆包同款",
     "猫箱同款"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_yourougongzi_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -45290,7 +45290,7 @@
     "角色扮演",
     "猫箱同款"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_youroubangzhu_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -45308,7 +45308,7 @@
     "角色扮演",
     "猫箱同款"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_dichenqianquan_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -45325,7 +45325,7 @@
    "tags": [
     "角色扮演"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_diyinchenyu_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -45342,7 +45342,7 @@
    "tags": [
     "角色扮演"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_junyigongzi_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -45359,7 +45359,7 @@
    "tags": [
     "视频配音"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_female_qingxinshaonv_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -45378,7 +45378,7 @@
     "豆包同款",
     "猫箱同款"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_female_jiaxiaozi_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -45396,7 +45396,7 @@
     "角色扮演",
     "S2S-SC"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_aojiaogongzi_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -45416,7 +45416,7 @@
     "豆包同款",
     "猫箱同款"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_female_aojiaonvyou_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -45434,7 +45434,7 @@
     "角色扮演",
     "S2S-SC"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_aojiaojingying_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -45452,7 +45452,7 @@
     "角色扮演",
     "猫箱同款"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_female_aomanjiaosheng_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -45472,7 +45472,7 @@
     "豆包同款",
     "猫箱同款"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_aomanshaoye_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -45489,7 +45489,7 @@
    "tags": [
     "角色扮演"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_aomanqingnian_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -45508,7 +45508,7 @@
     "S2S-SC",
     "猫箱同款"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_aoqilingren_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -45525,7 +45525,7 @@
    "tags": [
     "有声阅读"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_ruyagongzi_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -45542,7 +45542,7 @@
    "tags": [
     "角色扮演"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_ruyajunzi_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -45559,7 +45559,7 @@
    "tags": [
     "角色扮演"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_ruyazongcai_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -45577,7 +45577,7 @@
     "角色扮演",
     "猫箱同款"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_ruyacaijun_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -45594,7 +45594,7 @@
    "tags": [
     "角色扮演"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_yuanqishaonian_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -45611,7 +45611,7 @@
    "tags": [
     "通用场景"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_female_yuanqitianmei_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -45628,7 +45628,7 @@
    "tags": [
     "有声阅读"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_neiliancaijun_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -45645,7 +45645,7 @@
    "tags": [
     "角色扮演"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_lengaozongcai_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -45664,7 +45664,7 @@
     "豆包同款",
     "猫箱同款"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_lengjunshangsi_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -45681,7 +45681,7 @@
    "tags": [
     "角色扮演"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_lengjungaozhi_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -45699,7 +45699,7 @@
     "角色扮演",
     "猫箱同款"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_lengdanshuli_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -45716,7 +45716,7 @@
    "tags": [
     "角色扮演"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_lengmoxiongzhang_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -45733,7 +45733,7 @@
    "tags": [
     "角色扮演"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_lengmonanyou_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -45750,7 +45750,7 @@
    "tags": [
     "角色扮演"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_lenglianxiongzhang_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -45767,7 +45767,7 @@
    "tags": [
     "角色扮演"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_lenglianxueba_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -45785,7 +45785,7 @@
     "通用场景",
     "豆包同款"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_lengkugege_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -45802,7 +45802,7 @@
    "tags": [
     "角色扮演"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_lingyunqingnian_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -45819,7 +45819,7 @@
    "tags": [
     "客服场景"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_female_kefuyanlicuishou_v1_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -45836,7 +45836,7 @@
    "tags": [
     "通用场景"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_female_chuliannvyou_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -45855,7 +45855,7 @@
     "S2S-SC",
     "猫箱同款"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_female_keainvsheng_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -45872,7 +45872,7 @@
    "tags": [
     "视频配音"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_paoxiaoxiaoge_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -45889,7 +45889,7 @@
    "tags": [
     "视频配音"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_female_heainainai_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -45906,7 +45906,7 @@
    "tags": [
     "角色扮演"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_xiaozhangxiaoge_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -45924,7 +45924,7 @@
     "角色扮演",
     "猫箱同款"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_guzhibingjiao_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -45941,7 +45941,7 @@
    "tags": [
     "客服场景"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_female_kefunvshengwenhecuishou_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -45958,7 +45958,7 @@
    "tags": [
     "客服场景"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_cuishoutixing_dongbei_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -45975,7 +45975,7 @@
    "tags": [
     "角色扮演"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_tiancaitongzhuo_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -45993,7 +45993,7 @@
     "角色扮演",
     "豆包同款"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_naiqixiaosheng_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -46010,7 +46010,7 @@
    "tags": [
     "角色扮演"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_female_wumeikeren_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -46029,7 +46029,7 @@
     "S2S-SC",
     "豆包同款"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_female_wumeiyujie_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -46047,7 +46047,7 @@
     "角色扮演",
     "猫箱同款"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_female_jiaoruoluoli_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -46065,7 +46065,7 @@
     "角色扮演",
     "猫箱同款"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_female_jiaohannvwang_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -46083,7 +46083,7 @@
     "角色扮演",
     "豆包同款"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_guaogongzi_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -46100,7 +46100,7 @@
    "tags": [
     "角色扮演"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_gugaogongzi_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -46117,7 +46117,7 @@
    "tags": [
     "角色扮演"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_xuebatongzhuo_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -46136,7 +46136,7 @@
     "豆包同款",
     "猫箱同款"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_xuebanantongzhuo_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -46153,7 +46153,7 @@
    "tags": [
     "角色扮演"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_chanruoshaoye_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -46170,7 +46170,7 @@
    "tags": [
     "客服场景"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_female_guwenzhuanhua_4vo_v1_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -46187,7 +46187,7 @@
    "tags": [
     "客服场景"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_female_kefuwanjun_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -46204,7 +46204,7 @@
    "tags": [
     "客服场景"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_zhuanyefuwu_xiaodai_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -46222,7 +46222,7 @@
     "角色扮演",
     "猫箱同款"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_guayanxiaoge_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -46239,7 +46239,7 @@
    "tags": [
     "角色扮演"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_xiaohouye_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -46258,7 +46258,7 @@
     "豆包同款",
     "猫箱同款"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_shaonianjiangjun_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -46275,7 +46275,7 @@
    "tags": [
     "角色扮演"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_ganjingshaonian_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -46294,7 +46294,7 @@
     "豆包同款",
     "猫箱同款"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_youmoshushu_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -46313,7 +46313,7 @@
     "豆包同款",
     "猫箱同款"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_youmodaye_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -46330,7 +46330,7 @@
    "tags": [
     "客服场景"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_female_kaixinxiaohong_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -46347,7 +46347,7 @@
    "tags": [
     "客服场景"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_female_kailangtingting_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -46365,7 +46365,7 @@
     "通用场景",
     "猫箱同款"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_kailangqingkuai_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -46382,7 +46382,7 @@
    "tags": [
     "角色扮演"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_kailangqingnian_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -46402,7 +46402,7 @@
     "豆包同款",
     "猫箱同款"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_female_xingganyujie_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -46419,7 +46419,7 @@
    "tags": [
     "角色扮演"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_female_xingganmeihuo_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -46436,7 +46436,7 @@
    "tags": [
     "角色扮演"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_yiqishaonian_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -46454,7 +46454,7 @@
     "角色扮演",
     "猫箱同款"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_hanhoudunshi_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -46471,7 +46471,7 @@
    "tags": [
     "角色扮演"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_mengdongqingnian_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -46491,7 +46491,7 @@
     "豆包同款",
     "猫箱同款"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_female_chengshujiejie_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -46509,7 +46509,7 @@
     "角色扮演",
     "S2S-SC"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_chengshuzongcai_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -46527,7 +46527,7 @@
     "角色扮演",
     "猫箱同款"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_female_chengshuwenrou_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -46544,7 +46544,7 @@
    "tags": [
     "角色扮演"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_sajiaonanyou_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -46561,7 +46561,7 @@
    "tags": [
     "角色扮演"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_sajiaonansheng_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -46579,7 +46579,7 @@
     "角色扮演",
     "猫箱同款"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_sajiaonianren_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -46596,7 +46596,7 @@
    "tags": [
     "角色扮演"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_siwenqingnian_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -46614,7 +46614,7 @@
     "通用场景",
     "猫箱同款"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_nuanxintitie_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -46633,7 +46633,7 @@
     "S2S-SC",
     "猫箱同款"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_female_nuanxinxuejie_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -46650,7 +46650,7 @@
    "tags": [
     "客服场景"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_female_nuanxinqianqian_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -46667,7 +46667,7 @@
    "tags": [
     "通用场景"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_jilingxiaohuo_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -46684,7 +46684,7 @@
    "tags": [
     "角色扮演"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_jijiazhineng_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -46702,7 +46702,7 @@
     "角色扮演",
     "抖音同款"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_zhenbiandiyu_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -46720,7 +46720,7 @@
     "角色扮演",
     "猫箱同款"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_female_rouguhunshi_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -46738,7 +46738,7 @@
     "角色扮演",
     "猫箱同款"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_zhengzhiqingnian_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -46756,7 +46756,7 @@
     "角色扮演",
     "猫箱同款"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_chenwenyouya_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -46773,7 +46773,7 @@
    "tags": [
     "客服场景"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_female_cuishouxieshang_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -46790,7 +46790,7 @@
    "tags": [
     "客服场景"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_chenwenmingzai_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -46807,7 +46807,7 @@
    "tags": [
     "角色扮演"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_younidashu_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -46824,7 +46824,7 @@
    "tags": [
     "角色扮演"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_satuoqingnian_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -46841,7 +46841,7 @@
    "tags": [
     "客服场景"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_female_kefuhuoliyingxiao_v1_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -46858,7 +46858,7 @@
    "tags": [
     "角色扮演"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_huoliqingnian_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -46876,7 +46876,7 @@
     "角色扮演",
     "猫箱同款"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_female_huopodiaoman_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -46893,7 +46893,7 @@
    "tags": [
     "角色扮演"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_female_huoponvhai_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -46911,7 +46911,7 @@
     "通用场景",
     "猫箱同款"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_huoposhuanglang_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -46928,7 +46928,7 @@
    "tags": [
     "角色扮演"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_huoponanyou_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -46945,7 +46945,7 @@
    "tags": [
     "角色扮演"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_shenchenzongcai_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -46963,7 +46963,7 @@
     "角色扮演",
     "猫箱同款"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_qinglengjingui_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -46981,7 +46981,7 @@
     "角色扮演",
     "猫箱同款"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_female_qinglenggaoya_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -46998,7 +46998,7 @@
    "tags": [
     "客服场景"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_qingxinmumu_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -47015,7 +47015,7 @@
    "tags": [
     "客服场景"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_qingxinbobo_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -47032,7 +47032,7 @@
    "tags": [
     "客服场景"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_female_qingxixiaoxue_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -47050,7 +47050,7 @@
     "角色扮演",
     "猫箱同款"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_qinglangwenrun_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -47067,7 +47067,7 @@
    "tags": [
     "角色扮演"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_qingshuangshaonian_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -47084,7 +47084,7 @@
    "tags": [
     "客服场景"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_female_qingtiantaotao_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -47101,7 +47101,7 @@
    "tags": [
     "客服场景"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_female_qingtianmeimei_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -47119,7 +47119,7 @@
     "角色扮演",
     "猫箱同款"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_qingyisugan_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -47136,7 +47136,7 @@
    "tags": [
     "客服场景"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_female_wenwanshanshan_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -47153,7 +47153,7 @@
    "tags": [
     "有声阅读"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_wennuanshaonian_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -47171,7 +47171,7 @@
     "角色扮演",
     "猫箱同款"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_wenrouneilian_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -47189,7 +47189,7 @@
     "通用场景",
     "豆包同款"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_female_wenrounvshen_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -47206,7 +47206,7 @@
    "tags": [
     "角色扮演"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_wenrouxuezhang_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -47225,7 +47225,7 @@
     "S2S-SC",
     "猫箱同款"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_female_wenrouwenya_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -47242,7 +47242,7 @@
    "tags": [
     "角色扮演"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_wenrounanyou_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -47261,7 +47261,7 @@
     "豆包同款",
     "猫箱同款"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_wenrounantongzhuo_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -47278,7 +47278,7 @@
    "tags": [
     "通用场景"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_female_wenroubaiyueguang_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -47295,7 +47295,7 @@
    "tags": [
     "角色扮演"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_wenrunxuezhe_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -47312,7 +47312,7 @@
    "tags": [
     "角色扮演"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_wenshunshaonian_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -47330,7 +47330,7 @@
     "角色扮演",
     "猫箱同款"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_xiaosasuixing_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -47347,7 +47347,7 @@
    "tags": [
     "客服场景"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_female_lingdongxinxin_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -47364,7 +47364,7 @@
    "tags": [
     "通用场景"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_yangyang_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -47381,7 +47381,7 @@
    "tags": [
     "客服场景"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_female_reqingaina_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -47398,7 +47398,7 @@
    "tags": [
     "角色扮演"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_rexueshaonian_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -47415,7 +47415,7 @@
    "tags": [
     "客服场景"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_shuanglangxiaoyang_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -47432,7 +47432,7 @@
    "tags": [
     "角色扮演"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_shuanglangshaonian_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -47450,7 +47450,7 @@
     "通用场景",
     "猫箱同款"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_shuaizhenxiaohuo_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -47467,7 +47467,7 @@
    "tags": [
     "客服场景"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_female_lixingyuanzi_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -47484,7 +47484,7 @@
    "tags": [
     "角色扮演"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_tianxinanyou_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -47502,7 +47502,7 @@
     "角色扮演",
     "猫箱同款"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_female_tianmeijiaoqiao_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -47519,7 +47519,7 @@
    "tags": [
     "客服场景"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_female_tianmeixiaoju_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -47536,7 +47536,7 @@
    "tags": [
     "客服场景"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_female_tianmeixiaoyu_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -47554,7 +47554,7 @@
     "角色扮演",
     "猫箱同款"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_female_tianmeihuopo_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -47573,7 +47573,7 @@
     "豆包同款",
     "猫箱同款"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_bingjiaogege_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -47593,7 +47593,7 @@
     "豆包同款",
     "猫箱同款"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_female_bingjiaojiejie_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -47610,7 +47610,7 @@
    "tags": [
     "角色扮演"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_bingjiaoshaonian_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -47630,7 +47630,7 @@
     "豆包同款",
     "猫箱同款"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_bingjiaodidi_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -47647,7 +47647,7 @@
    "tags": [
     "角色扮演"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_bingjiaonanyou_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -47666,7 +47666,7 @@
     "S2S-SC",
     "猫箱同款"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_bingjiaobailian_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -47684,7 +47684,7 @@
     "角色扮演",
     "猫箱同款"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_female_bingjiaomengmei_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -47702,7 +47702,7 @@
     "角色扮演",
     "豆包同款"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_bingruogongzi_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -47719,7 +47719,7 @@
    "tags": [
     "角色扮演"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_female_bingruoshaonv_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -47736,7 +47736,7 @@
    "tags": [
     "角色扮演"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_bingruoshaonian_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -47757,7 +47757,7 @@
     "豆包同款",
     "剪映同款"
    ],
-   "sample": null,
+   "sample": "voices/doubao/zh_female_zhishuaiyingzi_uranus_bigtts.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -47774,7 +47774,7 @@
    "tags": [
     "角色扮演"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_zhishuaiqingnian_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -47791,7 +47791,7 @@
    "tags": [
     "通用场景"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_female_zhixinjiejie_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -47809,7 +47809,7 @@
     "通用场景",
     "猫箱同款"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_female_zhixingwenwan_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -47827,7 +47827,7 @@
     "角色扮演",
     "S2S-SC"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_cixingnansang_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -47846,7 +47846,7 @@
     "豆包同款",
     "猫箱同款"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_shenmifashi_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -47863,7 +47863,7 @@
    "tags": [
     "客服场景"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_female_xiuliqianqian_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -47880,7 +47880,7 @@
    "tags": [
     "角色扮演"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_nianrennanyou_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -47898,7 +47898,7 @@
     "角色扮演",
     "豆包同款"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_female_jinglingxiangdao_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -47915,7 +47915,7 @@
    "tags": [
     "角色扮演"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_jingyingqingnian_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -47932,7 +47932,7 @@
    "tags": [
     "通用场景"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_female_chunchenvsheng_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -47951,7 +47951,7 @@
     "豆包同款",
     "猫箱同款"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_chunzhenxuedi_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -47969,7 +47969,7 @@
     "角色扮演",
     "豆包同款"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_female_chunzhenshaonv_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -47987,7 +47987,7 @@
     "角色扮演",
     "猫箱同款"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_lvchaxiaoge_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -48004,7 +48004,7 @@
    "tags": [
     "角色扮演"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_pianpiangongzi_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -48021,7 +48021,7 @@
    "tags": [
     "角色扮演"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_huzishushu_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -48040,7 +48040,7 @@
     "S2S-SC",
     "猫箱同款"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_fuheigongzi_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -48057,7 +48057,7 @@
    "tags": [
     "角色扮演"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_zixinqingnian_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -48074,7 +48074,7 @@
    "tags": [
     "角色扮演"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_zifuqingnian_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -48092,7 +48092,7 @@
     "角色扮演",
     "猫箱同款"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_lanyincaohunshi_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -48110,7 +48110,7 @@
     "角色扮演",
     "猫箱同款"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_guiyishenmi_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -48128,7 +48128,7 @@
     "角色扮演",
     "猫箱同款"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_female_tiaopigongzhu_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -48148,7 +48148,7 @@
     "豆包同款",
     "猫箱同款"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_female_tiexinnvyou_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -48165,7 +48165,7 @@
    "tags": [
     "通用场景"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_female_tiexinmeimei_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -48184,7 +48184,7 @@
     "豆包同款",
     "猫箱同款"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_tiexinnanyou_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -48201,7 +48201,7 @@
    "tags": [
     "通用场景"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_female_tiexinguimi_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -48218,7 +48218,7 @@
    "tags": [
     "客服场景"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_female_ruanmengtuanzi_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -48235,7 +48235,7 @@
    "tags": [
     "客服场景"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_female_ruanmengtangtang_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -48252,7 +48252,7 @@
    "tags": [
     "客服场景"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_female_qingyingduoduo_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -48269,7 +48269,7 @@
    "tags": [
     "角色扮演"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_female_xiemeinvwang_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -48286,7 +48286,7 @@
    "tags": [
     "角色扮演"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_female_xiemeiyujie_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -48303,7 +48303,7 @@
    "tags": [
     "视频配音"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_female_linjuayi_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -48320,7 +48320,7 @@
    "tags": [
     "视频配音"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_chunhoudiyin_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -48338,7 +48338,7 @@
     "角色扮演",
     "S2S-SC"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_cujingnanyou_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -48355,7 +48355,7 @@
    "tags": [
     "角色扮演"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_cujingnansheng_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -48373,7 +48373,7 @@
     "角色扮演",
     "豆包同款"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_menyoupingxiaoge_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -48390,7 +48390,7 @@
    "tags": [
     "客服场景"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_yangguangyangyang_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -48408,7 +48408,7 @@
     "角色扮演",
     "S2S-SC"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_badaoshaoye_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -48425,7 +48425,7 @@
    "tags": [
     "角色扮演"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_badaozongcai_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -48443,7 +48443,7 @@
     "角色扮演",
     "猫箱同款"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_qingsexiaosheng_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -48460,7 +48460,7 @@
    "tags": [
     "角色扮演"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_qingseqingnian_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -48478,7 +48478,7 @@
     "角色扮演",
     "S2S-SC"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_fengfashaonian_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -48495,7 +48495,7 @@
    "tags": [
     "角色扮演"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_gaolengzongcai_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -48513,7 +48513,7 @@
     "通用场景",
     "指令遵循"
    ],
-   "sample": null,
+   "sample": "voices/doubao/zh_female_sophie_uranus_bigtts.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null
@@ -48531,7 +48531,7 @@
     "角色扮演",
     "豆包同款"
    ],
-   "sample": null,
+   "sample": "voices/doubao/ICL_uranus_zh_male_anrenqinzhu_tob.m4a",
    "sampleSource": null,
    "featured": false,
    "uses": null

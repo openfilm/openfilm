@@ -49,6 +49,7 @@ import { TemplatePicker } from '@/components/TemplatePicker';
 import { isLibraryText, layoutTracks, type TimelineBlock, type TimelineTrack } from '@/lib/timeline-layout';
 import { organizeTracks } from '@/lib/organize-tracks';
 import { useAgentWorking } from '@/lib/agent-working';
+import { useSettledProblem } from '@/editor/use-settled-problem';
 import { filmClipKind, filmDocLoc, filmSrcIsPage, filmSrcKind, filmTrackBadges, parseFilmDocLoc, type FilmBox, type FilmDoc, type FilmOverride } from '@/lib/film';
 import { exactRate, footageFps, setTimecodeFps, snapToFrame, stepFrames } from '@/lib/timecode';
 import { JUMP_FRAMES, loopBack, playStart, shuttleRate } from '@/lib/timeline-keys';
@@ -304,9 +305,10 @@ export function ProjectView({ projectId, onProject }: {
   /* the film with every edit made here, at once: an edit begun before the one before it was drawn (a color typed,
      then a stroke added with the same click) starts from it, not from the film before it */
   const filmRef = React.useRef<Film | null>(initial?.value ?? null);
-  const film = useFilm(projectId, initial, React.useCallback((value: Film, kind: 'edit' | 'server', head?: string) => {
+  const film = useFilm(projectId, initial, React.useCallback((value: Film, kind: 'edit' | 'server', head?: string, presented?: boolean) => {
+    const before = filmRef.current;
     filmRef.current = value;
-    preview.current?.update(value, head);
+    if (!presented) preview.current?.update(value, head);
     if (kind === 'server') {
       const found = droppedOverrides(lastServerDoc.current as unknown as FilmDoc, value as unknown as FilmDoc);
       if (found.length) setDropped(found);
@@ -314,7 +316,7 @@ export function ProjectView({ projectId, onProject }: {
       const edits = personSteps.current.flatMap((s) => s.redo.flatMap((op) => (op.op === 'props' ? op.edits : [])));
       /* compared with the film shown here (the person's edits in it), not the folder's last: an edit of theirs being
          written is no change */
-      const fields = undoneFields(filmRef.current as unknown as FilmDoc, value as unknown as FilmDoc, edits, settledEdits.current);
+      const fields = undoneFields(before as unknown as FilmDoc, value as unknown as FilmDoc, edits, settledEdits.current);
       for (const e of fields.gone) settledEdits.current.add(e);
       if (fields.undone.length) {
         const key = (e: PersonEdit) => `${e.clip}\u0000${e.prop}`;
@@ -326,9 +328,13 @@ export function ProjectView({ projectId, onProject }: {
   }, []), (latest) => {
     adoptFilm(latest);
     setFilmMissing(Boolean(latest.filmMissing));
-  });
+  }, { presentOnDraw: true, editUnavailable: t('project.filmBroken') });
   personSteps.current = film.steps.done;
   filmRef.current = film.film;
+  const { candidate, present } = film;
+  const previewRevision = React.useMemo(() => {
+    return candidate ? { rev: candidate.rev, present: () => present(candidate) } : null;
+  }, [candidate, present]);
   /* on `showError`, which stays the same: `toast` is new with every message, so showing it would run this again, and
      again (the editor gone) */
   const { showError } = toast;
@@ -352,15 +358,14 @@ export function ProjectView({ projectId, onProject }: {
   const pauseRef = React.useRef<() => void>(() => {});
   /* layers the motion panel just put something on, twirled open on the motion timeline */
   const [motionReveal, setMotionReveal] = React.useState<{ ids: readonly string[]; n: number } | null>(null);
-  /* the shell's way to show or hide a block of the edit's (shell/layout): the motion view opens the timeline and inspector with it */
-  const openBlockRef = React.useRef<(id: string, open: boolean) => void>(() => {});
 
   /* ── transport: the sound is the clock; the picture follows it, drawn in the preview from the player's line ── */
   const player = React.useRef(new Player());
+  const playPending = React.useRef<object | null>(null);
   React.useEffect(() => {
     const p = player.current;
     p.onAnchor = (anchor) => preview.current?.play?.(anchor);
-    return () => { p.onAnchor = null; p.close(); };
+    return () => { playPending.current = null; p.onAnchor = null; p.close(); };
   }, []);
   const [playing, setPlaying] = React.useState(false);
   const [timeMs, setTimeMs] = React.useState(0);
@@ -394,6 +399,7 @@ export function ProjectView({ projectId, onProject }: {
     let frame = 0;
     let lastTick = 0;
     const tick = (now: number) => {
+      if (playPending.current) { frame = requestAnimationFrame(tick); return; }
       const t = player.current.time();
       /* looping: back to the start of what loops once its end is reached */
       const back = loopRef.current ? loopBack(t * 1000, rangeNowRef.current, player.current.duration * 1000) : null;
@@ -434,14 +440,44 @@ export function ProjectView({ projectId, onProject }: {
     return () => cancelAnimationFrame(frame);
   }, [playing]);
 
-  const seek = React.useCallback((ms: number) => {
-    const t = Math.max(0, Math.min(ms / 1000, player.current.duration || ms / 1000));
-    /* playing, it plays on from there (the preview is told the player's new line); still, the picture shows t */
-    player.current.seek(t);
-    setTimeMs(t * 1000);
-    if (!player.current.playing) preview.current?.seek(pictureAt(t));
+  /* After a jump or a pause, cue the target picture before starting the audio clock. A later seek or pause can
+     supersede the cue while the decoder is working. */
+  const startPlayback = React.useCallback((from = player.current.time()) => {
+    const p = player.current;
+    if (!(p.duration > 0)) return;
+    const playAt = from >= p.duration - 1e-3 ? 0 : Math.max(0, from);
+    const request = {};
+    playPending.current = request;
+    if (p.playing) { p.pause(); setPlaying(false); }
+    p.seek(playAt);
+    setTimeMs(playAt * 1000);
     for (const fn of listeners.current) fn();
-  }, []);
+    const start = (ready: boolean | null) => {
+      if (playPending.current !== request) return;
+      playPending.current = null;
+      if (!ready) {
+        stopAtRef.current = null;
+        if (ready === false) showToast(t('assetDrawer.previewTimeout'));
+        return;
+      }
+      p.play(playAt);
+      setPlaying(true);
+    };
+    const cue = preview.current?.cue?.(pictureAt(playAt));
+    if (cue) void cue.then(start);
+    else start(true);
+  }, [showToast, t]);
+  const seek = React.useCallback((ms: number) => {
+    const p = player.current;
+    const t = Math.max(0, Math.min(ms / 1000, p.duration || ms / 1000));
+    if ((p.playing || playPending.current) && t < p.duration - 1e-3) { startPlayback(t); return; }
+    playPending.current = null;
+    if (p.playing) { p.pause(); setPlaying(false); }
+    p.seek(t);
+    setTimeMs(t * 1000);
+    preview.current?.seek(pictureAt(t));
+    for (const fn of listeners.current) fn();
+  }, [startPlayback]);
   /* ── J / K / L: the shuttle. 1×, 2× and 4× forward are the player's own (with sound); backwards, the picture alone
      is sought along at that rate, silent, as a scrub is (the player plays forward only, at most 4×) ── */
   const shuttleRateRef = React.useRef(0);
@@ -456,33 +492,35 @@ export function ProjectView({ projectId, onProject }: {
     }
     shuttleRateRef.current = 0;
   }, []);
-  const pause = React.useCallback(() => {
+  const stopPlayback = React.useCallback(() => {
     stopAtRef.current = null;
+    playPending.current = null;
     /* a picture-alone shuttle stops too */
     if (shuttleFrame.current) { cancelAnimationFrame(shuttleFrame.current); shuttleFrame.current = 0; shuttleRateRef.current = 0; }
-    if (!player.current.playing) return;
+    if (!player.current.playing) return false;
     player.current.pause();
+    setPlaying(false);
+    return true;
+  }, []);
+  const pause = React.useCallback(() => {
+    if (!stopPlayback()) return;
     /* stopped on the frame being shown: the timecode, the picture and an edit at the playhead all mean that frame */
     player.current.seek(snapToFrame(player.current.time() * 1000) / 1000);
-    setPlaying(false);
     setTimeMs(player.current.time() * 1000);
     preview.current?.seek(pictureAt(player.current.time()));
     for (const fn of listeners.current) fn();
-  }, []);
+  }, [stopPlayback]);
   pauseRef.current = pause;
   const toggle = React.useCallback(() => {
     stopShuttle();
-    if (player.current.playing) { pause(); return; }
+    if (player.current.playing || playPending.current) { pause(); return; }
     if (!(player.current.duration > 0)) return;
     stopAtRef.current = null;
     /* looping, it starts inside what loops */
-    if (loopRef.current) {
-      const from = playStart(player.current.time() * 1000, rangeNowRef.current, player.current.duration * 1000);
-      if (Math.abs(from - player.current.time() * 1000) > 1) seek(from);
-    }
-    void player.current.play();
-    setPlaying(true);
-  }, [pause, seek]);
+    const now = player.current.time();
+    const from = loopRef.current ? playStart(now * 1000, rangeNowRef.current, player.current.duration * 1000) / 1000 : now;
+    startPlayback(from);
+  }, [pause, startPlayback, stopShuttle]);
   /** J, K or L pressed (see lib/timeline-keys shuttleRate). */
   const shuttle = React.useCallback((key: 'j' | 'k' | 'l') => {
     const was = shuttleRateRef.current || (player.current.playing ? player.current.rate : 0);
@@ -494,7 +532,7 @@ export function ProjectView({ projectId, onProject }: {
       shuttleRateRef.current = rate;
       player.current.setRate(rate);
       setRateState(player.current.rate);
-      if (!player.current.playing) { stopAtRef.current = null; void player.current.play(); setPlaying(true); }
+      if (!player.current.playing) { stopAtRef.current = null; startPlayback(); }
       return;
     }
     pause();
@@ -513,17 +551,15 @@ export function ProjectView({ projectId, onProject }: {
       shuttleFrame.current = requestAnimationFrame(step);
     };
     shuttleFrame.current = requestAnimationFrame(step);
-  }, [pause, seek, stopShuttle]);
+  }, [pause, seek, startPlayback, stopShuttle]);
   React.useEffect(() => () => { if (shuttleFrame.current) cancelAnimationFrame(shuttleFrame.current); }, []);
   /* Play range (its key, the ruler's menu): from its start, stopping at its end */
   const playRange = React.useCallback((range: FilmRange) => {
-    pause();
+    stopPlayback();
     if (!(player.current.duration > 0)) return;
-    seek(range.startMs);
     stopAtRef.current = range.endMs;
-    void player.current.play();
-    setPlaying(true);
-  }, [pause, seek]);
+    startPlayback(range.startMs / 1000);
+  }, [startPlayback, stopPlayback]);
   /* a browser that held the sound back lets it start on the next click or key anywhere on the page */
   React.useEffect(() => {
     const wake = () => player.current.wake();
@@ -536,19 +572,19 @@ export function ProjectView({ projectId, onProject }: {
      editor, which renders whole each time, hears the time a few times a second, and once more as the scrub ends */
   const scrubTold = React.useRef(0);
   const scrubPreview = React.useCallback((ms: number) => {
-    pause();
+    const wasPlaying = stopPlayback();
     const t = Math.max(0, Math.min(ms / 1000, player.current.duration || ms / 1000));
     player.current.seek(t);
     preview.current?.seek(pictureAt(t));
     for (const fn of listeners.current) fn();
     const now = performance.now();
-    if (now - scrubTold.current > 100) { scrubTold.current = now; setTimeMs(t * 1000); }
+    if (wasPlaying || now - scrubTold.current > 100) { scrubTold.current = now; setTimeMs(t * 1000); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pause]);
-  const scrubCommit = React.useCallback((ms: number) => { pause(); seek(ms); }, [pause, seek]);
+  }, [stopPlayback]);
+  const scrubCommit = React.useCallback((ms: number) => { stopPlayback(); seek(ms); }, [stopPlayback, seek]);
   /* Skimming shows a silent frame without moving the playback clock or the edit's playhead. */
   const skimPreview = React.useCallback((ms: number | null) => {
-    if (player.current.playing || shuttleFrame.current) return;
+    if (player.current.playing || playPending.current || shuttleFrame.current) return;
     preview.current?.seek(pictureAt(ms == null ? player.current.time() : ms / 1000));
   }, []);
 
@@ -653,7 +689,23 @@ export function ProjectView({ projectId, onProject }: {
   const frameRate = React.useMemo(() => ({ fps: projectFps, fromFootage: settings?.fps == null, onChange: (fps: number) => patchSettings({ fps }) }), [projectFps, settings, patchSettings]);
 
   /* selection, by clip id: a block's own id is its place, and that changes when it moves */
-  const [selectedKeys, setSelectedKeys] = React.useState<readonly string[]>([]);
+  const lockedSelection = React.useMemo(() => new Set(timelineTracks.filter((tr) => tr.locked)
+    .flatMap((tr) => tr.blocks.map((b) => b.clipId ?? b.id))), [timelineTracks]);
+  const lockedSelectionRef = React.useRef(lockedSelection);
+  lockedSelectionRef.current = lockedSelection;
+  const [storedSelectedKeys, writeSelectedKeys] = React.useState<readonly string[]>([]);
+  const selectedKeys = React.useMemo(() => storedSelectedKeys.some((key) => lockedSelection.has(key))
+    ? storedSelectedKeys.filter((key) => !lockedSelection.has(key)) : storedSelectedKeys, [lockedSelection, storedSelectedKeys]);
+  const setSelectedKeys = React.useCallback((update: React.SetStateAction<readonly string[]>) => {
+    writeSelectedKeys((keys) => {
+      const next = typeof update === 'function' ? update(keys) : update;
+      const locked = lockedSelectionRef.current;
+      return next.some((key) => locked.has(key)) ? next.filter((key) => !locked.has(key)) : next;
+    });
+  }, []);
+  React.useLayoutEffect(() => {
+    if (selectedKeys !== storedSelectedKeys) writeSelectedKeys(selectedKeys);
+  }, [selectedKeys, storedSelectedKeys]);
   const selectedKeysRef = React.useRef(selectedKeys);
   selectedKeysRef.current = selectedKeys;
   const selectedBlocks = React.useMemo(() => {
@@ -690,7 +742,6 @@ export function ProjectView({ projectId, onProject }: {
      share where the panels are docked, and their boxes where they float. How each is drawn there (the timeline fitted
      to its tracks, the inspector left out of a narrow window while idle) is the edit's (editSizes below), told to the
      shell through the wiring (`blocks`). A block shown or hidden here is told with `openBlock` */
-  openBlockRef.current = (id, open) => openBlock('edit', id, open);
   const own = React.useMemo(() => {
     const places: Record<string, BlockPlace> = {}, free: Record<string, DockRect> = {};
     for (const block of arrangement.spec.blocks) {
@@ -717,6 +768,9 @@ export function ProjectView({ projectId, onProject }: {
 
   /* what is selected in the picture: a layer of a page, or a clip in hand */
   const [stageElement, setStageElement] = React.useState<StageElement | null>(null);
+  React.useLayoutEffect(() => {
+    if (stageElement?.clipLoc && anyLocked(film.film, [stageElement.clipLoc])) setStageElement(null);
+  }, [film.film, stageElement]);
   /* the inspector's font menu: this project's fonts, for the page the layer in hand is in */
   const stageClipLoc = stageElement?.clipLoc;
   const fontScope = React.useMemo<FontScope>(() => {
@@ -773,7 +827,7 @@ export function ProjectView({ projectId, onProject }: {
      those picked there are picked on the timeline (one selection, seen in three places) */
   const fromTimeline = React.useRef(false);
   const onTimelineSelected = React.useCallback((ids: readonly string[]) => {
-    const picked = blocksRef.current.filter((b) => ids.includes(b.id));
+    const picked = blocksRef.current.filter((b) => ids.includes(b.id) && !lockedSelectionRef.current.has(b.clipId ?? b.id));
     setSelectedKeys(picked.map((b) => b.clipId ?? b.id));
     setPickedTransition(null);
     const cues = picked.flatMap((b) => (b.cue ? [b.cue] : []));
@@ -785,12 +839,12 @@ export function ProjectView({ projectId, onProject }: {
       fromTimeline.current = true;
       setCaptionSelection(next);
     }
-    if (ids.length) {
+    if (picked.length) {
       setInspectorContent(cues.length === picked.length ? 'captions' : 'selection');
       setInspectorOpen(true);
       setStageElement((el) => (el && el.kind !== 'clip' ? null : el));
     }
-  }, []);
+  }, [setSelectedKeys]);
   const cuePick = useCaptionSelection();
   React.useEffect(() => {
     if (fromTimeline.current) { fromTimeline.current = false; return; }
@@ -923,10 +977,12 @@ export function ProjectView({ projectId, onProject }: {
     setPickedKeys(new Set(pending && pending.clip === motionBlock?.clipId ? pending.ids : []));
     setKeyMenu(null);
   }, [motionBlock?.clipId]);
+  /* the film's clips by id: the timeline asks of each of its blocks as it draws, hundreds of them */
+  const filmClipById = React.useMemo(() => new Map((film.film?.tracks ?? []).flatMap((tr) => tr.clips.map((c) => [c.id, c] as const))), [film.film]);
   const motionOfBlock = React.useCallback((block: TimelineBlock | null): Motion => {
-    const clip = block?.clipId ? film.film?.tracks.flatMap((tr) => tr.clips).find((c) => c.id === block.clipId) : null;
+    const clip = block?.clipId ? filmClipById.get(block.clipId) : null;
     return clip ? readMotion(clip as { id: string; style?: string }, film.film?.keyframes) : {};
-  }, [film.film]);
+  }, [film.film, filmClipById]);
   /* where a clip's keyframes have its picture at the playhead: its frame on the picture is drawn there */
   const poseOf = React.useCallback((clipId: string) => {
     const block = blocksRef.current.find((b) => b.clipId === clipId);
@@ -2541,7 +2597,7 @@ export function ProjectView({ projectId, onProject }: {
   const pickReplacementRef = React.useRef<(family: ReplaceFamily) => Promise<string | null>>(async () => null);
   const pickReplacement = React.useCallback((family: ReplaceFamily) => pickReplacementRef.current(family), []);
   const tools = useEditorTools({
-    projectId, tracks: timelineTracks, film: film.film, settings, patchSettings, player, timeRef, seek, edit: editOps, record: film.record,
+    projectId, tracks: timelineTracks, film: film.film, settings, patchSettings, player, timeRef, seek: scrubCommit, edit: editOps, record: film.record,
     editModel, selectedClipIds: selectedKeys, listing, toast, pickFile: pickReplacement,
   });
   const shownTracks = React.useMemo(() => foldHeads(tools.tracks, foldedHeads), [tools.tracks, foldedHeads]);
@@ -2779,6 +2835,24 @@ export function ProjectView({ projectId, onProject }: {
       ?? [...places].sort((p, q) => Math.abs(span(p)[0] - at) - Math.abs(span(q)[0] - at))[0];
     if (here) templateFilmHost(block, dir, film).put(here.id, file);
   }, [loadTemplateFilm, templateFilmHost]);
+  const replaceDroppedAsset = React.useCallback(async (block: TimelineBlock, file: ResourceDragItem, atMs: number): Promise<string | null> => {
+    let source = file;
+    if (file.saved) {
+      const item = builtInItem(file.saved);
+      if (item?.kind === 'group') return t('editorTools.replaceKind');
+      const taken = await api.takeSaved(projectId, item?.kind === 'textstyle' ? `${BUILT_IN}/${TEXT_COMPONENT}` : file.saved);
+      if ('clips' in taken) return t('editorTools.replaceKind');
+      source = { ...file, path: 'path' in taken ? taken.path : taken.clip.src };
+    }
+    const target = blocksRef.current.find((b) => b.clipId === block.clipId);
+    if (!target || target.src !== block.src) return t('timeline.editFail');
+    if (lockedSelectionRef.current.has(target.clipId ?? target.id)) return t('timeline.trackLocked');
+    if (templateFolderOf(target.src)) {
+      await dropOnTemplate(target, source, atMs);
+      return null;
+    }
+    return tools.timeline.onReplaceDrop(target, source);
+  }, [dropOnTemplate, projectId, t, tools.timeline.onReplaceDrop]);
   /* a template of the library the picked clip belongs to: its places for pictures, its words, picked whole
      (TemplateSection, lib/template-instance) */
   const templateSection = React.useCallback((blocks: readonly TimelineBlock[]): React.ReactNode => {
@@ -2911,6 +2985,7 @@ export function ProjectView({ projectId, onProject }: {
   }, []);
   /* the picture and the timeline share one selection of clips; a layer picked in the picture drops the timeline's */
   const selectStageElement = React.useCallback((element: StageElement | null, rowClipLocs?: readonly string[]) => {
+    if (element?.clipLoc && anyLocked(filmRef.current, [element.clipLoc])) return;
     setStageElement(element);
     if (element) setInspectorContent('selection');
     if (element && element.kind !== 'clip') setInspectorOpen(true);
@@ -3720,12 +3795,12 @@ export function ProjectView({ projectId, onProject }: {
   /* a clip that has keyframes shows them on its bar, cutting it or animating it: what moves is in sight */
   const withKeyMarks = React.useCallback((b: TimelineBlock): TimelineBlock => {
     if (!b.clipId || (b.kind !== 'mg' && b.kind !== 'video')) return b;
-    const clip = film.film?.tracks.flatMap((tr) => tr.clips).find((c) => c.id === b.clipId);
+    const clip = filmClipById.get(b.clipId);
     const own = keyTimesMs(motionOfBlock(b), 0, b.endMs - b.startMs);
     const vars = clip ? Object.values(readVarMotion(clip.id, clip.overrides as readonly FilmOverride[] | undefined, film.film?.keyframes)).flatMap((v) => v.keys.map((k) => Math.round(k.t * 1000))) : [];
     const keysMs = [...new Set([...own, ...vars])].filter((ms) => ms >= 0 && ms <= b.endMs - b.startMs).sort((x, y) => x - y);
     return keysMs.length ? { ...b, keysMs } : b;
-  }, [film.film, motionOfBlock]);
+  }, [film.film, filmClipById, motionOfBlock]);
   /* a layer shown twirled open (put on from the panels, or opened from the edit's inspector): its folder opens too */
   React.useEffect(() => {
     const ids = motionReveal?.ids ?? [];
@@ -4393,6 +4468,9 @@ export function ProjectView({ projectId, onProject }: {
   React.useEffect(() => { if (awaitingFiles) void listFiles(); }, [awaitingFiles, rawListing, listFiles]);
   /* while an agent changes the film, a file gone is on its way: its clips wait, and the viewer says nothing of it */
   const agentWorking = useAgentWorking();
+  const unreadableFilm = film.broken ?? (!film.film && loaded && !loaded.doc ? loaded : null);
+  const filmProblem = filmMissing ? 'missing' : unreadableFilm?.rev ?? null;
+  const showFilmProblem = useSettledProblem(filmProblem, agentWorking);
   const timelineTrouble = React.useMemo(() => (agentWorking && [...mediaTrouble.values()].includes('missing')
     ? new Map([...mediaTrouble].map(([src, why]) => [src, why === 'missing' ? 'waiting' as const : why])) : mediaTrouble), [agentWorking, mediaTrouble]);
   /** The file of a clip under the playhead that is gone (on a track that is seen), for the viewer to say. */
@@ -4541,10 +4619,17 @@ export function ProjectView({ projectId, onProject }: {
     ], 'history.stepDrop');
   }, [onImport, resourceOf, edit, roomFor, t]);
   /* on the timeline: where they were dropped, as a drag from the media pane lands */
-  const dropFiles = React.useCallback((all: File[], hit: AssetLaneHit | null, atMs: number, mode?: EditMode) => {
+  const dropFiles = React.useCallback(async (
+    all: File[], hit: AssetLaneHit | null, atMs: number, mode?: EditMode, target?: AssetDropTarget | { replace: TimelineBlock },
+  ): Promise<string | null> => {
     const files = takeSubtitleFiles(all, atMs);
-    return files.length ? importAndPlace(files, (items) => assetRunInsert(items, tracksRef.current, hit, atMs, mode, stageRef.current), mode) : Promise.resolve(null);
-  }, [importAndPlace, takeSubtitleFiles]);
+    if (!files.length) return null;
+    if (target && 'replace' in target) {
+      const [path] = await onImport(files, 'assets', () => {});
+      return path ? replaceDroppedAsset(target.replace, await resourceOf(path), atMs) : null;
+    }
+    return importAndPlace(files, (items) => assetRunInsert(items, tracksRef.current, hit, atMs, mode, stageRef.current, target), mode);
+  }, [importAndPlace, onImport, replaceDroppedAsset, resourceOf, takeSubtitleFiles]);
   /* a sound recorded with the timeline's record button: where the playhead was as recording began, on a sound track
      with room there */
   /* words spoken in a voice of the library (VoicesPane's Generate), made by Studio's `get tts` as an agent's are (its
@@ -5002,6 +5087,13 @@ export function ProjectView({ projectId, onProject }: {
         if (once) commands.overwriteTrack(cmd === 'overwrite-track-up' ? -1 : 1);
         return;
       case 'zoom-fit': take(); commands.zoomFit(); return;
+      case 'zoom-in': case 'zoom-out': case 'zoom-reset':
+        /* pressed in the picture (the film's frame passes its keys on, with no target here); the window's own presses
+           are the timeline's (Timeline zooms on them itself) */
+        if (event.target) return;
+        take();
+        commands.zoom(cmd);
+        return;
       case 'toggle-skimming': take(); if (once) commands.toggleSkimming(); return;
       case 'select-left': case 'select-right': take(); if (once) commands.selectSide(cmd === 'select-left' ? -1 : 1); return;
       case 'ripple-start': take(); if (once) commands.rippleTrimStart(); return;
@@ -5154,7 +5246,7 @@ export function ProjectView({ projectId, onProject }: {
   );
 
   /* what the shell reaches of the edit when it needs it (shell/frame): the picture drawn again, the files the film
-     plays; what changing the workbench shown asks of the edit (playing stopped, Motion's panes opened); what the
+     plays; what changing the workbench shown asks of the edit (playing stopped); what the
      layout reads of the edit's panes; what the library does here; and what the edit has on the top bar (below). The
      edit's own functions are called as the latest render made them */
   const forShell = React.useRef({ addFromCanvas, sendFromCanvas, listing });
@@ -5162,22 +5254,27 @@ export function ProjectView({ projectId, onProject }: {
   /* what others put in the film (openfilm/studio addTo: the canvas's file, or its cut, then the film shown), by path;
      the links to the film it shows (lib/links: a clip, a moment, a stretch, as the app's commands they stand for); and
      the app's commands that are the edit's (openfilm/studio onCommand) */
-  React.useEffect(() => provide('edit', {
-    opens: [FILM],
-    show: (link) => {
+  React.useEffect(() => {
+    const show = (link: string) => {
       const command = filmCommandOf(parseLink(link)?.fragment ?? null);
       if (command) hostCommands.current(command);
-    },
-    add: (paths, { show }) => {
-      const { listing: listed } = forShell.current;
-      const all = listed ? [...listed.files, ...listed.pages] : [];
-      const files = paths.flatMap((path) => all.find((f) => f.path === path) ?? []);
-      if (show) { void forShell.current.sendFromCanvas(files); return; }
-      void (async () => { for (const file of files) await forShell.current.addFromCanvas(file); })();
-    },
-    settle: () => forHistory.current.settle(),
-    restored: () => forHistory.current.restored(),
-  }), []);
+    };
+    const leaveEdit = provide('edit', {
+      opens: [FILM],
+      show,
+      add: (paths, { show }) => {
+        const { listing: listed } = forShell.current;
+        const all = listed ? [...listed.files, ...listed.pages] : [];
+        const files = paths.flatMap((path) => all.find((f) => f.path === path) ?? []);
+        if (show) { void forShell.current.sendFromCanvas(files); return; }
+        void (async () => { for (const file of files) await forShell.current.addFromCanvas(file); })();
+      },
+      settle: () => forHistory.current.settle(),
+      restored: () => forHistory.current.restored(),
+    });
+    const leaveMotion = provide('motion', { opens: [FILM], show });
+    return () => { leaveMotion(); leaveEdit(); };
+  }, []);
   React.useEffect(() => onCommand((command) => hostCommands.current(command)), []);
   /* the window is laid out by the shell (shell/layout); how the edit's blocks are drawn there is given here, for
      wherever they are and for the layout's menu, which draws each arrangement with it: each shown or not, its size
@@ -5253,7 +5350,6 @@ export function ProjectView({ projectId, onProject }: {
     reloadPicture: () => preview.current?.reload?.(),
     srcsInUse: () => blocksRef.current.flatMap((b) => (b.src ? [b.src] : [])),
     pause: () => pauseRef.current(),
-    motionShown: () => { openBlockRef.current('timeline', true); openBlockRef.current('inspector', true); },
     blocks: blockSizer,
     library: shellLibrary,
     topBar: shellTopBar,
@@ -5264,7 +5360,7 @@ export function ProjectView({ projectId, onProject }: {
   /* the shell draws the loading screen, and why the project could not be read */
   if (failure || !loaded) return null;
 
-  const value = film.film;
+  const value = film.film ?? candidate?.value ?? null;
   const viewerReady = Boolean(info);
   return (
     <>
@@ -5374,7 +5470,7 @@ export function ProjectView({ projectId, onProject }: {
                       <span className="rounded-md bg-[var(--bg-raised)] px-2.5 py-1 text-[12.5px] text-[var(--text)] shadow-sm">{t('project.dropOnPicture')}</span>
                     </div>
                   ) : null}
-                  {filmMissing ? (
+                  {showFilmProblem && filmMissing ? (
                     <div data-film-missing="" className="pointer-events-none absolute inset-x-0 top-3 z-20 flex justify-center px-4">
                       <p role="status" className="max-w-[min(30rem,90%)] rounded-lg bg-black/70 px-3.5 py-2 text-center text-[12.5px] leading-snug text-white/90">{t('project.filmMissing')}</p>
                     </div>
@@ -5427,6 +5523,7 @@ export function ProjectView({ projectId, onProject }: {
                         }}>
                           <Preview ref={preview} folder={folder} stage={shownStage} time={() => player.current.time()} fps={exactRate(projectFps)}
                             onInfo={onInfo} onKey={previewKey} onError={setPreviewError} onPlayed={onPlayed} onUndecoded={onUndecoded} waiting={agentWorking}
+                            filmUnavailable={filmProblem !== null} managed revision={previewRevision} onRevisionNeeded={film.refresh}
                             onSpans={(next) => setInfo((had) => (had ? { ...had, spans: next } : had))}
                             onShown={() => setPageShown((n) => n + 1)}>
                             {/* grading, the picture is looked at, not arranged: no picking or moving layers on it */}
@@ -5482,7 +5579,7 @@ export function ProjectView({ projectId, onProject }: {
                             target={libraryPreviewBar} onLetGo={() => dismissLibraryPreview.current()} onTemplateState={onTemplateState}
                             onDownloadFailed={onLibraryDownloadFailed} /> : null}
                         </div>
-                        {!viewerReady && !empty && !previewError ? (
+                        {!viewerReady && !empty && !previewError && !filmProblem ? (
                           <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-black">
                             <span role="status" className="text-sweep relative text-[13px] text-white/60">{t('project.previewStageMount')}</span>
                           </div>
@@ -5509,13 +5606,21 @@ export function ProjectView({ projectId, onProject }: {
                       ) : null}
                     </div>
                   ) : (
-                    filmMissing ? null : <p className="max-w-[280px] text-center text-[12.5px] text-[var(--text-faint)]">{loaded.problems.join(' ') || t('project.filmEmptyHint')}</p>
+                    filmProblem ? null : <p className="max-w-[280px] text-center text-[12.5px] text-[var(--text-faint)]">{t('project.filmEmptyHint')}</p>
                   )}
                 </div>
-                {film.broken ? (
-                  <div role="status" className="mx-2 mb-1 flex items-start gap-2 rounded-md border border-[var(--warn)] px-2.5 py-1.5 text-[12px] leading-snug text-[var(--text)]">
+                {showFilmProblem && !filmMissing && unreadableFilm ? (
+                  <div data-film-broken="" className="mx-2 mb-1 flex items-start gap-2 rounded-md border border-[var(--warn)] px-2.5 py-1.5 text-[12px] leading-snug text-[var(--text)]">
                     <TriangleAlert size={14} className="mt-px shrink-0 text-[var(--warn)]" aria-hidden />
-                    <span className="min-w-0 break-words"><span className="font-medium">{t('project.filmBroken')}</span>{' '}<span className="text-[var(--text-muted)]">{film.broken}</span></span>
+                    <div className="min-w-0">
+                      <p role="status" className="font-medium">{t(film.film ? 'project.previewPrevious' : 'project.filmBroken')}</p>
+                      {unreadableFilm.problems.length ? (
+                        <details className="mt-0.5 text-[var(--text-muted)]">
+                          <summary className="cursor-pointer">{t('project.previewDetails')}</summary>
+                          <p className="mt-1 max-h-32 overflow-auto whitespace-pre-wrap break-words">{unreadableFilm.problems.join('\n')}</p>
+                        </details>
+                      ) : null}
+                    </div>
                   </div>
                 ) : null}
                 <div ref={setLibraryPreviewBar} data-library-preview-bar="" className="peer empty:hidden" />
@@ -5717,7 +5822,6 @@ export function ProjectView({ projectId, onProject }: {
                     onViewChange={setThumbView}
                     tracks={layerTracks ? layerTracks.map((r) => r.track) : editTracks}
                     layers={layerTracks ? layerView(filmMotion, layerTracks, pickedKeys.size > 0, selectedBlocks.length > 0, openComposition) : null}
-                    timelineView={workModes.includes('motion') && workModes.includes('edit') ? { now: workMode === 'motion' ? 'motion' : 'edit', onView: setWorkMode } : null}
                     totalMs={totalMs}
                     timeMs={timeMs}
                     clock={playing ? clock : null}
@@ -5756,9 +5860,7 @@ export function ProjectView({ projectId, onProject }: {
                     waveUrl={waveUrl}
                     history={timelineHistory}
                     {...tools.timeline}
-                    /* a file dropped on a template's clip goes in its place there, without ⇧ */
-                    dropInto={(b) => templateFolderOf(b.src) != null}
-                    onReplaceDrop={(b, f, atMs) => { if (templateFolderOf(b.src) && atMs != null) void dropOnTemplate(b, f, atMs); else tools.timeline.onReplaceDrop(b, f as never); }}
+                    onReplaceDrop={replaceDroppedAsset}
                   />
                   )}
                   {motionOpen ? (compBlock ? compMotion.overlay : filmMotion.overlay) : null}
@@ -5800,6 +5902,8 @@ export function ProjectView({ projectId, onProject }: {
         open={exportOpen}
         onClose={() => { setExportOpen(false); setExportClipId(null); }}
         projectId={projectId}
+        savedRevision={film.savedRevision}
+        refreshPreview={film.refresh}
         title={title || 'video'}
         durationMs={totalMs}
         stage={stage}

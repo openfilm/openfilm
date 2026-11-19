@@ -19,6 +19,7 @@ import { inverse } from './undo';
 import { dropStep, inTurn, moveStep, nextStep, pushStep, type Steps } from './steps';
 
 export type FilmState = { value: Film; rev: string };
+type FilmCandidate = FilmState & { head?: string; before: FilmState | null };
 
 /**
  * One edit a person made here, undoable: what undoes it, what makes it again, and what to call it in the history.
@@ -31,15 +32,18 @@ export type Step = { undo: Op[]; redo: Op[]; label: string; at: number; outside?
 export type OutsideStep = { undo: () => Promise<string | null>; redo: () => Promise<string | null> };
 
 /**
- * The film of a project, editable. `onChange(value, kind, head)` tells the picture: `edit` for an edit made here (try
- * it in place), `server` for the film as the folder has it now (the agent wrote it, or an edit was refused), with its
- * file's head when known (a changed one is the film loaded again: its styles are not in the value).
+ * The film of a project, editable. With `presentOnDraw` the workbench calls `present` once the candidate has drawn.
+ * `onChange` then receives `presented` along with the committed film.
  */
-export function useFilm(projectId: string, initial: FilmState | null, onChange: (value: Film, kind: 'edit' | 'server', head?: string) => void, onRead: (latest: ProjectFilm) => void) {
-  const [state, setState] = useState<FilmState | null>(initial);
+export function useFilm(projectId: string, initial: FilmState | null, onChange: (value: Film, kind: 'edit' | 'server', head?: string, presented?: boolean) => void, onRead: (latest: ProjectFilm) => void, { presentOnDraw = false, editUnavailable = 'film.html cannot be read right now.' } = {}) {
+  const [state, setState] = useState<FilmState | null>(presentOnDraw ? null : initial);
+  const [candidate, setCandidate] = useState<FilmCandidate | null>(null);
+  const candidateRef = useRef(candidate);
+  const requestLatest = useRef<(() => void) | null>(null);
+  const refresh = useCallback(() => requestLatest.current?.(), []);
   const [error, setError] = useState<string | null>(null);
-  /** why film.html cannot be read now (null: it can) */
-  const [broken, setBroken] = useState<string | null>(null);
+  /** The last unreadable revision, with diagnostics for the viewer's details. */
+  const [broken, setBroken] = useState<{ rev: string; problems: string[] } | null>(null);
   const brokenRev = useRef<string | null>(null);
   /** edits applied here and not yet written */
   const pending = useRef(0);
@@ -53,30 +57,60 @@ export function useFilm(projectId: string, initial: FilmState | null, onChange: 
   }, []);
   const ref = useRef(state);
   const queue = useRef(Promise.resolve());
+  const savedRevision = useCallback(async () => {
+    await queue.current;
+    return ref.current?.rev;
+  }, []);
   const changed = useRef(onChange);
   changed.current = onChange;
   const read = useRef(onRead);
   read.current = onRead;
-  useEffect(() => { if (initial && !ref.current) { ref.current = initial; setState(initial); } }, [initial]);
+  const prepare = useCallback((next: FilmCandidate | null) => {
+    candidateRef.current = next;
+    setCandidate(next);
+  }, []);
+  useEffect(() => {
+    if (!initial || ref.current || candidateRef.current || brokenRev.current) return;
+    if (presentOnDraw) prepare({ ...initial, before: null });
+    else { ref.current = initial; setState(initial); }
+  }, [initial, prepare, presentOnDraw]);
+
+  /** The preview has drawn this exact revision. Commit the edit and its picture in the same render. */
+  const present = useCallback((next: FilmCandidate) => {
+    if (candidateRef.current !== next || next.before !== ref.current || pending.current) return false;
+    prepare(null);
+    const current = { value: next.value, rev: next.rev };
+    ref.current = current;
+    setState(current);
+    changed.current(current.value, 'server', next.head, true);
+    return true;
+  }, [prepare]);
 
   /** Accept a disk snapshot only while it still belongs to this view and no newer edit superseded it. */
-  const fromServer = useCallback(async ({ signal, accept = () => true, force = false }: { signal?: AbortSignal; accept?: () => boolean; force?: boolean } = {}) => {
+  const fromServer = useCallback(async ({ signal, accept = () => true, force = false, recover = false }: { signal?: AbortSignal; accept?: () => boolean; force?: boolean; recover?: boolean } = {}) => {
     const latest = await api.film(projectId, signal);
     if (!accept()) return 'stale';
     read.current(latest);
     if (latest.filmMissing || !latest.doc || !latest.value) {
+      prepare(null);
       brokenRev.current = latest.rev;
-      setBroken(latest.filmMissing ? null : latest.problems.join('\n') || 'film.html cannot be read');
+      setBroken(latest.filmMissing ? null : { rev: latest.rev, problems: latest.problems });
       return 'broken';
     }
-    if (!force && !brokenRev.current && latest.rev === ref.current?.rev) return 'current';
+    if (!force && !candidateRef.current && !brokenRev.current && latest.rev === ref.current?.rev) return 'current';
+    if (!force && latest.rev === candidateRef.current?.rev) return 'current';
     if (brokenRev.current) { brokenRev.current = null; setBroken(null); setError(null); }
     const next = { value: latest.value, rev: latest.rev };
+    if (presentOnDraw && !recover) {
+      prepare({ ...next, head: filmHead(latest.text), before: ref.current });
+      return 'current';
+    }
+    prepare(null);
     ref.current = next;
     setState(next);
     changed.current(next.value, 'server', filmHead(latest.text));
     return 'current';
-  }, [projectId]);
+  }, [projectId, prepare, presentOnDraw]);
 
   /* One refresh at a time. A transient read failure must not lose the folder's only change event. A read started
      before another change or an optimistic edit is rechecked after it, instead of painting an older timeline. */
@@ -93,7 +127,7 @@ export function useFilm(projectId: string, initial: FilmState | null, onChange: 
         if (life.signal.aborted || pending.current) return;
         const job = wanted;
         wanted = null;
-        if (!job.force && job.rev && job.rev === ref.current?.rev && !brokenRev.current) return;
+        if (!job.force && job.rev && job.rev === ref.current?.rev && !brokenRev.current && !candidateRef.current) return;
         const before = ref.current;
         try {
           const result = await fromServer({
@@ -120,6 +154,7 @@ export function useFilm(projectId: string, initial: FilmState | null, onChange: 
       if (retry) { clearTimeout(retry); retry = null; }
       void sync();
     };
+    requestLatest.current = () => request(undefined, true);
     const stop = projectEvents(projectId, (event) => {
       if (event.type === 'film') request(event.rev, !event.rev);
       /* The stream's initial project snapshot comes after the watcher is attached. Catch a write between the
@@ -131,6 +166,7 @@ export function useFilm(projectId: string, initial: FilmState | null, onChange: 
     document.addEventListener('visibilitychange', visible);
     window.addEventListener('focus', visible);
     return () => {
+      requestLatest.current = null;
       life.abort();
       if (retry) clearTimeout(retry);
       stop();
@@ -148,9 +184,11 @@ export function useFilm(projectId: string, initial: FilmState | null, onChange: 
   const run = useCallback((ops: Op[], record: 'do' | 'undo' | 'redo' = 'do', label = 'history.stepEdit', quiet = false, one?: Step, outside?: OutsideStep): Promise<string | null> => {
     const current = ref.current;
     if (!current || !ops.length) return Promise.resolve(null);
-    /* film.html cannot be read: the edit could not be written, and shown it would draw the picture again from the
-       broken file. Nothing changes; the note on the film already says why (`broken`) */
-    if (brokenRev.current) return Promise.resolve(null);
+    /* Keep the last good film and pause edits while its source is being updated or cannot be read. */
+    if (brokenRev.current) {
+      if (!quiet) setError(editUnavailable);
+      return Promise.resolve(editUnavailable);
+    }
     let after: Film;
     try { after = applyOps(structuredClone(current.value), ops) as Film; }
     catch (e) {
@@ -158,6 +196,7 @@ export function useFilm(projectId: string, initial: FilmState | null, onChange: 
       if (!quiet) setError(why);
       return Promise.resolve(why);
     }
+    prepare(null);
     const before = current.value;
     const next = { value: after, rev: current.rev };
     ref.current = next;
@@ -178,7 +217,7 @@ export function useFilm(projectId: string, initial: FilmState | null, onChange: 
         /* what was not written is not a step to undo */
         if (record === 'do') setSteps((s) => ({ ...s, done: s.done.filter((x) => x !== step) }));
         const recovered = pending.current ? 'stale' : await fromServer({
-          signal: AbortSignal.timeout(8000), accept: () => !pending.current, force: true,
+          signal: AbortSignal.timeout(8000), accept: () => !pending.current, force: true, recover: true,
         }).catch(() => 'failed');
         if ((recovered === 'broken' || recovered === 'failed') && !pending.current) {
           /* the folder's film cannot be read: back to the film as it was before this edit (the note on the film says
@@ -186,7 +225,11 @@ export function useFilm(projectId: string, initial: FilmState | null, onChange: 
           ref.current = current;
           setState(current);
           changed.current(current.value, 'server');
-          if (recovered === 'broken') return null;
+          if (recovered === 'broken') {
+            if (one && record !== 'do') setSteps((s) => moveStep(s, one, record === 'undo' ? 'redo' : 'undo'));
+            if (!quiet) setError(editUnavailable);
+            return editUnavailable;
+          }
         }
         if (!quiet) setError(why);
         return why;
@@ -197,9 +240,14 @@ export function useFilm(projectId: string, initial: FilmState | null, onChange: 
       /* Every edit here written: the folder's film is the truth (another write came in under this one). */
       const theirs = pending.current === 0 ? done.value : null;
       if (theirs && (done.rebased || JSON.stringify(theirs) !== JSON.stringify(here.value))) {
-        ref.current = { value: theirs, rev: done.rev };
-        setState(ref.current);
-        changed.current(theirs, 'server', filmHead(done.text));
+        const next = { value: theirs, rev: done.rev };
+        const head = filmHead(done.text);
+        if (presentOnDraw) prepare({ ...next, head, before: here });
+        else {
+          ref.current = next;
+          setState(next);
+          changed.current(theirs, 'server', head);
+        }
       } else {
         ref.current = { ...here, rev: done.rev };
         setState(ref.current);
@@ -208,7 +256,7 @@ export function useFilm(projectId: string, initial: FilmState | null, onChange: 
     });
     queue.current = written.then(() => {}, () => {});
     return written;
-  }, [projectId, fromServer, setSteps]);
+  }, [projectId, fromServer, prepare, setSteps, editUnavailable, presentOnDraw]);
 
   /* a step of another file: moved between the lists at once, its call made in turn with the film's writes; one that
      cannot be undone (the file changed since, elsewhere) leaves both lists, and says why. Resolves once made: true,
@@ -231,7 +279,8 @@ export function useFilm(projectId: string, initial: FilmState | null, onChange: 
      Resolves once the next step can be taken: at once for film.html alone, once written for another file. */
   const step = useCallback((one: Step, kind: 'undo' | 'redo'): Promise<void> => {
     const ops = kind === 'undo' ? one.undo : one.redo;
-    const drop = (why: string | null) => { if (why) setSteps((s) => dropStep(s, one)); };
+    if (ops.length && brokenRev.current) { setError(editUnavailable); return Promise.resolve(); }
+    const drop = (why: string | null) => { if (why && why !== editUnavailable) setSteps((s) => dropStep(s, one)); };
     if (one.outside && !ops.length) return runOutside(one, kind).then(() => {});
     /* film.html and another file: the other file first, both ways (it can be refused: written since), film.html only
        once it is written, so the two never disagree */
@@ -241,7 +290,7 @@ export function useFilm(projectId: string, initial: FilmState | null, onChange: 
     /* applied here at once: the next step can be taken now, its write queued after this one's */
     void run(ops, kind, undefined, false, one).then(drop);
     return Promise.resolve();
-  }, [run, runOutside, setSteps]);
+  }, [run, runOutside, setSteps, editUnavailable]);
   /* undo, redo and the history's jumps one at a time: the next step is looked for once the last one is taken */
   const turn = useRef(inTurn());
   const undo = useCallback(() => {
@@ -271,7 +320,7 @@ export function useFilm(projectId: string, initial: FilmState | null, onChange: 
   const forget = useCallback(() => setSteps(() => ({ done: [], undone: [] })), [setSteps]);
 
   return {
-    film: state?.value ?? null, rev: state?.rev ?? null, error, broken, edit, record, undo, redo, rollbackTo, forget, steps,
+    film: state?.value ?? null, rev: state?.rev ?? null, candidate, present, refresh, savedRevision, error, broken, edit, record, undo, redo, rollbackTo, forget, steps,
     canUndo: steps.done.length > 0, canRedo: steps.undone.length > 0, settled: () => queue.current,
   };
 }

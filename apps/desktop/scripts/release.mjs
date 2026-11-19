@@ -146,6 +146,7 @@ await builder.build({
       artifactName: `${NAME.replace(' ', '-')}-Setup-\${arch}.\${ext}`,
     },
     nsis: {
+      include: join(desktop, 'build/installer.nsh'),
       /* electron-builder leaves these out of its archive and adds them back apart, skipping node_modules: the
          library's previews (node_modules/openfilm/library/.../preview.mp4) would never reach the computer */
       preCompressedFileExtensions: null,

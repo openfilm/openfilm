@@ -256,7 +256,8 @@ export function ActionBar({ id, file, empty }: { id: string; file: WorkspaceReso
     const player = document.querySelector<HTMLVideoElement>(`.react-flow__node[data-id="${CSS.escape(id)}"] video`);
     const length = player && Number.isFinite(player.duration) ? player.duration : (file.durationMs ?? 0) / 1000;
     const at = mode === 'first' ? 0 : mode === 'last' ? Math.max(0, length - 0.04) : player?.currentTime ?? 0;
-    try { board.bring(id, [await frameOf(board.sources.file(file), at, `${file.name.replace(/\.[^.]+$/, '')}-${mode}-frame.png`)]); }
+    const address = player?.currentSrc || board.sources.file(file);
+    try { board.bring(id, [await frameOf(address, at, `${file.name.replace(/\.[^.]+$/, '')}-${mode}-frame.png`, board.sources.videoCopy?.(file))]); }
     catch { board.reportError?.(t('canvas.video.captureFailed')); }
   };
   /* ── the tools, each a key: those kept on the bar in the person's order (BarSettings), the rest under More ── */

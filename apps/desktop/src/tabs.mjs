@@ -24,7 +24,7 @@ export function projectGone(projects, projectId) {
 
 /**
  * @typedef {{ id: string, projectId: string, title: string, working: boolean, asking: boolean,
- *   exporting: number | null, shown: number }} Tab
+ *   exporting: number | null, exportStage?: string, shown: number }} Tab
  * @typedef {{ tabs: Array<{ projectId: string, title?: string }>, active: number }} SavedTabs
  */
 
@@ -58,7 +58,8 @@ export function createTabs({ saved = null, now = Date.now, newId = randomUUID } 
 
   const api = {
     /** The tabs in order, as the pages draw them. */
-    list: () => tabs.map((t) => ({ id: t.id, projectId: t.projectId, title: t.title, active: t.id === active, working: t.working, asking: t.asking, exporting: t.exporting })),
+    list: () => tabs.map((t) => ({ id: t.id, projectId: t.projectId, title: t.title, active: t.id === active, working: t.working,
+      asking: t.asking, exporting: t.exporting, ...(t.exportStage ? { exportStage: t.exportStage } : {}) })),
     activeId: () => active,
     /** @param {string} id */
     get: (id) => tabs.find((t) => t.id === id) ?? null,
@@ -146,13 +147,15 @@ export function createTabs({ saved = null, now = Date.now, newId = randomUUID } 
     },
     /**
      * What a tab's page says it shows now: its project's title, an export's progress.
-     * @param {string} id @param {{ title?: string, exporting?: number | null }} state → whether there was such a tab
+     * @param {string} id @param {{ title?: string, exporting?: number | null, exportStage?: string | null }} state → whether there was such a tab
      */
-    report(id, { title, exporting }) {
+    report(id, { title, exporting, exportStage }) {
       const tab = api.get(id);
       if (!tab) return false;
       if (typeof title === 'string') tab.title = title;
       if (exporting !== undefined) tab.exporting = typeof exporting === 'number' ? Math.max(0, Math.min(1, exporting)) : null;
+      if (tab.exporting == null || exportStage === null) delete tab.exportStage;
+      else if (exportStage !== undefined) tab.exportStage = exportStage;
       return true;
     },
     /**

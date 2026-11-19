@@ -68,6 +68,34 @@ test('multi-range video joins only selected frames, with matching sound and reti
   }
 });
 
+test('a selection can export when a trimmed clip outside it is offline', { skip: !hasFfmpeg, timeout: 30_000 }, async () => {
+  const root = mkdtempSync(join(tmpdir(), 'openfilm-range-offline-'));
+  const previousHome = process.env.OPENFILM_HOME;
+  process.env.OPENFILM_HOME = join(root, 'state');
+  const queue = createExports();
+  try {
+    writeFileSync(join(root, 'card.html'), '<body style="background:lime"><script>window.film={duration:1,frame(){}}</script>');
+    writeFileSync(join(root, 'film.html'), filmHtml({ stage: { w: 320, h: 180 }, tracks: [
+      { clips: [{ src: 'card.html', id: 'card', time: [0, 1] }, { src: 'offline.html', id: 'offline', at: 1, time: [0, 1] }] },
+      { hidden: true, clips: [{ src: 'hidden.html', id: 'hidden' }] },
+      { hidden: true, clips: [], captions: { src: 'hidden.vtt', kind: 'captions' } },
+    ] }));
+    const project = { id: 'ranges', name: 'Ranges', path: root };
+    const ask = { kind: 'video', fps: 10, hardware: false };
+    const partial = await ended(queue, queue.start(project, { ...ask, range: [0, 1] }, { folder: root }).id);
+    assert.equal(partial.status, 'done', partial.error);
+    assert.equal(Number(JSON.parse(probe(partial.out, 'stream=nb_frames')).streams[0].nb_frames), 10);
+    const full = await ended(queue, queue.start(project, ask, { folder: root }).id);
+    assert.equal(full.status, 'failed');
+    assert.match(full.error, /offline\.html/);
+  } finally {
+    await queue.stopAll();
+    if (previousHome === undefined) delete process.env.OPENFILM_HOME;
+    else process.env.OPENFILM_HOME = previousHome;
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('malformed selections and unsupported export destinations are refused before queueing', () => {
   const queue = createExports();
   const project = { id: 'ranges', name: 'Ranges', path: tmpdir() };

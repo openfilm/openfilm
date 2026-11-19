@@ -133,10 +133,12 @@ export function findTransitions(model: EditModel, facts: FactsOf): FilmTransitio
   const used = new Set<string>();
   const out: FilmTransition[] = [];
   const whites = clips.filter(({ clip }) => facts(clip.id)?.white);
+  /* the clips a transition can come in by: a fade in, or a move of their own (a film of hundreds of clips has few) */
+  const incoming = clips.filter(({ clip }) => { const f = facts(clip.id); return f && !f.white && ((f.fade[0] > 0) || f.moveIn); });
   for (const { clip: a, track: ta } of [...clips].sort((x, y) => Number(facts(y.clip.id)?.picture) - Number(facts(x.clip.id)?.picture))) {
     const fa = facts(a.id);
     if (!fa || fa.white || used.has(`a:${a.id}`)) continue;
-    for (const { clip: b, track: tb } of clips) {
+    for (const { clip: b, track: tb } of incoming) {
       const fb = facts(b.id);
       if (!fb || b.id === a.id || fb.white || fb.picture !== fa.picture || (!(fb.fade[0] > 0) && !fb.moveIn) || used.has(`b:${b.id}`)) continue;
       /* an overlap the incoming clip fades in over: the outgoing one fades out with it, or (a picture under it) stays whole */

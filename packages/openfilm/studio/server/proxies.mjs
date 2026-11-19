@@ -2,17 +2,18 @@
 /**
  * Proxies: light copies of heavy footage for the preview to play. Footage
  * past 1080p, or in a form slow to decode (ProRes, HEVC, 10-bit…), from a NAS most of all, stutters when played and
- * scrubbed; its proxy is an H.264 copy `height` px on its short side, its picture only, with the same frames at the
+ * scrubbed, and footage whose key frames are far apart is slow to scrub (slowToScrub); its proxy is an H.264 copy `height` px on its short side, with the same frames at the
  * same times (passthrough: none added or dropped) and a key frame every half second, so a scrub lands at once. Made in
  * the background, one at a time, kept in the project's cache: decoded and written on the graphics chip when it can
- * (src/encoders.mjs), so the processor stays free; by x264 otherwise.
+ * (src/encoders.mjs), so the processor stays free; by x264 otherwise. Copies carry sound for direct playback.
+ * Footage with transparency uses VP9 with alpha instead of H.264.
  *
  * Footage the editor's browser does not decode at all (HEVC on a computer without a chip for it, ProRes…) shows
  * nothing until its proxy is made: the editor says which (it asks its browser, playType), and theirs are made first,
  * whether proxies are on or not; off, only the proxies that are lighter footage are left out.
  *
- * Only the preview plays them (pages.mjs swaps a file for its proxy): the film's sound is mixed from the original, and
- * an export or a render reads the originals. Nothing in film.html changes.
+ * Studio previews play them. The timeline's sound is mixed from the original, and an export reads the originals.
+ * Nothing in film.html changes.
  */
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -21,17 +22,39 @@ import { join } from 'node:path';
 import { clipKind } from '../../src/film-doc.mjs';
 import { colorTagsOf, encoders, h264ColorTags, hardwareEncoder, hardwareOptions, onTheChip } from '../../src/encoders.mjs';
 import { decodedAnywhere } from '../../src/seekable.mjs';
-import { probe } from './derived.mjs';
+import { keyGap, probe } from './derived.mjs';
 import { readable } from './files.mjs';
 import { TOOL_DIR } from './projects.mjs';
 
 /** Changing how proxies are made makes new ones. */
-const VERSION = 1;
+const VERSION = 2;
 /** Decoded at full speed by every browser, 8-bit: light enough as it is, up to 1080p. */
 const LIGHT_CODECS = new Set(['h264', 'vp8', 'vp9', 'av1']);
 const LIGHT_PIXFMTS = new Set(['yuv420p', 'yuvj420p']);
 /** A key frame every half second. */
 const GOP_S = 0.5;
+
+/** Key frames further apart than this (s) make a scrub slow: each seek decodes from the one before it. */
+const SLOW_GOP_S = 0.5;
+/** What a seek may cost before footage is scrubbed from its proxy: the key frames' gap (s) by the picture's pixels, as
+    1280×720 footage with a key frame a second has it. */
+const SLOW_SEEK = 1280 * 720 * 1;
+
+/**
+ * Whether footage is slow to scrub: its key frames far apart (a phone's or a camera's H.264, a screen recording, a
+ * generated clip with one key frame in all), on a picture large enough that decoding from one to the frame sought
+ * takes a while. Its proxy has a key frame every GOP_S on a picture no larger. Played as it is, a scrub through it
+ * showed a few frames a second, and a cut to another clip of it came a moment late.
+ * @param {string} root @param {string} rel @param {{ width?: number, height?: number, codec?: string, pixfmt?: string }} facts
+ */
+export async function slowToScrub(root, rel, facts) {
+  /* H.264 only, which has no alpha: a proxy has none, and a VP9 or AV1 may keep one */
+  if (facts.codec !== 'h264' || !LIGHT_PIXFMTS.has(String(facts.pixfmt))) return false;
+  const pixels = Number(facts.width) * Number(facts.height);
+  if (!(pixels > 0)) return false;
+  const gap = await keyGap(root, rel).catch(() => null);
+  return gap != null && gap > SLOW_GOP_S && gap * pixels > SLOW_SEEK;
+}
 
 /**
  * Whether footage is heavy to play: past 1080p (its long side over 1920 or its short over 1080), or not 8-bit H.264,
@@ -81,12 +104,15 @@ function proxyFile(/** @type {string} */ root, /** @type {string} */ rel, /** @t
   const abs = readable(root, rel);
   const info = statSync(abs);
   const name = createHash('sha1').update(`${VERSION}\0${info.dev}:${info.ino}\0${info.size}\0${Math.round(info.mtimeMs)}\0${height}`).digest('hex').slice(0, 20);
-  return { abs, out: join(root, TOOL_DIR, 'cache', 'proxies', `${name}.mp4`) };
+  return { abs, base: join(root, TOOL_DIR, 'cache', 'proxies', name) };
 }
 
 /** The proxy of `rel` at `height`, when it is made; else null. */
 export function readyProxy(/** @type {string} */ root, /** @type {string} */ rel, /** @type {number} */ height) {
-  try { const { out } = proxyFile(root, rel, height); return existsSync(out) ? out : null; } catch { return null; }
+  try {
+    const { base } = proxyFile(root, rel, height);
+    return [`${base}.mp4`, `${base}.webm`].find(existsSync) ?? null;
+  } catch { return null; }
 }
 
 /**
@@ -146,6 +172,26 @@ function stopLightening() {
   if (making && !making.needed && (!lighten || [...jobs.values()].some((job) => job.needed && job.state === 'waiting'))) making.stop?.abort();
 }
 
+/** Who hears of each file the editor's browser does not decode, as it is said (the film's origin, in a thread of its
+    own, keeps its own list: pages.mjs). @type {((file: string) => void)[]} */
+const hearers = [];
+/** Hear of each file the editor's browser does not decode, as it is said. */
+export function onUndecoded(/** @type {(file: string) => void} */ hear) {
+  hearers.push(hear);
+}
+/** The files the editor's browser does not decode, said so far. */
+export const undecodedNow = () => [...undecoded];
+/** A file the editor's browser does not decode, said in another thread (see onUndecoded). */
+export function markUndecoded(/** @type {string} */ file) {
+  undecoded.add(file);
+}
+
+function needsCopy(/** @type {string} */ file) {
+  if (undecoded.has(file)) return;
+  markUndecoded(file);
+  for (const hear of hearers) hear(file);
+}
+
 /** Whether the editor's browser does not decode the project's video `rel` (said to ensureProxies). */
 export function undecodable(/** @type {string} */ root, /** @type {string} */ rel) {
   try { return undecoded.has(readable(root, rel)); } catch { return false; }
@@ -180,8 +226,19 @@ export async function playChecks(root, rels) {
  */
 export async function ensureProxies(root, rels, height, { on = true, undecoded: told = [] } = {}) {
   lighten = on;
+  return queueProxies(root, rels, height, on, told);
+}
+
+/** A direct player's compatibility copy, independent of the timeline's performance setting. */
+export async function ensurePlayback(/** @type {string} */ root, /** @type {string} */ rel, /** @type {number} */ height) {
+  const states = await queueProxies(root, [rel], height, false, [rel]);
+  return states[rel] ?? { state: 'failed', needed: true };
+}
+
+/** @param {string} root @param {string[]} rels @param {number} height @param {boolean} on @param {string[]} told */
+async function queueProxies(root, rels, height, on, told) {
   /** @type {Record<string, ProxyState>} */
-  const states = {};
+  const states = Object.create(null);
   for (const rel of rels) {
     if (clipKind(rel) !== 'video') continue;
     let facts;
@@ -189,10 +246,12 @@ export async function ensureProxies(root, rels, height, { on = true, undecoded: 
     if (!(Number(facts.width) > 0 && Number(facts.height) > 0)) continue;
     let file;
     try { file = proxyFile(root, rel, height); } catch { continue; }
-    const { abs, out } = file;
-    if (told.includes(rel)) undecoded.add(abs);
+    const { abs, base } = file;
+    const alpha = facts.alpha === true;
+    const out = `${base}.${alpha ? 'webm' : 'mp4'}`;
+    if (told.includes(rel)) needsCopy(abs);
     const needed = undecoded.has(abs);
-    if (!needed && !(on && heavy(facts))) continue;
+    if (!needed && !(on && (heavy(facts) || await slowToScrub(root, rel, facts)))) continue;
     const mark = needed ? { needed: /** @type {const} */ (true) } : {};
     if (existsSync(out)) { states[rel] = { state: 'ready', ...mark }; continue; }
     /* asked for once; one that failed (footage ffmpeg cannot read) is said, not tried again and again */
@@ -203,7 +262,7 @@ export async function ensureProxies(root, rels, height, { on = true, undecoded: 
       const seconds = Number(facts.duration) > 0 ? Number(facts.duration) : 0;
       /** @type {ProxyState & { make?: (signal: AbortSignal) => Promise<void> }} */
       const fresh = { state: 'waiting' };
-      fresh.make = (signal) => proxy(abs, out, size, fps, seconds, (ratio) => { fresh.ratio = ratio; }, signal);
+      fresh.make = (signal) => proxy(abs, out, size, fps, seconds, alpha ? String(facts.codec) : null, (ratio) => { fresh.ratio = ratio; }, signal);
       jobs.set(out, fresh);
       job = fresh;
     }
@@ -219,9 +278,13 @@ export async function ensureProxies(root, rels, height, { on = true, undecoded: 
  * Make one proxy, decoded and written on the graphics chip when it can, else (or when it fails) by x264. Stopped by
  * `signal`.
  * @param {string} abs @param {string} out @param {{ w: number, h: number }} size @param {number} fps @param {number} seconds
- * @param {(ratio: number) => void} progress @param {AbortSignal} signal
+ * @param {string | null} alphaCodec @param {(ratio: number) => void} progress @param {AbortSignal} signal
  */
-async function proxy(abs, out, size, fps, seconds, progress, signal) {
+async function proxy(abs, out, size, fps, seconds, alphaCodec, progress, signal) {
+  if (alphaCodec) {
+    const decoding = alphaCodec === 'vp9' ? ['-c:v', 'libvpx-vp9'] : alphaCodec === 'vp8' ? ['-c:v', 'libvpx'] : [];
+    return make(abs, out, size, fps, seconds, progress, null, decoding, signal, true);
+  }
   const chip = await hardwareEncoder('h264', await encoders());
   await onTheChip(chip, (encoder, decoding) => make(abs, out, size, fps, seconds, progress, encoder, decoding, signal), signal);
 }
@@ -232,19 +295,22 @@ async function proxy(abs, out, size, fps, seconds, progress, signal) {
  * color tags, which it keeps only when told them; null for x264. `decoding`: the input options that decode on the chip.
  * @param {string} abs @param {string} out @param {{ w: number, h: number }} size @param {number} fps @param {number} seconds
  * @param {(ratio: number) => void} progress @param {string | null} encoder @param {string[]} decoding
- * @param {AbortSignal} signal
+ * @param {AbortSignal} signal @param {boolean} [alpha]
  */
-async function make(abs, out, size, fps, seconds, progress, encoder, decoding, signal) {
+async function make(abs, out, size, fps, seconds, progress, encoder, decoding, signal, alpha = false) {
   mkdirSync(join(out, '..'), { recursive: true });
-  const part = `${out}.part.mp4`;
+  const part = `${out}.part.${alpha ? 'webm' : 'mp4'}`;
   const gop = Math.max(1, Math.round(fps * GOP_S));
-  const codec = encoder
+  const codec = alpha
+    ? ['-c:v', 'libvpx-vp9', '-deadline', 'realtime', '-cpu-used', '5', '-b:v', '0', '-crf', '29', '-g', String(gop), '-pix_fmt', 'yuva420p', '-auto-alt-ref', '0']
+    : encoder
     ? ['-pix_fmt', 'nv12', ...hardwareOptions(encoder, Math.max(2e6, size.w * size.h * fps * 0.1), { gop }), ...h264ColorTags(await colorTagsOf(abs))]
     : ['-c:v', 'libx264', '-preset', 'veryfast', '-crf', '23', '-g', String(gop), '-keyint_min', String(gop), '-pix_fmt', 'yuv420p'];
   return new Promise((done, fail) => {
     const proc = spawn('ffmpeg', ['-hide_banner', '-nostdin', '-loglevel', 'error', '-y', ...decoding, '-i', abs,
-      '-map', '0:v:0', '-an', '-sn', '-dn', '-fps_mode', 'passthrough', '-vf', `scale=${size.w}:${size.h}`, ...codec,
-      '-movflags', '+faststart', '-progress', 'pipe:1', '-nostats', part], { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true, signal });
+      '-map', '0:V:0', '-map', '0:a?', '-sn', '-dn', '-fps_mode', 'passthrough', '-vf', `scale=${size.w}:${size.h}`, ...codec,
+      ...(alpha ? ['-c:a', 'libopus'] : ['-c:a', 'aac', '-profile:a', 'aac_low', '-movflags', '+faststart']),
+      '-ac', '2', '-b:a', '160k', '-progress', 'pipe:1', '-nostats', part], { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true, signal });
     let err = '';
     proc.stderr.on('data', (d) => { err += d; });
     proc.stdout.on('data', (d) => {
@@ -260,7 +326,9 @@ async function make(abs, out, size, fps, seconds, progress, encoder, decoding, s
       stopped = e;
     });
     proc.on('close', (code) => {
-      if (!stopped && code === 0 && existsSync(part)) { renameSync(part, out); done(undefined); return; }
+      if (!stopped && code === 0 && existsSync(part)) {
+        try { renameSync(part, out); done(undefined); return; } catch (e) { drop(); fail(e); return; }
+      }
       drop();
       fail(stopped ?? new Error(err.trim() || `ffmpeg exit ${code}`));
     });

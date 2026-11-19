@@ -165,6 +165,8 @@ export const enUS = {
     diagnosticsCopied: 'Copied',
     switchAccount: 'Switch account',
     signedInAs: 'Signed in as {account}.',
+    modelTimeout: 'The model service took too long to respond. Try again or switch models.',
+    modelTimeoutRetry: 'The model service timed out. Retrying…',
     routeNoKey: "This model needs a DeepSeek API key, and none is set up on this computer. If you're only signed in to a DeepSeek account, use one of its models.",
     routeNoKeyNoAccount: 'This model needs a DeepSeek API key, and none is set up on this computer. Sign in to your DeepSeek account in DeepSeek Harness, or add an API key in its model settings.',
     useAccountModel: 'Use {model}',

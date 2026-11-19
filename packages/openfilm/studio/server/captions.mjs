@@ -21,7 +21,7 @@
  */
 import { mkdir, readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
-import { clipKind, clipSpan, declarations, kindOf, soundRole } from '../../src/film-doc.mjs';
+import { clipKind, clipSpan, declarations, kindOf, readFilmFile, soundRole } from '../../src/film-doc.mjs';
 import { probe } from './derived.mjs';
 import { readProjectFilm } from './film.mjs';
 import { HttpError, json, readJson } from './http.mjs';
@@ -116,6 +116,27 @@ export const wholeLine = (line) => ({
 });
 
 /**
+ * A line cut into subtitles, with its translations cut to follow, worked out once a line: a source cut into hundreds of
+ * clips (a talk trimmed sentence by sentence) asks the same of every line for each of them.
+ * @type {WeakMap<SpokenLine, Map<string, { pieces: ReturnType<typeof segmentLine>, alts: [string, ReturnType<typeof alignTranslation>][] }>>}
+ */
+const cutLines = new WeakMap();
+/** @param {SpokenLine} line @param {{ alt?: AltLines, cut?: boolean }} extra */
+function piecesOf(line, extra) {
+  const alt = extra.alt?.get(line.startMs) ?? {};
+  const key = `${extra.cut ? 1 : 0}\0${JSON.stringify(alt)}`;
+  let byKey = cutLines.get(line);
+  if (!byKey) cutLines.set(line, byKey = new Map());
+  let known = byKey.get(key);
+  if (!known) {
+    const pieces = extra.cut ? [wholeLine(line)] : segmentLine(line);
+    known = { pieces, alts: Object.entries(alt).map(([language, text]) => /** @type {[string, ReturnType<typeof alignTranslation>]} */ ([language, alignTranslation(text, pieces)])) };
+    byKey.set(key, known);
+  }
+  return known;
+}
+
+/**
  * One clip's subtitles. `span` is where it plays: source ms from `fromMs`, on the film from `startMs` for `durMs`, at
  * `speed` source ms per film ms. Each line is cut into subtitles first (segmentLine), its translations to follow
  * (alignTranslation); each cue says which piece of which line of which source it shows (`src`, `line`: the line's
@@ -135,8 +156,7 @@ export function clipCues(lines, span, extra = {}) {
   /** @type {FilmSubtitleCue[]} */
   const out = [];
   for (const line of lines) {
-    const pieces = extra.cut ? [wholeLine(line)] : segmentLine(line);
-    const alts = Object.entries(extra.alt?.get(line.startMs) ?? {}).map(([language, text]) => /** @type {const} */ ([language, alignTranslation(text, pieces)]));
+    const { pieces, alts } = piecesOf(line, extra);
     for (const piece of pieces) {
       const from = Math.max(piece.startMs, span.fromMs);
       const to = Math.min(piece.endMs, until);
@@ -221,11 +241,11 @@ export function transcriptOutlasts(lines, seconds) {
  *   untranscribed  the speech heard in the film that has no transcript yet
  * A film.html that cannot be read has no subtitles (its problems are shown elsewhere).
  * @param {string} root
- * @param {{ duration?: (src: string) => Promise<number | undefined> }} [options] the length of a source in seconds
+ * @param {{ duration?: (src: string) => Promise<number | undefined>, timeline?: string, forExport?: boolean }} [options] the length of a source in seconds
  *   when the clip's trim does not say it (ffprobe by default)
  */
 export async function filmCaptions(root, options = {}) {
-  const film = await readProjectFilm(root);
+  const film = options.timeline === undefined ? await readProjectFilm(root) : readFilmFile(options.timeline);
   const empty = { cues: /** @type {FilmSubtitleCue[]} */ ([]), sourceLanguage: null, languages: /** @type {string[]} */ ([]), untranscribed: /** @type {string[]} */ ([]) };
   const doc = /** @type {import('../../src/film-doc.d.mts').FilmDoc | null} */ (film.doc);
   if (!doc) return empty;
@@ -260,11 +280,11 @@ export async function filmCaptions(root, options = {}) {
   const untranscribed = new Set();
   for (const clip of heardClips(root, doc)) {
     const said = await transcriptOf(clip.src);
-    if (!said) { if (await wantsTranscript(root, clip.src)) untranscribed.add(clip.src); continue; }
+    if (!said) { if (!options.forExport && await wantsTranscript(root, clip.src)) untranscribed.add(clip.src); continue; }
     /* a transcript that runs on past the end of its file is not this file's any more (it was made again faster, or
        the transcript's times were moved): its lines would drift later and later and the last ones fall off. It is
        still shown, and made again with the rest (the timeline's captions button) */
-    if (await transcriptOutlasts(said.lines, await lengthOf(clip.src))) untranscribed.add(clip.src);
+    if (!options.forExport && await transcriptOutlasts(said.lines, await lengthOf(clip.src))) untranscribed.add(clip.src);
     const native = clip.time?.length === 2 ? undefined : await lengthOf(clip.src) ?? (said.lines.at(-1)?.endMs ?? 0) / 1000;
     let span;
     try { span = clipSpan(clip, native ?? NaN); } catch { continue; }
@@ -480,22 +500,22 @@ export async function captionRoutes(req, res, root, rest, { translate = async ()
  * For an export: the project's cues and style in one read (the style as the person left it, or the default). A film
  * with caption tracks (SPEC §1 Captions) has its subtitles there: the first one shown is the subtitle file's, and
  * `tracks` says they are drawn by the film itself (nothing to burn in). @param {string} root
- * @param {{ timelineOnly?: boolean }} [options] Editing project exports include every visible caption track.
+ * @param {{ timelineOnly?: boolean, timeline?: string }} [options] Editing project exports include every visible caption track.
  */
-export async function subtitlesForExport(root, { timelineOnly = false } = {}) {
-  const tracked = await captionTrackCues(root, timelineOnly);
+export async function subtitlesForExport(root, { timelineOnly = false, timeline } = {}) {
+  const tracked = await captionTrackCues(root, timelineOnly, timeline);
   if (tracked) return { cues: tracked, style: { ...parseFilmSubtitleStyle(null), language: null, bilingual: false }, tracks: true };
-  const [{ cues }, style] = await Promise.all([filmCaptions(root), readSubtitleStyle(root)]);
+  const [{ cues }, style] = await Promise.all([filmCaptions(root, { timeline, forExport: true }), readSubtitleStyle(root)]);
   return { cues, style: style ?? parseFilmSubtitleStyle(null) };
 }
 
 /**
  * Subtitle files read the first visible caption track. Editing project exports gather the visible timeline cues,
  * and a project with only hidden caption tracks has no visible cues to export.
- * @param {string} root @param {boolean} timelineOnly
+ * @param {string} root @param {boolean} timelineOnly @param {string} [timeline]
  */
-async function captionTrackCues(root, timelineOnly) {
-  const film = await readProjectFilm(root);
+async function captionTrackCues(root, timelineOnly, timeline) {
+  const film = timeline === undefined ? await readProjectFilm(root) : readFilmFile(timeline);
   const tracks = /** @type {import('../../src/film-doc.d.mts').FilmDoc | null} */ (film.doc)?.tracks ?? [];
   const visible = tracks.flatMap((t) => (t.captions && !t.hidden ? [t.captions.src] : []));
   if (timelineOnly) {

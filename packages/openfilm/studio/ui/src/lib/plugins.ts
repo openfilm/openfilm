@@ -102,7 +102,7 @@ async function read(): Promise<void> {
   try { before = localStorage.getItem(BEFORE); } catch { /* none */ }
   if (before != null) {
     const on = new Set(before.split(','));
-    const differ = plugins.filter((p) => p.workbench && on.has(p.workbench) !== p.on).sort((a, b) => Number(on.has(b.workbench!)) - Number(on.has(a.workbench!)));
+    const differ = plugins.filter((p) => !p.soon && p.workbench && on.has(p.workbench) !== p.on).sort((a, b) => Number(on.has(b.workbench!)) - Number(on.has(a.workbench!)));
     for (const p of on.size ? differ : []) {
       // eslint-disable-next-line no-await-in-loop
       const answer = await put(p.id, on.has(p.workbench!)).then((r) => (r.ok ? r.json() : null), () => null) as { plugins?: unknown } | null;

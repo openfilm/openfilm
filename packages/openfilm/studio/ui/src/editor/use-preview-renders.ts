@@ -64,7 +64,8 @@ export function usePreviewRenders({ projectId, folder, fps, playing, on, film, f
         const answer = await response.json();
         if (!alive || version !== revision.current) return;
         setMade(answer.ranges ?? []); setError(false);
-        if (answer.ranges?.some((r: MadePreview) => r.state === 'waiting' || r.state === 'making')) timer = window.setTimeout(() => void ask(), 800);
+        /* while it plays (or is edited) nothing is rendered, so nothing changes: asked again once it stops */
+        if (!(playing || editing) && answer.ranges?.some((r: MadePreview) => r.state === 'waiting' || r.state === 'making')) timer = window.setTimeout(() => void ask(), 800);
       } catch { if (alive) setError(true); }
     };
     timer = window.setTimeout(() => void ask(), playing || editing ? 0 : 1200);

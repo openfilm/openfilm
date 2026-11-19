@@ -15,6 +15,7 @@
  */
 import { readdir, readFile, stat } from 'node:fs/promises';
 import { basename, dirname, extname, join } from 'node:path';
+import { stripAudioTagParts, voiceTranscriptText } from '../../src/captions.mjs';
 import { writeAtomic } from './atomic.mjs';
 import { inProject, inside, trashFile } from './files.mjs';
 import { alignTranslation, replacePiece, segmentLine } from './subtitle-segments.mjs';
@@ -148,10 +149,11 @@ async function readText(path) {
  * @param {string} root @param {string} src @param {string} [language] @returns {Promise<Transcript | null>}
  */
 export async function readTranscript(root, src, language) {
-  const file = inProject(root, transcriptPath(src, language));
+  const path = transcriptPath(src, language);
+  const file = inProject(root, path);
   const body = file ? await readText(file) : null;
   if (body == null) return null;
-  const read = parseVtt(body);
+  const read = parseVtt(voiceTranscriptText(path, body));
   if (!read.lines.length) return null;
   /* cut by hand: one word a cue is what the person made */
   return !read.cut && wordCues(read.lines) ? { ...read, lines: linesOfWords(read.lines) } : read;
@@ -285,7 +287,7 @@ export async function projectSpeech(root) {
       if (entry.isDirectory()) { if (!entry.name.startsWith('.')) await walk(path); }
       else if (entry.name.endsWith('.vtt') && !/\.[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*\.vtt$/.test(entry.name)) {
         const file = inProject(root, path);
-        if (file) out.push(parseVtt(await readText(file) ?? '').lines.map((l) => l.text).join(' '));
+        if (file) out.push(parseVtt(voiceTranscriptText(path, await readText(file) ?? '')).lines.map((l) => l.text).join(' '));
       }
     }
   };
@@ -301,7 +303,7 @@ export async function projectSpeech(root) {
  *   · too long, it breaks after a clause mark (comma, enumeration comma), else at the length;
  *   · a pause of GAP_MS ends a line too: the pause was a boundary already.
  * A line's text comes from the text (spaces and punctuation are lost in tokens), its times from the word timings.
- * Performance tags for TTS ([short pause]) are taken out first: they are not words.
+ * Performance tags for TTS are taken out of both the script and the timed tokens before alignment.
  */
 
 /** A line holds at most this many cells: a full-width character is one, anything else half. */
@@ -320,7 +322,6 @@ const CLAUSE_END = /[,，、:：]/;
 const WIDE = /[\u1100-\u115f\u2e80-\ua4cf\ua960-\ua97f\uac00-\ud7a3\uf900-\ufaff\ufe10-\ufe19\ufe30-\ufe6f\uff00-\uff60\uffe0-\uffe6]/;
 /* the structural particles de, le, de, de, zhe: after these a Chinese word has almost always ended */
 const PARTICLE = /[\u7684\u4e86\u5730\u5f97\u7740]/;
-const AUDIO_TAG = /\[[a-z][a-z '-]{1,30}\] ?/g;
 
 /** @param {string} t */
 function cells(t) {
@@ -331,7 +332,7 @@ function cells(t) {
 
 /** @param {string} t */
 export function stripAudioTags(t) {
-  return t.replace(AUDIO_TAG, '').replace(/ {2,}/g, ' ').trim();
+  return stripAudioTagParts([t])[0].replace(/ {2,}/g, ' ').trim();
 }
 
 /** A half-width full stop ends a sentence only before a space or the end, and not after a digit (1.21, 0.5%). @param {string} t @param {number} i */
@@ -348,13 +349,15 @@ function endsSentence(t, i) {
 function alignedAt(t, words) {
   /** @type {{ index: number, startSec: number, endSec?: number }[]} */
   const out = [];
+  const tokens = stripAudioTagParts(words.map((w) => w.token));
   let cursor = 0;
-  for (const w of words) {
-    if (!w.token) continue;
-    const index = t.indexOf(w.token, cursor);
+  for (const [i, w] of words.entries()) {
+    const token = tokens[i] === w.token ? w.token : tokens[i].replace(/ {2,}/g, ' ').trim();
+    if (!token) continue;
+    const index = t.indexOf(token, cursor);
     if (index < 0) continue;
     out.push({ index, startSec: Number.isFinite(w.startSec) ? w.startSec : 0, ...(w.endSec !== undefined ? { endSec: w.endSec } : {}) });
-    cursor = index + w.token.length;
+    cursor = index + token.length;
   }
   return out;
 }

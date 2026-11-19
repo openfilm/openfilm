@@ -10,7 +10,7 @@ import { accountState } from '@/lib/account';
 import { useHostUpdate } from '@/lib/host';
 import { openPlugins } from '@/lib/plugins-window';
 import { sourcesApi, type News } from '@/lib/project-sources';
-import { useProviders } from '@/lib/providers';
+import { useOpenFilmAccount } from '@/lib/providers';
 import { showWhatsNew } from '@/lib/whats-new';
 import { Avatar } from './settings/AccountGroup';
 import styles from './ProjectsSidebar.module.css';
@@ -60,10 +60,18 @@ export function ProjectsSidebar({ place, onPlace, onStart, starting }: {
 /** The OpenFilm account: signed in, its picture and name; else the local account and the way to sign in. */
 function AccountCard() {
   const t = useT();
-  const hook = useProviders();
-  const own = hook.state?.providers.find((p) => p.id === 'openfilm');
-  if (!own) return <div className={styles.account} aria-hidden />;
-  const state = accountState(own, hook.state?.signingIn);
+  const hook = useOpenFilmAccount();
+  const { own, signingIn } = hook;
+  if (!own) return (
+    <div className={styles.account} data-projects-account={hook.accountLoadFailed ? 'error' : 'loading'}>
+      <span className={styles.accountMark}><User size={18} strokeWidth={1.7} aria-hidden /></span>
+      <span className={styles.accountText}>
+        <small role="status">{t(hook.accountLoadFailed ? 'settings.account.loadFailed' : 'settings.account.loading')}</small>
+        {hook.accountLoadFailed ? <button type="button" className={styles.signIn} onClick={hook.retryAccount}>{t('settings.account.retry')}</button> : null}
+      </span>
+    </div>
+  );
+  const state = accountState(own, signingIn);
   const signedIn = state === 'signed-in' || state === 'env';
   const name = own.profile?.name || own.account || 'OpenFilm';
   if (signedIn) {

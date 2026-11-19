@@ -96,7 +96,12 @@ export function HistoryModal({ projectId, uploads, onAdd, onClose }: {
     return () => { live = false; };
   }, [projectId, scope]);
   const items = part === 'made'
-    ? (made ?? []).map((m) => ({ key: `${m.project ?? ''}|${m.path}`, path: m.path, media: mediaOfMade(m), url: api.canvasMadeFile(projectId, m), made: m }))
+    ? (made ?? []).map((m) => ({
+      key: `${m.project ?? ''}|${m.path}`, path: m.path, media: mediaOfMade(m), made: m,
+      url: m.make === 'video'
+        ? `/api/projects/${encodeURIComponent(m.project ?? projectId)}/media?what=poster&path=${encodeURIComponent(m.path)}`
+        : api.canvasMadeFile(projectId, m),
+    }))
     : uploads.map((u) => ({ key: u.path, path: u.path, media: u.media, url: u.url, made: null as CanvasMade | null }));
   const counts = { all: items.length, image: 0, video: 0, audio: 0 };
   for (const i of items) counts[i.media] += 1;
@@ -130,8 +135,7 @@ export function HistoryModal({ projectId, uploads, onAdd, onClose }: {
                 title={[item.made?.prompt, item.made?.projectName].filter(Boolean).join('\n') || item.path}
                 className="group/item flex flex-col gap-1.5 text-left disabled:opacity-60">
                 <span className="relative block aspect-square w-full overflow-hidden rounded-[12px] bg-[var(--cv-card)] ring-1 ring-[var(--cv-float-line)] transition group-hover/item:ring-[var(--cv-ring)]">
-                  {item.media === 'image' && item.url ? <img src={item.url} alt="" loading="lazy" className="h-full w-full object-cover" />
-                    : item.media === 'video' && item.url ? <video src={item.url} muted preload="metadata" className="h-full w-full object-cover" />
+                  {item.media !== 'audio' && item.url ? <img src={item.url} alt="" loading="lazy" className="h-full w-full object-cover" />
                       : <span className="flex h-full w-full items-center justify-center text-[var(--cv-label)]"><AudioLines size={28} /></span>}
                   <span className="absolute left-1.5 top-1.5 flex h-5 w-5 items-center justify-center rounded-[6px] bg-black/60 text-white">
                     {item.media === 'image' ? <ImageIcon size={12} /> : item.media === 'video' ? <Film size={12} /> : <AudioLines size={12} />}

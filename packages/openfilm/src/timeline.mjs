@@ -2,7 +2,7 @@
 // in host.mjs); the file's own elements are the clips: an <iframe> a web page, a <video>, an <img> a still, an
 // <audio> a sound for the mix. Where each plays and sits is what film-doc.mjs reads in the file, the same reading
 // Studio plays and exports by; how each looks is the file's own CSS. Track 0, the first <section>, is on top.
-import { MEDIA_RATE_MAX, MEDIA_RATE_MIN, registerEffects, clipFade, clipSpan, clipTag, declarations, fadeGain, filmHead, fittedFade, keyframeBlocks, kindOf, lutsOf, mediaPlays, pictureLutsOf, parseFilm, pictureRect, readFilmFile, sourceAt, srcHref } from './film-doc.mjs';
+import { MEDIA_RATE_MAX, MEDIA_RATE_MIN, registerEffects, clipFade, clipOutsideRanges, clipSpan, clipTag, declarations, fadeGain, filmHead, fittedFade, keyframeBlocks, kindOf, lutsOf, mediaPlays, pictureLutsOf, parseFilm, pictureRect, readFilmFile, sourceAt, srcHref } from './film-doc.mjs';
 import { override, restore } from './overrides.mjs';
 import { CAPTION_BASE_CSS, cueCss, cueLayout, cueNodes, readVtt, regionBox } from './captions.mjs';
 import { clearVideoEffects, drawVideoEffects, hideVideoEffects, suspendVideoEffects, retryVideoEffects, videoEffectsOn, videoEffectsState, setVideoPreview, clearVideoAnalysisCache } from './video-effects.mjs';
@@ -57,6 +57,7 @@ const url = (src) => new URL(srcHref(src), location.href);
 /* an editor's preview (`?film-missing=skip`) plays on past a clip whose file is not there: the clip keeps its time,
    but is neither loaded, drawn nor heard. Anything else (a check, an export) says the missing file and stops */
 const SKIP_MISSING = new URL(location.href).searchParams.get('film-missing') === 'skip';
+const renderRanges = window.filmHost?.renderRanges;
 const ready = (a) => Promise.resolve(typeof a.ready === 'function' ? a.ready() : a.ready);
 
 /**
@@ -432,7 +433,7 @@ function roll(c, want, rate) {
     return;
   }
   const drift = v.currentTime - want;
-  if (Math.abs(drift) > ROLL_SEEK || v.ended) { v.currentTime = want; c.steer = 0; c.off = 0; }
+  if (!v.seeking && (Math.abs(drift) > ROLL_SEEK || v.ended)) { v.currentTime = want; c.steer = 0; c.off = 0; }
   else if (Math.abs(drift) > ROLL_STEER) { c.off = (c.off ?? 0) + 1; if (c.off >= 2) c.steer = drift > 0 ? -1 : 1; }
   else { c.off = 0; if (Math.abs(drift) < ROLL_SETTLE) c.steer = 0; }
   /* the pace is written only when it changes (each write is work for the media pipeline), and nudged within those
@@ -468,22 +469,38 @@ async function glance(c, want) {
   let justLoaded = false;
   if (v.readyState < 2) {
     await wake(c);
-    if (c.lastWant !== want || !c.awake) return;
+    if (c.lastWant !== want || !c.awake) return false;
     justLoaded = true;
   }
   follow(c);
-  if (!justLoaded && !v.seeking && Math.abs(v.currentTime - want) < SAME_TIME && v.readyState >= 2) return;
-  v.currentTime = want;
-  await sought(v);
-  if (!videoEffectsOn(c)) void onScreen(c, want);
+  if (v.error) return true;
+  if (!justLoaded && Math.abs(v.currentTime - want) < SAME_TIME) {
+    if (!v.seeking && v.readyState >= 2) return true;
+  } else v.currentTime = want;
+  const decoded = await sought(v);
+  if (!decoded || c.lastWant !== want) return false;
+  if (!v.error && !videoEffectsOn(c)) void onScreen(c, want);
+  return true;
 }
 
 /** A seek done: its frame decoded (`seeked`, or the file's first data), or after a time limit. */
 const sought = (v) => new Promise((done) => {
-  if (!v.seeking && v.readyState >= 2) { done(undefined); return; }
-  v.addEventListener('seeked', done, { once: true });
-  v.addEventListener('loadeddata', done, { once: true });
-  setTimeout(done, 3000);
+  const ready = () => Boolean(v.error || (!v.seeking && v.readyState >= 2));
+  if (ready()) { done(true); return; }
+  const finish = () => {
+    clearTimeout(timer);
+    v.removeEventListener('seeked', onReady);
+    v.removeEventListener('loadeddata', onReady);
+    v.removeEventListener('canplay', onReady);
+    v.removeEventListener('error', finish);
+    done(ready());
+  };
+  const onReady = () => { if (ready()) finish(); };
+  const timer = setTimeout(finish, 3000);
+  v.addEventListener('seeked', onReady);
+  v.addEventListener('loadeddata', onReady);
+  v.addEventListener('canplay', onReady);
+  v.addEventListener('error', finish);
 });
 
 /** Follow the frames a clip's video puts on screen (its frame callback): `c.presented`, the last one's time. */
@@ -1352,7 +1369,15 @@ async function load(row, track, ti, el) {
   const kind = kindOf(row);
   /* the element's own style as the file wrote it, its place (left, top…) included: place() writes over that */
   const c = { kind, id: row.id, src: row.src, track: ti, el, node: el, touched: new Map(), found: [], drawn: false, shown: false, css: el.getAttribute('style') ?? '' };
-  if (kind === 'sound') {
+  const hidden = renderRanges && track.hidden;
+  const inactive = renderRanges && row.time?.length === 2 && (row.disabled || (kind === 'sound' && track.muted));
+  if (hidden || inactive || clipOutsideRanges(row, renderRanges)) {
+    /* Visible tracks retain their exact clock. A hidden track does not contribute to the film's duration. */
+    c.missing = true;
+    if (hidden && row.time?.length !== 2) c.native = (row.time?.[0] ?? 0) + 0.001;
+    c.nw = stage.w; c.nh = stage.h;
+    if (kind === 'sound') c.el = null;
+  } else if (kind === 'sound') {
     /* a sound is heard in the mix (see hear), never by its element */
     el.pause?.();
     el.preload = 'none';
@@ -1394,8 +1419,8 @@ async function load(row, track, ti, el) {
     c.native = Number.isFinite(length) && length > 0 ? length : undefined;
     c.inner = (c.win.__filmSounds?.() ?? []).map((s) => ({ ...s }));
     if ([...pagesAwake].filter((p) => p.child).length > PAGES_AWAKE) restPage(c);
-  } else if (SKIP_MISSING && row.time?.length === 2) {
-    /* an editor's preview: a page whose #t= is its length opens when the playhead comes near (see near), its own
+  } else if ((SKIP_MISSING || renderRanges) && row.time?.length === 2) {
+    /* A page whose #t= is its length opens when a frame needs it (see near), its own
        length and size learned then (see wakePage); the film is up without waiting for every page of a long film */
     c.row = row;
     c.unread = true;
@@ -1469,8 +1494,9 @@ async function draw(t, live, play = null) {
   footagePlay = playing ? { rate: play.rate, now: play.now, t } : null;
   try {
     drawCaptions(t);
-    await Promise.all(clips.map((c) => drawClip(c, t, live, playing ? play : null, turn, coming, going)));
+    const drawn = await Promise.all(clips.map((c) => drawClip(c, t, live, playing ? play : null, turn, coming, going)));
     if (playing) idleFootage(t);
+    if (live && !playing) return drawn.every((ready) => ready !== false);
   } finally {
     /* the film drawn: a render not playing now goes */
     hideRenders(playing ? renderOn : null);
@@ -1523,7 +1549,11 @@ async function drawClip(c, t, live, play, turn, coming, going) {
     }
     const want = sourceAt(c.span, t - c.at, c.row);
     c.held = false;
-    if (live) { await glance(c, want); if (c.lastWant === want) { await drawVideoEffects(c, want); gradeLive(c); } return; }
+    if (live) {
+      if (!await glance(c, want)) return false;
+      if (c.lastWant === want) { await drawVideoEffects(c, want); gradeLive(c); }
+      return true;
+    }
     if (!c.el.paused) c.el.pause();
     c.lastWant = want;
     await loaded(c);
@@ -1611,7 +1641,7 @@ async function syncCaptions(value) {
     captionText = new Promise((done) => { link.onload = done; link.onerror = done; });
     document.head.append(link);
   }
-  const want = value.tracks.flatMap((track, ti) => (track.captions ? [{ ti, track }] : []));
+  const want = value.tracks.flatMap((track, ti) => (track.captions && !(renderRanges && track.hidden) ? [{ ti, track }] : []));
   for (const layer of [...captionLayers]) {
     if (want.some((w) => w.ti === layer.ti && w.track.captions.src === layer.src)) continue;
     layer.el.remove();

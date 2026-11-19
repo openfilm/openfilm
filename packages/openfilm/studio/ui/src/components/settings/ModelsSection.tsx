@@ -128,6 +128,7 @@ function ModelRow({ verb, hook, onConnect }: { verb: ProviderVerb; hook: Provide
           choicesOf={choicesOf}
           current={current}
           busy={hook.busy === verb}
+          empty={verb === 'music' || verb === 'sfx' ? t('settings.models.none') : undefined}
           onPick={(choice) => void hook.choose(verb, choice?.provider ?? '', choice ? { model: choice.model } : undefined)}
           onConnect={onConnect}
         />

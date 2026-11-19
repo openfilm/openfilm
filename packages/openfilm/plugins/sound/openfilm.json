@@ -1,0 +1,34 @@
+{
+  "order": 4,
+  "beta": true,
+  "icon": "audio",
+  "title": {
+    "en": "Sound",
+    "zh-CN": "声音",
+    "ja": "サウンド",
+    "ko": "사운드",
+    "es": "Sonido"
+  },
+  "summary": {
+    "en": "Mixing by hand: equalizer, compressor and volume over time.",
+    "zh-CN": "亲手混音：均衡、压缩、随时间变化的音量。",
+    "ja": "手で行うミキシング：イコライザー、コンプレッサー、時間で変わる音量。",
+    "ko": "손으로 하는 믹싱: 이퀄라이저, 컴프레서, 시간에 따라 변하는 음량.",
+    "es": "Mezcla a mano: ecualizador, compresor y volumen en el tiempo."
+  },
+  "about": "a mixer for the film's sound",
+  "category": "sound",
+  "audience": {
+    "en": "People who mix by hand",
+    "zh-CN": "要亲手混音的人",
+    "ja": "手でミックスしたい人",
+    "ko": "직접 믹싱하는 사람",
+    "es": "Quien mezcla a mano"
+  },
+  "workbench": "sound",
+  "soon": true,
+  "skills": [],
+  "requires": [
+    "film"
+  ]
+}

@@ -407,12 +407,14 @@ function openInTabs(to) {
  * first time, the last project's; none: the projects.
  */
 async function openTabs() {
-  const listed = (await studioApi('/api/projects').catch(() => ({ projects: [] }))).projects;
-  const projects = listed.filter((p) => !projectGone(listed, p.id));
+  const listed = (await studioApi('/api/projects').catch(() => null))?.projects;
+  const projects = listed?.filter((p) => !projectGone(listed, p.id)) ?? [];
   tabs = createTabs({ saved: state.tabs ?? null });
-  /* a tab of a project no longer there is left out, and not kept to open again */
-  const known = new Set(projects.map((p) => p.id));
-  tabs.closeProjects(tabs.list().map((t) => t.projectId).filter((id) => !known.has(id)));
+  /* A failed project-list request leaves the saved tabs available for another try. */
+  if (listed) {
+    const known = new Set(projects.map((p) => p.id));
+    tabs.closeProjects(tabs.list().map((t) => t.projectId).filter((id) => !known.has(id)));
+  }
   if (!tabs.list().length && !state.tabs && projects[0]) tabs.open({ projectId: projects[0].id, title: projects[0].name });
   const front = tabs.activeId();
   if (front) showTab(front);
@@ -603,6 +605,16 @@ async function runStudio(env) {
   }
 }
 
+/** The desktop owns Studio. Its quit-when-idle endpoint reports work without shutting it down. */
+async function studioBusy() {
+  if (!studio) return false;
+  const res = await fetch(`${studio.origin}/api/quit`, {
+    method: 'POST', headers: { 'x-studio-key': studio.key, 'content-type': 'application/json' },
+    body: JSON.stringify({ whenIdle: true }), signal: AbortSignal.timeout(3000),
+  });
+  return res.status === 409;
+}
+
 async function start() {
   /* updates (updates.mjs): Restart waits while an agent's turn runs or Studio exports, either would be lost */
   updates = startUpdates({
@@ -612,13 +624,7 @@ async function start() {
     onState: (next) => broadcast('desktop:update', next),
     prepareRestart: async () => {
       if (localAgents?.isBusy()) return { ok: false, error: 'agent-busy' };
-      /* Studio's quit-when-idle answers 409 while it exports; otherwise the window's Studio stays (studio-process.mjs
-         `stays`, 423), and is stopped in beforeInstall. No answer: no Studio, no export to lose. */
-      const res = studio && await fetch(`${studio.origin}/api/quit`, {
-        method: 'POST', headers: { 'x-studio-key': studio.key, 'content-type': 'application/json' },
-        body: JSON.stringify({ whenIdle: true }), signal: AbortSignal.timeout(3000),
-      }).catch(() => null);
-      return res?.status === 409 ? { ok: false, error: 'exporting' } : { ok: true };
+      return await studioBusy().catch(() => false) ? { ok: false, error: 'exporting' } : { ok: true };
     },
     /* what before-quit would do, done first (`quitting`), so the quit Squirrel starts is not held up or cancelled */
     beforeInstall: async () => {
@@ -642,6 +648,7 @@ async function start() {
     shell: shellEnv,
     extra: {
       OPENFILM_HOME: IDENTITY.studioHome ?? process.env.OPENFILM_HOME ?? join(app.getPath('home'), '.openfilm'),
+      ...(app.isPackaged ? { OPENFILM_INSTALL_DIR: mac ? dirname(dirname(process.resourcesPath)) : dirname(process.execPath) } : {}),
       ...(FLAVOR !== 'release' ? { OPENFILM_ACCOUNT_DEVICE: PRODUCT_NAME } : {}),
       ...((IDENTITY.library ?? process.env.OPENFILM_LIBRARY) ? { OPENFILM_LIBRARY: IDENTITY.library ?? process.env.OPENFILM_LIBRARY } : {}),
       /* a flavour with a home of its own still shares the person's library (src/locations.mjs) */
@@ -698,7 +705,10 @@ async function start() {
   win.on('moved', saveState);
   win.on('enter-full-screen', () => broadcast('desktop:full-screen', true));
   win.on('leave-full-screen', () => broadcast('desktop:full-screen', false));
-  cancelWindowClose = keepWindowOnClose(win, { mac, isQuitting: () => quitting, save: saveState });
+  cancelWindowClose = keepWindowOnClose(win, {
+    mac, isQuitting: () => quitting, save: saveState,
+    ...(windows ? { shouldMinimize: async () => Boolean(localAgents?.isBusy()) || await studioBusy() } : {}),
+  });
   win.on('closed', () => { win = null; views.clear(); pagePresentation = null; app.quit(); });
 
   ipcMain.on('desktop:theme', (event, next) => { if (fromPage(event)) setTheme(next); });
@@ -750,7 +760,7 @@ async function start() {
   tabHandle('desktop:tabs:close', (self, { id }) => { void closeTab(typeof id === 'string' ? id : self); return { ok: true }; });
   tabHandle('desktop:tabs:move', (_self, { id, index }) => { if (tabs?.move(String(id), Number(index))) tellTabs(); return { ok: true }; });
   /* what a page shows now: its project's title, an export's progress; or its project gone */
-  tabHandle('desktop:tabs:report', (self, { title, exporting, gone }) => {
+  tabHandle('desktop:tabs:report', (self, { title, exporting, exportStage, gone }) => {
     if (!tabs) return { ok: false };
     /* its project gone (deleted, in this page or another; its folder gone): its tab closes, without asking. Asked of
        Studio first: a tab closed stops its agent, and a project missing only film.html is not gone (tabs.mjs projectGone) */
@@ -761,7 +771,11 @@ async function start() {
       }
       return { ok: true };
     }
-    tabs.report(self, { ...(typeof title === 'string' ? { title: title.slice(0, 200) } : {}), ...(exporting !== undefined ? { exporting: typeof exporting === 'number' ? exporting : null } : {}) });
+    tabs.report(self, {
+      ...(typeof title === 'string' ? { title: title.slice(0, 200) } : {}),
+      ...(exporting !== undefined ? { exporting: Number.isFinite(exporting) ? exporting : null } : {}),
+      ...(exportStage !== undefined ? { exportStage: typeof exportStage === 'string' ? exportStage.slice(0, 120) : null } : {}),
+    });
     tellTabs();
     return { ok: true };
   });
@@ -821,10 +835,14 @@ async function start() {
     isAgentUpdating: (id) => agentUpdates?.state(id).status === 'updating',
     /* the `openfilm` command first (with the app's ffmpeg and browser in it); the app's ffmpeg last, for a computer
        that has none of its own: the person's own ffmpeg and browsers are what the agent's commands use */
-    binDir: installOpenfilmCommand(DATA, { ffmpeg: ffmpegHere, env: browsers }),
+    binDir: installOpenfilmCommand(DATA, { ffmpeg: ffmpegHere, env: {
+      ...browsers,
+      ...(env.OPENFILM_INSTALL_DIR ? { OPENFILM_INSTALL_DIR: env.OPENFILM_INSTALL_DIR } : {}),
+    } }),
     fallbackDir: ffmpegHere,
     env: {
       OPENFILM_HOME: env.OPENFILM_HOME,
+      ...(env.OPENFILM_INSTALL_DIR ? { OPENFILM_INSTALL_DIR: env.OPENFILM_INSTALL_DIR } : {}),
       ...(env.OPENFILM_API_URL ? { OPENFILM_API_URL: env.OPENFILM_API_URL } : {}),
       ...(env.OPENFILM_LIBRARY ? { OPENFILM_LIBRARY: env.OPENFILM_LIBRARY } : {}),
       ...(env.OPENFILM_SHARED_HOME ? { OPENFILM_SHARED_HOME: env.OPENFILM_SHARED_HOME } : {}),

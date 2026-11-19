@@ -16,8 +16,8 @@ import { HttpError, json, readJson } from '../http.mjs';
 import { changeSettings, cleanKey, envKey, kindOf, modelFor, providerKey, readSettings } from '../keys.mjs';
 import { shownService, withService } from '../custom-services.mjs';
 import { cancelSignIn, signInState, signOut, startSignIn } from '../sign-in.mjs';
-import { desktopAccount } from '../account.mjs';
-import { accountProfile } from '../account-profile.mjs';
+import { desktopAccount, lastAccountConnection } from '../account.mjs';
+import { accountProfile, lastAccountProfile } from '../account-profile.mjs';
 import elevenlabs from './elevenlabs.mjs';
 import inworld from './inworld.mjs';
 import cartesia from './cartesia.mjs';
@@ -52,6 +52,7 @@ const OWN = [...BUILT_IN];
 
 /** The kinds of media the person chooses a provider and model for (Settings → Services). */
 const USE_VERBS = /** @type {Verb[]} */ (['tts', 'music', 'sfx', 'asr', 'cutout', 'image', 'image-search', 'video-search', 'video', 'translate', 'web-search']);
+export const isAudioGeneration = (/** @type {string} */ verb) => verb === 'music' || verb === 'sfx';
 
 export const listProviders = () => OWN;
 
@@ -95,7 +96,7 @@ async function named(id, verb, settings, strict) {
 function fill(s) {
   const connected = OWN.filter((p) => providerKey(p, s)).sort((a, b) => a.name.localeCompare(b.name));
   for (const verb of USE_VERBS) {
-    if (s.use[verb]) continue;
+    if (Object.hasOwn(s.use, verb)) continue;
     const next = connected.find((p) => /** @type {readonly string[]} */ (p.verbs).includes(verb));
     if (next) s.use[verb] = next.id;
   }
@@ -122,13 +123,14 @@ export async function localModelsChanged() {
 /**
  * Who serves `verb`: `via` (a provider id from `--via`), else the person's choice while it can. null:
  * nothing is chosen, or what is chosen cannot serve now.
- * @param {Verb} verb @param {{ via?: string | null, settings?: ProviderSettings }} [options]
+ * @param {Verb} verb @param {{ via?: string | null, settings?: ProviderSettings, recoverOnly?: boolean }} [options]
  * @returns {Promise<Provider | null>}
  */
-export async function chooseProvider(verb, { via, settings } = {}) {
+export async function chooseProvider(verb, { via, settings, recoverOnly = false } = {}) {
   const saved = settings ?? await providerSettings();
   /* every provider that speaks also lists its voices; one that searches the web reads its pages */
   const kind = /** @type {Verb} */ (kindOf(verb));
+  if (isAudioGeneration(kind) && saved.use[kind] === '' && !recoverOnly) return null;
   /* what the one it would be offers now */
   await OWN.find((p) => p.id === (via || saved.use[kind]))?.refresh?.();
   if (via) return named(via, kind, saved, true);
@@ -158,15 +160,37 @@ export function shownChoices(settings) {
   };
 }
 
+const INVALID_ACCOUNT = 'This OpenFilm connection is no longer valid. Connect again.';
+
+/** An account card can render from the local credential and cached details while Services is still loading. */
+async function localAccount() {
+  const signingIn = signInState();
+  const settings = await readSettings(undefined, { strict: true });
+  const key = providerKey(openfilm, settings);
+  const invalid = lastAccountConnection(key?.key)?.status === 401;
+  const profile = !invalid && key?.source === 'file' ? lastAccountProfile(key.key) : null;
+  return {
+    account: {
+      source: invalid ? null : key?.source ?? null, env: key?.env ?? openfilm.env,
+      account: key?.source === 'file' ? settings.accounts.openfilm ?? null : null,
+      keysUrl: openfilm.keysUrl,
+      ...(invalid ? { connectionError: INVALID_ACCOUNT } : {}),
+      ...(profile ? { profile } : {}),
+    },
+    signingIn,
+  };
+}
+
 /** What Settings → Services shows. Never a key: where it comes from and its last four characters. */
 async function state() {
-  await freshProviders();
-  const settings = await readSettings();
-  const account = await desktopAccount();
-  /* the signed-in account's name and picture (account-profile.mjs) */
-  const own = OWN.find((p) => p.id === 'openfilm');
-  const signed = own ? providerKey(own, settings) : null;
-  const profile = signed?.source === 'file' && account.connection?.status !== 401 ? await accountProfile(signed.key) : null;
+  const signingIn = signInState();
+  const settings = await readSettings(undefined, { strict: true });
+  const signed = providerKey(openfilm, settings);
+  const [account, profile] = await Promise.all([
+    desktopAccount({ settings }),
+    signed?.source === 'file' && lastAccountConnection(signed.key)?.status !== 401 ? accountProfile(signed.key) : null,
+    freshProviders(),
+  ]);
   return {
     providers: OWN.map((p) => {
       const key = providerKey(p, settings);
@@ -179,17 +203,17 @@ async function state() {
         ...(p.keyless ? { keyless: true } : {}),
         /* `noKey`: it takes no key at all (a local service): connected and disconnected with one click */
         ...(p.ready ? { noKey: true } : {}), source: invalid ? null : key?.source ?? null, last4: key?.key ? key.key.slice(-4) : null,
-        ...(invalid ? { connectionError: 'This OpenFilm connection is no longer valid. Connect again.' } : {}),
+        ...(invalid ? { connectionError: INVALID_ACCOUNT } : {}),
         /* connected by signing in (sign-in.mjs), and as whom */
         signIn: Boolean(p.signIn), account: key?.source === 'file' ? settings.accounts[p.id] ?? null : null,
-        ...(p.id === 'openfilm' && profile ? { profile } : {}),
+        ...(p.id === 'openfilm' && !invalid && profile ? { profile } : {}),
         /* one the person added (added.mjs), not built in */
         ...(p.added ? { added: true } : {}),
       };
     }),
     /* the added services left out, and why */
     ...(addedProblems.size ? { addedProblems: [...addedProblems].map(([folder, problem]) => ({ folder, problem })) } : {}),
-    signingIn: signInState(),
+    signingIn,
     ...shownChoices(settings),
     custom: settings.custom.map(shownService),
     /* the library searched by meaning at OpenFilm's service, or by its words alone */
@@ -230,6 +254,7 @@ async function state() {
  */
 export async function providersRoute(req, res, parts, { openBrowser }) {
   if (!parts.length && req.method === 'GET') return json(res, 200, await state());
+  if (parts.length === 2 && parts[0] === 'openfilm' && parts[1] === 'account' && req.method === 'GET') return json(res, 200, await localAccount());
   if (parts[0] === 'custom' && parts.length <= 2) {
     const id = parts[1] ?? null;
     if (id === null ? req.method !== 'POST' : req.method !== 'PUT' && req.method !== 'DELETE') throw new HttpError(405, 'POST to add, PUT or DELETE one');
@@ -299,8 +324,11 @@ export async function providersRoute(req, res, parts, { openBrowser }) {
         delete s.accounts[provider.id];
         /* one connected without a kept key (the environment's, or none at all) stays off until connected again */
         if ((envKey(provider) || provider.ready) && !s.off.includes(provider.id)) s.off.push(provider.id);
-        /* what a provider that can no longer be used made goes to what else makes it */
-        if (!providerKey(provider, s)) for (const [verb, id] of Object.entries(s.use)) if (id === provider.id) delete s.use[verb];
+        /* Disconnecting the selected audio generator stops paid generation until another is chosen. */
+        if (!providerKey(provider, s)) for (const [verb, id] of Object.entries(s.use)) {
+          if (id !== provider.id) continue;
+          if (isAudioGeneration(verb)) s.use[verb] = ''; else delete s.use[verb];
+        }
         fill(s);
       });
       return json(res, 200, await state());
@@ -324,7 +352,7 @@ export async function providersRoute(req, res, parts, { openBrowser }) {
     const named = model == null || model === '' ? null : models.find((m) => m.id === model);
     if (model != null && model !== '' && !named) throw new HttpError(400, `${id ?? 'no provider'} has no model ${String(model)} for ${kind}`);
     await changeSettings((s) => {
-      if (id === null) delete s.use[kind]; else s.use[kind] = id;
+      if (id !== null || isAudioGeneration(kind)) s.use[kind] = id ?? ''; else delete s.use[kind];
       if (named && named !== models[0]) s.model[kind] = named.id; else delete s.model[kind];
     });
     return json(res, 200, await state());

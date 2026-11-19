@@ -165,6 +165,8 @@ export const es: Words = {
     diagnosticsCopied: 'Copiado',
     switchAccount: 'Cambiar de cuenta',
     signedInAs: 'Sesión iniciada como {account}.',
+    modelTimeout: 'El servicio del modelo tardó demasiado en responder. Vuelve a intentarlo o cambia de modelo.',
+    modelTimeoutRetry: 'Se agotó el tiempo de espera del modelo. Reintentando…',
     routeNoKey: 'Este modelo necesita una clave de API de DeepSeek y no hay ninguna configurada en este equipo. Si solo iniciaste sesión con una cuenta de DeepSeek, usa uno de sus modelos.',
     routeNoKeyNoAccount: 'Este modelo necesita una clave de API de DeepSeek y no hay ninguna configurada en este equipo. Inicia sesión con tu cuenta de DeepSeek en DeepSeek Harness o añade una clave de API en su configuración de modelos.',
     useAccountModel: 'Usar {model}',

@@ -125,10 +125,11 @@ export const PROVIDER_SITES: Readonly<Record<string, string>> = {
   brave: 'brave.com/search/api', tavily: 'tavily.com', keenable: 'keenable.ai',
 };
 
-async function call<T = ProvidersState>(path: string, init?: { method: string; json?: unknown }): Promise<T> {
+async function call<T = ProvidersState>(path: string, init?: { method?: string; json?: unknown; signal?: AbortSignal }): Promise<T> {
   const res = await fetch(`/api/providers${path}`, {
     method: init?.method ?? 'GET',
     cache: 'no-store',
+    signal: init?.signal,
     headers: init?.json === undefined ? undefined : { 'content-type': 'application/json' },
     body: init?.json === undefined ? undefined : JSON.stringify(init.json),
   });
@@ -162,6 +163,7 @@ function followSignIn() {
 }
 
 function publish(next: ProvidersState) {
+  if (!Array.isArray(next.providers)) throw new Error('Studio did not return the services.');
   const finished = snapshot?.signingIn?.provider && !next.signingIn?.provider;
   snapshot = next;
   followSignIn();
@@ -302,5 +304,52 @@ export function useProviders(): ProvidersHook {
       revision++;
       await readProviders().then(announce, () => {});
     },
+  };
+}
+
+type LocalAccount = {
+  account: Pick<OwnProvider, 'source' | 'env' | 'account' | 'keysUrl' | 'profile' | 'connectionError'>;
+  signingIn: ProvidersState['signingIn'];
+};
+
+let readingAccount: Promise<LocalAccount> | null = null;
+function readLocalAccount() {
+  readingAccount ??= call<LocalAccount>('/openfilm/account', { signal: AbortSignal.timeout(4000) }).then((next) => {
+    if (!next.account || !next.signingIn) throw new Error('Studio did not return the OpenFilm account.');
+    return next;
+  }).finally(() => { readingAccount = null; });
+  return readingAccount;
+}
+
+/** The local account can be shown while the shared Services snapshot is still waiting for the cloud. */
+export function useOpenFilmAccount() {
+  const providers = useProviders();
+  const own = providers.state?.providers.find((p) => p.id === 'openfilm');
+  const loaded = Boolean(own);
+  const [local, setLocal] = React.useState<LocalAccount | null>(null);
+  const [failed, setFailed] = React.useState(false);
+  const [attempt, setAttempt] = React.useState(0);
+  React.useEffect(() => {
+    if (loaded) return;
+    let live = true;
+    let timer: number | undefined;
+    setFailed(false);
+    const load = (retry: boolean) => {
+      void readLocalAccount().then((next) => { if (live) setLocal(next); }, () => {
+        if (!live) return;
+        if (retry) timer = window.setTimeout(() => load(false), 750);
+        else setFailed(true);
+      });
+    };
+    load(true);
+    return () => { live = false; window.clearTimeout(timer); };
+  }, [loaded, attempt]);
+
+  return {
+    ...providers,
+    own: own ?? local?.account,
+    signingIn: providers.state?.signingIn ?? local?.signingIn,
+    accountLoadFailed: !loaded && failed,
+    retryAccount: () => { setFailed(false); setAttempt((n) => n + 1); },
   };
 }

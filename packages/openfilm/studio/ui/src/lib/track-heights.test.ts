@@ -25,7 +25,7 @@ test('heights are kept between the least and the most a track can be', () => {
   assert.equal(clampTrackHeight(4), TRACK_MIN_H);
   assert.equal(clampTrackHeight(999), TRACK_MAX_H);
   assert.equal(clampTrackHeight(60.4), 60);
-  assert.equal(sizeOf(64, 'visual'), 'medium');
+  assert.equal(sizeOf(60, 'visual'), 'medium');
   assert.equal(sizeOf(30, 'audio'), 'small');
   assert.equal(sizeOf(57, 'visual'), null);
 });

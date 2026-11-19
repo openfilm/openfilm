@@ -736,14 +736,18 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, onUpload, onKee
             </span>
           ) : null}
         </button>
-        {open ? node.children.map((child) => (
-          <button key={child.key} type="button" onClick={child.onPick} aria-pressed={child.on} title={child.name}
-            data-rail-line={child.line?.key} data-rail-kind={child.line?.kind}
-            onContextMenu={child.line ? (e) => { e.preventDefault(); setRailMenu({ x: e.clientX, y: e.clientY, items: lineMenu(child.line!) }); } : undefined}
-            className={`${RAIL_CHILD} ${child.on ? 'text-[var(--accent)]' : 'text-[var(--text)] hover:text-[var(--accent)]'}`}>
-            <span className="min-w-0 flex-1 truncate">{child.name}</span>
-          </button>
-        )) : null}
+        {open && node.children.length ? (
+          <div className={RAIL_CHILDREN}>
+            {node.children.map((child) => (
+              <button key={child.key} type="button" onClick={child.onPick} aria-pressed={child.on} title={child.name}
+                data-rail-line={child.line?.key} data-rail-kind={child.line?.kind}
+                onContextMenu={child.line ? (e) => { e.preventDefault(); setRailMenu({ x: e.clientX, y: e.clientY, items: lineMenu(child.line!) }); } : undefined}
+                className={`${RAIL_CHILD} ${child.on ? 'text-[var(--accent)]' : 'text-[var(--text)]'}`}>
+                <span className="min-w-0 flex-1 truncate">{child.name}</span>
+              </button>
+            ))}
+          </div>
+        ) : null}
       </div>
     );
   };
@@ -807,7 +811,7 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, onUpload, onKee
         {/* as wide as the person dragged its edge (RAIL), kept for next time */}
         <div className="relative flex shrink-0" style={{ width: rail }}>
           <RailEdge width={rail} onWidth={setRail} />
-          <nav ref={railNav} data-studio-host-panel="" className="flex min-w-0 flex-1 flex-col gap-1 overflow-y-auto border-r border-[var(--border)] px-2 pb-[var(--drawer-foot)] pt-2.5">
+          <nav ref={railNav} data-studio-host-panel="" className="flex min-w-0 flex-1 flex-col gap-1 overflow-y-auto border-r border-[var(--border)] px-2.5 pb-[var(--drawer-foot)] pt-2.5">
             {/* the side bar is the library's folders: this project's, the person's own (the library folder's), the packs
                 of the Community (OpenFilm's own among them), as one list in the person's order; the right side shows
                 what of this category the line picked holds */}
@@ -825,7 +829,9 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, onUpload, onKee
                       <span className="min-w-0 flex-1 truncate">{t('assetDrawer.railMine')}</span>
                       <ChevronDown size={13} aria-hidden className={`shrink-0 transition-transform duration-150 ${folded[`${cat}:mine`] ? '' : 'rotate-180'}`} />
                     </button>
-                    {folded[`${cat}:mine`] ? null : movable.map((line, i) => mineLine(line, i, 'child'))}
+                    {folded[`${cat}:mine`] ? null : (
+                      <div className={RAIL_CHILDREN}>{movable.map((line, i) => mineLine(line, i, 'child'))}</div>
+                    )}
                   </div>
                 ) : null}
                 {spaces.map(railNode)}
@@ -980,8 +986,9 @@ function StarButton({ item, kept, className }: { item: LibraryItem; kept: boolea
 }
 
 /** A namespace of the side bar, as a box (one that opens, its heading); a line under one that opened. */
-const RAIL_BOX = 'flex h-[26px] w-full shrink-0 select-none items-center gap-1 rounded-[4px] bg-[var(--bg-field)] px-2.5 text-left text-[11.5px] font-semibold transition-colors hover:bg-[var(--bg-pressed)]';
-const RAIL_CHILD = 'flex h-7 w-full shrink-0 items-center px-2.5 text-left text-[11.5px] font-semibold transition-colors';
+const RAIL_BOX = 'flex h-[26px] w-full shrink-0 select-none items-center gap-1 rounded-[4px] bg-[var(--bg-field)] px-2.5 text-left text-[11.5px] font-semibold hover:bg-[var(--bg-pressed)]';
+const RAIL_CHILDREN = 'mt-2 flex flex-col gap-2';
+const RAIL_CHILD = 'flex h-6 w-full shrink-0 select-none items-center rounded-[4px] px-2.5 text-left text-[11.5px] font-semibold hover:bg-[var(--bg-pressed)] focus-visible:bg-[var(--bg-pressed)]';
 
 /** The sections of the side bars folded, by category and section, kept on this computer. */
 const FOLDED_KEY = 'openfilm.library.folded';
@@ -1065,7 +1072,7 @@ function RailLine({ line, on, onPick, onMenu, onHold, held = false, style, drop,
         if (drop?.accepts(e.dataTransfer)) { e.preventDefault(); e.stopPropagation(); drop.onDrop(e); }
       }}
       /* the one shown in the accent; a folder something is dragged over, ringed; the one held, lifted */
-      className={`${look === 'box' ? RAIL_BOX : `${RAIL_CHILD} rounded-md`} ${on ? 'text-[var(--accent)]' : `text-[var(--text)] ${look === 'child' ? 'hover:text-[var(--accent)]' : ''}`} ${held ? 'cursor-grabbing bg-[var(--bg-raised)] shadow-[0_6px_18px_rgba(0,0,0,0.28)] ring-1 ring-[var(--border-strong)]' : ''} ${over ? 'ring-1 ring-[var(--accent)]' : ''} ${line.link?.missing ? 'opacity-60' : ''}`}>
+      className={`${look === 'box' ? RAIL_BOX : RAIL_CHILD} ${on ? 'text-[var(--accent)]' : 'text-[var(--text)]'} ${held ? 'cursor-grabbing bg-[var(--bg-raised)] shadow-[0_6px_18px_rgba(0,0,0,0.28)] ring-1 ring-[var(--border-strong)]' : ''} ${over ? 'ring-1 ring-[var(--accent)]' : ''} ${line.link?.missing ? 'opacity-60' : ''}`}>
       <span className="min-w-0 flex-1 truncate">{label ?? line.name}</span>
     </button>
   );

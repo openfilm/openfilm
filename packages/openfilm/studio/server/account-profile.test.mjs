@@ -35,3 +35,12 @@ test('the profile is asked with the computer\'s key, kept a while, and asked aga
   ok = true;
   assert.equal((await accountProfile('ofk_two', { fetch, now: at + 61_000 }))?.name, 'Ada');
 });
+
+test('a failed refresh keeps the last profile for the same key until the service can answer again', async () => {
+  const at = 2_000_000;
+  const profile = { name: 'Before', avatar: null };
+  const key = 'ofk_profile_refresh';
+  await accountProfile(key, { now: at, fetch: async () => Response.json({ user: { name: profile.name } }) });
+  assert.deepEqual(await accountProfile(key, { now: at + 600_001, fetch: async () => { throw new Error('offline'); } }), profile);
+  assert.equal((await accountProfile(key, { now: at + 660_002, fetch: async () => Response.json({ user: { name: 'After' } }) })).name, 'After');
+});

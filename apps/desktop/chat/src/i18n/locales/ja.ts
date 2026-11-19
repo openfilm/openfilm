@@ -165,6 +165,8 @@ export const ja: Words = {
     diagnosticsCopied: 'コピーしました',
     switchAccount: 'アカウントを切り替え',
     signedInAs: '{account} でサインイン中です。',
+    modelTimeout: 'モデルサービスの応答がタイムアウトしました。再試行するか、モデルを切り替えてください。',
+    modelTimeoutRetry: 'モデルサービスの応答がタイムアウトしたため、再試行しています…',
     routeNoKey: 'このモデルには DeepSeek の API キーが必要ですが、このコンピューターには設定されていません。DeepSeek アカウントにだけサインインしている場合は、アカウントのモデルを使ってください。',
     routeNoKeyNoAccount: 'このモデルには DeepSeek の API キーが必要ですが、このコンピューターには設定されていません。DeepSeek Harness で DeepSeek アカウントにサインインするか、モデル設定で API キーを追加してください。',
     useAccountModel: '{model} を使う',

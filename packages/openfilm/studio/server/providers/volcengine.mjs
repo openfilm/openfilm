@@ -56,6 +56,8 @@ export function videoModelSpec(/** @type {string} */ id, canLink = false) {
 for (const model of MODELS.video) Object.assign(model, { spec: videoModelSpec(model.id) });
 /** The most pictures a Seedream picture is made from, and its sizes: 1K and 2K (Ark takes 0.9 to 4.6 million pixels). */
 const MAX_REFS = 10;
+// Bound the total inline data before base64 expansion. Larger references still use signed links.
+const SEEDREAM_INLINE_BYTES = 8 * 1024 * 1024;
 for (const model of MODELS.image) Object.assign(model, { spec: { ratios: Object.keys(RATIO_SIZE), refs: MAX_REFS, sizes: ['1k', '2k'], transparent: true } });
 
 /** Ark's names for the sizes. */
@@ -223,15 +225,30 @@ async function image(args, ctx) {
   const size = asked === '1k' ? '1k' : '2k';
   if (asked !== size) said.push(`--size ${asked}: Seedream makes 1k and 2k pictures, so 2k`);
   const { width, height } = /** @type {{ width: number, height: number }} */ (pictureSize(ratio, size));
-  /* a picture as an address when the run can give one (Ark fetches it), else inside the request */
+  /* Small pictures go directly to Ark so it does not have to fetch them from object storage. */
   const images = [];
-  for (const ref of refs) images.push(ctx.link ? await ctx.link(ref) : await dataUri(ref, ctx));
+  let inlineLeft = SEEDREAM_INLINE_BYTES;
+  for (const ref of refs) {
+    const size = ctx.inputSize?.(ref);
+    if (ctx.link && (size === undefined || size <= 0 || size > inlineLeft)) {
+      images.push(await ctx.link(ref));
+      continue;
+    }
+    images.push(await dataUri(ref, ctx));
+    inlineLeft -= size ?? 0;
+  }
   const body = {
     model, prompt, size: `${width}x${height}`, output_format: 'png', background: args.transparent ? 'transparent' : 'opaque',
     response_format: 'b64_json', watermark: false, ...(images.length ? { image: images } : {}),
   };
   const url = `${serviceUrl('ARK', 'https://ark.cn-beijing.volces.com')}/api/v3/images/generations`;
-  const answer = /** @type {any} */ (await (await call(NAME, url, { method: 'POST', headers: { ...auth(ctx), 'content-type': 'application/json' }, body: JSON.stringify(body) }, ctx)).json());
+  const response = await call(NAME, url, { method: 'POST', headers: { ...auth(ctx), 'content-type': 'application/json' }, body: JSON.stringify(body) }, ctx).catch((error) => {
+    if (error?.status === 400 && /timeout while downloading/i.test(error.message)) {
+      error.message = 'Volcengine timed out downloading a Seedream reference image. Try again or use a smaller reference image.';
+    }
+    throw error;
+  });
+  const answer = /** @type {any} */ (await response.json());
   const b64 = answer?.data?.[0]?.b64_json;
   if (typeof b64 !== 'string') throw new Error(`${NAME} answered without a picture${answer?.error?.message ? `: ${text(answer.error.message)}` : '.'}`);
   const made = madePicture({ path: landing('image', args.out, 'png'), bytes: new Uint8Array(Buffer.from(b64, 'base64')), prompt, provider: 'volcengine', model, notes: said });

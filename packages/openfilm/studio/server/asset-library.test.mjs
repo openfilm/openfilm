@@ -1,22 +1,26 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import fsPromises from 'node:fs/promises';
 import { lstat, mkdir, mkdtemp, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises';
 import { realpathSync } from 'node:fs';
+import { syncBuiltinESMExports } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { startStudio } from './server.mjs';
 
-async function fixture(run) {
+async function fixture(run, { followProjects = false } = {}) {
   const scratch = await mkdtemp(join(tmpdir(), 'of-assets-'));
   const names = ['HOME', 'SHARED_HOME', 'LIBRARY', 'SAVED', 'TRASH_DIR'];
   const before = new Map(names.map((name) => [`OPENFILM_${name}`, process.env[`OPENFILM_${name}`]]));
   for (const name of names) process.env[`OPENFILM_${name}`] = join(scratch, name.toLowerCase());
+  if (followProjects) delete process.env.OPENFILM_SAVED;
+  const saved = process.env.OPENFILM_SAVED || join(scratch, 'Saved');
   let studio;
   try {
-    await mkdir(process.env.OPENFILM_SAVED, { recursive: true });
+    await mkdir(saved, { recursive: true });
     await mkdir(process.env.OPENFILM_TRASH_DIR, { recursive: true });
     await writeFile(
-      join(process.env.OPENFILM_SAVED, 'logo.svg'),
+      join(saved, 'logo.svg'),
       '<svg xmlns="http://www.w3.org/2000/svg" width="80" height="40"><rect width="80" height="40" fill="teal"/></svg>',
     );
     studio = await startStudio({ port: 0, openBrowser: () => {} });
@@ -30,7 +34,7 @@ async function fixture(run) {
       assert.equal(response.status, expected, `${method} ${path}: ${JSON.stringify(value)}`);
       return value;
     };
-    await run({ call, scratch });
+    await run({ call, scratch, saved });
   } finally {
     await studio?.close();
     for (const [key, value] of before) {
@@ -40,6 +44,97 @@ async function fixture(run) {
     await rm(scratch, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
   }
 }
+
+test('an existing custom projects folder can bring along the old asset library without losing favorites or references', async (t) =>
+  fixture(async ({ call, scratch, saved }) => {
+    const otherDisk = process.env.OPENFILM_TEST_OTHER_DISK;
+    const destination = otherDisk ? await mkdtemp(join(otherDisk, 'of-assets-target-')) : scratch;
+    if (otherDisk) {
+      t.after(() => rm(destination, { recursive: true, force: true }));
+      assert.notEqual((await lstat(scratch)).dev, (await lstat(destination)).dev);
+    }
+    const projects = join(destination, 'Other drive');
+    const target = join(projects, 'Saved');
+    await mkdir(process.env.OPENFILM_SHARED_HOME);
+    await writeFile(join(process.env.OPENFILM_SHARED_HOME, 'prefs.json'), JSON.stringify({ projectsFolder: projects }));
+    assert.deepEqual((await call('locations')).saved, { path: saved, target, followsProjects: true });
+    const { project } = await call('projects', 'POST', { name: 'Existing' });
+    const { taken } = await call(`projects/${project.id}/library/add`, 'POST', { path: 'saved/logo.svg', mode: 'link' });
+    const { project: offline } = await call('open', 'POST', { path: join(scratch, 'Linked project'), fallback: 0 });
+    const { taken: offlineAsset } = await call(`projects/${offline.id}/library/add`, 'POST', { path: 'saved/logo.svg', mode: 'link' });
+    await rename(offline.path, `${offline.path}-offline`);
+    const { ids } = await call('saved/star', 'PUT', { path: 'saved/logo.svg', on: true });
+    await call('saved/folders', 'POST', { path: 'saved/Clips' });
+    await call('saved/shelf', 'PUT', { shelf: ['saved/Clips'] });
+    const external = join(scratch, 'External');
+    await mkdir(external);
+    await writeFile(join(external, 'source.svg'), '<svg/>');
+    await call('saved/files/bring', 'POST', { into: 'saved', paths: [external], mode: 'link' });
+    await rename(external, `${external}-offline`);
+
+    const moved = await call('locations/saved', 'PUT');
+    assert.equal(moved.locations.saved.path, target);
+    assert.deepEqual(moved.savedMove, { from: saved, recycled: true });
+    await assert.rejects(lstat(saved), { code: 'ENOENT' });
+    assert.equal((await lstat(join(target, 'External'))).isSymbolicLink(), true);
+    assert.deepEqual((await call('saved/places')).shelf, ['saved/Clips']);
+    assert.deepEqual((await call('saved/star')).paths, ['saved/logo.svg']);
+    assert.ok((await call('library/favorites')).ids.includes(ids[0]));
+    assert.deepEqual(await call(`projects/${project.id}/saved/take`, 'POST', { path: 'saved/logo.svg' }), taken);
+    assert.equal((await call('saved/usage?path=saved%2Flogo.svg')).projects[0].present, true);
+    await rename(`${offline.path}-offline`, offline.path);
+    await call(`projects/${offline.id}`);
+    assert.deepEqual(await call(`projects/${offline.id}/saved/take`, 'POST', { path: 'saved/logo.svg' }), offlineAsset);
+    await rename(`${external}-offline`, external);
+    assert.equal(await readFile(join(target, 'External', 'source.svg'), 'utf8'), '<svg/>');
+    assert.equal((await call('locations/saved', 'PUT')).savedMove, null);
+  }, { followProjects: true }));
+
+test('changing projects storage moves the library even when projects stay, and a failed copy leaves the original active', async (t) =>
+  fixture(async ({ call, scratch, saved }) => {
+    const { project } = await call('projects', 'POST', { name: 'Stays' });
+    const projects = join(scratch, 'Other drive');
+    const target = join(projects, 'Saved');
+    const existing = join(target, 'existing.svg');
+    await mkdir(target, { recursive: true });
+    await writeFile(existing, '<svg/>');
+    await call('locations/projects', 'PUT', { path: projects, move: false }, 409);
+    assert.equal((await call('locations')).saved.path, saved);
+    assert.equal((await call('locations')).projects.path, process.env.OPENFILM_LIBRARY);
+    assert.equal(await readFile(existing, 'utf8'), '<svg/>');
+    await rm(existing);
+
+    const copy = t.mock.method(fsPromises, 'cp', async (_from, part) => {
+      await mkdir(part, { recursive: true });
+      await writeFile(join(part, 'partial'), 'incomplete');
+      throw new Error('Disk full');
+    });
+    syncBuiltinESMExports();
+    try {
+      const failed = await call('locations/projects', 'PUT', { path: projects, move: false }, 409);
+      assert.match(failed.error, /Disk full/);
+    } finally {
+      copy.mock.restore();
+      syncBuiltinESMExports();
+    }
+    assert.deepEqual(await readdir(projects), ['Saved'], 'the staging folder is cleaned up');
+    assert.equal((await call('locations')).saved.path, saved);
+
+    const moved = await call('locations/projects', 'PUT', { path: projects, move: false });
+    assert.equal(moved.locations.saved.path, target);
+    assert.equal(moved.moved, 0);
+    assert.equal((await call(`projects/${project.id}`)).project.path, project.path);
+    await call('saved/folders', 'POST', { path: 'saved/New folder' });
+    assert.ok((await lstat(join(target, 'New folder'))).isDirectory());
+    await rename(target, `${target}-offline`);
+    await call('saved/files', 'GET', undefined, 409);
+    await assert.rejects(lstat(target), { code: 'ENOENT' });
+    await rename(`${target}-offline`, target);
+
+    const restored = await call('locations/projects', 'PUT', { path: null, move: false });
+    assert.equal(restored.locations.saved.path, saved);
+    assert.ok((await lstat(join(saved, 'New folder'))).isDirectory());
+  }, { followProjects: true }));
 
 test('library renames preserve asset identity', async () =>
   fixture(async ({ call }) => {

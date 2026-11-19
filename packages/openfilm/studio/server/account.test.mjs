@@ -19,6 +19,7 @@ test('the private desktop account reads the exact Services key, account, disconn
     requests.push(req.url);
     res.setHeader('content-type', 'application/json');
     if (req.url === '/v1/media/models') return res.end(JSON.stringify({ models: {} }));
+    if (req.url === '/api/desktop/profile') return res.end(JSON.stringify({ user: { name: 'Shared account' } }));
     res.statusCode = revoked ? 401 : 200;
     res.end(JSON.stringify(revoked ? { message: 'Invalid key', error: 'Unauthorized', statusCode: 401 } : catalog));
   });
@@ -29,14 +30,22 @@ test('the private desktop account reads the exact Services key, account, disconn
   try {
     assert.equal((await desktopAccount()).key, null);
     await changeSettings((s) => { s.keys.openfilm = 'ofk-shared'; s.accounts.openfilm = 'shared@example.com'; });
-    assert.deepEqual(await desktopAccount(), { key: 'ofk-shared', email: 'shared@example.com', baseUrl: `${origin}/v1/agent`, connection: { status: 200, catalog, error: null }, signingIn: false, error: null });
-    const settingsState = async () => {
+    const settingsState = async (parts = []) => {
       let output;
-      await providersRoute({ method: 'GET' }, { writeHead() {}, end(body) { output = JSON.parse(body); } }, [], { openBrowser: () => {} });
+      await providersRoute({ method: 'GET' }, { writeHead() {}, end(body) { output = JSON.parse(body); } }, parts, { openBrowser: () => {} });
       return output;
     };
+    const quickAccount = async () => (await settingsState(['openfilm', 'account'])).account;
+    const local = await quickAccount();
+    assert.equal(local.source, 'file');
+    assert.equal(local.account, 'shared@example.com');
+    assert.equal(local.profile, undefined);
+    assert.ok(!JSON.stringify(local).includes('ofk-shared'));
+    assert.deepEqual(requests, [], 'loading the account card makes no cloud requests');
+    assert.deepEqual(await desktopAccount(), { key: 'ofk-shared', email: 'shared@example.com', baseUrl: `${origin}/v1/agent`, connection: { status: 200, catalog, error: null }, signingIn: false, error: null });
     let shown = (await settingsState()).providers.find((p) => p.id === 'openfilm');
     assert.equal(shown.source, 'file');
+    assert.equal((await quickAccount()).profile?.name, 'Shared account');
     const before = requests.filter((path) => path === '/v1/agent/models').length;
     await desktopAccount();
     assert.equal(requests.filter((path) => path === '/v1/agent/models').length, before, 'Services and the agent reuse one validation and catalog');
@@ -47,8 +56,10 @@ test('the private desktop account reads the exact Services key, account, disconn
     shown = (await settingsState()).providers.find((p) => p.id === 'openfilm');
     assert.equal(shown.source, null, 'a revoked key is not presented as Connected in Services');
     assert.match(shown.connectionError, /Connect again/);
+    assert.equal((await quickAccount()).source, null, 'the quick account respects a known credential rejection');
     revoked = false;
     await changeSettings((s) => { s.keys.openfilm = 'ofk-new'; });
+    assert.equal((await quickAccount()).profile, undefined, 'the previous credential’s profile does not reappear');
     assert.equal((await desktopAccount()).connection.status, 200, 'a new login invalidates the old cached rejection');
     process.env.OPENFILM_API_KEY = 'ofk-environment';
     assert.equal((await desktopAccount()).key, 'ofk-new', 'Services prefers the saved login to an environment key');
