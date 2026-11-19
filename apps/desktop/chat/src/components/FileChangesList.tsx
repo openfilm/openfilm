@@ -4,8 +4,10 @@
  * first few rows show; the rest open from the last row. Settings → Developer turns it off.
  */
 import React from 'react';
-import { ChevronRight, File, FileAudio, FileCode, FileImage, FileJson, FileText, FileVideo } from 'lucide-react';
+import { Check, ChevronRight, Copy, File, FileAudio, FileCode, FileImage, FileJson, FileText, FileVideo, FolderOpen } from 'lucide-react';
 import { useT } from '@/i18n';
+import { desktopBridge } from '@/lib/desktop-bridge';
+import { ChatProjectContext } from '@/lib/developer';
 import type { FileChange, FileHunk } from '@/lib/file-changes';
 import { StickToBottomContext } from './useStickToBottom';
 
@@ -51,13 +53,37 @@ export function FileChangesList({ changes }: { changes: FileChange[] }) {
 
 function FileRow({ change, first, onToggle }: { change: FileChange; first: boolean; onToggle: () => void }) {
   const t = useT();
+  const project = React.useContext(ChatProjectContext);
   const [open, setOpen] = React.useState(false);
+  const [copied, setCopied] = React.useState(false);
+  const copyTimer = React.useRef<number | null>(null);
+  React.useEffect(() => () => {
+    if (copyTimer.current !== null) window.clearTimeout(copyTimer.current);
+  }, []);
   const Icon = iconOf(change.path);
   const slash = change.path.lastIndexOf('/');
   const name = change.path.slice(slash + 1);
   const folder = slash > 0 ? change.path.slice(0, slash) : '';
   const lines = change.added != null || change.removed != null;
   const canOpen = Boolean(change.hunks?.length);
+  const bridge = desktopBridge();
+  const sep = project?.includes('\\') ? '\\' : '/';
+  const revealTarget = project && change.change !== 'removed' && bridge?.revealPath
+    ? `${project.replace(/[\\/]+$/, '')}${sep}${change.path.replace(/^[\\/]+/, '').replace(/[\\/]+/g, sep)}`
+    : null;
+
+  const copyPath = () => {
+    if (typeof navigator === 'undefined' || !navigator.clipboard?.writeText) return;
+    void Promise.resolve(navigator.clipboard.writeText(change.path)).then(() => {
+      setCopied(true);
+      if (copyTimer.current !== null) window.clearTimeout(copyTimer.current);
+      copyTimer.current = window.setTimeout(() => {
+        copyTimer.current = null;
+        setCopied(false);
+      }, 1500);
+    }).catch(() => {});
+  };
+
   const row = (
     <>
       <Icon size={14} aria-hidden className="shrink-0 text-[var(--text-faint)]" />
@@ -78,15 +104,43 @@ function FileRow({ change, first, onToggle }: { change: FileChange; first: boole
       <ChevronRight size={13} aria-hidden className={`shrink-0 text-[var(--text-faint)] transition-transform ${open ? 'rotate-90' : ''} ${canOpen ? '' : 'invisible'}`} />
     </>
   );
-  const shell = `flex h-9 w-full min-w-0 items-center gap-2 px-3 text-left ${first ? '' : 'border-t border-[var(--border)]'}`;
+
   return (
     <div className="min-w-0">
-      {canOpen ? (
-        <button type="button" aria-expanded={open} onClick={() => { onToggle(); setOpen((value) => !value); }}
-          className={`${shell} transition-colors hover:bg-[var(--bg-hover)]`}>
-          {row}
-        </button>
-      ) : <div className={shell}>{row}</div>}
+      <div className={`group/file flex h-9 w-full min-w-0 items-center gap-1.5 px-3 ${first ? '' : 'border-t border-[var(--border)]'} ${canOpen ? 'transition-colors hover:bg-[var(--bg-hover)]' : ''}`}>
+        {canOpen ? (
+          <button
+            type="button"
+            aria-expanded={open}
+            onClick={() => { onToggle(); setOpen((value) => !value); }}
+            className="flex h-full min-w-0 flex-1 items-center gap-2 text-left"
+          >
+            {row}
+          </button>
+        ) : <div className="flex min-w-0 flex-1 items-center gap-2 text-left">{row}</div>}
+        <span className="flex shrink-0 items-center gap-0.5 text-[var(--text-faint)] opacity-0 transition-opacity group-hover/file:opacity-100 has-[:focus-visible]:opacity-100">
+          <button
+            type="button"
+            onClick={copyPath}
+            title={copied ? t('turnFrame.copied') : t('refCard.path')}
+            aria-label={copied ? t('turnFrame.copied') : t('refCard.path')}
+            className="flex h-6 w-6 items-center justify-center rounded-md transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]"
+          >
+            {copied ? <Check size={13} aria-hidden /> : <Copy size={13} aria-hidden />}
+          </button>
+          {revealTarget ? (
+            <button
+              type="button"
+              onClick={() => void bridge?.revealPath(revealTarget)}
+              title={t('turnLog.reveal')}
+              aria-label={t('turnLog.reveal')}
+              className="flex h-6 w-6 items-center justify-center rounded-md transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]"
+            >
+              <FolderOpen size={13} aria-hidden />
+            </button>
+          ) : null}
+        </span>
+      </div>
       {open && change.hunks ? <Hunks hunks={change.hunks} cut={change.cut === true} /> : null}
     </div>
   );

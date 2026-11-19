@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { LANGUAGES, appLanguage } from './i18n/language.mjs';
 import { MENU_WORDS } from './i18n/menu.mjs';
 import { UPDATE_DIALOG_WORDS } from './i18n/update-dialogs.mjs';
-import { applicationMenuTemplate } from './menu.mjs';
+import { applicationMenuTemplate, contextMenuTemplate } from './menu.mjs';
 import { createManualUpdateCheck } from './update-menu.mjs';
 
 function fixture(platform, packaged = true, updates = null) {
@@ -134,4 +134,58 @@ test('the update dialogs have every line in every language', async () => {
     ['업데이트 확인', '아직 재시작할 수 없습니다', UPDATE_DIALOG_WORDS.ko.errors['agent-busy'], ['확인']],
     ['Buscar actualizaciones', 'No se pudo buscar actualizaciones', `${UPDATE_DIALOG_WORDS.es.errors.offline} OpenFilm también lo volverá a intentar por sí solo.`, ['Aceptar']],
   ]);
+});
+
+test('contextMenuTemplate shows Copy for non-editable text selections across all languages', () => {
+  for (const language of LANGUAGES) {
+    const words = MENU_WORDS[language];
+    assert.deepEqual(contextMenuTemplate({ selectionText: 'hello' }, language), [{ role: 'copy', label: words.copy }]);
+  }
+  assert.deepEqual(contextMenuTemplate({ selectionText: 'hello' }, 'xx'), [{ role: 'copy', label: MENU_WORDS.en.copy }]);
+});
+
+test('contextMenuTemplate shows Cut, Copy, Paste, and Select All for editable fields with matching enabled states', () => {
+  for (const language of LANGUAGES) {
+    const words = MENU_WORDS[language];
+    assert.deepEqual(
+      contextMenuTemplate(
+        { isEditable: true, editFlags: { canCut: false, canCopy: true, canPaste: true, canSelectAll: true } },
+        language,
+      ),
+      [
+        { role: 'cut', label: words.cut, enabled: false },
+        { role: 'copy', label: words.copy, enabled: true },
+        { role: 'paste', label: words.paste, enabled: true },
+        { type: 'separator' },
+        { role: 'selectAll', label: words.selectAll, enabled: true },
+      ],
+    );
+  }
+  assert.deepEqual(
+    contextMenuTemplate({ isEditable: true, selectionText: 'selected', editFlags: { canCut: true, canCopy: false, canPaste: false, canSelectAll: false } }),
+    [
+      { role: 'cut', label: MENU_WORDS.en.cut, enabled: true },
+      { role: 'copy', label: MENU_WORDS.en.copy, enabled: true },
+      { role: 'paste', label: MENU_WORDS.en.paste, enabled: false },
+      { type: 'separator' },
+      { role: 'selectAll', label: MENU_WORDS.en.selectAll, enabled: false },
+    ],
+  );
+  assert.deepEqual(
+    contextMenuTemplate({ isEditable: true }),
+    [
+      { role: 'cut', label: MENU_WORDS.en.cut, enabled: false },
+      { role: 'copy', label: MENU_WORDS.en.copy, enabled: false },
+      { role: 'paste', label: MENU_WORDS.en.paste, enabled: false },
+      { type: 'separator' },
+      { role: 'selectAll', label: MENU_WORDS.en.selectAll, enabled: true },
+    ],
+  );
+});
+
+test('contextMenuTemplate returns an empty array for empty or whitespace non-editable clicks', () => {
+  assert.deepEqual(contextMenuTemplate(), []);
+  assert.deepEqual(contextMenuTemplate({}), []);
+  assert.deepEqual(contextMenuTemplate({ isEditable: false, selectionText: '' }), []);
+  assert.deepEqual(contextMenuTemplate({ isEditable: false, selectionText: '   \n\t ' }), []);
 });

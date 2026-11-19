@@ -128,6 +128,7 @@ export const ko: Words = {
   composer: {
     contextFull: '대화가 길어졌습니다. 새 대화를 시작하면 더 잘 됩니다.',
     contextFullNew: '새 대화',
+    contextTokens: '{used} / {size} 토큰',
     agentLoading: '불러오는 중…',
     agentNone: '에이전트',
     agentNoneShown: '채팅에 켜 둔 에이전트가 없습니다.',
@@ -135,6 +136,9 @@ export const ko: Words = {
     agentOptionsFailed: '설정을 읽으려고 실행했지만 시작하지 못했습니다.',
     agentOutdated: 'OpenFilm에 필요한 버전보다 오래되었습니다. Codex를 업데이트한 다음',
     agentOwnKey: '내 키',
+    agentPermissionAllowSession: '이 세션에서 항상 허용',
+    agentPermissionAutoNotice: '이 세션에서 권한 요청을 자동으로 허용하고 있습니다.',
+    agentPermissionAutoOff: '끄기',
     agentPermissionDeny: '허용 안 함',
     agentPermissionTitle: '{name}이(가) 다음 작업을 하려고 합니다',
     agentSection: '에이전트',
@@ -167,6 +171,8 @@ export const ko: Words = {
     accountModelPicked: '{model}(으)로 바꿨습니다. 메시지를 다시 보내세요.',
     speed: '속도',
     thumbOnly: '메시지에는 썸네일만 남겨 두었습니다. 원본은 원래 위치에 있고, 붙여 넣은 파일은 프로젝트에 저장되어 있습니다.',
+    replaceDraft: '작성 중인 초안을 이 메시지로 바꿀까요?',
+    replaceDraftConfirm: '바꾸기',
   },
   library: {
     removeReference: '참조 제거',
@@ -245,6 +251,10 @@ export const ko: Words = {
     sessionSearchPlaceholder: '채팅 검색…',
     stop: '중지',
     untitledSession: '새 채팅',
+    editMessage: '편집하여 다시 보내기',
+    searchConversation: '대화 내용 검색…',
+    searchPrev: '이전 일치',
+    searchNext: '다음 일치',
   },
   projectMenu: {
     archive: '보관',

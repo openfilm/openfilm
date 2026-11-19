@@ -132,6 +132,7 @@ export const enUS = {
   composer: {
     contextFull: 'This conversation is getting long. A new one will work better.',
     contextFullNew: 'New conversation',
+    contextTokens: '{used} / {size} tokens',
     agentLoading: 'Loading…',
     agentNone: 'Agent',
     agentNoneShown: 'No agent is switched on for the chat.',
@@ -139,6 +140,9 @@ export const enUS = {
     agentOptionsFailed: 'Couldn\'t start it to read its settings.',
     agentOutdated: 'It is older than OpenFilm needs. Update Codex, then',
     agentOwnKey: 'Your own key',
+    agentPermissionAllowSession: 'Allow for this session',
+    agentPermissionAutoNotice: 'Auto-approving permissions in this session.',
+    agentPermissionAutoOff: 'Turn off',
     agentPermissionDeny: 'Don’t allow',
     agentPermissionTitle: '{name} wants to do this',
     agentSection: 'Agent',
@@ -171,6 +175,8 @@ export const enUS = {
     accountModelPicked: 'Switched to {model}. Send your message again.',
     speed: 'Speed',
     thumbOnly: 'A thumbnail kept with the message. The original stays where it was, or in the project if it was pasted.',
+    replaceDraft: 'Replace what you’re writing in the box with this message?',
+    replaceDraftConfirm: 'Replace',
   },
   library: {
     removeReference: 'Remove reference',
@@ -250,6 +256,10 @@ export const enUS = {
     sessionSearchPlaceholder: 'Search chats…',
     stop: 'Stop',
     untitledSession: 'New chat',
+    editMessage: 'Edit in composer',
+    searchConversation: 'Search in conversation…',
+    searchPrev: 'Previous match',
+    searchNext: 'Next match',
   },
   projectMenu: {
     archive: 'Archive',

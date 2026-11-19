@@ -14,14 +14,18 @@ export function AgentPermissionCard({
   agentName,
   permission,
   onAnswer,
+  onAllowSession,
 }: {
   agentName: string;
   permission: { title: string; options: Array<{ optionId: string; name: string; kind: string }> };
   /** null: Don't allow. */
   onAnswer: (optionId: string | null) => void;
+  /** Allows the current permission and auto-approves subsequent requests in this session. */
+  onAllowSession?: () => void;
 }) {
   const t = useT();
   const [collapsed, setCollapsed] = React.useState(false);
+  const canAllow = permission.options.some((o) => o.kind.startsWith('allow'));
   return (
     <ComposerCard
       role="alertdialog"
@@ -37,6 +41,11 @@ export function AgentPermissionCard({
         <CardButton weight="quiet" onClick={() => onAnswer(null)}>
           {t('composer.agentPermissionDeny')}
         </CardButton>
+        {onAllowSession && canAllow ? (
+          <CardButton weight="secondary" onClick={onAllowSession}>
+            {t('composer.agentPermissionAllowSession')}
+          </CardButton>
+        ) : null}
         {permission.options.map((option, index) => (
           <CardButton
             key={option.optionId}

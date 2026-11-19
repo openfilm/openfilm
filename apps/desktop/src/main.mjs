@@ -24,7 +24,7 @@ import { createPagePresentation, paintPage, preparePage, revealPage, syncPagePoi
 import { closeTabOrWindow, keepWindowOnClose, quitAfterStudio } from './window-lifecycle.mjs';
 import { appLanguage } from './i18n/language.mjs';
 import { PAGE_FAILURE_WORDS } from './i18n/page-failure.mjs';
-import { applicationMenuTemplate } from './menu.mjs';
+import { applicationMenuTemplate, contextMenuTemplate } from './menu.mjs';
 import { registerLocalAgentIpc } from './local-agents-ipc.mjs';
 import { readPreferences, registerChatIpc } from './chat-ipc.mjs';
 import { registerSkillsIpc } from './skills-ipc.mjs';
@@ -222,6 +222,10 @@ function makeView(tabId) {
   v.webContents.on('responsive', () => unresponsivePages.delete(v));
   /* the page gone (a crash): it comes back where it was; the agents' turns go on in this process meanwhile */
   v.webContents.on('render-process-gone', (_event, details) => { if (details.reason !== 'clean-exit' && !quitting) setTimeout(() => { if (!v.webContents.isDestroyed()) v.webContents.reload(); }, 500); });
+  v.webContents.on('context-menu', (_event, params) => {
+    const items = contextMenuTemplate(params, appLanguage(state.language, app.getPreferredSystemLanguages()));
+    if (items.length && win && !win.isDestroyed()) Menu.buildFromTemplate(items).popup({ window: win });
+  });
   return v;
 }
 
@@ -964,7 +968,7 @@ async function start() {
   });
   agentHandle('desktop:agents:own-model', ({ config }) => roster.saveOwnModel(config));
   agentHandle('desktop:agents:own-model-remove', ({ id }) => { roster.removeOwnModel(String(id)); return { ok: true }; });
-  ipcMain.handle('desktop:reveal', (event, path) => { if (fromPage(event) && typeof path === 'string' && path) shell.showItemInFolder(path); });
+  ipcMain.handle('desktop:reveal', (event, path) => { if (fromPage(event) && typeof path === 'string' && path) shell.showItemInFolder(resolve(path)); });
   ipcMain.handle('desktop:pick-folder', (event, options) => (fromPage(event) ? pickFolder(options) : null));
   /* a picture of part of the window (the viewer, for a reference in the chat): what the person sees, as JPEG */
   ipcMain.handle('desktop:capture', async (event, rect) => {

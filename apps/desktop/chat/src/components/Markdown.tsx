@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import { Check, Copy } from 'lucide-react';
 import {
   parseInlineMarkdown,
   rescanMarkdown,
@@ -93,11 +94,7 @@ const MarkdownRow = React.memo(function MarkdownRow({ block }: { block: Markdown
   if (block.kind === 'code') {
     // No syntax highlighting: code blocks in chat are mostly a few lines of commands, not worth a highlighter
     // in the bundle.
-    return (
-      <pre className="overflow-x-auto rounded-lg border border-[var(--border)] bg-[var(--bg-field)] px-2.5 py-2 font-mono text-[13.5px] leading-[1.55] text-[var(--text-muted)]">
-        <code>{block.text}</code>
-      </pre>
-    );
+    return <CodeBlock text={block.text} />;
   }
   if (block.kind === 'table') {
     const [head, ...body] = block.rows;
@@ -130,6 +127,43 @@ const MarkdownRow = React.memo(function MarkdownRow({ block }: { block: Markdown
   }
   return <hr className="border-[var(--border)]" />;
 });
+
+function CodeBlock({ text }: { text: string }) {
+  const t = useT();
+  const [copied, setCopied] = React.useState(false);
+  const timerRef = React.useRef<number | null>(null);
+  React.useEffect(() => () => {
+    if (timerRef.current !== null) window.clearTimeout(timerRef.current);
+  }, []);
+  const copy = () => {
+    if (typeof navigator === 'undefined' || !navigator.clipboard?.writeText) return;
+    void Promise.resolve(navigator.clipboard.writeText(text)).then(() => {
+      setCopied(true);
+      if (timerRef.current !== null) window.clearTimeout(timerRef.current);
+      timerRef.current = window.setTimeout(() => {
+        timerRef.current = null;
+        setCopied(false);
+      }, 1500);
+    }).catch(() => {});
+  };
+  const label = t(copied ? 'turnFrame.copied' : 'turnFrame.copy');
+  return (
+    <div className="group/code relative">
+      <pre className="overflow-x-auto rounded-lg border border-[var(--border)] bg-[var(--bg-field)] px-2.5 py-2 pr-9 font-mono text-[13.5px] leading-[1.55] text-[var(--text-muted)]">
+        <code>{text}</code>
+      </pre>
+      <button
+        type="button"
+        onClick={copy}
+        aria-label={label}
+        title={label}
+        className="absolute right-1.5 top-1.5 flex h-6 w-6 items-center justify-center rounded-md bg-[var(--bg-field)]/90 text-[var(--text-faint)] opacity-0 transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)] focus-visible:opacity-100 group-hover/code:opacity-100"
+      >
+        {copied ? <Check size={13} aria-hidden /> : <Copy size={13} aria-hidden />}
+      </button>
+    </div>
+  );
+}
 
 function inline(text: string): React.ReactNode[] {
   return parseInlineMarkdown(text).map((piece, index) => {

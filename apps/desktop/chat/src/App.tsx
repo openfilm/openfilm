@@ -23,7 +23,7 @@ import { AgentPermissionCard } from '@/components/AgentPermissionCard';
 import { LocalAgentQuestionCard } from '@/components/TurnQuestionCard';
 import { Tooltip } from '@/components/Tooltip';
 import { StickToBottomContext, useStickToBottom, useTailSpacer } from '@/components/useStickToBottom';
-import { PromptEditor, PromptPill, PromptPillHoverContext, PromptPillRevealContext, activatedSkillIds, fileReferenceId, fileReferencePath, promptReferenceToken, resolvePromptReferences, skillReferenceId, skillReferencePackage, splitPromptReferenceText, type MentionProvider, type PromptEditorHandle, type PromptEditorState, type PromptPillHover, type PromptReference } from '@/components/prompt-editor';
+import { PromptEditor, PromptPill, PromptPillHoverContext, PromptPillRevealContext, activatedSkillIds, collectPromptReferences, fileReferenceId, fileReferencePath, promptReferenceToken, resolvePromptReferences, skillReferenceId, skillReferencePackage, splitPromptReferenceText, stripPromptReferenceTokens, type MentionProvider, type PromptEditorHandle, type PromptEditorState, type PromptPillHover, type PromptReference } from '@/components/prompt-editor';
 import { filesFromTransfer, transferHasFiles } from '@/lib/composer-attachments';
 import { PROMPT_PICTURES_MAX, attachedPictures, attachmentBlocker, formatFileSize, turnAttachments, useDesktopAttachments } from '@/lib/desktop-attachments';
 import { attachmentPill, attachmentsInText, attachmentWords, isAttachmentPill, projectFilePath, sentPill } from '@/lib/attachment-pills';
@@ -97,6 +97,50 @@ const CONTEXT_NOTICE_SHARE = 0.85;
 /** On a video's thumbnail: it plays, it is not a picture. */
 /* between the chat's root (the add-skill dialog) and the project's chat: a skill added, a skill to make */
 const MAKE_SKILL = 'openfilm:make-skill';
+
+interface SessionDraft {
+  text: string;
+  studioRefs: Map<string, StudioRef>;
+  fileRefs: PromptReference[];
+  skillRefs: PromptReference[];
+}
+
+/** Composer drafts kept per `${projectKey}:${sessionId}` across session switches. */
+const SESSION_DRAFTS = new Map<string, SessionDraft>();
+
+const SEND_MOD_STORAGE_KEY = 'openfilm.chat.sendMod';
+
+function pickAllowOption(options: ReadonlyArray<{ optionId: string; name: string; kind: string }>) {
+  return options.find((o) => o.kind === 'allow_once') ?? options.find((o) => o.kind.startsWith('allow'));
+}
+
+function retainedAttachmentIds(excludeDraftKey: string, currentSessionKey: string, currentText: string): Set<string> {
+  const ids = new Set<string>();
+  const collect = (text: string) => {
+    for (const seg of splitPromptReferenceText(text)) {
+      if (seg.kind === 'reference' && isAttachmentPill(seg.id)) ids.add(seg.id);
+    }
+  };
+  for (const [key, draft] of SESSION_DRAFTS) {
+    if (key !== excludeDraftKey) collect(draft.text);
+  }
+  if (currentSessionKey !== excludeDraftKey) collect(currentText);
+  return ids;
+}
+
+function splitDisplayPills(references: readonly PromptReference[]) {
+  const studio = new Map<string, StudioRef>();
+  const files: PromptReference[] = [];
+  const named: PromptReference[] = [];
+  /* kept as the composer had them */
+  for (const pill of references) {
+    const ref = refFromPill(pill);
+    if (ref) studio.set(pill.id, ref);
+    else if (skillReferencePackage(pill.id)) named.push(pill);
+    else if (!isAttachmentPill(pill.id)) files.push(pill);
+  }
+  return { studio, files, named };
+}
 
 export function App({ initialProject, initialSelection, initialFfmpeg }: {
   initialProject: Project | null;
@@ -350,13 +394,20 @@ function ChatPane({ project, banners, selection, assetsOpen, assetsOverlay }: { 
   const [followUpRefs, setFollowUpRefs] = React.useState<PromptReference[]>([]);
   /** what the person pointed at in Studio for this message, by pill id */
   const [studioRefs, setStudioRefs] = React.useState<Map<string, StudioRef>>(() => new Map());
-  /** the conversation whose message waits for its turn to end (an agent that cannot take one mid-turn) */
-  const [queued, setQueued] = React.useState<string | null>(null);
+  /** conversations whose message waits for their running turn to end (an agent that cannot take one mid-turn) */
+  const [queuedSessions, setQueuedSessions] = React.useState<ReadonlySet<string>>(() => new Set());
+  const [sendWithMod, setSendWithMod] = React.useState(() => {
+    try { return localStorage.getItem(SEND_MOD_STORAGE_KEY) === '1'; } catch { return false; }
+  });
+  const [autoApproveSessions, setAutoApproveSessions] = React.useState<ReadonlySet<string>>(() => new Set());
+  const autoApprovedReq = React.useRef(new Set<string>());
   const [followUpError, setFollowUpError] = React.useState<string | null>(null);
   /* the notices on the composer closed here (NoticeCard): each stays closed for what it said */
   const [closed, setClosed] = React.useState<ReadonlySet<string>>(() => new Set());
   const close = (key: string) => setClosed((set) => new Set(set).add(key));
   const composerFiles = useDesktopAttachments(project.path);
+  /* attachment ids added to the composer whose pill markers have not yet committed to followUp / SESSION_DRAFTS */
+  const pendingAttachments = React.useRef(new Map<string, string>());
   /* a file of the message being written, opened to look at */
   const [openedFile, setOpenedFile] = React.useState<AttachmentPreviewItem | null>(null);
   const attachInputRef = React.useRef<HTMLInputElement>(null);
@@ -373,7 +424,14 @@ function ChatPane({ project, banners, selection, assetsOpen, assetsOverlay }: { 
   /* a folder of this computer, as a pill (the agent is given its path; nothing is copied) */
   const attachFolder = async () => {
     const path = await app.pickFolder?.({ title: t('project.addFolder') });
-    if (path) { const added = composerFiles.addPaths([path]); if (added.length) composerRef.current?.insertReferences(added.map(attachmentPill)); }
+    if (path) {
+      const added = composerFiles.addPaths([path]);
+      if (added.length && composerRef.current) {
+        const draftKey = `${projectKey}:${shownSession.current}`;
+        for (const f of added) pendingAttachments.current.set(f.id, draftKey);
+        composerRef.current.insertReferences(added.map(attachmentPill));
+      }
+    }
   };
   /* ⌘U (Ctrl+U): files or photos, as the Add menu's first line says */
   React.useEffect(() => {
@@ -400,7 +458,11 @@ function ChatPane({ project, banners, selection, assetsOpen, assetsOverlay }: { 
   /** files brought in (dropped, pasted, picked with +): pills where they were let go, or at the caret */
   const attachFiles = (files: File[], point?: { x: number; y: number }) => {
     const added = composerFiles.add(files);
-    if (added.length) composerRef.current?.insertReferences(added.map(attachmentPill), point);
+    if (added.length && composerRef.current) {
+      const draftKey = `${projectKey}:${sessionId}`;
+      for (const f of added) pendingAttachments.current.set(f.id, draftKey);
+      composerRef.current.insertReferences(added.map(attachmentPill), point);
+    }
   };
   const attachmentOf = React.useCallback(
     (pill: { id: string }) => (isAttachmentPill(pill.id) ? composerFiles.files.find((f) => f.id === pill.id) : undefined),
@@ -481,15 +543,23 @@ function ChatPane({ project, banners, selection, assetsOpen, assetsOverlay }: { 
     const pill = skillPill(skill);
     requestAnimationFrame(() => { composerRef.current?.insertReference(pill); composerRef.current?.focus(); });
   }, [skillPill]);
+  const pickSkillRef = React.useRef(pickSkill);
+  pickSkillRef.current = pickSkill;
+  const pendingNewSessionSkill = React.useRef<PickedSkill | null>(null);
   /* the skills a message can name: OpenFilm's, and of the agent's own those it has (let in, or all when it cannot be told) */
   const nameableSkills = React.useMemo(() => [
     ...(skillListing?.openfilm ?? []),
     ...(skillListing?.own.skills ?? []).filter((s) => !skillListing?.own.filtered || s.allowed),
   ], [skillListing]);
   /* a skill picked in Studio's skills: named in the message; Try now there: in a new conversation */
-  const newConversation = React.useRef<() => void>(() => {});
+  const newConversation = React.useRef<() => boolean>(() => false);
   React.useEffect(() => app.onUseSkill?.((skill) => {
-    if (skill.newConversation) newConversation.current();
+    if (skill.newConversation) {
+      if (newConversation.current()) {
+        pendingNewSessionSkill.current = skill;
+        return;
+      }
+    }
     pickSkill(skill);
   }), [pickSkill]);
   /* a skill added from the examples (AddSkillDialog, at the chat's root), or turned on or off in them: the list read
@@ -570,9 +640,27 @@ function ChatPane({ project, banners, selection, assetsOpen, assetsOverlay }: { 
       },
     ];
   }, [selection, mentionFiles, nameableSkills, skillWords, skillPill, t, takeStudioRefs]);
+  const sessionDraftKey = `${projectKey}:${sessionId}`;
+  const activeDraftKey = React.useRef<string | null>(null);
+  const restoringDraft = React.useRef(false);
+  const fillRafRef = React.useRef<number | null>(null);
+  const [draftRestoredRev, bumpDraftRestored] = React.useReducer((n: number) => n + 1, 0);
+  const composerFilesRef = React.useRef(composerFiles.files);
+  composerFilesRef.current = composerFiles.files;
+
   const onComposerChange = React.useCallback((state: PromptEditorState) => {
+    if (restoringDraft.current) return;
     setFollowUp(state.text);
     setFollowUpRefs(state.references);
+    if (state.text.trim().length === 0) {
+      setQueuedSessions((prev) => {
+        const currentId = shownSession.current;
+        if (!prev.has(currentId)) return prev;
+        const next = new Set(prev);
+        next.delete(currentId);
+        return next;
+      });
+    }
   }, []);
 
   /* Studio's "Reference in chat": the thing becomes a pill where the cursor is */
@@ -724,7 +812,8 @@ function ChatPane({ project, banners, selection, assetsOpen, assetsOverlay }: { 
     const agent = by;
     const sessionId = conversation;
     const shown = conversation === shownSession.current;
-    const turn = createLocalAgentTurn(id, agent, ordered.length);
+    const turnCount = shown ? ordered.length : loadLocalAgentTurns(projectKey, sessionId).length;
+    const turn = createLocalAgentTurn(id, agent, turnCount);
     const agentStore = useLocalAgents.getState();
     const own = sessions.find((s) => s.id === sessionId)?.agentPrefs;
     const picked = conversationPrefs(agentStore.prefs, own);
@@ -753,7 +842,7 @@ function ChatPane({ project, banners, selection, assetsOpen, assetsOverlay }: { 
     }));
     const meta: LocalAgentTurnMeta = {
       turnId: id, projectId: projectKey, projectTitle: project.name, sessionId, agent, prompt: instruction,
-      turnNo: ordered.length, startedAt: Date.now(), turn: started,
+      turnNo: turnCount, startedAt: Date.now(), turn: started,
     };
     registerRunningLocalTurn({ id, projectId: projectKey, projectTitle: project.name, sessionId, agent, prompt: instruction, startedAt: meta.startedAt, turn: started });
     /* the project's files as the turn found them (read before the agent is sent anything); once the turn settles,
@@ -793,33 +882,35 @@ function ChatPane({ project, banners, selection, assetsOpen, assetsOverlay }: { 
   function runTurn(opened: ReturnType<typeof openTurn>, prepared: Promise<{ text: string; images: PromptImage[]; skills?: string[]; said?: () => void }>): void {
     const { turn, meta, prefs, ready } = opened;
     const id = meta.turnId;
+    const targetSessionId = meta.sessionId;
+    const targetAgent = meta.agent;
     const finish = (lastTurnId: string | undefined, patch: Partial<Turn & TurnBalance>) => {
       settlers.current.get(lastTurnId ?? id)?.(patch);
       settlers.current.get(id)?.(patch);
     };
     /* the agent's own session of this conversation, gone on with (after a restart too); a new one is kept for next time */
-    const resume = sessions.find((s) => s.id === sessionId)?.agentSessions?.[agent] ?? null;
+    const resume = sessions.find((s) => s.id === targetSessionId)?.agentSessions?.[targetAgent] ?? null;
     const run = Promise.all([prepared, ready]).then(([{ text, images, skills, said }]) => runLocalAgentTurn({
       projectId: projectKey,
-      conversation: sessionId,
+      conversation: targetSessionId,
       resume,
-      agent,
+      agent: targetAgent,
       cwd: project.path,
       text,
       images,
       turn,
       options: prefs,
       meta,
-      onOptions: (options) => useLocalAgents.getState().noteOptions(agent, options),
+      onOptions: (options) => useLocalAgents.getState().noteOptions(targetAgent, options),
       /* Studio's note in the message reached the agent: Studio counts it told (lib/studio-film keptNote) */
       onStarted: said,
       onSessionInfo: (info) => {
         /* a session it could not take up again has none of the skills' pages from before: those of this message only */
         const fresh = !info.resumed || info.sessionId !== resume;
         if (info.sessionId && fresh) {
-          touchSession(sessionId, (s) => ({
-            agentSessions: { ...s.agentSessions, [agent]: info.sessionId },
-            skillsGiven: givenAfter(s.skillsGiven, agent, info.sessionId, skills ?? [], { fresh }),
+          touchSession(targetSessionId, (s) => ({
+            agentSessions: { ...s.agentSessions, [targetAgent]: info.sessionId },
+            skillsGiven: givenAfter(s.skillsGiven, targetAgent, info.sessionId, skills ?? [], { fresh }),
           }));
         }
       },
@@ -863,6 +954,47 @@ function ChatPane({ project, banners, selection, assetsOpen, assetsOverlay }: { 
     if (!undone.current.delete(conversation)) return '';
     return '\n\n<studio_note>The person undid your last turn: the project\'s files are back as they were before it, and its message is out of the chat.</studio_note>';
   };
+  const applyComposerFill = React.useCallback((
+    text: string,
+    studio: Map<string, StudioRef>,
+    files: PromptReference[],
+    named: PromptReference[],
+  ) => {
+    const targetKey = `${projectKey}:${shownSession.current}`;
+    if (!text && studio.size === 0 && files.length === 0 && named.length === 0) {
+      SESSION_DRAFTS.delete(targetKey);
+    } else {
+      SESSION_DRAFTS.set(targetKey, {
+        text,
+        studioRefs: new Map(studio),
+        fileRefs: files,
+        skillRefs: named,
+      });
+    }
+    if (fillRafRef.current !== null) cancelAnimationFrame(fillRafRef.current);
+    restoringDraft.current = true;
+    const pillLookup = new Map<string, PromptReference>([
+      ...[...studio.entries()].map(([id, ref]) => [id, refPill(id, ref)] as const),
+      ...files.map((p) => [p.id, p] as const),
+      ...named.map((p) => [p.id, p] as const),
+      ...composerFilesRef.current.map((f) => [f.id, attachmentPill(f)] as const),
+    ]);
+    setStudioRefs(studio);
+    setFileRefs(files);
+    setSkillRefs(named);
+    setFollowUp(text);
+    setFollowUpRefs(collectPromptReferences(text, (id) => pillLookup.get(id)));
+    /* written once the pills are the composer's, so each token finds its pill */
+    fillRafRef.current = requestAnimationFrame(() => {
+      fillRafRef.current = null;
+      if (activeDraftKey.current !== targetKey) return;
+      restoringDraft.current = false;
+      composerRef.current?.setText(text);
+      composerRef.current?.focus();
+    });
+  }, [projectKey]);
+  React.useEffect(() => () => { if (fillRafRef.current !== null) cancelAnimationFrame(fillRafRef.current); }, []);
+
   /**
    * Undo the conversation's last turn: the files as it found them (the app keeps them while it runs), the turn out of
    * the conversation, and its message back in the composer, its pills too (a file brought in is not kept: its pill goes).
@@ -876,21 +1008,8 @@ function ChatPane({ project, banners, selection, assetsOpen, assetsOverlay }: { 
     undone.current.add(sessionId);
     setFollowUpError(done.missed.length ? t('undo.missed').replace('{names}', done.missed.slice(0, 3).join(', ') + (done.missed.length > 3 ? ` (+${done.missed.length - 3})` : '')) : null);
     const display = entry.promptDisplay ?? { text: entry.prompt, references: [] };
-    const studio = new Map<string, StudioRef>();
-    const files: PromptReference[] = [];
-    const named: PromptReference[] = [];
-    /* kept as the composer had them */
-    for (const pill of display.references as PromptReference[]) {
-      const ref = refFromPill(pill);
-      if (ref) studio.set(pill.id, ref);
-      else if (skillReferencePackage(pill.id)) named.push(pill);
-      else if (!isAttachmentPill(pill.id)) files.push(pill);
-    }
-    setStudioRefs(studio);
-    setFileRefs(files);
-    setSkillRefs(named);
-    /* written once the pills are the composer's, so each token finds its pill */
-    requestAnimationFrame(() => { composerRef.current?.setText(display.text); composerRef.current?.focus(); });
+    const { studio, files, named } = splitDisplayPills(display.references as PromptReference[]);
+    applyComposerFill(display.text, studio, files, named);
   };
   const undoNow = React.useRef(undoTurn);
   undoNow.current = undoTurn;
@@ -898,20 +1017,31 @@ function ChatPane({ project, banners, selection, assetsOpen, assetsOverlay }: { 
   const [undoAsk, setUndoAsk] = React.useState<ProjectVersion | null>(null);
   const onUndo = React.useMemo(() => (active ? null : (entry: ProjectVersion) => setUndoAsk(entry)), [active]);
   React.useEffect(() => { if (active) setUndoAsk(null); }, [active]);
+  const [replaceDraftAsk, setReplaceDraftAsk] = React.useState<{
+    text: string;
+    studio: Map<string, StudioRef>;
+    files: PromptReference[];
+    named: PromptReference[];
+  } | null>(null);
+  React.useEffect(() => { setReplaceDraftAsk(null); }, [sessionId]);
 
-  function submitFollowUp(): void {
-    if (!followUpFilled) return;
-    /* while a turn runs: into it, for an agent that takes that; else it waits for the turn to end */
-    const steer = active && asset ? canSteer(asset.id) : false;
-    if (active && !steer) { setQueued(sessionId); return; }
-    setQueued(null);
+  function sendPromptToSession(targetSessionId: string, draftState: SessionDraft, steerCurrent: boolean, preserveComposer = false): void {
+    if (draftState.text.trim().length === 0) return;
+    const isCurrent = targetSessionId === sessionId;
+    const pillMap = new Map<string, PromptReference>([
+      ...[...draftState.studioRefs.entries()].map(([id, ref]) => [id, refPill(id, ref)] as const),
+      ...draftState.fileRefs.map((p) => [p.id, p] as const),
+      ...draftState.skillRefs.map((p) => [p.id, p] as const),
+      ...composerFiles.files.map((f) => [f.id, attachmentPill(f)] as const),
+    ]);
+    const refs = collectPromptReferences(draftState.text, (id) => pillMap.get(id));
     /* the sentence as the agent reads it: a pill becomes "[n: name](its link)", and what each number is follows, in a
        block; a file brought in becomes where it is */
-    const attached = attachmentsInText(composerFiles.files, followUpRefs);
+    const attached = attachmentsInText(composerFiles.files, refs);
     const attachedById = new Map(attached.map((f) => [f.id, f]));
     const used: StudioRef[] = [];
-    const instruction = resolvePromptReferences(followUp, (pillId, index) => {
-      const ref = studioRefs.get(pillId);
+    const instruction = resolvePromptReferences(draftState.text, (pillId, index) => {
+      const ref = draftState.studioRefs.get(pillId);
       if (!ref) return null;
       used[index - 1] = ref;
       const link = linkOfRef(ref);
@@ -922,55 +1052,133 @@ function ChatPane({ project, banners, selection, assetsOpen, assetsOverlay }: { 
       const file = attachedById.get(pillId);
       return file ? attachmentWords(file) ?? '' : null;
     }).trim();
+    const targetSessionItem = sessions.find((s) => s.id === targetSessionId);
+    const targetLastAgent = isCurrent
+      ? lastTurnAgent
+      : loadLocalAgentTurns(projectKey, targetSessionId).at(-1)?.turn.localAgent?.id;
+    const targetUsed = [targetSessionItem?.agent, targetLastAgent].find((id): id is LocalAgentId => Boolean(id) && isAgentId(id));
+    const targetAgent = isCurrent ? agent : conversationAgent(targetUsed, la.roster, currentAgent(la)).agent;
     /* the skills it names, for this message: each one's SKILL.md follows it, unseen in the chat, the first time this
        conversation's agent session meets that skill (lib/skill-pages) */
-    const agentSession = sessions.find((s) => s.id === sessionId)?.agentSessions?.[agent] ?? null;
-    const skillNames = pagesToSend(activatedSkillIds(followUpRefs), sessions.find((s) => s.id === sessionId)?.skillsGiven, agent, agentSession);
+    const agentSession = targetSessionItem?.agentSessions?.[targetAgent] ?? null;
+    const skillNames = pagesToSend(activatedSkillIds(refs), targetSessionItem?.skillsGiven, targetAgent, agentSession);
     if (!instruction) return;
     const blocker = attachmentBlocker(attached, t);
-    if (blocker) { setFollowUpError(blocker); return; }
-    setFollowUpError(null);
-    /* sent with the assets open: they close (as they were, for next time) and the conversation shows */
-    if (assetsOverlay) app.setAssetsOpen(false);
-    const promptDisplay = buildPromptDisplay(followUp, followUpRefs.map(sentPill));
-    thread.scrollToBottom({ smooth: true });
-    composerRef.current?.clear();
-    setFollowUp('');
-    setFollowUpRefs([]);
-    setStudioRefs(new Map());
-    setFileRefs([]);
-    setSkillRefs([]);
-    const files = composerFiles.take(attached.map((f) => f.id));
+    if (blocker) {
+      if (isCurrent) setFollowUpError(blocker);
+      return;
+    }
+    if (!preserveComposer) SESSION_DRAFTS.delete(`${projectKey}:${targetSessionId}`);
+    if (isCurrent) {
+      setFollowUpError(null);
+      /* sent with the assets open: they close (as they were, for next time) and the conversation shows */
+      if (assetsOverlay) app.setAssetsOpen(false);
+      thread.scrollToBottom({ smooth: true });
+      if (!preserveComposer) {
+        composerRef.current?.clear();
+        setFollowUp('');
+        setFollowUpRefs([]);
+        setStudioRefs(new Map());
+        setFileRefs([]);
+        setSkillRefs([]);
+      }
+    }
+    const promptDisplay = buildPromptDisplay(draftState.text, refs.map(sentPill));
+    const targetDraftKey = `${projectKey}:${targetSessionId}`;
+    let files = attached;
+    if (!preserveComposer) {
+      const keepIds = retainedAttachmentIds(targetDraftKey, sessionDraftKey, followUp);
+      for (const [pendingId, draftKey] of pendingAttachments.current) {
+        if (draftKey === targetDraftKey) pendingAttachments.current.delete(pendingId);
+        else keepIds.add(pendingId);
+      }
+      files = composerFiles.take(attached.map((f) => f.id), keepIds);
+    }
     const id = makeLocalAgentTurnId();
-    const refs = used.filter(Boolean);
+    const studioUsed = used.filter(Boolean);
     const stage = selection?.stage ?? null;
     /* each reference's picture is kept in the project for the agent (the block names it), and sent to one that takes pictures */
-    const skillTexts = skillNames.length ? (app.skills?.texts(project.path, agent, skillNames).catch(() => []) ?? Promise.resolve([])) : Promise.resolve([]);
-    if (skillNames.length) touchSession(sessionId, (s) => ({ skillsGiven: givenAfter(s.skillsGiven, agent, agentSession, skillNames) }));
+    const skillTexts = skillNames.length ? (app.skills?.texts(project.path, targetAgent, skillNames).catch(() => []) ?? Promise.resolve([])) : Promise.resolve([]);
+    if (skillNames.length) touchSession(targetSessionId, (s) => ({ skillsGiven: givenAfter(s.skillsGiven, targetAgent, agentSession, skillNames) }));
     /* an example pointed at: its folder fetched now if it is not yet (the turn waits, as it waits for its reply) */
-    const withFolders = Promise.all(refs.map(async (ref) => (ref.kind === 'example' && !ref.folder
+    const withFolders = Promise.all(studioUsed.map(async (ref) => (ref.kind === 'example' && !ref.folder
       ? { ...ref, folder: await app.exampleFolder?.(ref.id).catch(() => undefined) } : ref)));
     /* the pictures sent: the references' first, then the files brought in, in the order of their pills, while there is
        room (the rest by their path) */
     /* what the person changed while the agent last worked that Studio kept over its writes, said with this message */
-    const prepared = withFolders.then((ready) => Promise.all([referencePictures(ready, { project: project.path, turnId: id }), skillTexts, keptNote(project.id, sessionId)])
+    const prepared = withFolders.then((ready) => Promise.all([referencePictures(ready, { project: project.path, turnId: id }), skillTexts, keptNote(project.id, targetSessionId)])
       .then(async ([{ pictures, images }, skills, kept]) => ({
-        text: instruction + studioReferencesText(ready, { stage, pictures }) + kept.text + undoneNote(sessionId) + skills.map((s) => `\n\n${s.text}`).join(''),
+        text: instruction + studioReferencesText(ready, { stage, pictures }) + kept.text + undoneNote(targetSessionId) + skills.map((s) => `\n\n${s.text}`).join(''),
         images: [...images, ...await attachedPictures(files, PROMPT_PICTURES_MAX - images.length)],
         skills: skills.map((s) => s.name),
         said: kept.said,
       })));
-    const opened = openTurn(id, instruction, promptDisplay ?? null, turnAttachments(files));
-    if (steer && asset) steerTurn(asset.id, opened, prepared);
+    const opened = openTurn(id, instruction, promptDisplay ?? null, turnAttachments(files), { conversation: targetSessionId, by: targetAgent });
+    if (steerCurrent && asset && isCurrent) steerTurn(asset.id, opened, prepared);
     else runTurn(opened, prepared);
   }
 
-  /* queued while the turn ran (an agent that cannot take a message mid-turn): sent as soon as it ends */
+  function submitFollowUp(): void {
+    if (!followUpFilled) return;
+    /* while a turn runs: into it, for an agent that takes that; else it waits for the turn to end */
+    const steer = active && asset ? canSteer(asset.id) : false;
+    if (active && !steer) {
+      SESSION_DRAFTS.set(sessionDraftKey, {
+        text: followUp,
+        studioRefs: new Map(studioRefs),
+        fileRefs,
+        skillRefs,
+      });
+      setQueuedSessions((prev) => {
+        if (prev.has(sessionId)) return prev;
+        const next = new Set(prev);
+        next.add(sessionId);
+        return next;
+      });
+      return;
+    }
+    setQueuedSessions((prev) => {
+      if (!prev.has(sessionId)) return prev;
+      const next = new Set(prev);
+      next.delete(sessionId);
+      return next;
+    });
+    sendPromptToSession(sessionId, { text: followUp, studioRefs, fileRefs, skillRefs }, steer);
+  }
+
+  const fillComposerNow = React.useRef<(detail: { prompt?: string; promptDisplay?: Turn['promptDisplay'] | null; submit?: boolean }) => void>(() => {});
+  fillComposerNow.current = (detail) => {
+    const display = detail.promptDisplay ?? { text: detail.prompt ?? '', references: [] };
+    const { studio, files, named } = splitDisplayPills(display.references as PromptReference[]);
+    const hasAttachmentPill = (display.references as PromptReference[]).some((p) => isAttachmentPill(p.id));
+    /* Fall back to the resolved prompt when display.text cannot preserve dropped attachment markers. */
+    const fallbackToPrompt = !display.text
+      || (studio.size === 0 && files.length === 0 && named.length === 0
+        && (hasAttachmentPill || !stripPromptReferenceTokens(display.text).trim()));
+    const text = fallbackToPrompt && detail.prompt?.trim()
+      ? detail.prompt
+      : display.text;
+    if (detail.submit) {
+      if (active) return;
+      sendPromptToSession(sessionId, { text, studioRefs: studio, fileRefs: files, skillRefs: named }, false, true);
+      return;
+    }
+    if (followUp.trim().length > 0 && followUp.trim() !== text.trim()) {
+      setReplaceDraftAsk({ text, studio, files, named });
+      return;
+    }
+    setReplaceDraftAsk(null);
+    applyComposerFill(text, studio, files, named);
+  };
   React.useEffect(() => {
-    /* another tab shown meanwhile: the message stays written, not sent there */
-    if (queued && queued !== sessionId) setQueued(null);
-    else if (queued && !active) submitFollowUp();
-  }, [queued, active, sessionId]); // eslint-disable-line react-hooks/exhaustive-deps
+    const onFill = (event: Event) => {
+      const detail = (event as CustomEvent<{ prompt?: string; promptDisplay?: Turn['promptDisplay'] | null; submit?: boolean }>).detail;
+      if (!detail || typeof detail.prompt !== 'string') return;
+      fillComposerNow.current(detail);
+    };
+    window.addEventListener('openfilm:composer-fill', onFill);
+    return () => window.removeEventListener('openfilm:composer-fill', onFill);
+  }, []);
 
   /* the conversations whose turn runs now, by the turn: their lights breathe, and they cannot be archived meanwhile */
   const allRunning = useRunningLocalTurns();
@@ -978,6 +1186,96 @@ function ChatPane({ project, banners, selection, assetsOpen, assetsOverlay }: { 
     () => new Map(allRunning.filter((r) => r.projectId === projectKey).map((r) => [r.sessionId, r.id])),
     [allRunning, projectKey],
   );
+
+  /* persist composer draft per session and restore when switching sessions */
+  React.useEffect(() => {
+    if (activeDraftKey.current !== sessionDraftKey || restoringDraft.current) return;
+    if (pendingAttachments.current.size > 0) {
+      for (const seg of splitPromptReferenceText(followUp)) {
+        if (seg.kind === 'reference') pendingAttachments.current.delete(seg.id);
+      }
+    }
+    if (!followUp && studioRefs.size === 0 && fileRefs.length === 0 && skillRefs.length === 0) {
+      SESSION_DRAFTS.delete(sessionDraftKey);
+      return;
+    }
+    SESSION_DRAFTS.set(sessionDraftKey, {
+      text: followUp,
+      studioRefs: new Map(studioRefs),
+      fileRefs,
+      skillRefs,
+    });
+  }, [sessionDraftKey, followUp, studioRefs, fileRefs, skillRefs]);
+  React.useEffect(() => {
+    const prevDraftKey = activeDraftKey.current;
+    const isInitial = prevDraftKey === null;
+    activeDraftKey.current = sessionDraftKey;
+    if (prevDraftKey && prevDraftKey !== sessionDraftKey && pendingAttachments.current.size > 0) {
+      for (const [id, draftKey] of pendingAttachments.current) {
+        if (draftKey === prevDraftKey) pendingAttachments.current.delete(id);
+      }
+    }
+    if (fillRafRef.current !== null) {
+      cancelAnimationFrame(fillRafRef.current);
+      fillRafRef.current = null;
+    }
+    const saved = SESSION_DRAFTS.get(sessionDraftKey);
+    if (isInitial && !saved) return;
+    restoringDraft.current = true;
+    const nextStudio = saved ? new Map(saved.studioRefs) : new Map<string, StudioRef>();
+    const nextFiles = saved?.fileRefs ?? [];
+    const nextSkills = saved?.skillRefs ?? [];
+    const nextText = saved?.text ?? '';
+    const pillLookup = new Map<string, PromptReference>([
+      ...[...nextStudio.entries()].map(([id, ref]) => [id, refPill(id, ref)] as const),
+      ...nextFiles.map((p) => [p.id, p] as const),
+      ...nextSkills.map((p) => [p.id, p] as const),
+      ...composerFilesRef.current.map((f) => [f.id, attachmentPill(f)] as const),
+    ]);
+    setStudioRefs(nextStudio);
+    setFileRefs(nextFiles);
+    setSkillRefs(nextSkills);
+    setFollowUp(nextText);
+    setFollowUpRefs(collectPromptReferences(nextText, (id) => pillLookup.get(id)));
+    const frame = requestAnimationFrame(() => {
+      if (activeDraftKey.current !== sessionDraftKey) return;
+      restoringDraft.current = false;
+      composerRef.current?.setText(nextText);
+      bumpDraftRestored();
+      const skillToPick = pendingNewSessionSkill.current;
+      if (skillToPick) {
+        pendingNewSessionSkill.current = null;
+        pickSkillRef.current(skillToPick);
+      }
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [sessionDraftKey]);
+
+  /* queued while the turn ran (an agent that cannot take a message mid-turn): sent as soon as it ends, even while viewing another session */
+  React.useEffect(() => {
+    if (queuedSessions.size === 0) return;
+    const readyToSend: string[] = [];
+    for (const qId of queuedSessions) {
+      const isRunning = qId === sessionId ? active || running.has(qId) : running.has(qId);
+      if (isRunning) continue;
+      if (qId === sessionId && (activeDraftKey.current !== sessionDraftKey || restoringDraft.current)) continue;
+      readyToSend.push(qId);
+    }
+    if (!readyToSend.length) return;
+    setQueuedSessions((prev) => {
+      const next = new Set(prev);
+      for (const qId of readyToSend) next.delete(qId);
+      return next;
+    });
+    for (const qId of readyToSend) {
+      const draftState = qId === sessionId
+        ? { text: followUp, studioRefs, fileRefs, skillRefs }
+        : SESSION_DRAFTS.get(`${projectKey}:${qId}`);
+      if (draftState && draftState.text.trim().length > 0) {
+        sendPromptToSession(qId, draftState, false);
+      }
+    }
+  }, [queuedSessions, active, sessionId, sessionDraftKey, running, draftRestoredRev]); // eslint-disable-line react-hooks/exhaustive-deps
   /* those that stopped while another was shown, and how their last turn ended: lit until shown */
   const [unseen, setUnseen] = React.useState<Map<string, 'done' | 'error'>>(() => new Map());
   const wasRunning = React.useRef(running);
@@ -1040,6 +1338,39 @@ function ChatPane({ project, banners, selection, assetsOpen, assetsOverlay }: { 
     composerRef.current?.focus();
   };
   const wasName = agentWas === 'byok' ? t('composer.agentOwnKey') : agentWas ? la.roster?.find((a) => a.id === agentWas)?.name ?? AGENT_DEFINITIONS[agentWas]?.name ?? agentWas : '';
+
+  const permission = localTurn?.state.permission ?? null;
+  const autoApproveOption = permission ? pickAllowOption(permission.options) : undefined;
+  const autoApprovingPermission = Boolean(permission && autoApproveSessions.has(sessionId) && autoApproveOption);
+  const currentAssetId = asset?.id;
+  React.useEffect(() => {
+    const unsubs: Array<() => void> = [];
+    for (const r of allRunning) {
+      if (r.projectId !== projectKey || !autoApproveSessions.has(r.sessionId)) continue;
+      const inst = localAgentTurn(r.id);
+      if (!inst) continue;
+      const check = () => {
+        const p = inst.state.permission;
+        const opt = p ? pickAllowOption(p.options) : undefined;
+        if (p && opt && !autoApprovedReq.current.has(p.requestId)) {
+          autoApprovedReq.current.add(p.requestId);
+          void answerLocalAgentPermission(r.id, opt.optionId);
+        }
+      };
+      check();
+      unsubs.push(inst.store.subscribe(check));
+    }
+    const currentOpt = permission ? pickAllowOption(permission.options) : undefined;
+    if (permission && currentAssetId && currentOpt && autoApproveSessions.has(sessionId) && !autoApprovedReq.current.has(permission.requestId)) {
+      autoApprovedReq.current.add(permission.requestId);
+      void answerLocalAgentPermission(currentAssetId, currentOpt.optionId);
+    }
+    return () => {
+      for (const unsub of unsubs) unsub();
+    };
+  }, [allRunning, projectKey, autoApproveSessions, permission, currentAssetId, sessionId]);
+
+  const isMac = typeof navigator !== 'undefined' && navigator.platform.startsWith('Mac');
 
   const editComposerCard = (
     <div className="flex flex-col gap-1">
@@ -1107,6 +1438,7 @@ function ChatPane({ project, banners, selection, assetsOpen, assetsOverlay }: { 
               references={composerPills}
               onChange={onComposerChange}
               onSubmit={submitFollowUp}
+              sendWithModifier={sendWithMod}
               onReveal={revealPill}
               describe={describePill}
               onTransferReferences={onTransferReferences}
@@ -1124,7 +1456,7 @@ function ChatPane({ project, banners, selection, assetsOpen, assetsOverlay }: { 
             />
           </div>
           {/* while it works: Stop, or Send once something is written (it goes into the turn, or after it); Esc stops */}
-          <Tooltip label={stopping ? t('project.stop') : t('project.sendFollowUp')} shortcut={stopping ? 'Esc' : 'Enter'}>
+          <Tooltip label={stopping ? t('project.stop') : t('project.sendFollowUp')} shortcut={stopping ? 'Esc' : sendWithMod ? (isMac ? '⌘↵' : 'Ctrl+↵') : 'Enter'}>
             <button
               type="button"
               onClick={stopping ? () => { if (asset) void cancelLocalAgentTurn(asset.id); } : submitFollowUp}
@@ -1147,6 +1479,35 @@ function ChatPane({ project, banners, selection, assetsOpen, assetsOverlay }: { 
           onPref={(id, configId, value) => keepOnSession((s) => ({ agentPrefs: { ...s.agentPrefs, [id]: { ...s.agentPrefs?.[id], [configId]: value } } }))}
         />
         <div className="min-w-0 flex-1" />
+        {agentContext && agentContext.size > 0 && agentContext.used > 0 ? (
+          <Tooltip label={t('composer.contextTokens').replace('{used}', agentContext.used.toLocaleString()).replace('{size}', agentContext.size.toLocaleString())}>
+            <span className={`select-none px-1.5 text-[11.5px] tabular-nums ${contextFull ? 'text-[var(--warn)]' : 'text-[var(--text-faint)]'}`}>
+              {Math.min(100, Math.max(1, Math.round((agentContext.used / agentContext.size) * 100)))}%
+            </span>
+          </Tooltip>
+        ) : null}
+        <Tooltip
+          label={t('project.sendFollowUp')}
+          shortcut={sendWithMod ? (isMac ? '⌘↵' : 'Ctrl+↵') : 'Enter'}
+        >
+          <button
+            type="button"
+            aria-pressed={sendWithMod}
+            aria-label={`${t('project.sendFollowUp')} (${sendWithMod ? (isMac ? '⌘↵' : 'Ctrl+↵') : 'Enter'})`}
+            onClick={() => {
+              setSendWithMod((prev) => {
+                const next = !prev;
+                try { localStorage.setItem(SEND_MOD_STORAGE_KEY, next ? '1' : '0'); } catch {}
+                return next;
+              });
+            }}
+            className={`inline-flex h-7 min-w-7 shrink-0 cursor-pointer items-center justify-center rounded-[8px] px-1.5 text-[11px] font-medium tabular-nums transition-colors ${
+              sendWithMod ? 'bg-[var(--bg-pressed)] text-[var(--text)]' : 'text-[var(--text-muted)] hover:bg-[var(--bg-field)] hover:text-[var(--text)]'
+            }`}
+          >
+            {sendWithMod ? (isMac ? '⌘↵' : '⌃↵') : '↵'}
+          </button>
+        </Tooltip>
         <input
           ref={attachInputRef}
           type="file"
@@ -1219,6 +1580,7 @@ function ChatPane({ project, banners, selection, assetsOpen, assetsOverlay }: { 
                           <TurnUndoContext.Provider value={onUndo}>
                           <ProjectFolderContext.Provider value={projectFolder}>
                             <LiveConversation
+                              key={sessionId}
                               store={liveStore}
                               turns={opLog}
                               liveAssetId={active ? asset!.id : null}
@@ -1280,12 +1642,19 @@ function ChatPane({ project, banners, selection, assetsOpen, assetsOverlay }: { 
                       onDone={(answers) => { if (asset) void answerLocalAgentQuestion(asset.id, answers); }}
                     />
                   ) : null}
-                  {localTurn?.state.permission ? (
+                  {permission && !autoApprovingPermission ? (
                     <AgentPermissionCard
-                      key={localTurn.state.permission.requestId}
+                      key={permission.requestId}
                       agentName={agentName}
-                      permission={localTurn.state.permission}
+                      permission={permission}
                       onAnswer={(optionId) => { if (asset) void answerLocalAgentPermission(asset.id, optionId); }}
+                      onAllowSession={() => {
+                        setAutoApproveSessions((prev) => new Set(prev).add(sessionId));
+                        if (asset && autoApproveOption) {
+                          autoApprovedReq.current.add(permission.requestId);
+                          void answerLocalAgentPermission(asset.id, autoApproveOption.optionId);
+                        }
+                      }}
                     />
                   ) : null}
                   {undoAsk ? (
@@ -1295,6 +1664,30 @@ function ChatPane({ project, banners, selection, assetsOpen, assetsOverlay }: { 
                         <CardButton weight="danger" onClick={() => { const entry = undoAsk; setUndoAsk(null); void undoNow.current(entry); }}>{t('undo.confirm')}</CardButton>
                       </>}>
                       {t('undo.description')}
+                    </Notice>
+                  ) : null}
+                  {replaceDraftAsk ? (
+                    <Notice
+                      tone="warn"
+                      role="alertdialog"
+                      onClose={() => setReplaceDraftAsk(null)}
+                      actions={
+                        <>
+                          <CardButton weight="quiet" onClick={() => setReplaceDraftAsk(null)}>{t('skills.cancel')}</CardButton>
+                          <CardButton
+                            weight="primary"
+                            onClick={() => {
+                              const ask = replaceDraftAsk;
+                              setReplaceDraftAsk(null);
+                              applyComposerFill(ask.text, ask.studio, ask.files, ask.named);
+                            }}
+                          >
+                            {t('composer.replaceDraftConfirm')}
+                          </CardButton>
+                        </>
+                      }
+                    >
+                      {t('composer.replaceDraft')}
                     </Notice>
                   ) : null}
                   {turnError && !closed.has(`error:${sessionId}:${turnError}`) ? (
@@ -1313,8 +1706,32 @@ function ChatPane({ project, banners, selection, assetsOpen, assetsOverlay }: { 
                   ) : null}
                   {localTurn?.state.balance && !closed.has(`balance:${sessionId}`) ? <BalanceNotice balance={localTurn.state.balance} onClose={() => close(`balance:${sessionId}`)} /> : null}
                   {followUpError ? <Notice tone="error" onClose={() => setFollowUpError(null)}>{followUpError}</Notice> : null}
-                  {queued === sessionId && active ? (
-                    <Notice actions={<CardButton weight="quiet" onClick={() => setQueued(null)}>{t('composer.queuedCancel')}</CardButton>}>{t('composer.queued')}</Notice>
+                  {queuedSessions.has(sessionId) && active ? (
+                    <Notice actions={<CardButton weight="quiet" onClick={() => setQueuedSessions((prev) => {
+                      if (!prev.has(sessionId)) return prev;
+                      const next = new Set(prev);
+                      next.delete(sessionId);
+                      return next;
+                    })}>{t('composer.queuedCancel')}</CardButton>}>{t('composer.queued')}</Notice>
+                  ) : null}
+                  {autoApproveSessions.has(sessionId) ? (
+                    <Notice
+                      actions={
+                        <CardButton
+                          weight="quiet"
+                          onClick={() => setAutoApproveSessions((prev) => {
+                            if (!prev.has(sessionId)) return prev;
+                            const next = new Set(prev);
+                            next.delete(sessionId);
+                            return next;
+                          })}
+                        >
+                          {t('composer.agentPermissionAutoOff')}
+                        </CardButton>
+                      }
+                    >
+                      {t('composer.agentPermissionAutoNotice')}
+                    </Notice>
                   ) : null}
                   {/* the agent this conversation used cannot be used now: the next message goes to the one picked below */}
                   {agentWas && !closed.has(`was:${sessionId}`) ? (

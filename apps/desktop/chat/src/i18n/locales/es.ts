@@ -132,6 +132,7 @@ export const es: Words = {
   composer: {
     contextFull: 'Esta conversación ya es larga. Una nueva funcionará mejor.',
     contextFullNew: 'Nueva conversación',
+    contextTokens: '{used} / {size} tokens',
     agentLoading: 'Cargando…',
     agentNone: 'Agente',
     agentNoneShown: 'No hay ningún agente activado para el chat.',
@@ -139,6 +140,9 @@ export const es: Words = {
     agentOptionsFailed: 'No se pudo iniciar para leer su configuración.',
     agentOutdated: 'Es más antigua de lo que OpenFilm necesita. Actualiza Codex y luego',
     agentOwnKey: 'Tu propia clave',
+    agentPermissionAllowSession: 'Permitir en esta sesión',
+    agentPermissionAutoNotice: 'Aprobando permisos automáticamente en esta sesión.',
+    agentPermissionAutoOff: 'Desactivar',
     agentPermissionDeny: 'No permitir',
     agentPermissionTitle: '{name} quiere hacer esto',
     agentSection: 'Agente',
@@ -171,6 +175,8 @@ export const es: Words = {
     accountModelPicked: 'Cambiado a {model}. Vuelve a enviar el mensaje.',
     speed: 'Velocidad',
     thumbOnly: 'Una miniatura guardada con el mensaje. El original sigue donde estaba, o en el proyecto si se pegó.',
+    replaceDraft: '¿Reemplazar el borrador actual con este mensaje?',
+    replaceDraftConfirm: 'Reemplazar',
   },
   library: {
     removeReference: 'Quitar referencia',
@@ -249,6 +255,10 @@ export const es: Words = {
     sessionSearchPlaceholder: 'Buscar chats…',
     stop: 'Detener',
     untitledSession: 'Nuevo chat',
+    editMessage: 'Editar mensaje',
+    searchConversation: 'Buscar en la conversación…',
+    searchPrev: 'Coincidencia anterior',
+    searchNext: 'Coincidencia siguiente',
   },
   projectMenu: {
     archive: 'Archivar',

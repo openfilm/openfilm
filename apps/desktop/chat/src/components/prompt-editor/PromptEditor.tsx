@@ -80,6 +80,8 @@ export interface PromptEditorProps {
   references: PromptReference[];
   onChange: (state: PromptEditorState) => void;
   onSubmit?: () => void;
+  /** When true, Cmd/Ctrl+Enter submits and bare Enter inserts a newline. */
+  sendWithModifier?: boolean;
   /**
    * Receives pasted files (a screenshot, a file copied in Finder); without it, a paste is
    * handled as usual.
@@ -133,6 +135,7 @@ export const PromptEditor = React.forwardRef<PromptEditorHandle, PromptEditorPro
       references,
       onChange,
       onSubmit,
+      sendWithModifier,
       onPasteFiles,
       onTransferReferences,
       describe,
@@ -217,7 +220,7 @@ export const PromptEditor = React.forwardRef<PromptEditorHandle, PromptEditorPro
             />
           </div>
           <HistoryPlugin />
-          <SubmitPlugin onSubmit={onSubmit} />
+          <SubmitPlugin onSubmit={onSubmit} sendWithModifier={sendWithModifier} />
           <TransferReferencesPlugin onTransferReferences={onTransferReferences} />
           <PasteFilesPlugin onPasteFiles={onPasteFiles} />
           <MovePillsPlugin {...(showsDropCaret ? { showsCaret: showsDropCaret } : {})} />
@@ -303,8 +306,8 @@ function ChangePlugin({
   return null;
 }
 
-/** Enter sends, Shift+Enter breaks the line; during IME composition Enter is left alone, since it picks a candidate. */
-function SubmitPlugin({ onSubmit }: { onSubmit?: () => void }) {
+/** Enter sends (or Cmd/Ctrl+Enter when sendWithModifier is set); during IME composition Enter is left alone, since it picks a candidate. */
+function SubmitPlugin({ onSubmit, sendWithModifier }: { onSubmit?: () => void; sendWithModifier?: boolean }) {
   const [editor] = useLexicalComposerContext();
 
   React.useEffect(() => {
@@ -312,14 +315,19 @@ function SubmitPlugin({ onSubmit }: { onSubmit?: () => void }) {
     return editor.registerCommand(
       KEY_ENTER_COMMAND,
       (event) => {
-        if (!event || event.shiftKey || event.isComposing || editor.isComposing()) return false;
+        if (!event || event.isComposing || editor.isComposing()) return false;
+        if (sendWithModifier) {
+          if (!event.metaKey && !event.ctrlKey) return false;
+        } else if (event.shiftKey) {
+          return false;
+        }
         event.preventDefault();
         onSubmit();
         return true;
       },
       COMMAND_PRIORITY_HIGH,
     );
-  }, [editor, onSubmit]);
+  }, [editor, onSubmit, sendWithModifier]);
 
   return null;
 }

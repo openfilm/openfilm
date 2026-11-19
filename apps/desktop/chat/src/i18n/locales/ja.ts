@@ -132,6 +132,7 @@ export const ja: Words = {
   composer: {
     contextFull: 'この会話は長くなっています。新しい会話のほうがうまくいきます。',
     contextFullNew: '新しい会話',
+    contextTokens: '{used} / {size} トークン',
     agentLoading: '読み込み中…',
     agentNone: 'エージェント',
     agentNoneShown: 'チャットで使えるエージェントがオンになっていません。',
@@ -139,6 +140,9 @@ export const ja: Words = {
     agentOptionsFailed: '設定を読み込むために起動できませんでした。',
     agentOutdated: 'OpenFilm に必要なバージョンより古いです。Codex を更新してから',
     agentOwnKey: '自分のキー',
+    agentPermissionAllowSession: 'このセッションでは常に許可',
+    agentPermissionAutoNotice: 'このセッションでは権限リクエストを自動許可しています。',
+    agentPermissionAutoOff: 'オフにする',
     agentPermissionDeny: '許可しない',
     agentPermissionTitle: '{name} が次の操作を求めています',
     agentSection: 'エージェント',
@@ -171,6 +175,8 @@ export const ja: Words = {
     accountModelPicked: '{model} に切り替えました。もう一度送信してください。',
     speed: '速度',
     thumbOnly: 'メッセージにはサムネイルだけが残ります。元のファイルは元の場所にあります。貼り付けたものはプロジェクトに保存されています。',
+    replaceDraft: '入力中の下書きをこのメッセージで置き換えますか？',
+    replaceDraftConfirm: '置き換える',
   },
   library: {
     removeReference: '参照を削除',
@@ -249,6 +255,10 @@ export const ja: Words = {
     sessionSearchPlaceholder: 'チャットを検索…',
     stop: '停止',
     untitledSession: '新しいチャット',
+    editMessage: '編集して再送',
+    searchConversation: '会話内を検索…',
+    searchPrev: '前の一致',
+    searchNext: '次の一致',
   },
   projectMenu: {
     archive: 'アーカイブ',

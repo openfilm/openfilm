@@ -45,6 +45,8 @@ const THUMBS_AT_ONCE = 4;
 
 export function useDesktopAttachments(project: string) {
   const [files, setFiles] = React.useState<DesktopAttachment[]>([]);
+  const current = React.useRef(files);
+  current.current = files;
   const patch = (id: string, next: Partial<DesktopAttachment>) => setFiles((list) => list.map((f) => (f.id === id ? { ...f, ...next } : f)));
 
   const thumbs = React.useRef<{ running: number; waiting: Array<() => Promise<void>> }>({ running: 0, waiting: [] });
@@ -78,7 +80,9 @@ export function useDesktopAttachments(project: string) {
       };
       return { item, file, path: bridge?.pathForFile?.(file) ?? '' };
     });
-    setFiles((list) => [...list, ...items.map(({ item }) => item)]);
+    const addedItems = items.map(({ item }) => item);
+    current.current = [...current.current, ...addedItems];
+    setFiles((list) => [...list, ...addedItems]);
     for (const { item, file } of items) {
       if (item.kind === 'image') {
         thumbnail(() => readFileDataUrl(file).then(makeAttachmentThumb).then((thumb) => { if (thumb) patch(item.id, { thumb }); }));
@@ -109,12 +113,13 @@ export function useDesktopAttachments(project: string) {
         .then((r) => patch(item.id, { state: 'ready', path: r.path }))
         .catch((error: unknown) => patch(item.id, { state: 'failed', error: error instanceof Error ? error.message : String(error) }));
     }
-    return items.map(({ item }) => item);
+    return addedItems;
   }, [project, thumbnail]);
 
   /** Things of this computer by their paths (a folder picked): pills at once, ready once the app says what each is. */
   const addPaths = React.useCallback((paths: string[]): DesktopAttachment[] => {
     const items = paths.map((path): DesktopAttachment => ({ id: newAttachmentPillId(), name: path.split(/[\\/]/).filter(Boolean).at(-1) ?? path, kind: 'document', mediaType: '', size: 0, state: 'pending' }));
+    current.current = [...current.current, ...items];
     setFiles((list) => [...list, ...items]);
     void app.chat.describePaths(paths)
       .then((found) => items.forEach((item, i) => {
@@ -127,18 +132,24 @@ export function useDesktopAttachments(project: string) {
   }, []);
 
   /**
-   * Hand over the files whose pills are sent, in that order; the composer is empty of files after, those whose pill
-   * was taken out too (kept until now only so an undo could bring the pill back).
+   * Hand over the files whose pills are sent, in that order; keep files still referenced in other sessions' drafts
+   * (`keepIds`), and drop the rest (including those whose pill was taken out, kept until now only for undo).
    */
-  const current = React.useRef(files);
-  current.current = files;
-  const take = React.useCallback((ids: readonly string[]): DesktopAttachment[] => {
+  const take = React.useCallback((ids: readonly string[], keepIds?: ReadonlySet<string>): DesktopAttachment[] => {
     const byId = new Map(current.current.map((f) => [f.id, f]));
+    const takenIds = new Set(ids);
     const taken = ids.flatMap((id) => byId.get(id) ?? []);
+    const kept: DesktopAttachment[] = [];
     /* sent: the message keeps their thumbnails, the agent their paths */
-    for (const f of current.current) if (f.previewUrl) URL.revokeObjectURL(f.previewUrl);
-    current.current = [];
-    setFiles([]);
+    for (const f of current.current) {
+      if (!takenIds.has(f.id) && keepIds?.has(f.id)) {
+        kept.push(f);
+      } else if (f.previewUrl) {
+        URL.revokeObjectURL(f.previewUrl);
+      }
+    }
+    current.current = kept;
+    setFiles(kept);
     return taken;
   }, []);
 

@@ -3,7 +3,21 @@
 import React from 'react';
 import { AGENT_DEFINITIONS, isAgentId } from '../../../src/agent-definitions.mjs';
 import type { PublicProgressSnapshot, TurnAttachment } from '@openfilm/shared';
-import { BellRing, Check, ChevronRight, Copy, KeyRound, Undo2 } from 'lucide-react';
+import {
+  BellRing,
+  Check,
+  ChevronDown,
+  ChevronRight,
+  ChevronsUpDown,
+  ChevronUp,
+  Copy,
+  KeyRound,
+  Pencil,
+  RotateCcw,
+  Search,
+  Undo2,
+  X,
+} from 'lucide-react';
 import { AgentActivityList, formatWorkDuration, StatusLine, type AgentActivityItem } from './AgentActivityRow';
 import { AgentIcon, hasAgentIcon } from './AgentIcons';
 import { BrandLogo } from './BrandLogo';
@@ -25,9 +39,11 @@ import {
 import { useT, useUiLocale } from '@/i18n';
 import { relativeTime, useMinuteTick } from '@/lib/relative-time';
 import { isPendingAssetId } from '@/lib/asset-lists';
+import { isLocalAgentTurnId } from '@/lib/local-agent-run';
 import { TurnLogButton } from './TurnLog';
 import { FileChangesList } from './FileChangesList';
 import { ChatProjectContext, useDeveloperMode, useShowChanges } from '@/lib/developer';
+import { escTaken } from '@/lib/esc-stop';
 import { isVideoAttachment } from '@/lib/composer-attachments';
 import { desktopBridge } from '@/lib/desktop-bridge';
 import { attachmentPlace } from '@/lib/attachment-place';
@@ -37,6 +53,37 @@ import { ATTACHMENT_CARD, ATTACHMENT_THUMB, AttachmentCardBody, PlayMark } from 
 /** What past turns get as "no live process". One constant: a new array each time would defeat the memo. */
 const NO_TRANSCRIPT: TranscriptItem[] = [];
 const NO_ROWS: AgentActivityItem[] = [];
+const NO_MATCHES: string[] = [];
+
+/** Overrides per-turn step collapsing from the conversation toolbar (null = default per-turn rule). */
+const StepOpenOverrideContext = React.createContext<boolean | null>(null);
+
+/** Whether the active session currently has an active turn running. */
+const ConversationActiveContext = React.createContext<boolean>(false);
+
+const NO_SEARCH_MATCH: { matchedIds: ReadonlySet<string>; activeId: string | null; query: string } = {
+  matchedIds: new Set(),
+  activeId: null,
+  query: '',
+};
+
+/** Matched turn ids, currently highlighted match id, and active query for in-conversation search. */
+const SearchMatchContext = React.createContext<{
+  matchedIds: ReadonlySet<string>;
+  activeId: string | null;
+  query: string;
+}>(NO_SEARCH_MATCH);
+
+function isInsideChat(node: EventTarget | null): boolean {
+  const el = node instanceof Element ? node : node instanceof Node ? node.parentElement : null;
+  return Boolean(el && (el.closest('.of-chat') || document.getElementById('of-chat')?.contains(el)));
+}
+
+function isEditableOutsideChat(node: EventTarget | null): boolean {
+  return node instanceof HTMLElement
+    && !isInsideChat(node)
+    && (node.tagName === 'INPUT' || node.tagName === 'TEXTAREA' || node.tagName === 'SELECT' || node.isContentEditable);
+}
 
 /**
  * For benchmarks: with `?rebuild-list` the whole list is rebuilt on every delta, the slow way.
@@ -87,9 +134,165 @@ export const ProjectConversation = React.memo(function ProjectConversation({
   /** Measures the last turn's height, which sizes the space below it (see useTailSpacer). */
   lastTurnRef?: (node: HTMLDivElement | null) => void;
 }) {
+  const t = useT();
+  const thread = React.useContext(StickToBottomContext);
   const store = useLiveTranscriptStore(liveTranscript);
   const keyOf = useStableTurnKeys(turns);
   const liveKey = liveAssetId ? keyOf(liveAssetId) : null;
+
+  const [stepOverride, setStepOverride] = React.useState<boolean | null>(null);
+  const [searchOpen, setSearchOpen] = React.useState(false);
+  const [searchQuery, setSearchQuery] = React.useState('');
+  const [matchIndex, setMatchIndex] = React.useState(0);
+  const [transcriptRev, bumpTranscriptRev] = React.useReducer((n: number) => n + 1, 0);
+  const searchInputRef = React.useRef<HTMLInputElement | null>(null);
+  const turnNodesRef = React.useRef(new Map<string, HTMLDivElement>());
+  const shouldScrollOnQueryRef = React.useRef(false);
+  const lastPointerInChat = React.useRef(true);
+  const prevMatchesRef = React.useRef<string[]>(NO_MATCHES);
+
+  const registerTurnNode = React.useCallback((assetId: string, node: HTMLDivElement | null) => {
+    if (node) turnNodesRef.current.set(assetId, node);
+    else turnNodesRef.current.delete(assetId);
+  }, []);
+
+  React.useEffect(() => {
+    if (!searchOpen) return undefined;
+    let active = true;
+    for (const entry of turns) {
+      if (
+        entry.assetId === liveAssetId
+        || isPendingAssetId(entry.assetId)
+        || isLocalAgentTurnId(entry.assetId)
+        || STORED_TRANSCRIPTS.has(entry.assetId)
+        || FETCHED_TRANSCRIPTS.has(entry.assetId)
+      ) continue;
+      void fetchStoredTranscript(entry.assetId)
+        .then(() => { if (active) bumpTranscriptRev(); })
+        .catch(() => {});
+    }
+    return () => { active = false; };
+  }, [searchOpen, turns, liveAssetId]);
+
+  const trimmedQuery = searchQuery.trim().toLowerCase();
+  const matches = React.useMemo(() => {
+    if (!searchOpen || !trimmedQuery) {
+      prevMatchesRef.current = NO_MATCHES;
+      return NO_MATCHES;
+    }
+    const found: string[] = [];
+    for (const entry of turns) {
+      if (
+        entry.prompt.toLowerCase().includes(trimmedQuery)
+        || (entry.promptDisplay?.text ?? '').toLowerCase().includes(trimmedQuery)
+      ) {
+        found.push(entry.assetId);
+        continue;
+      }
+      const items = entry.assetId === liveAssetId ? liveTranscript : STORED_TRANSCRIPTS.get(entry.assetId);
+      if (items?.some((item) => item.kind === 'text' && (item.text ?? '').toLowerCase().includes(trimmedQuery))) {
+        found.push(entry.assetId);
+      }
+    }
+    if (found.length === 0) {
+      prevMatchesRef.current = NO_MATCHES;
+      return NO_MATCHES;
+    }
+    const prev = prevMatchesRef.current;
+    if (prev.length === found.length && prev.every((id, index) => id === found[index])) {
+      return prev;
+    }
+    prevMatchesRef.current = found;
+    return found;
+  }, [searchOpen, trimmedQuery, turns, liveAssetId, liveTranscript, transcriptRev]);
+
+  const activeQuery = searchOpen ? trimmedQuery : '';
+  const activeMatchIndex = matches.length > 0 ? Math.min(matchIndex, matches.length - 1) : 0;
+  const activeId = searchOpen && trimmedQuery && matches.length > 0
+    ? (matches[activeMatchIndex] ?? null)
+    : null;
+  const searchMatch = React.useMemo(
+    () => (matches.length === 0 && activeId === null
+      ? NO_SEARCH_MATCH
+      : { matchedIds: new Set(matches), activeId, query: activeQuery }),
+    [matches, activeId, activeQuery],
+  );
+
+  const scrollToMatch = React.useCallback((assetId: string | undefined) => {
+    if (!assetId) return;
+    const node = turnNodesRef.current.get(assetId);
+    if (!node) return;
+    thread?.skipNextPin();
+    node.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [thread]);
+
+  React.useEffect(() => {
+    if (!shouldScrollOnQueryRef.current || matches.length === 0) return;
+    shouldScrollOnQueryRef.current = false;
+    scrollToMatch(matches[0]);
+  }, [matches, scrollToMatch]);
+
+  const jumpMatch = React.useCallback((delta: number) => {
+    if (!matches.length) return;
+    shouldScrollOnQueryRef.current = false;
+    const next = (activeMatchIndex + delta + matches.length) % matches.length;
+    setMatchIndex(next);
+    scrollToMatch(matches[next]);
+  }, [matches, activeMatchIndex, scrollToMatch]);
+
+  const closeSearch = React.useCallback(() => {
+    setSearchOpen(false);
+    setSearchQuery('');
+    setMatchIndex(0);
+    shouldScrollOnQueryRef.current = false;
+  }, []);
+
+  const toggleStepOverride = React.useCallback(() => {
+    thread?.skipNextPin();
+    setStepOverride((v) => (v === true ? false : true));
+  }, [thread]);
+
+  React.useEffect(() => {
+    if (!searchOpen) return;
+    searchInputRef.current?.focus();
+    searchInputRef.current?.select();
+  }, [searchOpen]);
+
+  React.useEffect(() => {
+    const onPointerDown = (event: PointerEvent) => {
+      lastPointerInChat.current = isInsideChat(event.target);
+    };
+    window.addEventListener('pointerdown', onPointerDown, true);
+    return () => window.removeEventListener('pointerdown', onPointerDown, true);
+  }, []);
+
+  React.useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (
+        turns.length > 0
+        && (event.metaKey || event.ctrlKey)
+        && !event.shiftKey
+        && !event.altKey
+        && event.key.toLowerCase() === 'f'
+        && !isEditableOutsideChat(event.target)
+        && !isEditableOutsideChat(document.activeElement)
+        && (
+          isInsideChat(event.target)
+          || isInsideChat(document.activeElement)
+          || ((!document.activeElement || document.activeElement === document.body || document.activeElement === document.documentElement) && lastPointerInChat.current)
+        )
+      ) {
+        event.preventDefault();
+        setSearchOpen(true);
+        requestAnimationFrame(() => {
+          searchInputRef.current?.focus();
+          searchInputRef.current?.select();
+        });
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [turns.length]);
 
   /**
    * This list doesn't depend on the live process: liveTranscript is left out of the deps on purpose.
@@ -112,6 +315,7 @@ export const ProjectConversation = React.memo(function ProjectConversation({
           live={live}
           isLast={index === turns.length - 1}
           liveActivity={live ? liveActivity : null}
+          onTurnNode={registerTurnNode}
           {...(rootRef ? { rootRef } : {})}
         />
         {sessionBreakAt === entry.assetId ? (
@@ -127,14 +331,115 @@ export const ProjectConversation = React.memo(function ProjectConversation({
     );
   }), [
     turns, keyOf, liveKey, liveActive, liveActivity,
-    sessionBreakAt, sessionBreakLabel, lastTurnRef,
+    sessionBreakAt, sessionBreakLabel, lastTurnRef, registerTurnNode,
     ...(BENCH_REBUILD_LIST ? [liveTranscript] : []),
   ]);
 
+  const expandButton = (
+    <button
+      type="button"
+      onClick={toggleStepOverride}
+      className="flex h-6 shrink-0 items-center gap-1 whitespace-nowrap rounded-md px-1.5 text-[11.5px] text-[var(--text-faint)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]"
+    >
+      <ChevronsUpDown size={12} aria-hidden />
+      <span>{t(stepOverride === true ? 'turnLog.collapseAll' : 'turnLog.expandAll')}</span>
+    </button>
+  );
+
   return (
-    <LiveTranscriptContext.Provider value={store}>
-      <div className="flex flex-col gap-5">{list}</div>
-    </LiveTranscriptContext.Provider>
+    <ConversationActiveContext.Provider value={liveActive}>
+      <StepOpenOverrideContext.Provider value={stepOverride}>
+        <SearchMatchContext.Provider value={searchMatch}>
+          <LiveTranscriptContext.Provider value={store}>
+            {turns.length > 0 ? (
+              <div className="sticky top-0 z-10 -mx-1 mb-2 flex items-center justify-end gap-1.5 bg-[var(--bg-panel)]/95 px-1 py-1 backdrop-blur-sm">
+                {searchOpen ? (
+                  <>
+                    <div className="flex h-7 min-w-0 flex-1 items-center gap-1 rounded-md border border-[var(--border)] bg-[var(--bg-field)] px-2 focus-within:border-[var(--border-strong)]">
+                      <Search size={12} aria-hidden className="shrink-0 text-[var(--text-faint)]" />
+                      <input
+                        ref={searchInputRef}
+                        type="text"
+                        value={searchQuery}
+                        onChange={(event) => {
+                          setSearchQuery(event.target.value);
+                          setMatchIndex(0);
+                          shouldScrollOnQueryRef.current = event.target.value.trim().length > 0;
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.nativeEvent.isComposing) return;
+                          if (event.key === 'Escape') {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            escTaken(event);
+                            closeSearch();
+                          } else if (event.key === 'Enter') {
+                            event.preventDefault();
+                            jumpMatch(event.shiftKey ? -1 : 1);
+                          }
+                        }}
+                        placeholder={t('project.searchConversation')}
+                        aria-label={t('project.searchConversation')}
+                        className="min-w-0 flex-1 bg-transparent text-[12px] text-[var(--text)] outline-none placeholder:text-[var(--text-faint)]"
+                      />
+                      {trimmedQuery ? (
+                        <span className="shrink-0 text-[11px] tabular-nums text-[var(--text-faint)]">
+                          {matches.length > 0 ? `${activeMatchIndex + 1}/${matches.length}` : '0/0'}
+                        </span>
+                      ) : null}
+                      <button
+                        type="button"
+                        disabled={matches.length === 0}
+                        onClick={() => jumpMatch(-1)}
+                        aria-label={t('project.searchPrev')}
+                        title={t('project.searchPrev')}
+                        className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-[var(--text-faint)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)] disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-transparent"
+                      >
+                        <ChevronUp size={13} />
+                      </button>
+                      <button
+                        type="button"
+                        disabled={matches.length === 0}
+                        onClick={() => jumpMatch(1)}
+                        aria-label={t('project.searchNext')}
+                        title={t('project.searchNext')}
+                        className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-[var(--text-faint)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)] disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-transparent"
+                      >
+                        <ChevronDown size={13} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={closeSearch}
+                        aria-label={t('project.close')}
+                        title={t('project.close')}
+                        className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-[var(--text-faint)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]"
+                      >
+                        <X size={13} />
+                      </button>
+                    </div>
+                    {expandButton}
+                  </>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setSearchOpen(true)}
+                      title={t('project.searchConversation')}
+                      aria-label={t('project.searchConversation')}
+                      className="flex h-6 w-6 items-center justify-center rounded-md text-[var(--text-faint)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]"
+                    >
+                      <Search size={13} />
+                    </button>
+                    {expandButton}
+                  </>
+                )}
+              </div>
+            ) : null}
+            <div className="flex flex-col gap-5">{list}</div>
+          </LiveTranscriptContext.Provider>
+        </SearchMatchContext.Provider>
+      </StepOpenOverrideContext.Provider>
+    </ConversationActiveContext.Provider>
   );
 });
 
@@ -229,6 +534,7 @@ const ConversationTurn = React.memo(function ConversationTurn({
   live,
   liveActivity,
   rootRef,
+  onTurnNode,
   isLast,
 }: {
   entry: ProjectVersion;
@@ -236,6 +542,7 @@ const ConversationTurn = React.memo(function ConversationTurn({
   isLast: boolean;
   liveActivity: string | null;
   rootRef?: (node: HTMLDivElement | null) => void;
+  onTurnNode?: (assetId: string, node: HTMLDivElement | null) => void;
 }) {
   const t = useT();
   const showChanges = useShowChanges();
@@ -247,9 +554,12 @@ const ConversationTurn = React.memo(function ConversationTurn({
     live ? store.get : GET_EMPTY,
     GET_EMPTY,
   );
+  const { matchedIds, activeId, query } = React.useContext(SearchMatchContext);
+  const isMatched = matchedIds.has(entry.assetId);
+  const isActiveMatch = activeId === entry.assetId;
   const shell = React.useRef<HTMLDivElement | null>(null);
   const near = useNearViewport(shell, live);
-  const stored = useStoredTranscript(entry.assetId, !live && near && !isPendingAssetId(entry.assetId));
+  const stored = useStoredTranscript(entry.assetId, !live && (near || isMatched) && !isPendingAssetId(entry.assetId));
   const lastLive = React.useRef<TranscriptItem[] | null>(null);
   if (live && liveTranscript.length > 0) lastLive.current = liveTranscript;
   /* When the turn finishes (live turns false) its process goes into the cache, so later renders read it there,
@@ -277,19 +587,20 @@ const ConversationTurn = React.memo(function ConversationTurn({
      one frame unfolded, note the answer's bottom edge in the viewport, then fold and restore the scroll, so the
      answer stays put and the process above it shrinks. Turns you didn't watch (after a reload, older turns)
      start folded. */
+  const stepOverride = React.useContext(StepOpenOverrideContext);
   const watched = React.useRef(live);
   if (live) watched.current = true;
   const [folded, setFolded] = React.useState(false);
-  const collapsed = settled && (!(watched.current && isLast) || folded);
+  const collapsed = settled && (stepOverride !== null ? !stepOverride : (!(watched.current && isLast) || folded));
   const thread = React.useContext(StickToBottomContext);
   const tailRef = React.useRef<HTMLDivElement | null>(null);
   const foldAnchor = React.useRef<number | null>(null);
   React.useLayoutEffect(() => {
-    if (!settled || collapsed) return;
+    if (!settled || collapsed || stepOverride !== null) return;
     const tail = tailRef.current;
     foldAnchor.current = tail ? tail.getBoundingClientRect().top : null;
     setFolded(true);
-  }, [settled, collapsed]);
+  }, [settled, collapsed, stepOverride]);
   React.useLayoutEffect(() => {
     const top = foldAnchor.current;
     foldAnchor.current = null;
@@ -319,11 +630,19 @@ const ConversationTurn = React.memo(function ConversationTurn({
     shell.current = node;
     rootRef?.(node);
   }, [rootRef]);
+  React.useEffect(() => {
+    const node = shell.current;
+    if (!node || !onTurnNode) return undefined;
+    onTurnNode(entry.assetId, node);
+    return () => onTurnNode(entry.assetId, null);
+  }, [entry.assetId, onTurnNode]);
 
   return (
     <div
       ref={attach}
-      className="group/turn flex min-w-0 flex-col gap-2"
+      className={`group/turn flex min-w-0 flex-col gap-2 transition-colors${
+        isActiveMatch ? ' rounded-[12px] ring-1 ring-[var(--border-strong)] bg-[var(--bg-hover)]/35 px-2 -mx-2 py-1 -my-1' : ''
+      }`}
       /**
        * Turns scrolled out of view skip layout.
        *
@@ -341,7 +660,7 @@ const ConversationTurn = React.memo(function ConversationTurn({
        * The nodes stay in the DOM (not a virtual list): find-in-page, screen readers and copy-paste all still
        * work, the three things a virtual list loses and then works hard to restore.
        */
-      style={(rootRef || live || near) ? undefined : ({
+      style={(rootRef || live || near || isMatched) ? undefined : ({
         contentVisibility: 'auto',
         containIntrinsicSize: `auto ${guessHeight(items)}px`,
       } as React.CSSProperties)}
@@ -384,7 +703,12 @@ const ConversationTurn = React.memo(function ConversationTurn({
       {/* The agent's side is a block of its own: hovering it (not the whole turn) shows the line below */}
       <div className="group/reply flex min-w-0 flex-col gap-2 empty:hidden">
       {/* What the agent did. Fully open while running; for turns you didn't watch, the process folds to one line and the answer stands out. */}
-      <TurnBody rows={rows} collapsed={collapsed} {...(entry.durationMs ? { durationMs: entry.durationMs } : {})} />
+      <TurnBody
+        rows={rows}
+        collapsed={collapsed}
+        matchQuery={isActiveMatch ? query : ''}
+        {...(entry.durationMs ? { durationMs: entry.durationMs } : {})}
+      />
       {/* The answer's bottom edge, the anchor for folding (see folded above). */}
       {rows?.length ? <div ref={tailRef} aria-hidden className="-mt-2 h-0" /> : null}
       {/* Only for older turns you didn't watch (after a reload, scrolling back). The turn you watched has its
@@ -542,10 +866,12 @@ function TurnBody({
   rows,
   collapsed,
   durationMs,
+  matchQuery,
 }: {
   rows: AgentActivityItem[] | null;
   collapsed: boolean;
   durationMs?: number;
+  matchQuery?: string;
 }) {
   const split = React.useMemo(() => (rows && collapsed ? answerStart(rows) : -1), [rows, collapsed]);
   const work = React.useMemo(() => (rows && split >= 0 ? rows.slice(0, split) : null), [rows, split]);
@@ -564,9 +890,12 @@ function TurnBody({
       </div>
     );
   }
+  const workMatchesQuery = Boolean(
+    matchQuery && work.some((item) => item.kind === 'text' && (item.text ?? '').toLowerCase().includes(matchQuery)),
+  );
   return (
     <div className="min-w-0 w-full">
-      <WorkSummary items={work} {...(durationMs ? { durationMs } : {})} />
+      <WorkSummary items={work} forceOpen={workMatchesQuery} {...(durationMs ? { durationMs } : {})} />
       {answer.length ? <AgentActivityList items={answer} keyPrefix="answer" /> : null}
     </div>
   );
@@ -577,12 +906,27 @@ function TurnBody({
  *
  * Opening changes the height: as in ActGroup, the clicked row is pinned so the column isn't pulled to the bottom.
  */
-function WorkSummary({ items, durationMs }: { items: AgentActivityItem[]; durationMs?: number }) {
+function WorkSummary({
+  items,
+  durationMs,
+  forceOpen = false,
+}: {
+  items: AgentActivityItem[];
+  durationMs?: number;
+  forceOpen?: boolean;
+}) {
   const t = useT();
   const thread = React.useContext(StickToBottomContext);
+  const stepOverride = React.useContext(StepOpenOverrideContext);
   const rootRef = React.useRef<HTMLDivElement>(null);
   const anchorTop = React.useRef<number | null>(null);
-  const [open, setOpen] = React.useState(false);
+  const [open, setOpen] = React.useState(() => stepOverride ?? Boolean(forceOpen));
+  React.useEffect(() => {
+    if (stepOverride !== null) setOpen(stepOverride);
+  }, [stepOverride]);
+  React.useEffect(() => {
+    if (forceOpen) setOpen(true);
+  }, [forceOpen]);
   const steps = countedSteps(items);
   const label = [
     durationMs ? t('turnFrame.worked').replace('{t}', formatWorkDuration(durationMs)) : null,
@@ -655,8 +999,19 @@ function CopyButton({ text }: { text: string }) {
   );
 }
 
+/** Dispatches a composer pre-fill request to edit or retry a historical turn prompt. */
+function dispatchComposerFill(entry: ProjectVersion, submit: boolean): void {
+  window.dispatchEvent(new CustomEvent('openfilm:composer-fill', {
+    detail: {
+      prompt: entry.prompt,
+      promptDisplay: entry.promptDisplay ?? null,
+      submit,
+    },
+  }));
+}
+
 /**
- * The line under a reply: copy, who answered (icon only) · the model · how long ago, and how it stopped if it
+ * The line under a reply: copy, retry, who answered (icon only) · the model · how long ago, and how it stopped if it
  * didn't finish normally. While it runs, on hover below the status: copy what it said so far, its log so far, who.
  *
  * Several agents can answer in one project and their replies look alike, so the footer says which one. A stopped
@@ -682,10 +1037,22 @@ function TurnFooter({ entry, items, running = false, last = false }: { entry: Pr
 
   const developer = useDeveloperMode();
   const project = React.useContext(ChatProjectContext);
+  const conversationActive = React.useContext(ConversationActiveContext);
 
   return (
     <div data-turn-footer="" className={`-mt-1.5 flex h-6 min-w-0 items-center gap-1.5 text-[11.5px] text-[var(--text-faint)] group-hover/reply:opacity-100 ${HOVER_LINE}`}>
       {answer ? <CopyButton text={answer} /> : null}
+      {!running && !conversationActive && entry.origin !== 'background' && entry.prompt.trim() ? (
+        <button
+          type="button"
+          onClick={() => dispatchComposerFill(entry, true)}
+          aria-label={t('project.retry')}
+          title={t('project.retry')}
+          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]"
+        >
+          <RotateCcw size={13} />
+        </button>
+      ) : null}
       {/* developer mode (Settings → Developer): the turn as it happened, every event; while it runs, as it goes */}
       {developer && project && !isPendingAssetId(entry.assetId) ? <TurnLogButton project={project} turnId={entry.assetId} live={running} /> : null}
       {entry.agent ? (
@@ -737,8 +1104,9 @@ function UndoButton({ entry }: { entry: ProjectVersion }) {
   );
 }
 
-/** Under the sent message: how long ago, and copy. Also shown on hover, with its space kept. */
+/** Under the sent message: how long ago, copy, and edit/reuse. Also shown on hover, with its space kept. */
 function PromptFooter({ entry }: { entry: ProjectVersion }) {
+  const t = useT();
   const locale = useUiLocale();
   const now = useMinuteTick();
   const when = relativeTime(entry.createdAt, locale, now);
@@ -747,6 +1115,17 @@ function PromptFooter({ entry }: { entry: ProjectVersion }) {
     <div className={`flex h-6 min-w-0 items-center justify-end gap-1 text-[11.5px] text-[var(--text-faint)] group-hover/ask:opacity-100 ${HOVER_LINE}`}>
       {when ? <span className="px-1">{when}</span> : null}
       {text ? <CopyButton text={text} /> : null}
+      {text || entry.promptDisplay ? (
+        <button
+          type="button"
+          onClick={() => dispatchComposerFill(entry, false)}
+          aria-label={t('project.editMessage')}
+          title={t('project.editMessage')}
+          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]"
+        >
+          <Pencil size={13} />
+        </button>
+      ) : null}
     </div>
   );
 }
@@ -858,7 +1237,7 @@ function useStoredTranscript(assetId: string, enabled: boolean) {
     if (!enabled) return undefined;
     const cached = STORED_TRANSCRIPTS.get(assetId);
     if (cached) setItems(cached);
-    if (FETCHED_TRANSCRIPTS.has(assetId)) return undefined;
+    if (FETCHED_TRANSCRIPTS.has(assetId) || isLocalAgentTurnId(assetId)) return undefined;
 
     let alive = true;
     setLoading(true);

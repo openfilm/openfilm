@@ -137,3 +137,27 @@ export function applicationMenuTemplate({ productName, packaged, language = 'en'
   ];
   return template;
 }
+
+/**
+ * Native right-click context menu template for text selections and editable fields, in Studio's language.
+ * Returns an empty list for non-text targets so custom page menus are never covered.
+ * @param {Partial<Electron.ContextMenuParams>} [params]
+ * @param {string} [language]
+ * @returns {Electron.MenuItemConstructorOptions[]}
+ */
+export function contextMenuTemplate(params = {}, language = 'en') {
+  const words = MENU_WORDS[language] ?? MENU_WORDS.en;
+  if (params?.isEditable) {
+    return [
+      { role: 'cut', label: words.cut, enabled: Boolean(params.editFlags?.canCut) },
+      { role: 'copy', label: words.copy, enabled: Boolean(params.editFlags?.canCopy || params.selectionText?.trim()) },
+      { role: 'paste', label: words.paste, enabled: Boolean(params.editFlags?.canPaste) },
+      { type: 'separator' },
+      { role: 'selectAll', label: words.selectAll, enabled: Boolean(params.editFlags?.canSelectAll ?? true) },
+    ];
+  }
+  if (typeof params?.selectionText === 'string' && params.selectionText.trim().length > 0) {
+    return [{ role: 'copy', label: words.copy }];
+  }
+  return [];
+}

@@ -132,6 +132,7 @@ export const zhCN: Words = {
   composer: {
     contextFull: '这段对话已经很长了，开个新对话效果更好。',
     contextFullNew: '新对话',
+    contextTokens: '已用 {used} / {size} tokens',
     agentLoading: '正在加载…',
     agentNone: '智能体',
     agentNoneShown: '对话中尚未开启任何智能体。',
@@ -139,6 +140,9 @@ export const zhCN: Words = {
     agentOptionsFailed: '无法启动它来读取设置。',
     agentOutdated: '它的版本比 OpenFilm 需要的旧。请先更新 Codex，然后',
     agentOwnKey: '自有密钥',
+    agentPermissionAllowSession: '本会话始终允许',
+    agentPermissionAutoNotice: '当前会话已开启权限自动允许。',
+    agentPermissionAutoOff: '关闭',
     agentPermissionDeny: '不允许',
     agentPermissionTitle: '{name} 想要执行以下操作',
     agentSection: '智能体',
@@ -171,6 +175,8 @@ export const zhCN: Words = {
     accountModelPicked: '已换成 {model}，再发一次即可。',
     speed: '速度',
     thumbOnly: '消息中只保留了缩略图。原文件还在原来的位置；粘贴的文件保存在项目里。',
+    replaceDraft: '要用这条历史消息替换输入框里未发送的草稿吗？',
+    replaceDraftConfirm: '替换',
   },
   library: {
     removeReference: '移除引用',
@@ -249,6 +255,10 @@ export const zhCN: Words = {
     sessionSearchPlaceholder: '搜索对话…',
     stop: '停止',
     untitledSession: '新对话',
+    editMessage: '编辑并重发',
+    searchConversation: '在对话中搜索…',
+    searchPrev: '上一个匹配',
+    searchNext: '下一个匹配',
   },
   projectMenu: {
     archive: '归档',

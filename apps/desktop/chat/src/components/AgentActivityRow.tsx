@@ -680,7 +680,10 @@ function IdleStatus({ since, quietFirst = false, ownAgent = false }: { since: nu
   const idle = (tick ?? Date.now()) - since;
   if (quietFirst && idle < AFTER_TEXT_MS) return null;
   const label = idleStatus(idle, ownAgent);
-  return <StatusShell label={t(label)} extra={label === 'act.waitingForModel' ? t('act.waitingForModelHint') : undefined} plain since={since} />;
+  const extra = (label === 'act.waitingForModel' || (label === 'act.stillWorking' && idle >= 60_000))
+    ? t('act.waitingForModelHint')
+    : undefined;
+  return <StatusShell label={t(label)} extra={extra} plain since={since} />;
 }
 
 /* Status row: the act's icon while an act runs; thinking / working is text only, flush left. The shimmer
