@@ -130,8 +130,8 @@ const CLOCK_PINGS = 5;
 const RESCALE_MS = 600;
 /** How often a load held back for a drag or a line typed in place looks whether it may be shown, ms. */
 const HOLD_POLL_MS = 100;
-/** Allow the decoder's seek deadline after any frame already being drawn. */
-const PLAY_CUE_MS = 4200;
+/** A cold page can need several seconds to load its own images, fonts and videos. */
+const PLAY_CUE_MS = 12_000;
 type StillSeek = { key: number; t: number; seq: number; drawn?: boolean; finish?: (ready?: boolean | null) => void };
 
 export const Preview = forwardRef<PreviewHandle, Props>(function Preview({ folder, stage, time, fps, onInfo, onKey, onError, onPlayed, onSpans, onUndecoded, onShown, waiting = false, filmUnavailable = false, managed = false, revision, onRevisionNeeded, children }, ref) {
@@ -200,13 +200,13 @@ export const Preview = forwardRef<PreviewHandle, Props>(function Preview({ folde
   /* the still frame asked for last: drawn again when a page opens after it (see the stage's `woke`) */
   const lastSeek = useRef<number | null>(null);
   const stillSeek = useRef<StillSeek | null>(null);
-  const requestSeek = (t: number) => {
+  const requestSeek = (t: number, reuseWaiting = false) => {
     const key = shownRef.current?.key;
     const had = stillSeek.current;
     const wasPlaying = line.current != null;
     line.current = null;
     lastSeek.current = t;
-    if (!wasPlaying && had && had.key === key && had.t === t && (had.drawn !== false || had.finish)) return had;
+    if (!wasPlaying && had && had.key === key && had.t === t && (had.drawn !== false || had.finish || reuseWaiting)) return had;
     had?.finish?.();
     if (key == null) { stillSeek.current = null; return null; }
     const request: StillSeek = { key, t, seq: ++seq.current };
@@ -265,7 +265,7 @@ export const Preview = forwardRef<PreviewHandle, Props>(function Preview({ folde
   useImperativeHandle(ref, () => ({
     seek(t) { requestSeek(t); },
     cue(t) {
-      const request = requestSeek(t);
+      const request = requestSeek(t, true);
       if (!request || request.drawn) return Promise.resolve(true);
       return new Promise<boolean | null>((resolve) => {
         request.finish?.();
@@ -274,15 +274,19 @@ export const Preview = forwardRef<PreviewHandle, Props>(function Preview({ folde
           request.finish = undefined;
           resolve(ready);
         };
-        const timer = setTimeout(() => finish(false), PLAY_CUE_MS);
+        const timer = setTimeout(() => {
+          if (stillSeek.current === request) stillSeek.current = null;
+          finish(false);
+        }, PLAY_CUE_MS);
         request.finish = finish;
       });
     },
     play(anchor) {
+      const key = stillSeek.current?.drawn ? stillSeek.current.key : shownRef.current?.key;
       stillSeek.current?.finish?.();
       stillSeek.current = null;
       line.current = { ...anchor };
-      tellPlay(shownRef.current?.key);
+      tellPlay(key);
     },
     renders(list) {
       rendered.current = list;
@@ -368,7 +372,7 @@ export const Preview = forwardRef<PreviewHandle, Props>(function Preview({ folde
    * Show the frame `key`, drawn at `t`: the film playing, it plays on from the line; still, the playhead may have moved
    * while it drew, and seeks went to the frame shown then.
    */
-  const show = (key: number, t: number, swap: boolean) => {
+  const show = (key: number, t: number, swap: boolean, drawn = true) => {
     const frame = framesRef.current.find((f) => f.key === key);
     if (!frame) return;
     if (swap && frame.revision && frame.error) return;
@@ -382,8 +386,25 @@ export const Preview = forwardRef<PreviewHandle, Props>(function Preview({ folde
     } else setFrames((list) => shownAfter(list, key));
     const info = managed && swap && frameInfo.current.get(key);
     if (info) onInfo(info);
-    if (swap && line.current) tellPlay(key);
-    else if (swap && Math.abs(time() - t) > 1e-6) post(key, { type: 'seek', t: time(), seq: ++seq.current });
+    if (!swap) return;
+    if (line.current) { tellPlay(key); return; }
+    const request = stillSeek.current;
+    const wanted = request?.t ?? time();
+    if (drawn && Math.abs(wanted - t) <= 1e-6) {
+      if (request) {
+        request.key = key;
+        request.drawn = true;
+        request.finish?.(true);
+      }
+      return;
+    }
+    const seek = ++seq.current;
+    if (request) {
+      request.key = key;
+      request.seq = seek;
+      request.drawn = undefined;
+    }
+    post(key, { type: 'seek', t: wanted, seq: seek });
   };
   const showRef = useRef(show);
   showRef.current = show;
@@ -514,7 +535,7 @@ export const Preview = forwardRef<PreviewHandle, Props>(function Preview({ folde
           setHolding(true);
           return;
         }
-        showRef.current(key, Number(m.t), swap);
+        showRef.current(key, Number(m.t), swap, m.drawn !== false);
       } else if (m.type === 'updated') {
         if (m.inPlace) {
           frameInfo.current.set(key, m as FilmInfo);
@@ -558,8 +579,11 @@ export const Preview = forwardRef<PreviewHandle, Props>(function Preview({ folde
             bubbles: true, cancelable: true,
           }));
         } else if (m.event === 'woke') {
-          /* a page opened after the still frame was drawn: that frame drawn again, now with it */
-          if (!line.current && lastSeek.current != null) post(key, { type: 'seek', t: lastSeek.current, seq: ++seq.current });
+          /* An active cue already waits for this page. Only redraw a still that is no longer being cued. */
+          const request = stillSeek.current;
+          if (!line.current && lastSeek.current != null && !(request?.key === key && request.finish)) {
+            post(key, { type: 'seek', t: lastSeek.current, seq: ++seq.current });
+          }
         } else if (m.event === 'typing') {
           const size = m.size && typeof m.size === 'object' && Number.isFinite(Number(m.size.w)) && Number.isFinite(Number(m.size.h))
             ? { w: Number(m.size.w), h: Number(m.size.h) } : undefined;

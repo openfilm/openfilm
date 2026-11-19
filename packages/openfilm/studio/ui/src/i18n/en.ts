@@ -910,6 +910,7 @@ export const en = {
     previewMissing: 'Media not found: {file}',
     previewPreparing: "Preparing this clip to play… {p}%",
     previewPreparingWait: "Preparing this clip to play…",
+    previewCue: 'Loading the current frame…',
     previewPrepareFailed: "This clip can’t play here: {reason}",
     previewPreparingWhy: "This browser can’t decode {file}, so Studio makes a copy it can play. Exports use the original.",
     ungraded: 'Original (ungraded)',

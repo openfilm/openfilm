@@ -896,6 +896,7 @@ export const ja: Words = {
     previewMissing: 'メディアが見つかりません：{file}',
     previewPreparing: "このクリップを再生できるよう準備中… {p}%",
     previewPreparingWait: "このクリップを再生できるよう準備中…",
+    previewCue: '現在位置のフレームを読み込み中…',
     previewPrepareFailed: "このクリップはここで再生できません：{reason}",
     previewPreparingWhy: "このブラウザは {file} をデコードできないため、Studio が再生できるコピーを作成しています。書き出しには元の素材を使います。",
     ungraded: '元の映像（補正なし）',

@@ -371,6 +371,7 @@ export function ProjectView({ projectId, onProject }: {
     return () => { playPending.current = null; p.onAnchor = null; p.close(); };
   }, []);
   const [playing, setPlaying] = React.useState(false);
+  const [preparingPlayback, setPreparingPlayback] = React.useState(false);
   const [timeMs, setTimeMs] = React.useState(0);
   const timeRef = React.useRef(0);
   timeRef.current = timeMs;
@@ -451,6 +452,7 @@ export function ProjectView({ projectId, onProject }: {
     const playAt = from >= p.duration - 1e-3 ? 0 : Math.max(0, from);
     const request = {};
     playPending.current = request;
+    setPreparingPlayback(true);
     if (p.playing) { p.pause(); setPlaying(false); }
     p.seek(playAt);
     setTimeMs(playAt * 1000);
@@ -458,6 +460,7 @@ export function ProjectView({ projectId, onProject }: {
     const start = (ready: boolean | null) => {
       if (playPending.current !== request) return;
       playPending.current = null;
+      setPreparingPlayback(false);
       if (!ready) {
         stopAtRef.current = null;
         if (ready === false) showToast(t('assetDrawer.previewTimeout'));
@@ -475,6 +478,7 @@ export function ProjectView({ projectId, onProject }: {
     const t = Math.max(0, Math.min(ms / 1000, p.duration || ms / 1000));
     if ((p.playing || playPending.current) && t < p.duration - 1e-3) { startPlayback(t); return; }
     playPending.current = null;
+    setPreparingPlayback(false);
     if (p.playing) { p.pause(); setPlaying(false); }
     p.seek(t);
     setTimeMs(t * 1000);
@@ -498,6 +502,7 @@ export function ProjectView({ projectId, onProject }: {
   const stopPlayback = React.useCallback(() => {
     stopAtRef.current = null;
     playPending.current = null;
+    setPreparingPlayback(false);
     /* a picture-alone shuttle stops too */
     if (shuttleFrame.current) { cancelAnimationFrame(shuttleFrame.current); shuttleFrame.current = 0; shuttleRateRef.current = 0; }
     if (!player.current.playing) return false;
@@ -675,7 +680,7 @@ export function ProjectView({ projectId, onProject }: {
   const projectFps = settings?.fps ?? footageRate;
   /* stretches that play late, rendered in the background to play smoothly (editor/use-preview-renders) */
   const { renders: rendersOn, stats: statsOn } = usePreviewPrefs();
-  const previewRenders = usePreviewRenders({ projectId, folder, fps: exactRate(projectFps), playing, on: rendersOn, film: film.film, files: filesTick, preview, duration: totalMs / 1000 });
+  const previewRenders = usePreviewRenders({ projectId, folder, fps: exactRate(projectFps), playing: playing || preparingPlayback, on: rendersOn, film: film.film, files: filesTick, preview, duration: totalMs / 1000 });
   /* Settings → Developer: how playing goes, in the viewer's corner, said about once a second */
   const [played, setPlayed] = React.useState<PlayedReport | null>(null);
   const renderPreview = React.useCallback((clipId?: string) => {
@@ -5533,6 +5538,11 @@ export function ProjectView({ projectId, onProject }: {
                       <ViewerZoom store={viewerZoom} frame={frameBox} off={fullscreen}
                         className={`relative bg-black ${frameBox.inner.left < -0.5 || frameBox.inner.top < -0.5 ? 'overflow-hidden' : 'overflow-visible'}`}
                         notices={<>
+                          {preparingPlayback && !preparingHere ? (
+                            <div role="status" data-preview-cue="" className="pointer-events-none absolute bottom-2 left-1/2 z-10 -translate-x-1/2 rounded-md bg-black/75 px-2 py-1 text-center text-[11px] text-white">
+                              {t('project.previewCue')}
+                            </div>
+                          ) : null}
                           {/* a clip under the playhead whose file is gone plays as nothing (src/timeline.mjs, film-missing):
                               said here, over the picture, with what to do; in sight at any zoom */}
                           {statsOn && playing && played ? (
@@ -5643,7 +5653,7 @@ export function ProjectView({ projectId, onProject }: {
                           hostRef={stageFullRef}
                           timeMs={timeMs}
                           totalMs={totalMs}
-                          playing={playing}
+                          playing={playing || preparingPlayback}
                           volume={volume}
                           muted={muted}
                           rate={rate}
@@ -5681,7 +5691,7 @@ export function ProjectView({ projectId, onProject }: {
                     timeMs={timeMs}
                     clock={clock}
                     totalMs={totalMs}
-                    playing={playing}
+                    playing={playing || preparingPlayback}
                     onPlayPause={toggle}
                     playback={{
                       loop,
