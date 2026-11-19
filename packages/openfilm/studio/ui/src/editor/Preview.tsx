@@ -522,7 +522,7 @@ export const Preview = forwardRef<PreviewHandle, Props>(function Preview({ folde
         if (line.current && key === shownRef.current?.key) tellPlay(key);
       } else if (m.type === 'seeked' || m.type === 'seek-ready') {
         const request = stillSeek.current;
-        if (request?.key === key && request.seq === Number(m.seq)) {
+        if (request?.key === key && request.seq === Number(m.seekSeq ?? m.seq)) {
           request.drawn = m.drawn !== false;
           if (request.drawn) request.finish?.(true);
         }

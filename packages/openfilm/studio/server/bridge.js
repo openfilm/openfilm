@@ -15,8 +15,8 @@
  *            { type: 'pick', x, y, seq }          what is under this stage point
  *            { type: 'shown' }            this load is shown now, over the one it replaces: say when it is on screen
  *   film   → { source: 'openfilm-film', type: 'ready', duration, width, height, sounds, spans, origin }
- *            { type: 'seeked', t, seq, drawn }    the seek finished or reached its time limit
- *            { type: 'seek-ready', t, seq }       the same frame finished drawing after that limit
+ *            { type: 'seeked', t, seq, seekSeq, drawn }  the seek finished or reached its time limit
+ *            { type: 'seek-ready', t, seq, seekSeq }    the same frame finished drawing after that limit
  *            { type: 'clock', ping, now }         this page's clock (performance.now) when the ping came
  *            { type: 'played', frames, drawn, late, rendered, ms, spans }   while playing, about once a second over
  *                                         `ms`: the screen's refreshes, the film's frames drawn, the refreshes that got
@@ -102,11 +102,13 @@
   const BEHIND_WAIT_MS = 20_000;
   let drawing = false;
   let next = null;
+  let preparing = null;
+  let prepareTimer;
   let refreshStill = false;
   /* the moment last asked for (drawn, being drawn or waiting): what an edit changed in place is drawn at */
   let asked = 0;
   const draw = async () => {
-    if (drawing || (!next && !refreshStill)) return;
+    if (drawing || preparing || (!next && !refreshStill)) return;
     drawing = true;
     const seek = next;
     const t = seek?.t ?? asked;
@@ -133,14 +135,35 @@
         if (!completed && seek?.publish) throw new Error('The new film did not draw its first frame in time.');
       } finally { clearTimeout(timer); }
       if (seek) {
-        post({ type: 'seeked', t, seq: seek.seq, drawn: completed });
+        post({ type: 'seeked', t, seq: seek.seq, seekSeq: seek.seekSeq, drawn: completed });
         if (!completed && !behind) void drawingFrame.then((ready) => {
-          if (ready !== false && !line && !next && asked === t) post({ type: 'seek-ready', t, seq: seek.seq });
+          if (ready !== false && !line && !next && asked === t) post({ type: 'seek-ready', t, seq: seek.seq, seekSeq: seek.seekSeq });
         }, () => {});
       }
     } catch (e) { fail(e); }
     drawing = false;
     if (line) requestFrame(); else draw();
+  };
+
+  const clearPreparation = () => {
+    clearTimeout(prepareTimer);
+    preparing = null;
+  };
+  /** A cold chapter may take seconds to open. Its preparation does not hold the draw slot for a newer seek. */
+  const seekTo = (message) => {
+    stop();
+    clearPreparation();
+    const seek = next = { ...message, seekSeq: message.seq };
+    asked = seek.t;
+    const pages = up && !seek.behind && editor()?.prepareSeekPages?.(seek.t);
+    if (!pages) { draw(); return; }
+    preparing = seek;
+    prepareTimer = setTimeout(() => post({ type: 'seeked', t: seek.t, seq: seek.seq, seekSeq: seek.seekSeq, drawn: false }), FRAME_WAIT_MS);
+    void pages.then(() => {
+      if (preparing !== seek) return;
+      clearPreparation();
+      draw();
+    });
   };
 
   /*
@@ -227,8 +250,9 @@
     if (m.type === 'shown') { requestAnimationFrame(() => requestAnimationFrame(() => post({ type: 'painted' }))); return; }
     /* before the next frame is drawn: the one asked for after them shows them */
     if (m.type === 'overrides') { if (!editor()) tweaks = Array.isArray(m.list) && m.list.length ? m.list : null; return; }
-    if (m.type === 'seek') { stop(); next = m; asked = m.t; draw(); return; }
+    if (m.type === 'seek') { seekTo(m); return; }
     if (m.type === 'play') {
+      clearPreparation();
       const fps = Number(m.fps);
       line = { t: Number(m.t), at: Number(m.at), rate: Number(m.rate) || 1, fps: fps > 0 ? fps : 0 };
       next = null;

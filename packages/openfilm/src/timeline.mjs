@@ -781,6 +781,7 @@ function hideRenders(keep = null) {
  * videos to be loaded, so an export's frame is as exact as ever.
  */
 const WAKE_AHEAD = 4;   // s: a video this close to coming on is given its file (more than CUE_AHEAD)
+const PAGE_WAKE_AHEAD = 12; // s: a page can initialize an entire scene before its first frame
 const WAKE_BEHIND = 1;  // s: and one that went off this recently keeps it (a scrub back)
 const KEEP = 12;        // s: one further than this from t lets its file go
 const AWAKE_MAX = 12;   // videos holding their files at once, besides those on at t
@@ -871,7 +872,7 @@ const pagesAwake = new Set();
  * without opening when it was let go meanwhile (see restPage).
  */
 function wakePage(c) {
-  const mine = c.waking = {};
+  const mine = c.waking = Promise.withResolvers();
   c.awake = pageLimited(async () => {
     if (c.waking !== mine) return;
     const el = c.el;
@@ -891,8 +892,9 @@ function wakePage(c) {
       await new Promise((r) => setTimeout(r, 20));
     }
     const win = el.contentWindow;
-    await ready(win.film);
+    await Promise.race([ready(win.film), mine.promise]);
     if (c.waking !== mine) return;
+    c.seekLoading = false;
     steerFootage(win);
     c.win = win;
     c.child = win.film;
@@ -931,15 +933,18 @@ function wakePage(c) {
  * Close a page clip's document: its length and size stay known, its tweaks are put on again when it opens. Closed once
  * its own files are in: a request cut short is a failed one, which a host reports.
  */
-function restPage(c) {
+function restPage(c, interrupt = false) {
   pagesAwake.delete(c);
+  const waking = c.waking;
   c.awake = c.waking = null;
+  waking?.resolve();
+  c.seekLoading = false;
   c.win = c.child = null;
   c.drawn = false;
   c.touched = new Map();
   const el = c.el;
   const close = () => { if (!c.awake && el.isConnected) el.setAttribute('src', 'about:blank'); };
-  if (!el.hasAttribute('src') || el.contentDocument?.readyState === 'complete') close();
+  if (interrupt || !el.hasAttribute('src') || el.contentDocument?.readyState === 'complete') close();
   else el.addEventListener('load', close, { once: true });
 }
 
@@ -975,18 +980,20 @@ function pageLoaded(c) {
  * at t, and let none rest unless far too many are awake (a scrub: the rest is done once it stops, see draw). `exact`:
  * for an exact frame (an export's), each video woken at the frame it is wanted at.
  */
-function near(t, { only = false, exact = false } = {}) {
+function near(t, { only = false, exact = false, playing = false } = {}) {
   nearOf('video', AWAKE_MAX, t, only, exact);
-  nearOf('page', PAGES_AWAKE, t, only, exact);
+  nearOf('page', PAGES_AWAKE, t, only, exact, playing ? PAGE_WAKE_AHEAD : WAKE_AHEAD);
 }
-function nearOf(kind, max, t, only, exact) {
+function nearOf(kind, max, t, only, exact, ahead = WAKE_AHEAD) {
   const off = (c) => (t < c.at ? c.at - t : t >= c.end ? t - c.end : 0);
   const all = clips.filter((c) => c.kind === kind);
   const wanted = all
-    .filter((c) => !c.hidden && !c.disabled && !c.missing && (only ? off(c) === 0 : t < c.at ? c.at - t <= WAKE_AHEAD : t - c.end <= WAKE_BEHIND))
+    .filter((c) => !c.hidden && !c.disabled && !c.missing && (only ? off(c) === 0 : t < c.at ? c.at - t <= ahead : t - c.end <= WAKE_BEHIND))
     .sort((a, b) => off(a) - off(b));
   const on = wanted.filter((c) => off(c) === 0).length;
-  const keep = new Set(wanted.slice(0, Math.max(on, max)));
+  /* Outside the normal loading window, prepare only the nearest page. */
+  const early = ahead > WAKE_AHEAD ? wanted.findIndex((c) => c.at - t > WAKE_AHEAD) : -1;
+  const keep = new Set(wanted.slice(0, Math.min(Math.max(on, max), early < 0 ? wanted.length : early + 1)));
   for (const c of keep) wake(c, exact && kind === 'video' ? sourceAt(c.span, Math.min(Math.max(0, t - c.at), c.span.length), c.row) : null);
   /* the rest: videos far off rest, and the farthest while too many are awake (pages: only then, and never more than
      max, a scrub's included) */
@@ -998,6 +1005,19 @@ function nearOf(kind, max, t, only, exact) {
     if (cueing.has(c)) continue;
     if ((kind === 'video' && !only && (c.hidden || c.disabled || off(c) > KEEP)) || over > 0) { rest(c); over--; }
   }
+}
+
+/** Open the pages a still seek needs before it takes the renderer's drawing slot. */
+function prepareSeekPages(t) {
+  clearTimeout(settleNear);
+  const needed = (c) => !c.hidden && !c.disabled && !c.missing && t >= c.at && t < c.end;
+  for (const c of pagesAwake) {
+    if (c.seekLoading && !c.shown && !needed(c) && !cueing.has(c)) restPage(c, true);
+  }
+  const cold = clips.filter((c) => c.kind === 'page' && !c.child && needed(c));
+  if (!cold.length) return null;
+  nearOf('page', PAGES_AWAKE, t, true, false);
+  return Promise.allSettled(cold.map((c) => { c.seekLoading = true; return wake(c); }));
 }
 /** a scrub's last moment, its neighbors woken (and the far ones let go) once it stops */
 let settleNear = 0;
@@ -1478,7 +1498,7 @@ async function draw(t, live, play = null) {
   const playing = live && play != null;
   if (!playing) stopRolling();
   clearTimeout(settleNear);
-  if (live && !playing) { near(t, { only: true }); settleNear = setTimeout(() => near(t), 250); } else near(t, { exact: !live });
+  if (live && !playing) { near(t, { only: true }); settleNear = setTimeout(() => near(t), 250); } else near(t, { exact: !live, playing });
   /* watched, a page coming on shows once its frame is drawn, and the pictures going off stay until then: shown first,
      it showed what it held before (its own first state, or the frame it drew the last time it was on) for as long as
      its frame took, a flash at the cut. An exact frame is taken when all of it is drawn, so it shows each at once. */
@@ -2027,6 +2047,7 @@ function describe(c, el) {
 }
 
 window.__filmEditor = {
+  prepareSeekPages,
   /** Draw the film at t for a person watching it (see draw); `play` while it plays: `{ rate, now }`. */
   watch: (t, play = null) => draw(t, true, play),
   /**
