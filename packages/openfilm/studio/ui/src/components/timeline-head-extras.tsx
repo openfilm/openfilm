@@ -8,7 +8,7 @@ import { useT } from '@/i18n';
 import { clampTrackHeight } from '@/lib/track-heights';
 import { Tooltip } from './Tooltip';
 
-/** Solo: an S, in the accent while the track is soloed; ⌥-click soloes it alone. */
+/** Solo: an S with a highlighted background when on; ⌥-click soloes it alone. */
 export function SoloButton({ on, onToggle }: { on: boolean; onToggle: (only: boolean) => void }) {
   const t = useT();
   const label = on ? t('editorTools.unsolo') : t('editorTools.solo');
@@ -30,13 +30,9 @@ export function SoloButton({ on, onToggle }: { on: boolean; onToggle: (only: boo
           e.currentTarget.blur();
           onToggle(e.altKey);
         }}
-        className="flex h-full w-full items-center justify-center rounded-[4px] outline-none transition-colors hover:bg-[var(--bg-hover)]"
+        className="flex h-full w-full items-center justify-center rounded-[4px] text-[var(--editor-control)] outline-none transition-colors hover:bg-[var(--bg-hover)]"
       >
-        {/* the letter alone, as the head's other switches: muted at rest, the accent when on */}
-        <span
-          className="text-[12px] font-semibold leading-none"
-          style={{ color: on ? 'var(--accent)' : 'var(--text-muted)' }}
-        >
+        <span className={`grid size-5 place-items-center rounded-[4px] text-[12px] font-semibold leading-none ${on ? 'bg-[var(--accent-soft)]' : ''}`}>
           S
         </span>
       </button>

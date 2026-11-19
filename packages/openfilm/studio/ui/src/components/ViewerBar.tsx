@@ -64,7 +64,7 @@ export function ViewerBar({
           aria-disabled={!playable}
           /* no focus on click: the next Space would land on the button and draw a focus ring; Tab focus is kept */
           onMouseDown={(e) => e.preventDefault()}
-          className={`${mediaButton(false, MEDIA_ICON)} ${playable ? '' : 'opacity-30'}`}
+          className={mediaButton(false, MEDIA_ICON)}
           aria-label={playing ? t('viewer.pause') : t('viewer.play')}
         >
           <Icon d={playing ? PATH_PAUSE : PATH_PLAY} size={MEDIA_ICON} />

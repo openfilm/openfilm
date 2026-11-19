@@ -231,6 +231,8 @@ export interface ExportCenterProps {
   open: boolean;
   onClose: () => void;
   projectId: string;
+  /** The timeline revision the editor is showing. */
+  filmRev?: string;
   title: string;
   /** The film's length. */
   durationMs: number;
@@ -611,7 +613,7 @@ export function ExportCenter(props: ExportCenterProps) {
          of this screen comes through here */
       const typed = nameTyped && !toDrafts ? exportName.trim() : '';
       const named = typed ? jobs.map((job, index) => ({ ...job, name: typed + (canRange && range && rangeDelivery === 'separate' && (parsedRanges?.length ?? 0) > 1 ? ` - ${String(index + 1).padStart(2, '0')}` : '') })) : jobs;
-      const queued = await startExports(props.projectId, named, s.folder || undefined);
+      const queued = await startExports(props.projectId, named, s.folder || undefined, props.filmRev);
       props.onQueued?.(queued);
       /* the ticked covers, as pictures beside the video */
       if (dest === 'video' && props.covers && coversTicked.length) {

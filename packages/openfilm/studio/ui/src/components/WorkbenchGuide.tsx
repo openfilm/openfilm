@@ -1,8 +1,7 @@
 /**
  * What a workbench is for and how it is used, said where its name is (the top right): its mark, name and one line
  * (`summary`), then its `details`, a line each (when to use it, how, …), from its plugin (openfilm.json), and the keys
- * that go from one workbench to another. It comes by
- * itself the first time a workbench is shown (kept in this browser), and again from the workbench menu's "?".
+ * that go from one workbench to another. The workbench menu's "?" and the ? key open it on request.
  * It is a dialog in the middle of the window, with what the editor draws of its own help (studio `help`) under its
  * plugin's words; Esc, its × or a click beside it puts it away.
  */
@@ -18,30 +17,16 @@ import { PluginDetails, usePluginWords } from './library/PluginsPane';
 import { WorkbenchMark } from './WorkbenchMark';
 import { editorHelps, type EditorHelp } from '@/studio/hub';
 
-const SEEN_KEY = 'openfilm.guide.seen';
 const KEY = 'rounded-[4px] bg-[var(--bg-hover)] px-1.5 py-px font-sans text-[11px] tabular-nums text-[var(--text)]';
 
-const seenOnes = (): string[] => {
-  try { const v = JSON.parse(localStorage.getItem(SEEN_KEY) ?? '[]'); return Array.isArray(v) ? v : []; } catch { return []; }
-};
-const markSeen = (workbench: string) => {
-  try { const was = seenOnes(); if (!was.includes(workbench)) localStorage.setItem(SEEN_KEY, JSON.stringify([...was, workbench])); } catch { /* for this launch only */ }
-};
-
-/**
- * The guide of the workbench shown: which one is open (null: none), opened by itself for one not seen before (not
- * while a browser is driven by a program, whose clicks it would be in the way of), and by `open`.
- */
+/** Help opens on request for the current workbench and closes when that workbench changes. */
 export function useWorkbenchGuide(shown: string | null, plugins: readonly Plugin[]) {
-  const [open, setOpen] = React.useState<string | null>(null);
-  const known = plugins.some((p) => p.workbench === shown && p.details);
+  const [requested, setRequested] = React.useState<string | null>(null);
   React.useEffect(() => {
-    if (!shown || !known || navigator.webdriver) return;
-    if (!seenOnes().includes(shown)) { markSeen(shown); setOpen(shown); }
-    else setOpen((was) => (was && was !== shown ? null : was));
-  }, [shown, known]);
-  const plugin = open ? plugins.find((p) => p.workbench === open) ?? null : null;
-  return { plugin, open: (workbench: string) => { markSeen(workbench); setOpen(workbench); }, close: () => setOpen(null) };
+    setRequested((was) => (was === shown ? was : null));
+  }, [shown]);
+  const plugin = requested && requested === shown ? plugins.find((p) => p.workbench === requested) ?? null : null;
+  return { plugin, open: () => setRequested(shown), close: () => setRequested(null) };
 }
 
 export function WorkbenchGuide({ plugin, benches, onClose }: {

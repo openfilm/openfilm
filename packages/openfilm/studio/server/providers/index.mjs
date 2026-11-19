@@ -16,8 +16,8 @@ import { HttpError, json, readJson } from '../http.mjs';
 import { changeSettings, cleanKey, envKey, kindOf, modelFor, providerKey, readSettings } from '../keys.mjs';
 import { shownService, withService } from '../custom-services.mjs';
 import { cancelSignIn, signInState, signOut, startSignIn } from '../sign-in.mjs';
-import { desktopAccount } from '../account.mjs';
-import { accountProfile } from '../account-profile.mjs';
+import { desktopAccount, lastAccountConnection } from '../account.mjs';
+import { accountProfile, lastAccountProfile } from '../account-profile.mjs';
 import elevenlabs from './elevenlabs.mjs';
 import inworld from './inworld.mjs';
 import cartesia from './cartesia.mjs';
@@ -158,15 +158,37 @@ export function shownChoices(settings) {
   };
 }
 
+const INVALID_ACCOUNT = 'This OpenFilm connection is no longer valid. Connect again.';
+
+/** An account card can render from the local credential and cached details while Services is still loading. */
+async function localAccount() {
+  const signingIn = signInState();
+  const settings = await readSettings(undefined, { strict: true });
+  const key = providerKey(openfilm, settings);
+  const invalid = lastAccountConnection(key?.key)?.status === 401;
+  const profile = !invalid && key?.source === 'file' ? lastAccountProfile(key.key) : null;
+  return {
+    account: {
+      source: invalid ? null : key?.source ?? null, env: key?.env ?? openfilm.env,
+      account: key?.source === 'file' ? settings.accounts.openfilm ?? null : null,
+      keysUrl: openfilm.keysUrl,
+      ...(invalid ? { connectionError: INVALID_ACCOUNT } : {}),
+      ...(profile ? { profile } : {}),
+    },
+    signingIn,
+  };
+}
+
 /** What Settings → Services shows. Never a key: where it comes from and its last four characters. */
 async function state() {
-  await freshProviders();
-  const settings = await readSettings();
-  const account = await desktopAccount();
-  /* the signed-in account's name and picture (account-profile.mjs) */
-  const own = OWN.find((p) => p.id === 'openfilm');
-  const signed = own ? providerKey(own, settings) : null;
-  const profile = signed?.source === 'file' && account.connection?.status !== 401 ? await accountProfile(signed.key) : null;
+  const signingIn = signInState();
+  const settings = await readSettings(undefined, { strict: true });
+  const signed = providerKey(openfilm, settings);
+  const [account, profile] = await Promise.all([
+    desktopAccount({ settings }),
+    signed?.source === 'file' && lastAccountConnection(signed.key)?.status !== 401 ? accountProfile(signed.key) : null,
+    freshProviders(),
+  ]);
   return {
     providers: OWN.map((p) => {
       const key = providerKey(p, settings);
@@ -179,17 +201,17 @@ async function state() {
         ...(p.keyless ? { keyless: true } : {}),
         /* `noKey`: it takes no key at all (a local service): connected and disconnected with one click */
         ...(p.ready ? { noKey: true } : {}), source: invalid ? null : key?.source ?? null, last4: key?.key ? key.key.slice(-4) : null,
-        ...(invalid ? { connectionError: 'This OpenFilm connection is no longer valid. Connect again.' } : {}),
+        ...(invalid ? { connectionError: INVALID_ACCOUNT } : {}),
         /* connected by signing in (sign-in.mjs), and as whom */
         signIn: Boolean(p.signIn), account: key?.source === 'file' ? settings.accounts[p.id] ?? null : null,
-        ...(p.id === 'openfilm' && profile ? { profile } : {}),
+        ...(p.id === 'openfilm' && !invalid && profile ? { profile } : {}),
         /* one the person added (added.mjs), not built in */
         ...(p.added ? { added: true } : {}),
       };
     }),
     /* the added services left out, and why */
     ...(addedProblems.size ? { addedProblems: [...addedProblems].map(([folder, problem]) => ({ folder, problem })) } : {}),
-    signingIn: signInState(),
+    signingIn,
     ...shownChoices(settings),
     custom: settings.custom.map(shownService),
     /* the library searched by meaning at OpenFilm's service, or by its words alone */
@@ -230,6 +252,7 @@ async function state() {
  */
 export async function providersRoute(req, res, parts, { openBrowser }) {
   if (!parts.length && req.method === 'GET') return json(res, 200, await state());
+  if (parts.length === 2 && parts[0] === 'openfilm' && parts[1] === 'account' && req.method === 'GET') return json(res, 200, await localAccount());
   if (parts[0] === 'custom' && parts.length <= 2) {
     const id = parts[1] ?? null;
     if (id === null ? req.method !== 'POST' : req.method !== 'PUT' && req.method !== 'DELETE') throw new HttpError(405, 'POST to add, PUT or DELETE one');

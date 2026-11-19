@@ -30,29 +30,27 @@ export function ShapeMark({ shape, size = 14 }: { shape: CoverShape; size?: numb
  * dashed box with a pen and "Cover" while it has none). A click opens the cover design; its menu opens it, makes the
  * frame at the playhead the cover's picture, or exports the covers.
  */
-export function CoverTile({ thumb, size, gutter, onOpen, menu }: {
-  thumb: string | null; size: number; gutter: number; onOpen: () => void; menu: () => ContextMenuEntry[];
+export function CoverTile({ thumb, size, leftGap, onOpen, menu }: {
+  thumb: string | null; size: number; leftGap: number; onOpen: () => void; menu: () => ContextMenuEntry[];
 }) {
   const t = useT();
   const [at, setAt] = React.useState<{ x: number; y: number } | null>(null);
-  /* a square, in the middle of its column */
-  const w = size;
   return (
     <>
       <button type="button" data-cover-tile="" onClick={(e) => { e.stopPropagation(); onOpen(); }}
         onPointerDown={(e) => e.stopPropagation()}
         onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setAt({ x: e.clientX, y: e.clientY }); }}
         title={thumb ? t('covers.tileTip') : t('covers.tileNewTip')}
-        className={`group absolute top-1/2 z-10 flex -translate-y-1/2 flex-col items-center justify-center overflow-hidden rounded-[7px] text-[11.5px] transition ${thumb
-          ? 'bg-black text-white shadow-[0_0_0_1px_var(--border-strong)] hover:shadow-[0_0_0_1.5px_var(--accent)]'
-          : 'gap-1 border border-dashed border-[var(--border-strong)] bg-[var(--bg-field)] text-[var(--text-muted)] hover:border-[var(--accent)] hover:text-[var(--text)]'}`}
-        style={{ width: w, height: size, left: `calc(100% + ${Math.round((gutter - w) / 2)}px)` }}>
+        className={`group absolute top-1/2 z-10 flex -translate-y-1/2 flex-col items-center justify-center overflow-hidden rounded-[5px] text-[10px] leading-none transition ${thumb
+          ? 'bg-black text-[#e6e6e6] shadow-[0_0_0_1px_var(--border-strong)] hover:shadow-[0_0_0_1.5px_var(--accent)]'
+          : 'gap-0.5 border border-dashed border-[var(--border-strong)] bg-[var(--bg-field)] text-[var(--editor-control)] hover:border-[var(--accent)]'}`}
+        style={{ width: size, height: size, left: `calc(100% + ${leftGap}px)` }}>
         {thumb ? (
           <>
             <img src={thumb} alt="" draggable={false} className="min-h-0 w-full flex-1 object-cover" />
-            <span className="flex h-[17px] w-full shrink-0 items-center justify-center bg-black/75 text-[10.5px] leading-none">{t('covers.title')}</span>
+            <span className="flex h-[13px] w-full shrink-0 items-center justify-center bg-black/75">{t('covers.title')}</span>
           </>
-        ) : <><PenLine size={15} strokeWidth={1.8} /><span>{t('covers.title')}</span></>}
+        ) : <><PenLine size={13} strokeWidth={1.8} /><span>{t('covers.title')}</span></>}
       </button>
       {at ? <ContextMenu x={at.x} y={at.y} items={menu()} onClose={() => setAt(null)} /> : null}
     </>

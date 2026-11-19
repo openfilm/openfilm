@@ -187,10 +187,16 @@ export function folderFiles(root, { inject = `<script>${HOST_FLAG}</script>`, ti
     };
     /* a HEAD has no body (the browser cancels one that brings it) */
     if (req.method === 'HEAD') { res.writeHead(200, headers).end(); return true; }
-    if (type.startsWith('text/html') && query?.get('film-host') !== '0') {
+    const film = rel === `/${FILM_FILE}` || rel.endsWith(`/${FILM_FILE}`);
+    const revision = film ? query?.get('film-rev') : null;
+    if (type.startsWith('text/html') && (revision || query?.get('film-host') !== '0')) {
       const html = readFileSync(file, 'utf8');
+      if (revision && createHash('sha256').update(html).digest('hex').slice(0, 16) !== revision) {
+        res.writeHead(409, headers).end('The film has changed.');
+        return true;
+      }
+      if (query?.get('film-host') === '0') { res.writeHead(200, headers).end(html); return true; }
       /* the film itself: played by the timeline, and the host's driving of it (`timelineInject`) put in */
-      const film = rel === `/${FILM_FILE}` || rel.endsWith(`/${FILM_FILE}`);
       const start = film ? timelineInject + filmStart(readFilmFile(html).doc?.stage ?? DEFAULT_STAGE) : inject;
       res.writeHead(200, headers).end(injectFirst(film ? holdPages(html) : html, start));
       return true;

@@ -49,6 +49,7 @@ import { TemplatePicker } from '@/components/TemplatePicker';
 import { isLibraryText, layoutTracks, type TimelineBlock, type TimelineTrack } from '@/lib/timeline-layout';
 import { organizeTracks } from '@/lib/organize-tracks';
 import { useAgentWorking } from '@/lib/agent-working';
+import { useSettledProblem } from '@/editor/use-settled-problem';
 import { filmClipKind, filmDocLoc, filmSrcIsPage, filmSrcKind, filmTrackBadges, parseFilmDocLoc, type FilmBox, type FilmDoc, type FilmOverride } from '@/lib/film';
 import { exactRate, footageFps, setTimecodeFps, snapToFrame, stepFrames } from '@/lib/timecode';
 import { JUMP_FRAMES, loopBack, playStart, shuttleRate } from '@/lib/timeline-keys';
@@ -304,9 +305,10 @@ export function ProjectView({ projectId, onProject }: {
   /* the film with every edit made here, at once: an edit begun before the one before it was drawn (a color typed,
      then a stroke added with the same click) starts from it, not from the film before it */
   const filmRef = React.useRef<Film | null>(initial?.value ?? null);
-  const film = useFilm(projectId, initial, React.useCallback((value: Film, kind: 'edit' | 'server', head?: string) => {
+  const film = useFilm(projectId, initial, React.useCallback((value: Film, kind: 'edit' | 'server', head?: string, presented?: boolean) => {
+    const before = filmRef.current;
     filmRef.current = value;
-    preview.current?.update(value, head);
+    if (!presented) preview.current?.update(value, head);
     if (kind === 'server') {
       const found = droppedOverrides(lastServerDoc.current as unknown as FilmDoc, value as unknown as FilmDoc);
       if (found.length) setDropped(found);
@@ -314,7 +316,7 @@ export function ProjectView({ projectId, onProject }: {
       const edits = personSteps.current.flatMap((s) => s.redo.flatMap((op) => (op.op === 'props' ? op.edits : [])));
       /* compared with the film shown here (the person's edits in it), not the folder's last: an edit of theirs being
          written is no change */
-      const fields = undoneFields(filmRef.current as unknown as FilmDoc, value as unknown as FilmDoc, edits, settledEdits.current);
+      const fields = undoneFields(before as unknown as FilmDoc, value as unknown as FilmDoc, edits, settledEdits.current);
       for (const e of fields.gone) settledEdits.current.add(e);
       if (fields.undone.length) {
         const key = (e: PersonEdit) => `${e.clip}\u0000${e.prop}`;
@@ -326,9 +328,14 @@ export function ProjectView({ projectId, onProject }: {
   }, []), (latest) => {
     adoptFilm(latest);
     setFilmMissing(Boolean(latest.filmMissing));
-  });
+  }, { presentOnDraw: true, editUnavailable: t('project.filmBroken') });
   personSteps.current = film.steps.done;
   filmRef.current = film.film;
+  const { candidate, present } = film;
+  React.useEffect(() => {
+    if (candidate) preview.current?.prepareRevision?.({ rev: candidate.rev, present: () => present(candidate) });
+    else preview.current?.discardRevision?.();
+  }, [candidate, present]);
   /* on `showError`, which stays the same: `toast` is new with every message, so showing it would run this again, and
      again (the editor gone) */
   const { showError } = toast;
@@ -4395,6 +4402,9 @@ export function ProjectView({ projectId, onProject }: {
   React.useEffect(() => { if (awaitingFiles) void listFiles(); }, [awaitingFiles, rawListing, listFiles]);
   /* while an agent changes the film, a file gone is on its way: its clips wait, and the viewer says nothing of it */
   const agentWorking = useAgentWorking();
+  const unreadableFilm = film.broken ?? (!film.film && loaded && !loaded.doc ? loaded : null);
+  const filmProblem = filmMissing ? 'missing' : unreadableFilm?.rev ?? null;
+  const showFilmProblem = useSettledProblem(filmProblem, agentWorking);
   const timelineTrouble = React.useMemo(() => (agentWorking && [...mediaTrouble.values()].includes('missing')
     ? new Map([...mediaTrouble].map(([src, why]) => [src, why === 'missing' ? 'waiting' as const : why])) : mediaTrouble), [agentWorking, mediaTrouble]);
   /** The file of a clip under the playhead that is gone (on a track that is seen), for the viewer to say. */
@@ -5273,7 +5283,7 @@ export function ProjectView({ projectId, onProject }: {
   /* the shell draws the loading screen, and why the project could not be read */
   if (failure || !loaded) return null;
 
-  const value = film.film;
+  const value = film.film ?? candidate?.value ?? null;
   const viewerReady = Boolean(info);
   return (
     <>
@@ -5383,7 +5393,7 @@ export function ProjectView({ projectId, onProject }: {
                       <span className="rounded-md bg-[var(--bg-raised)] px-2.5 py-1 text-[12.5px] text-[var(--text)] shadow-sm">{t('project.dropOnPicture')}</span>
                     </div>
                   ) : null}
-                  {filmMissing ? (
+                  {showFilmProblem && filmMissing ? (
                     <div data-film-missing="" className="pointer-events-none absolute inset-x-0 top-3 z-20 flex justify-center px-4">
                       <p role="status" className="max-w-[min(30rem,90%)] rounded-lg bg-black/70 px-3.5 py-2 text-center text-[12.5px] leading-snug text-white/90">{t('project.filmMissing')}</p>
                     </div>
@@ -5436,6 +5446,7 @@ export function ProjectView({ projectId, onProject }: {
                         }}>
                           <Preview ref={preview} folder={folder} stage={shownStage} time={() => player.current.time()} fps={exactRate(projectFps)}
                             onInfo={onInfo} onKey={previewKey} onError={setPreviewError} onPlayed={onPlayed} onUndecoded={onUndecoded} waiting={agentWorking}
+                            filmUnavailable={filmProblem !== null} managed onRevisionNeeded={film.refresh}
                             onSpans={(next) => setInfo((had) => (had ? { ...had, spans: next } : had))}
                             onShown={() => setPageShown((n) => n + 1)}>
                             {/* grading, the picture is looked at, not arranged: no picking or moving layers on it */}
@@ -5491,7 +5502,7 @@ export function ProjectView({ projectId, onProject }: {
                             target={libraryPreviewBar} onLetGo={() => dismissLibraryPreview.current()} onTemplateState={onTemplateState}
                             onDownloadFailed={onLibraryDownloadFailed} /> : null}
                         </div>
-                        {!viewerReady && !empty && !previewError ? (
+                        {!viewerReady && !empty && !previewError && !filmProblem ? (
                           <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-black">
                             <span role="status" className="text-sweep relative text-[13px] text-white/60">{t('project.previewStageMount')}</span>
                           </div>
@@ -5518,13 +5529,21 @@ export function ProjectView({ projectId, onProject }: {
                       ) : null}
                     </div>
                   ) : (
-                    filmMissing ? null : <p className="max-w-[280px] text-center text-[12.5px] text-[var(--text-faint)]">{loaded.problems.join(' ') || t('project.filmEmptyHint')}</p>
+                    filmProblem ? null : <p className="max-w-[280px] text-center text-[12.5px] text-[var(--text-faint)]">{t('project.filmEmptyHint')}</p>
                   )}
                 </div>
-                {film.broken ? (
-                  <div role="status" className="mx-2 mb-1 flex items-start gap-2 rounded-md border border-[var(--warn)] px-2.5 py-1.5 text-[12px] leading-snug text-[var(--text)]">
+                {showFilmProblem && !filmMissing && unreadableFilm ? (
+                  <div data-film-broken="" className="mx-2 mb-1 flex items-start gap-2 rounded-md border border-[var(--warn)] px-2.5 py-1.5 text-[12px] leading-snug text-[var(--text)]">
                     <TriangleAlert size={14} className="mt-px shrink-0 text-[var(--warn)]" aria-hidden />
-                    <span className="min-w-0 break-words"><span className="font-medium">{t('project.filmBroken')}</span>{' '}<span className="text-[var(--text-muted)]">{film.broken}</span></span>
+                    <div className="min-w-0">
+                      <p role="status" className="font-medium">{t(film.film ? 'project.previewPrevious' : 'project.filmBroken')}</p>
+                      {unreadableFilm.problems.length ? (
+                        <details className="mt-0.5 text-[var(--text-muted)]">
+                          <summary className="cursor-pointer">{t('project.previewDetails')}</summary>
+                          <p className="mt-1 max-h-32 overflow-auto whitespace-pre-wrap break-words">{unreadableFilm.problems.join('\n')}</p>
+                        </details>
+                      ) : null}
+                    </div>
                   </div>
                 ) : null}
                 <div ref={setLibraryPreviewBar} data-library-preview-bar="" className="peer empty:hidden" />
@@ -5809,6 +5828,7 @@ export function ProjectView({ projectId, onProject }: {
         open={exportOpen}
         onClose={() => { setExportOpen(false); setExportClipId(null); }}
         projectId={projectId}
+        filmRev={film.rev ?? undefined}
         title={title || 'video'}
         durationMs={totalMs}
         stage={stage}

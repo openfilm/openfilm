@@ -86,6 +86,7 @@ import { selectionClips } from '../../src/render-ranges.mjs';
 import { filmVideos } from '../../src/seekable.mjs';
 import { FILM_FILE, clipFade, filmHtml, fittedFade, kindOf, pictureRect, readFilmFile } from '../../src/film-doc.mjs';
 import { layerBlocks, rowBadges, trackKind } from './track-layout.mjs';
+import { revOf } from './film.mjs';
 import { fcpxmlDocument } from './fcpxml.mjs';
 import { markHevcStraightAlpha } from './hevc-alpha.mjs';
 import { frameSpan, NLE_FPS, nleFps, ownLook, plainFootageCss, planNleTimeline, probeSource, soundStem, xmemlDocument } from './nle.mjs';
@@ -151,6 +152,18 @@ export class ExportError extends Error {
     super(message);
     this.status = status;
   }
+}
+
+/** Check that an export still has the timeline chosen in the editor, including after waiting in the queue. */
+export async function exportFilmStamp(/** @type {string} */ root, /** @type {string} */ rev) {
+  const path = join(root, FILM_FILE);
+  const stamp = async () => {
+    const s = await stat(path, { bigint: true });
+    return `${s.dev}:${s.ino}:${s.size}:${s.mtimeNs}:${s.ctimeNs}`;
+  };
+  const reads = await Promise.all([stamp(), readFile(path, 'utf8')]).catch(() => null);
+  if (reads && revOf(reads[1]) === rev && reads[0] === await stamp().catch(() => null)) return reads[0];
+  throw new ExportError('The timeline changed. Export again when the preview shows the version you want.', 409);
 }
 
 /* ── what this machine can encode ───────────────────────────────────────── */
@@ -933,7 +946,7 @@ const STOP_WAIT_MS = 8000;
 export function createExports({ onChange = () => {}, captions = subtitlesForExport, drafts = defaultDrafts } = {}) {
   /** @type {ExportJob[]} */
   const jobs = [];
-  /** @type {Map<string, { root: string, folder: string, abort: AbortController, twin?: string }>} */
+  /** @type {Map<string, { root: string, folder: string, abort: AbortController, twin?: string, filmRev?: string }>} */
   const work = new Map();
   let running = false;
   /* Studio is closing: nothing new starts (stopAll) */
@@ -1934,8 +1947,9 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
     /** @type {() => void} */
     let finished = () => {};
     idle = new Promise((r) => { finished = () => r(undefined); });
-    const { root, folder, abort, twin } = /** @type {{ root: string, folder: string, abort: AbortController, twin?: string }} */ (work.get(job.id));
+    const { root, folder, abort, twin, filmRev } = /** @type {NonNullable<ReturnType<typeof work.get>>} */ (work.get(job.id));
     try {
+      const filmStamp = filmRev ? await exportFilmStamp(root, filmRev) : null;
       await mkdir(folder, { recursive: true });
       /* what an export Studio could not finish left behind, gone before this one starts */
       await Promise.all([sweep(folder, LEFT.output), sweep(join(root, '.film', 'cache', 'export'), LEFT.scratch),
@@ -1954,6 +1968,9 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
       else if (kind === 'project') await exportProject(job, root, folder, abort.signal);
       else await exportStills(job, root, folder, abort.signal);
       if (abort.signal.aborted) throw new Error('cancelled');
+      if (filmRev && filmStamp !== await exportFilmStamp(root, filmRev)) {
+        throw new ExportError('The timeline changed during export. Export again from the preview.', 409);
+      }
       const bytes = job.outputs.reduce((n, f) => n + (existsSync(f) ? statSync(f).size : 0), 0);
       update(job, { status: 'done', progress: 1, phase: null, etaMs: null, bytes, finishedAt: Date.now() });
     } catch (e) {
@@ -1974,9 +1991,8 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
     }
   }
 
-  /** @param {{ id: string, name: string, path: string }} project @param {ExportAsk} ask @param {string} folder */
-  /** @param {{ id: string, name: string, path: string }} project @param {ExportAsk} ask @param {string} folder @param {string} [twin] */
-  function queue(project, ask, folder, twin) {
+  /** @param {{ id: string, name: string, path: string }} project @param {ExportAsk} ask @param {string} folder @param {string} [twin] @param {string} [filmRev] */
+  function queue(project, ask, folder, twin, filmRev) {
     /** @type {ExportJob} */
     const job = {
       id: randomBytes(6).toString('hex'), project: project.id, name: project.name, label: ask.label ?? '', kind: ask.kind, ask,
@@ -1984,7 +2000,7 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
       outputs: [], bytes: null, alpha: null, at: Date.now(), startedAt: null, finishedAt: null,
     };
     jobs.unshift(job);
-    work.set(job.id, { root: project.path, folder, abort: new AbortController(), ...(twin ? { twin } : {}) });
+    work.set(job.id, { root: project.path, folder, abort: new AbortController(), twin, filmRev });
     onChange({ ...job, outputs: [] });
     return job;
   }
@@ -1998,7 +2014,7 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
     },
     /**
      * Queue several exports at once (`{ jobs: [ask…], folder? }`): all of them, or, when one is wrong, none.
-     * @param {{ id: string, name: string, path: string }} project @param {{ jobs?: unknown, folder?: unknown }} body
+     * @param {{ id: string, name: string, path: string }} project @param {{ jobs?: unknown, folder?: unknown, filmRev?: string }} body
      */
     startAll(project, body) {
       /* Up to 100 selected stretches for each of the destinations a single export could already queue. */
@@ -2012,7 +2028,8 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
       const queued = asks.map((ask) => {
         const { preset, label, ...rest } = /** @type {ExportAsk & { preset?: string }} */ (ask);
         const same = ask.kind === 'video' || ask.kind === 'gif' ? JSON.stringify(rest, Object.keys(rest).sort()) : null;
-        const job = queue(project, ask, folder, same ? first.get(same) : undefined);
+        const filmRev = ask.kind !== 'project' && typeof body.filmRev === 'string' ? body.filmRev : undefined;
+        const job = queue(project, ask, folder, same ? first.get(same) : undefined, filmRev);
         if (same && !first.has(same)) first.set(same, job.id);
         return job;
       });

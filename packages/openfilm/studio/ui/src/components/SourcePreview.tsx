@@ -13,7 +13,7 @@ import { useT } from '@/i18n';
 import { STILL_DROP_MS } from '@/lib/asset-timeline';
 import type { SourceRange } from '@/lib/media-place';
 import { exactRate, formatTimecode, snapToFrame, useTimecodeFps } from '@/lib/timecode';
-import { cuePlain, readVtt } from '../../../../src/captions.mjs';
+import { cuePlain, readVtt, voiceTranscriptText } from '../../../../src/captions.mjs';
 import { type MediaSources, type WorkspaceResource } from '@/lib/workspace-resources';
 import { keyAction } from '@/lib/keymap-store';
 import { isTypingTarget } from './typing-target';
@@ -166,18 +166,18 @@ export interface SourcePreviewProps {
 }
 
 /** A WebVTT's lines as they read (a transcript, a subtitle file): each one's time, and what it says. */
-function VttLines({ url }: { url: string }) {
+function VttLines({ url, path }: { url: string; path: string }) {
   const t = useT();
   const [lines, setLines] = React.useState<{ start: number; text: string }[] | null>(null);
   React.useEffect(() => {
     let current = true;
     setLines(null);
     fetch(url).then((r) => (r.ok ? r.text() : '')).then(
-      (text) => { if (current) setLines(readVtt(text).cues.map((c) => ({ start: c.start, text: cuePlain(c.text) }))); },
+      (text) => { if (current) setLines(readVtt(voiceTranscriptText(path, text)).cues.map((c) => ({ start: c.start, text: cuePlain(c.text) }))); },
       () => { if (current) setLines([]); },
     );
     return () => { current = false; };
-  }, [url]);
+  }, [url, path]);
   if (!lines) return null;
   if (!lines.length) return <p className="text-[11.5px] text-[var(--text-faint)]">{t('media.transcriptEmpty')}</p>;
   return (
@@ -311,7 +311,7 @@ function MediaPreviewPane({ file, sources, onClose, onPlace, withinDialog, saved
           /* a subtitle or transcript file: its lines, as they read */
           <div data-asset-preview-control="" className="h-full w-full max-w-[640px] overflow-y-auto py-2">
             <p className="mb-3 truncate text-[13px] font-medium text-[var(--text)]">{file.name}</p>
-            <VttLines url={src} />
+            <VttLines url={src} path={file.path} />
           </div>
         ) : (
           /* a file Studio does not play: what it is, by its icon and name */

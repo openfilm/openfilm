@@ -31,7 +31,7 @@ import { CoverFilmError, coverFolder, coverFrame, coverLook, coverLooks, coverPi
 import { readPage, writePage } from './page-text.mjs';
 import { FileError, bringIn, collect, extractAudio, freezeFrame, importFile, inside, listFiles, makeFolder, moveCheck, moveFile, readable, relink, trashFile } from './files.mjs';
 import { mediaReferences } from '../../src/media-links.mjs';
-import { ExportError, createExports, draftApps, exportCapabilities, exportsRoot, projectSizes, renderDefaults } from './exports.mjs';
+import { ExportError, createExports, draftApps, exportCapabilities, exportFilmStamp, exportsRoot, projectSizes, renderDefaults } from './exports.mjs';
 import { MediaError, frame, loudness, mixLoudness, mixedWaveform, poster, probe, waveform } from './derived.mjs';
 import { HistoryError, checkoutVersion, copyVersion, deleteVersions, discardChanges, keepAside, log, recoverVersions, restoreFilm, saveVersion, status as historyStatus, versionFilesChanged } from './history.mjs';
 import * as personEdits from './person-edits.mjs';
@@ -1621,6 +1621,9 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
         /* several at once: `{ jobs: [ask…], folder? }` → `{ exports }`; one: the ask itself → `{ export }` */
         if (body && typeof body === 'object' && 'jobs' in body) {
           const request = Array.isArray(body.jobs) ? { ...body, jobs: body.jobs.map(withSampling) } : body;
+          if (Array.isArray(request.jobs) && request.jobs.some((/** @type {any} */ job) => job?.kind !== 'project') && typeof request.filmRev === 'string') {
+            await exportFilmStamp(project.path, request.filmRev);
+          }
           return json(res, 200, { exports: exports.startAll(project, request) });
         }
         return json(res, 200, { export: exports.start(project, withSampling(body)) });

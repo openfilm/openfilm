@@ -152,7 +152,9 @@ export function changeProjectFilm(root, change, edit = {}) {
 export async function editProjectFilm(root, base, ops, { undo = false } = {}) {
   const done = await changeProjectFilm(root, (start, current) => {
     /* a film.html that does not read is the agent's to fix: Studio never writes over it */
-    if (!current.value && current.text.trim()) throw new EditError(current.problems.join('\n'), 'invalid');
+    if (!current.value && (current.text.trim() || (base != null && base !== current.rev))) {
+      throw new EditError(current.problems.join('\n'), 'invalid');
+    }
     if (base != null && base !== current.rev && Array.isArray(ops) && ops.some((op) => op.op === 'track-layout')) {
       throw new EditError('the film changed while editing its tracks: try again', 'conflict');
     }

@@ -122,8 +122,13 @@
          not stop the picture. */
       const watch = editor()?.watch;
       let timer;
-      await Promise.race([watch && !behind ? watch(t) : drawn(f, t), new Promise((done) => { timer = setTimeout(done, behind ? BEHIND_WAIT_MS : FRAME_WAIT_MS); })]);
-      clearTimeout(timer);
+      try {
+        const completed = await Promise.race([
+          Promise.resolve(watch && !behind ? watch(t) : drawn(f, t)).then(() => true),
+          new Promise((done) => { timer = setTimeout(() => done(false), behind ? BEHIND_WAIT_MS : FRAME_WAIT_MS); }),
+        ]);
+        if (!completed && seek?.publish) throw new Error('The new film did not draw its first frame in time.');
+      } finally { clearTimeout(timer); }
       if (seek) post({ type: 'seeked', t, seq: seek.seq });
     } catch (e) { fail(e); }
     drawing = false;

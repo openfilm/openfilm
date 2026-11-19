@@ -285,14 +285,14 @@ function coarsestStep(ladder: readonly number[], msPerFrame: number, pxPerMs: nu
   return found ?? ladder[ladder.length - 1]!;
 }
 
-export function rulerSteps(pxPerMs: number, fps = DISPLAY_FPS): RulerSteps {
+export function rulerSteps(pxPerMs: number, fps = DISPLAY_FPS, empty = false): RulerSteps {
   const perSec = framesPerSecond(fps);
   if (!(pxPerMs > 0)) return { labelMs: 1000, tickMs: 1000, fps, labelFrames: perSec, tickFrames: perSec };
   /* a frame's nominal length: a second is perSec of them */
   const msPerFrame = 1000 / perSec;
   /* from 2: a label every frame leaves no room for a tick between labels */
-  const labels = frameStepLadder(fps, 2);
-  const ticks = frameStepLadder(fps, 1);
+  const labels = empty ? SECOND_STEPS.filter((s) => s >= 5).map((s) => s * perSec) : frameStepLadder(fps, 2);
+  const ticks = frameStepLadder(fps, empty ? Math.ceil(perSec / 2) : 1);
   const labelFrames = coarsestStep(labels, msPerFrame, pxPerMs, MIN_LABEL_PX);
   const wanted = coarsestStep(ticks, msPerFrame, pxPerMs, MIN_TICK_PX);
 

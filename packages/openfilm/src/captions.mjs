@@ -203,6 +203,59 @@ export function cueEscape(/** @type {string} */ text) {
   return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n\s*\n/g, '\n');
 }
 
+/* The inline controls offered in Studio's voice generator. Other angle-bracket text can be dialogue. */
+const VOICE_CONTROL = String.raw`\s*(?:break\s+time|(?:speed|volume)\s+ratio|emotion\s+value)\s*=\s*(?:"[^"<>]*"|'[^'<>]*')\s*\/\s*`;
+const AUDIO_TAG = new RegExp(String.raw`\[[a-z][a-z '-]{1,30}\]|<${VOICE_CONTROL}>`, 'g');
+const ESCAPED_VOICE_CONTROL = new RegExp(`&lt;${VOICE_CONTROL}&gt;`, 'g');
+
+/**
+ * Remove performance tags spanning multiple tokens while keeping each fragment in its original part.
+ * @param {readonly string[]} parts @param {string} [separator] @param {RegExp} [pattern]
+ */
+export function stripAudioTagParts(parts, separator = ' ', pattern = AUDIO_TAG) {
+  const matches = parts.join(separator).matchAll(pattern);
+  let tag = matches.next().value;
+  if (!tag) return parts;
+  let offset = 0;
+  return parts.map((part) => {
+    const end = offset + part.length;
+    let from = offset;
+    let kept = '';
+    while (tag && tag.index < end) {
+      if (tag.index > from) kept += part.slice(from - offset, tag.index - offset);
+      const tagEnd = tag.index + tag[0].length;
+      from = Math.max(from, tagEnd);
+      if (tagEnd > end) break;
+      tag = matches.next().value;
+    }
+    kept += part.slice(from - offset);
+    offset = end + separator.length;
+    return kept;
+  });
+}
+
+/**
+ * Older voice-over sidecars escaped the controls as dialogue and could split them across cues. Clean the payload
+ * as one stream, keeping WebVTT tags and timestamps outside the text used to match the controls.
+ * @param {string} path @param {string} body
+ */
+export function voiceTranscriptText(path, body) {
+  if (!path.startsWith('assets/audio/vo/') || !body.includes('&lt;')) return body;
+  const vtt = readVtt(body);
+  const payloads = vtt.cues.map((cue) => cue.text.split(/(<[^>]*>)/g));
+  const parts = payloads.flatMap((payload) => [...payload.filter((_, i) => i % 2 === 0), '\n']);
+  const cleaned = stripAudioTagParts(parts, '', ESCAPED_VOICE_CONTROL);
+  if (cleaned === parts) return body;
+  let at = 0;
+  vtt.cues = vtt.cues.flatMap((cue, i) => {
+    const text = payloads[i].map((part, j) => j % 2 === 0 ? cleaned[at++] : part).join('');
+    at += 1; // cue separator
+    if (text === cue.text) return [cue];
+    return cuePlain(text).trim() ? [{ ...cue, text }] : [];
+  });
+  return writeVtt(vtt);
+}
+
 /* a character written as a word of its own (Chinese, Japanese): each is timed apart */
 const CJK = '\\u3040-\\u30ff\\u3400-\\u9fff\\uf900-\\ufaff';
 const UNITS = new RegExp(`\\s+|[${CJK}][^\\s${CJK}\\p{L}\\p{N}]*|[^\\s${CJK}]+`, 'gu');

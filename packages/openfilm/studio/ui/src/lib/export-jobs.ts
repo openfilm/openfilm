@@ -130,8 +130,8 @@ export async function probeFps(projectId: string, path: string): Promise<number 
 }
 
 /** Queue exports, all or none. `folder`: where to write them (absolute, or ~/…); missing = the default folder. */
-export async function startExports(projectId: string, jobs: readonly ExportRequest[], folder?: string): Promise<ExportJob[]> {
-  const body = await call<{ exports: ExportJob[] }>(endpoint(projectId), { method: 'POST', json: { jobs, ...(folder ? { folder } : {}) } });
+export async function startExports(projectId: string, jobs: readonly ExportRequest[], folder?: string, filmRev?: string): Promise<ExportJob[]> {
+  const body = await call<{ exports: ExportJob[] }>(endpoint(projectId), { method: 'POST', json: { jobs, folder, filmRev } });
   return body.exports;
 }
 

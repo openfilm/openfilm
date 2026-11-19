@@ -62,6 +62,8 @@
   --text: #161619;
   --text-muted: #5d5d63;
   --text-faint: #8b8b92;
+  --editor-control: #222226;
+  --editor-control-disabled: #a6a6ad;
 
   --border: rgba(16, 16, 24, 0.085);
   --border-strong: rgba(16, 16, 24, 0.16);
@@ -102,9 +104,11 @@
   --tl-lane: #f1f1f3;
   /* a track's band, the ground seen in the gaps between two (the panel itself), and the track of a picked clip: the
      panel a quiet step darker (lighter in dark), the picked one a step further */
-  --tl-row: rgba(16, 16, 24, 0.03);
+  --tl-row: #f7f7f8;
   --tl-gap: var(--bg-panel);
-  --tl-lane-on: rgba(16, 16, 24, 0.07);
+  --tl-lane-on: #f3f3f4;
+  --tl-empty: #f4f4f5;
+  --tl-empty-drop: #efeff1;
   --tl-playhead: #161619;
   --tl-select: #161619;
   --tl-wave: rgba(255, 255, 255, 0.5);
@@ -144,6 +148,8 @@
   --text: #e6e6e6;
   --text-muted: #a3a3a3;
   --text-faint: #717177;
+  --editor-control: #e6e6e6;
+  --editor-control-disabled: #464646;
 
   --border: rgba(240, 240, 255, 0.075);
   --border-strong: rgba(240, 240, 255, 0.15);
@@ -177,9 +183,11 @@
   --clip-audio: #1c5757;
 
   --tl-lane: #151518;
-  --tl-row: rgba(240, 240, 255, 0.035);
+  --tl-row: #1c1c1c;
   --tl-gap: var(--bg-panel);
-  --tl-lane-on: rgba(240, 240, 255, 0.085);
+  --tl-lane-on: #202020;
+  --tl-empty: #242424;
+  --tl-empty-drop: #282828;
   --tl-playhead: #ffffff;
   --tl-select: #ffffff;
   --tl-wave: rgba(255, 255, 255, 0.4);
