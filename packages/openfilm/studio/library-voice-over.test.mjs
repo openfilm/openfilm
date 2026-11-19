@@ -44,7 +44,7 @@ test('voice-over and captions are the library’s: recording is a line of voice-
     const voices = drawer.getByRole('button', { name: 'Voices', exact: true });
     await voices.click();
     /* recording is a tab of Mine, beside the voices and cloning */
-    assert.deepEqual(await drawer.locator('nav[data-studio-host-panel] [data-rail-section] > button[aria-expanded], nav[data-studio-host-panel] button[aria-pressed]').evaluateAll((rows) => rows.slice(0, 4).map((r) => r.textContent?.trim())), ['Favorites', 'AI generation', 'Mine', 'Services']);
+    assert.deepEqual(await drawer.locator('nav[data-studio-host-panel] [data-rail-section] > button[aria-expanded], nav[data-studio-host-panel] button[aria-pressed]').evaluateAll((rows) => rows.slice(0, 3).map((r) => r.textContent?.trim())), ['Favorites', 'Mine', 'Services']);
     await drawer.getByRole('button', { name: 'Mine', exact: true }).click();
     /* Mine: recording at the top, then cloning a voice */
     assert.deepEqual(await drawer.locator('[data-voice-mine] h3').allInnerTexts(), ['Record', 'Voice cloning']);
@@ -53,7 +53,7 @@ test('voice-over and captions are the library’s: recording is a line of voice-
     /* another category shown: it still records, and voice-over says so */
     await drawer.getByRole('button', { name: 'Captions', exact: true }).click();
     await drawer.locator('[data-record-pane]').waitFor({ state: 'detached' });
-    assert.deepEqual(await drawer.locator('nav[data-studio-host-panel] button[aria-pressed]').allInnerTexts(), ['From speech', 'AI generation', 'Subtitle file', 'By hand']);
+    assert.deepEqual(await drawer.locator('nav[data-studio-host-panel] button[aria-pressed]').allInnerTexts(), ['From speech', 'Subtitle file', 'By hand']);
     await drawer.getByRole('button', { name: 'By hand', exact: true }).click();
     await drawer.locator('[data-captions-new-track]').waitFor();
     await voices.locator('[data-recording]').waitFor();
