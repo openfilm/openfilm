@@ -33,5 +33,9 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter openfilm exec playwright-core install chromium-headless-shell
-      - run: node --test --test-concurrency=1 studio/workspaces.test.mjs studio/project-title.test.mjs studio/caption-group-move.test.mjs studio/preview-cue.test.mjs
+      - shell: pwsh
+        run: |
+          if (-not (Get-Command ffmpeg -ErrorAction SilentlyContinue)) { choco install ffmpeg --no-progress -y }
+          ffmpeg -version | Select-Object -First 1
+      - run: node --test --test-concurrency=1 studio/workspaces.test.mjs studio/project-title.test.mjs studio/caption-group-move.test.mjs studio/preview-cue.test.mjs studio/viewer-dark.test.mjs
         working-directory: packages/openfilm
