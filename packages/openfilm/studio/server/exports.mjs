@@ -89,7 +89,7 @@ import { layerBlocks, rowBadges, trackKind } from './track-layout.mjs';
 import { recentFilm, revOf } from './film.mjs';
 import { fcpxmlDocument } from './fcpxml.mjs';
 import { markHevcStraightAlpha } from './hevc-alpha.mjs';
-import { frameSpan, NLE_FPS, nleFps, ownLook, plainFootageCss, planNleTimeline, probeSource, soundStem, xmemlDocument } from './nle.mjs';
+import { frameSpan, NLE_FPS, nleFps, ownLook, ownSize, plainFootageCss, planNleTimeline, probeSource, soundStem, xmemlDocument } from './nle.mjs';
 import { draftsRoot, jianyingClipLook, jianyingDraft } from './jianying.mjs';
 import { captionNeedsRendering, jianyingCaptionFonts } from './jianying-captions.mjs';
 import { slidesPdf, writePptx } from './slides.mjs';
@@ -1542,7 +1542,8 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
           if (!track.hidden) duration = Math.max(duration, c.end);
           if (kind !== 'sound') {
             /** @type {import('./nle.mjs').SourceFacts | null} */
-            let f = kind === 'page' ? null : { ...(await factsOf(path)), ...(c.w && c.h ? { w: c.w, h: c.h } : {}) };
+            const probed = kind === 'page' ? null : await factsOf(path);
+            let f = kind === 'page' ? null : { ...probed, ...(ownSize(probed, c, doc.stage) ?? {}) };
             /* a drawing has no pixels of its own: it is drawn as big as it shows, so the editor doesn't blow it up */
             if (f?.w && f.h && /\.svg$/i.test(row.src)) {
               const k = pictureRect(kind, { w: f.w, h: f.h }, doc.stage, row.box).w / f.w;

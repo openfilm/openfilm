@@ -117,7 +117,9 @@ function hostFacts(href) {
   if (src.origin !== location.origin) return Promise.resolve(null);
   const of = fromFilm(src);
   return fetch(new URL(`__film/media-facts?of=${encodeURIComponent(of)}`, location.href))
-    .then((r) => (r.ok ? r.json() : null)).then((f) => (f?.duration > 0 ? { duration: f.duration, w: f.w ?? 0, h: f.h ?? 0 } : null)).catch(() => null);
+    /* a file the host reads the picture's size of but no length of: its size is still its size, and it is the size a
+       clip placed with a width but no height takes its height from (#501) */
+    .then((r) => (r.ok ? r.json() : null)).then((f) => (f && (f.duration > 0 || (f.w > 0 && f.h > 0)) ? { duration: f.duration ?? 0, w: f.w ?? 0, h: f.h ?? 0 } : null)).catch(() => null);
 }
 
 /**
