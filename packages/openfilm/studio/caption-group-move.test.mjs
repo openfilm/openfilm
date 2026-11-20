@@ -63,6 +63,8 @@ test('unlocked caption tracks move with a mixed selection, with one undo for med
     assert.ok(body, 'the movable clip is drawn');
     await clip.click({ position: { x: body.width / 4, y: 10 } });
     await clip.locator('[data-block-frame]').waitFor();
+    /* Timeline focus is deferred; the selection frame can appear before its keyboard shortcuts own the press. */
+    await page.waitForFunction(() => Boolean(document.activeElement?.closest('[data-timeline]')));
     await page.keyboard.press('ControlOrMeta+a');
     await until(async () => await unlockedCues.locator('[data-block-frame]').count() === 183
       && await page.locator('[data-block-kind="mg"] [data-block-frame]').count() === 2,
