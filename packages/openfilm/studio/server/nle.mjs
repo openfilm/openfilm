@@ -152,6 +152,23 @@ function objectOffset(position, roomX, roomY) {
 }
 
 /**
+ * A picture's own size for the export: the file's, as ffprobe reads it, and the browser's own size of the clip only
+ * when it is a size of its own. The browser falls back to the stage's shape when it could not read the file's (see
+ * timeline.mjs), and the stage's shape is not the picture's: taking it over the probed size stretched a landscape
+ * clip on a portrait stage, and pushed it off the stage where it sat low (#501).
+ * @param {SourceFacts} probed @param {{ w: number | null, h: number | null }} seen @param {{ w: number, h: number }} stage
+ * @returns {{ w: number, h: number } | null}
+ */
+export function ownSize(probed, seen, stage) {
+  if (probed?.w > 0 && probed?.h > 0) return { w: probed.w, h: probed.h };
+  const w = seen?.w ?? 0, h = seen?.h ?? 0;
+  if (!(w > 0 && h > 0)) return null;
+  /* the stage's shape: the browser's fallback, not the picture's */
+  if (w === stage.w && h === stage.h) return null;
+  return { w, h };
+}
+
+/**
  * A footage or still clip's place (fitted whole inside its `box`, or the stage, or filling it: `fit` contain or cover;
  * where in it `position` says, centered when not said; `r` turns it about its center) as Basic Motion: the source's own
  * pixels × scale %, its center moved from the frame's by a share of the frame's width and height. A fill is cut at its
