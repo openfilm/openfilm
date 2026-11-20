@@ -179,6 +179,7 @@ export async function renderSound({ source, clips = [], bus, frames, out, codec,
     if (failure) throw failure;
   } catch (e) {
     fail(e instanceof Error ? e : new Error(String(e)));
+    await Promise.allSettled([...all, ...[...open.values()].map((c) => c.run)].map((run) => run.done));
     throw failure ?? e;
   } finally {
     if (timer) clearTimeout(timer);

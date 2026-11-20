@@ -33,7 +33,8 @@ import { DefaultResourceLoader, ModelRuntime, SessionManager, SettingsManager, c
 import { EnvHttpProxyAgent, install, setGlobalDispatcher } from 'undici';
 import { agentSessionsDir, openLog } from './chat-store.mjs';
 import { connectorTools } from './pi-connectors.mjs';
-import { IMAGE_BUDGET, THINKING, TOO_LARGE, WAIT_MINUTES, agentTools, contextUsed, effortOption, fitImages, modelOption, modelsJson, providerOf, retryNotice, stopReason, toolCall, toolContent } from './pi-config.mjs';
+import { connectionDetails, observeModelTransport } from './model-transport.mjs';
+import { IMAGE_BUDGET, THINKING, TOO_LARGE, WAIT_MINUTES, agentTools, contextUsed, effortOption, fitImages, isModelConnectionError, modelOption, modelsJson, providerOf, retryNotice, stopReason, toolCall, toolContent } from './pi-config.mjs';
 
 /* stdout is the protocol's: anything else Pi or a library prints goes to stderr */
 console.log = console.info = console.warn = console.debug = (...args) => process.stderr.write(`${args.map(String).join(' ')}\n`);
@@ -121,7 +122,7 @@ function modelLog(cwd, turnId) {
   let system = 'null';
   let tools = 'null';
   return {
-    write({ startedAt, messages, imageContext, toolsNow, answer }) {
+    write({ startedAt, messages, imageContext, toolsNow, answer, modelConnection }) {
       const all = messages.map((m) => JSON.stringify(m));
       let prefix = 0;
       while (prefix < keys.length && prefix < all.length && keys[prefix] === all[prefix]) prefix += 1;
@@ -130,6 +131,7 @@ function modelLog(cwd, turnId) {
       file.write('call', {
         startedAt, ms: Date.now() - startedAt, prefix, messages: messages.slice(prefix),
         ...(imageContext?.removed ? { imageContext } : {}),
+        ...(modelConnection ? { modelConnection } : {}),
         ...(toolsKey !== tools ? { tools: toolsNow } : {}), ...(systemKey !== system ? { systemPrompt: answer?.systemPrompt ?? null } : {}),
         answer: answer?.message ?? null,
       });
@@ -146,10 +148,10 @@ async function open(client, cwd, resumeId, mcpServers = []) {
   const file = resumeId ? SessionManager.findById(cwd, resumeId, sessionDir) : null;
   if (resumeId && !file) throw new Error('That conversation is not here any more.');
   const sessionManager = file ? SessionManager.open(file, sessionDir) : SessionManager.create(cwd, sessionDir);
-  /* the model clients' own timeout too (WAIT_MS above), then one more try */
-  const settingsManager = SettingsManager.inMemory({ httpIdleTimeoutMs: WAIT_MS, retry: { enabled: true, maxRetries: 1 } });
+  const settingsManager = SettingsManager.inMemory({ httpIdleTimeoutMs: WAIT_MS, retry: { enabled: true, maxRetries: 2 } });
   /* the request about to go: its whole context, for the turn's log */
   let pending = null;
+  const transport = { host: null, attempt: null };
   /* the session's id, once it has one: the questions `ask` puts are the session's */
   let sessionId = null;
   /* the pictures a request carries at most (pi-config.mjs IMAGE_BUDGET), and those the last one carried (bytes) */
@@ -230,8 +232,12 @@ async function open(client, cwd, resumeId, mcpServers = []) {
         });
       } },
       { name: 'openfilm-log', hidden: true, factory: (pi) => {
-        pi.on('context_with_system', (event) => { pending = { startedAt: Date.now(), messages: event.messages,
-          imageContext: { keptBytes: imagesSent, removed: imagesRemoved, pruned: imagesPruned, reason: imagePruneReason } }; });
+        pi.on('context_with_system', (event) => {
+          const startedAt = Date.now();
+          transport.attempt = { startedAt, wire: null };
+          pending = { startedAt, messages: event.messages,
+            imageContext: { keptBytes: imagesSent, removed: imagesRemoved, pruned: imagesPruned, reason: imagePruneReason } };
+        });
       } },
       { name: 'openfilm-ask', hidden: true, factory: (pi) => pi.registerTool(askTool(client, () => sessionId, (waiting) => { awaitingAnswer = waiting; })) },
       { name: 'openfilm-connectors', hidden: true, factory: (pi) => { for (const tool of connectors.tools) pi.registerTool(tool); } },
@@ -244,15 +250,23 @@ async function open(client, cwd, resumeId, mcpServers = []) {
     ...(startEffort !== 'auto' ? { thinkingLevel: startEffort } : {}),
     resourceLoader, sessionManager, settingsManager, tools: [...agentTools(), ...connectors.tools.map((tool) => tool.name)],
   });
-  /* a request refused as too large is one Pi tries again (its retry: once, the failed attempt left out of what is sent)
-     when it held pictures to leave out; Pi neither retries a 413 nor, but for Anthropic's own words, compacts for it */
+  // Use Pi's retry loop so a retry starts after the last completed tool result.
   const retryable = session._isRetryableError.bind(session);
-  session._isRetryableError = (message) => (TOO_LARGE.test(String(message?.errorMessage ?? '')) ? imagesSent > 0 : retryable(message));
+  session._isRetryableError = (message) => {
+    if (message.stopReason !== 'error') return false;
+    const error = String(message.errorMessage ?? '');
+    if (isModelConnectionError(error)) {
+      // A second answer could repeat text that was already streamed to the chat.
+      return !message.content.some((block) => block.type === 'text' && block.text);
+    }
+    if (session.retryAttempt > 0) return false;
+    return TOO_LARGE.test(error) ? imagesSent > 0 : retryable(message);
+  };
   /* what it runs on now, as the chat names it (a conversation taken up again may be on another model and effort) */
   const now = ownOf(session.model);
   const onModel = now.id ?? startModel;
   const levels = byId.get(onModel)?.levels ?? ['auto'];
-  const entry = { session, connectors, log: null, answer: null, overflow: null, model: onModel,
+  const entry = { session, connectors, transport, log: null, answer: null, overflow: null, modelConnection: null, retries: 0, model: onModel,
     effort: now.thinking && levels.includes(session.thinkingLevel) ? session.thinkingLevel : !now.thinking && levels.includes('auto') ? 'auto' : byId.get(onModel)?.effort ?? 'auto' };
   /* a conversation taken up again on a model no longer set up: on the one a session starts on */
   if (!now.id) await use(entry, onModel, entry.effort);
@@ -280,6 +294,8 @@ async function open(client, cwd, resumeId, mcpServers = []) {
         if (message?.role !== 'assistant') break;
         /* the turn's last answer: Pi drops one too long for the model from the conversation as it tries to recover */
         entry.answer = message;
+        entry.modelConnection = message.stopReason === 'error' && isModelConnectionError(message.errorMessage)
+          ? connectionDetails(transport, message, entry.retries) : null;
         /* refused as too large: the request tried again (see below) carries half of its pictures */
         if (message.stopReason === 'error' && TOO_LARGE.test(String(message.errorMessage ?? '')) && imagesSent > 0) {
           imageBudget = Math.floor(imagesSent / 2);
@@ -288,9 +304,10 @@ async function open(client, cwd, resumeId, mcpServers = []) {
         }
         if (pending && entry.log) {
           const toolsNow = (session.agent?.state?.tools ?? []).map((t) => ({ name: t.name, description: t.description, parameters: t.parameters }));
-          entry.log.write({ ...pending, toolsNow, answer: { message, systemPrompt: session.systemPrompt } });
+          entry.log.write({ ...pending, toolsNow, answer: { message, systemPrompt: session.systemPrompt }, modelConnection: entry.modelConnection });
         }
         pending = null;
+        transport.attempt = null;
         const used = contextUsed(message, session.model);
         if (used) send({ sessionUpdate: 'usage_update', ...used });
         break;
@@ -308,8 +325,12 @@ async function open(client, cwd, resumeId, mcpServers = []) {
           content: toolContent(event.result), rawOutput: event.result?.content?.filter?.((b) => b?.type === 'text').map((b) => b.text).join('\n') ?? '' });
         break;
       case 'auto_retry_start':
+        entry.retries = event.attempt;
         /* the service failed or sent nothing in time, and Pi tries again: the chat says so (nothing once it answers) */
-        send(retryNotice(event));
+        send(retryNotice(isModelConnectionError(event.errorMessage) ? event : { ...event, maxAttempts: 1 }));
+        break;
+      case 'auto_retry_end':
+        entry.retries = 0;
         break;
       case 'compaction_end':
         /* Pi could not make room for the conversation: the turn ends on that (its last answer may not say it) */
@@ -401,13 +422,40 @@ function promptOf(blocks) {
 function failed(e) {
   if (e instanceof acp.RequestError) return e;
   const text = e instanceof Error ? e.message : String(e);
-  return new acp.RequestError(-32603, text, typeof e?.details === 'string' && e.details !== text ? { details: e.details } : undefined);
+  const data = typeof e?.details === 'string' && e.details !== text ? { details: e.details } : {};
+  if (e?.modelConnection) data.modelConnection = e.modelConnection;
+  return new acp.RequestError(-32603, text, Object.keys(data).length ? data : undefined);
 }
 
 /** A request whose failure the chat shows as it is said. */
 const said = (handler) => async (params) => {
   try { return await handler(params); } catch (e) { throw failed(e); }
 };
+
+const TURN_CHECKPOINT = 'openfilm-turn';
+
+/** Resume from the last durable user/tool boundary in Pi's own transcript. */
+async function resumeTurn(session, id) {
+  const branch = session.sessionManager.getBranch();
+  const index = branch.findLastIndex((entry) => entry.type === 'custom' && entry.customType === TURN_CHECKPOINT);
+  if (index < 0 || branch[index]?.data?.id !== id
+    || !branch.slice(index + 1).some((entry) => entry.type === 'message' && entry.message.role === 'user')) {
+    throw new Error('The original task has no saved checkpoint to resume.');
+  }
+  let last = session.agent.state.messages.at(-1);
+  if (!last || (last.role === 'assistant' && last.stopReason !== 'error' && last.stopReason !== 'aborted')) {
+    throw new Error('The original task has already finished.');
+  }
+  // Persist the omissions so Pi can't reintroduce an earlier failed attempt when
+  // it rebuilds the context for the next retry.
+  while (last?.role === 'assistant' && (last.stopReason === 'error' || last.stopReason === 'aborted')) {
+    session._omitRecoveryAttempt(last);
+    last = session.agent.state.messages.at(-1);
+  }
+  // Start the session's managed run with no new user message. Calling the underlying
+  // agent directly skips the session's post-run retry, compaction and cancellation.
+  await session._runAgentPrompt([]);
+}
 
 const connection = new acp.AgentSideConnection((client) => ({
   async initialize() {
@@ -430,12 +478,20 @@ const connection = new acp.AgentSideConnection((client) => ({
     entry.log = typeof meta.turnId === 'string' && typeof meta.cwd === 'string' ? modelLog(meta.cwd, meta.turnId) : null;
     entry.answer = null;
     entry.overflow = null;
+    entry.modelConnection = null;
+    entry.retries = 0;
     const progress = entry.startProgress();
     try {
-      const { text, images } = promptOf(params.prompt);
-      await session.prompt(text, images.length ? { images } : undefined);
+      await observeModelTransport(session.model.baseUrl, entry.transport, async () => {
+        if (meta.recover === true && typeof meta.turnId === 'string') await resumeTurn(session, meta.turnId);
+        else {
+          if (typeof meta.turnId === 'string') session.sessionManager.appendCustomEntry(TURN_CHECKPOINT, { id: meta.turnId });
+          const { text, images } = promptOf(params.prompt);
+          await session.prompt(text, images.length ? { images } : undefined);
+        }
+      });
       const last = entry.answer ?? [...session.messages].reverse().find((m) => m.role === 'assistant');
-      return { stopReason: stopReason(entry.overflow && last?.stopReason !== 'aborted' ? { stopReason: 'error', errorMessage: entry.overflow } : last) };
+      return { stopReason: stopReason(entry.overflow && last?.stopReason !== 'aborted' ? { stopReason: 'error', errorMessage: entry.overflow } : last, entry.overflow ? null : entry.modelConnection) };
     } finally {
       clearInterval(progress);
       entry.log?.end();

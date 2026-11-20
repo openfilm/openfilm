@@ -73,23 +73,41 @@ export function projectPrint(root) {
   return hash.digest('hex');
 }
 
+/** The last film.html read of each project, and what it says: asked again and again while the film plays, read once. */
+const films = new Map();
+
+/**
+ * A project's film.html as a render's name takes it: its text, its head (filmHead) and the film it says (null when it
+ * says none). Read again only when the text changed.
+ * @param {string} root @returns {{ text: string, head: string, doc: any }}
+ */
+function filmOf(root) {
+  let text = '';
+  try { text = readFileSync(join(root, FILM_FILE), 'utf8'); } catch { /* none: nothing renders */ }
+  const known = films.get(root);
+  if (known?.text === text) return known;
+  const doc = readFilmFile(text).doc ?? null;
+  const film = { text, head: doc ? filmHead(text) : text, doc };
+  films.set(root, film);
+  return film;
+}
+
 /**
  * The name of a render of film seconds [a, b) at `fps` and `height` (its short side), for the project as it is now.
  * @param {string} root @param {number} a @param {number} b @param {number} fps @param {number} height @param {string} [print]
+ * @param {{ text: string, head: string, doc: any }} [film] its film.html as filmOf reads it
  */
-export function previewKey(root, a, b, fps, height, print = projectPrint(root)) {
-  let film = '';
-  try { film = readFileSync(join(root, FILM_FILE), 'utf8'); } catch { /* none: nothing renders */ }
-  const read = readFilmFile(film);
-  if (read.doc) {
-    const relevant = { ...read.doc, tracks: read.doc.tracks.map((track) => ({ ...track, clips: track.clips.filter((clip) => {
+export function previewKey(root, a, b, fps, height, print = projectPrint(root), film = filmOf(root)) {
+  let named = film.text;
+  if (film.doc) {
+    const relevant = { ...film.doc, tracks: film.doc.tracks.map((/** @type {any} */ track) => ({ ...track, clips: track.clips.filter((/** @type {any} */ clip) => {
       const start = clip.at ?? 0;
       const duration = clip.time?.length === 2 ? (clip.time[1] - clip.time[0]) / (clip.speed ?? 1) : Infinity;
       return start < b && start + duration > a;
     }) })) };
-    film = filmHead(film) + JSON.stringify(relevant);
+    named = film.head + JSON.stringify(relevant);
   }
-  return createHash('sha1').update(`${VERSION}\0${film}\0${print}\0${a}\0${b}\0${fps}\0${height}`).digest('hex').slice(0, 20);
+  return createHash('sha1').update(`${VERSION}\0${named}\0${print}\0${a}\0${b}\0${fps}\0${height}`).digest('hex').slice(0, 20);
 }
 
 /**
@@ -127,6 +145,7 @@ const wanted = new Map();
  */
 export function ensurePreviews(root, ranges, fps, height, make = renderApart, { schedule = true } = {}) {
   const print = projectPrint(root);
+  const film = filmOf(root);
   const dir = previewDir(root);
   /* what is known to play late, for the next session (not kept: found again as it plays) */
   if (JSON.stringify(knownLate(root)) !== JSON.stringify(ranges)) {
@@ -140,7 +159,7 @@ export function ensurePreviews(root, ranges, fps, height, make = renderApart, { 
     const a = Math.floor(from * fps + 1e-6) / fps;
     const b = Math.ceil(to * fps - 1e-6) / fps;
     if (!(b > a)) continue;
-    const key = previewKey(root, a, b, fps, height, print);
+    const key = previewKey(root, a, b, fps, height, print, film);
     const out = join(dir, `${key}.mp4`);
     current.add(out);
     if (existsSync(out)) { states.push({ a, b, key, state: 'ready' }); continue; }

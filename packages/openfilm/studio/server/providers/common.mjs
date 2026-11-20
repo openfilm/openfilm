@@ -24,16 +24,30 @@ export const steadily = { first: 1000, most: 10_000 };
  * the service cannot be reached or is passing between processes, for up to that long; `keep`: answers handed back as
  * they are, for the caller to read (an asynchronous run's 404 or 409).
  * @param {string} service @param {string} url @param {RequestInit} init @param {RunContext} ctx
- * @param {{ patience?: number, keep?: number[] }} [how]
+ * @param {{ patience?: number, keep?: number[], stopOnCommandFailure?: boolean, retryThrottle?: boolean }} [how]
  */
 export async function call(service, url, init, ctx, how = {}) {
   const until = Date.now() + (how.patience ?? 0);
   let res;
+  let retriedThrottle = false;
   for (let wait = steadily.first; ; wait = Math.min(steadily.most, wait * 2)) {
     try {
       /* a short call can be given its own limit (`networkTimeoutMs`), so a silent connection is retried instead of awaited */
       res = await fetch(url, { ...init, signal: ctx.networkTimeoutMs ? AbortSignal.any([ctx.signal, AbortSignal.timeout(ctx.networkTimeoutMs)]) : ctx.signal });
+      if (how.retryThrottle && res.status === 429 && !retriedThrottle) {
+        const delay = await throttleDelay(res);
+        if (delay !== null) {
+          retriedThrottle = true;
+          try { await sleep(delay, ctx.signal); } catch { break; }
+          await res.body?.cancel();
+          continue;
+        }
+      }
       if (!PASSING.has(res.status) || Date.now() + wait > until) break;
+      if (how.stopOnCommandFailure && /application\/json/i.test(res.headers.get('content-type') ?? '')) {
+        const terminal = await res.clone().json().catch(() => null);
+        if (terminal?.error === 'command_failed') break;
+      }
       /* the answer not taken: let its connection go before asking again */
       await res.body?.cancel();
     } catch (e) {
@@ -49,6 +63,16 @@ export async function call(service, url, init, ctx, how = {}) {
   const error = Object.assign(await failure(service, res, ctx), { status: res.status, answered: /json/i.test(res.headers.get('content-type') ?? '') });
   if (init.method === 'POST' && res.status >= 500 && !new Headers(init.headers).has('idempotency-key')) Object.assign(error, { mediaUncertain: true });
   throw error;
+}
+
+/** Wait once for an explicit transient rejection. */
+async function throttleDelay(/** @type {Response} */ response) {
+  const body = await response.clone().text().catch(() => '');
+  const retryAfter = response.headers.get('retry-after');
+  if (outOfBalance(429, body) || (!retryAfter && !/heavy traffic|too many concurrent requests|rate.limit/i.test(body))) return null;
+  const delay = retryAfter === null ? 750 + Math.round(Math.random() * 500)
+    : /^\d+$/.test(retryAfter) ? Number(retryAfter) * 1000 : Math.max(0, Date.parse(retryAfter) - Date.now());
+  return Number.isFinite(delay) && delay <= 5000 ? delay : null;
 }
 
 /**

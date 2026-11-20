@@ -40,11 +40,13 @@ import {
 } from '@/lib/timeline-drag';
 import {
   linkedIds,
+  mainTrackOf,
   magnetOn,
   planEdges,
   planMove,
   planRippleTrim,
   planSpeed,
+  ridesOf,
   sourceLeftMs,
   type EditModel,
   type EditPlan,
@@ -55,6 +57,7 @@ import { edgeHeld, speedDragEdge, speedForLength, speedRoomMs } from '@/lib/clip
 import { planCopies } from '@/lib/timeline-clipboard';
 import { switchesOf, type TimelinePrefs } from '@/lib/timeline-prefs';
 import type { TimelineBlock, TimelineTrack } from '@/lib/timeline-layout';
+import { trackDropBand, type ClipDropTarget } from './replace-drop';
 
 /**
  * What a press on the timeline does: move a clip, trim one of its edges, or change its speed by one of its edges (the
@@ -115,6 +118,8 @@ export interface DragPreview {
   snappedTo: SnapTarget | null;
   /** The selection moving along, by the same offset. */
   moves: BlockMove[];
+  /** Linked overlays follow the held clip horizontally. After release, their places come from the edit plan. */
+  following?: ReadonlyMap<string, { startMs: number; endMs: number }>;
   /** Where release puts it. Meaningful only when `droppable`. */
   landStartMs: number;
   landEndMs: number;
@@ -141,6 +146,8 @@ export interface DragPreview {
   opens: ReadonlyMap<string, number>;
   /** An insert onto a track: where it goes in (a line is drawn there). */
   insertAtMs: number | null;
+  /** Explicit landing on another clip, with its own drop marker. */
+  dropTarget?: ClipDropTarget;
   /** Where the clips the edit pushes, trims or cuts are drawn meanwhile, by block id; null: it goes. */
   ghosts: ReadonlyMap<string, { startMs: number; endMs: number } | null>;
   tip: GestureTip | null;
@@ -209,10 +216,13 @@ export function useBlockDrag(opts: {
   scrollEl?: React.RefObject<HTMLElement | null>;
   /** The row and band under the pointer. Without it a clip can only slide along its own row. */
   laneHitAtY?: (clientY: number) => { lane: number; band: DropBand };
+  clipDropAt?: (clientX: number, clientY: number, skip: ReadonlySet<string>, laneIndex: number) => ClipDropTarget | null;
   /** The selection: dragging one of it moves all of it (see dragCompanions). Read at press time. */
   selectedIds?: readonly string[];
   /** Write the plan's operations, as one edit. Null = done; a sentence = it did not go through. */
   onCommit?: (ops: Op[], label: string) => Promise<string | null>;
+  /** Ask before replacing an existing clip. The timeline plans the edit again after confirmation. */
+  onReplaceDrop?: (source: TimelineBlock, target: TimelineBlock) => void;
   /**
    * Clips moved out of the timeline and let go over the panel of the app around Studio (its chat,
    * `[data-studio-host-panel]`): the move is dropped and these clips are handed to it instead.
@@ -309,8 +319,21 @@ export function useBlockDrag(opts: {
         ...partnersOf(block).map((b) => b.id),
       ])].filter((id) => id !== block.id).map((id) => allBlocks.find((b) => b.id === id)).filter(writable)
       : [];
+    const inHand = new Set([block.id, ...crowd.map((b) => b.id)]);
     const partners = mode === 'move' ? [] : partnersOf(block);
     const ids = [block.clipId!, ...(mode === 'move' ? crowd : partners).map((b) => b.clipId!)];
+    const movedClips = new Set(ids);
+    const main = mainTrackOf(model);
+    const riders = mode === 'move' && !copy && model.some((track) => track.index === main && track.clips.some((clip) => movedClips.has(clip.id)))
+      ? [...ridesOf(model, main, movedClips)].flatMap(([id, ride]) => {
+        const rider = blockOfClip.get(id);
+        return rider && movedClips.has(ride.host) ? [rider] : [];
+      })
+      : [];
+    const together = new Set([...inHand, ...riders.map((rider) => rider.id)]);
+    const movingIds = [...inHand, ...partners.map((b) => b.id)];
+    const followingIds = [...together];
+    const earliestStartMs = Math.min(geom.startMs, ...crowd.map((b) => b.startMs));
 
     const homeLaneIndex = lanes.findIndex((lane) => lane.blocks.some((b) => b.id === block.id));
     const homeLane = homeLaneIndex >= 0 ? lanes[homeLaneIndex] : undefined;
@@ -350,11 +373,11 @@ export function useBlockDrag(opts: {
       const scrolledY = (latest.current.scrollEl?.current?.scrollTop ?? startScrollTop) - startScrollTop;
       const deltaMs = (ev.clientX - startX + scrolled) / pxPerMs;
       const snapping = p.snap;
-      const movingIds = [block.id, ...crowd.map((b) => b.id), ...partners.map((b) => b.id)];
-      const snapKey = `${latest.current.playheadMs}`;
+      const follows = p.linkage && riders.length > 0;
+      const snapKey = `${latest.current.playheadMs}:${follows}`;
       if (snapping && !snapCache.has(snapKey)) {
         snapCache.clear();
-        snapCache.set(snapKey, snapTargetsFor(latest.current.allBlocks, movingIds, latest.current.playheadMs, edgeMs, latest.current.snapPointsMs));
+        snapCache.set(snapKey, snapTargetsFor(latest.current.allBlocks, follows ? followingIds : movingIds, latest.current.playheadMs, edgeMs, latest.current.snapPointsMs));
       }
       const targets: SnapTarget[] = snapping ? snapCache.get(snapKey)! : [];
       const base = {
@@ -457,13 +480,27 @@ export function useBlockDrag(opts: {
       /* a move: the clip follows the hand; where it lands, and what it does to what is there, is the plan's */
       const offsetY = ev.clientY - startY + scrolledY;
       const hit = latest.current.laneHitAtY?.(ev.clientY) ?? { lane: homeLaneIndex, band: 'body' as const };
+      const beforeStart = deltaMs < -earliestStartMs;
       const out = applyDrag(geom, 'move', deltaMs, targets, pxPerMs, block.room, crowd);
       const grouped = crowd.length > 0 && homeLaneIndex >= 0;
+      const hovered = !copy && !beforeStart && !homeLane?.captions
+        ? latest.current.clipDropAt?.(ev.clientX, ev.clientY, follows ? together : inHand, hit.lane) : null;
+      const hoverRow = latest.current.lanes[hovered?.laneIndex ?? hit.lane];
+      const band = trackDropBand(hovered, hit.band);
+      const doc = hoverRow?.docIndex;
+      const opensAt = band !== 'body' && doc != null && !copy && !beforeStart && !homeLane?.captions && !crowd.some((b) => b.cue)
+        ? doc + (band === 'below' ? 1 : 0) : null;
+      const onTrack = hovered && band === 'body' && !grouped && doc != null && !hoverRow?.captions
+        && (hoverRow?.role === 'audio') === isSound(block);
+      const insertAtMs = onTrack && hovered.zone !== 'replace'
+        ? hovered.zone === 'before' ? hovered.block.startMs : hovered.block.endMs : undefined;
+      const replaceId = onTrack && hovered.zone === 'replace' ? hovered.block.clipId : undefined;
+      const explicit = opensAt != null || onTrack;
       /* a group above every row or below every row: new tracks there, one per track it came from (as one clip does) */
       const onFilm = groupLanes.filter((lane) => lane.docIndex != null);
-      const groupOpens = grouped && onFilm.length
-        ? hit.lane < 0 ? onFilm[0]!.docIndex! : hit.lane >= latest.current.lanes.length ? onFilm.at(-1)!.docIndex! + 1 : null
-        : null;
+      const groupOpens = grouped && onFilm.length ? opensAt ?? (
+        hit.lane < 0 ? onFilm[0]!.docIndex! : hit.lane >= latest.current.lanes.length ? onFilm.at(-1)!.docIndex! + 1 : null
+      ) : null;
       const shift = groupOpens != null
         ? { ok: true, delta: 0, moves: [] as { id: string; trackIndex: number }[] }
         : grouped
@@ -481,22 +518,24 @@ export function useBlockDrag(opts: {
           }),
         ], groupLanes, hit.lane - homeLaneIndex)
         : { ok: true, delta: 0, moves: [] as { id: string; trackIndex: number }[] };
-      const drop = grouped ? { action: 'stay' as const } : moveDestFor(homeLane?.docIndex, singleLanes, hit.lane, isSound(block));
+      let drop: TrackDrop = grouped ? { action: 'stay' } : moveDestFor(homeLane?.docIndex, singleLanes, hit.lane, isSound(block));
+      if (!grouped && opensAt != null) drop = { action: 'insert', at: opensAt };
+      if (onTrack && doc != null) drop = hoverRow?.locked ? { action: 'refuse' } : { action: 'move', trackIndex: doc };
       /*
        * Looks flush: make it flush. The nearest snap target is often the playhead a few ms off a neighbor's edge —
        * under a pixel on screen, but those ms would put it on a new track (flushShiftMs). Only with snapping on, for
        * one clip, put down.
        */
       const destLane = drop.action === 'move' ? singleLanes.find((l) => l.docIndex === drop.trackIndex) : singleLanes[homeLaneIndex];
-      const flush = !grouped && snapping && drop.action !== 'insert'
+      const flush = !beforeStart && !grouped && snapping && drop.action !== 'insert'
         ? flushShiftMs({ startMs: out.startMs, endMs: out.endMs }, destLane?.occupied ?? [], SNAP_THRESHOLD_PX / pxPerMs)
         : null;
       /* a copy (⌥ at the press, often still held) is always put down: ⌥ inserts only a move */
-      const editMode: MoveMode = copy ? 'place' : moveEditMode(altNow);
+      const editMode: MoveMode = insertAtMs != null ? 'insert' : copy || explicit ? 'place' : moveEditMode(altNow);
       /* onto the main track with the magnet it goes in between: the insert point decides, not a snap */
       const landsOn = groupOpens != null ? null : drop.action === 'move' ? drop.trackIndex : drop.action === 'stay' ? homeLane?.docIndex : null;
       const mainInsert = !grouped && magnetOn(m, landsOn, p.magnet);
-      const settle = editMode === 'place' && !mainInsert ? flush : null;
+      const settle = editMode === 'place' && !mainInsert && !explicit ? flush : null;
       const to = new Map<string, TrackDest>();
       if (drop.action === 'move') to.set(block.clipId!, drop.trackIndex);
       if (drop.action === 'insert') to.set(block.clipId!, { insert: drop.at });
@@ -507,22 +546,27 @@ export function useBlockDrag(opts: {
       if (groupOpens != null) for (const b of [block, ...crowd]) if (b.clipId) to.set(b.clipId, { insert: groupOpens });
       const outside = overHostPanel(ev);
       const moveBy = out.startMs + (settle?.shiftMs ?? 0) - geom.startMs;
+      const pointerMs = beforeStart ? 0 : grabMs + deltaMs;
       /* ⌥ at the press: copies land there, the clips stay (planCopies) */
       const plan = outside || drop.action === 'refuse' || !shift.ok ? null : copy
-        ? planCopies(m, { ids, deltaMs: moveBy, to, pointerMs: grabMs + deltaMs, ...switchesOf(p) })
-        : planMove(m, { ids, deltaMs: moveBy, pointerMs: grabMs + deltaMs, to, mode: editMode, ...switchesOf(p) });
+        ? planCopies(m, { ids, deltaMs: moveBy, to, pointerMs, ...switchesOf(p) })
+        : planMove(m, {
+          ids, deltaMs: moveBy, pointerMs, to, mode: editMode, ...switchesOf(p),
+          ...(insertAtMs != null ? { insertAtMs } : {}),
+          ...(replaceId ? { replaceId } : {}),
+        });
       lastPlan = plan;
       document.body.style.cursor = outside || copy ? 'copy' : 'grabbing';
       const landed = plan?.placed.get(block.clipId!);
-      const landStartMs = landed?.startMs ?? out.startMs;
-      const inHand = new Set([block.id, ...crowd.map((b) => b.id)]);
+      const landStartMs = landed?.startMs ?? (plan && 'landMs' in plan && typeof plan.landMs === 'number' ? plan.landMs : out.startMs);
       last = {
         ...base,
         startMs: geom.startMs + deltaMs,
         endMs: geom.endMs + deltaMs,
         /* a push into contact counts as a snap too: the guide shows it landed against the neighbor */
-        snappedTo: plan && editMode === 'place' && !mainInsert ? (settle ? { ms: settle.edgeMs, kind: 'edge' as const } : out.snappedTo) : null,
+        snappedTo: plan && editMode === 'place' && !mainInsert && !explicit ? (settle ? { ms: settle.edgeMs, kind: 'edge' as const } : out.snappedTo) : null,
         moves: crowd.map((b) => ({ id: b.id, startMs: b.startMs + deltaMs, endMs: b.endMs + deltaMs })),
+        ...(follows ? { following: new Map(riders.map((b) => [b.id, { startMs: b.startMs + deltaMs, endMs: b.endMs + deltaMs }])) } : {}),
         landStartMs,
         landEndMs: landStartMs + (geom.endMs - geom.startMs),
         landMoves: crowd.map((b) => {
@@ -540,6 +584,7 @@ export function useBlockDrag(opts: {
         editMode,
         opens: opensOf(plan, blockOfClip, inHand),
         insertAtMs: plan && (editMode === 'insert' || mainInsert) && drop.action !== 'insert' ? landStartMs : null,
+        ...(plan && explicit && hovered ? { dropTarget: hovered } : {}),
         ghosts: plan ? ghostsOf(plan, inHand) : new Map(),
         tip: null,
       };
@@ -661,6 +706,11 @@ export function useBlockDrag(opts: {
         setPreview(null);
         return;
       }
+      if (last.dropTarget?.zone === 'replace') {
+        setPreview(null);
+        latest.current.onReplaceDrop?.(block, last.dropTarget.block);
+        return;
+      }
       const ops = lastPlan.ops;
       /* the clips stay where they were let go until the new layout is drawn */
       const held = {
@@ -705,6 +755,9 @@ export function useBlockDrag(opts: {
     if (preview.id === id) return { startMs: preview.startMs, endMs: preview.endMs };
     const m = preview.moves.find((x) => x.id === id);
     if (m) return { startMs: m.startMs, endMs: m.endMs };
+    const following = !preview.landed && preview.following?.get(id);
+    if (following) return following;
+    if (preview.dropTarget && !preview.landed) return null;
     if (!preview.ghosts.has(id)) return null;
     const ghost = preview.ghosts.get(id);
     return ghost ? { startMs: ghost.startMs, endMs: ghost.endMs } : { startMs: 0, endMs: 0, gone: true };

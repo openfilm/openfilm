@@ -43,14 +43,15 @@ export function frameBox(stage, frame, fill) {
  * film's pixels; `remove()` when done.
  * @param {string} root @param {{ w: number, h: number }} stage @param {string} frame @param {'contain' | 'cover'} fill
  * @param {Cue[]} cues @param {SubtitleStyle} style @param {boolean} [transparent] nothing behind the film (an alpha export)
+ * @param {string} [timeline] The root timeline the render will serve.
  */
-export async function burnFilm(root, stage, frame, fill, cues, style, transparent = false) {
+export async function burnFilm(root, stage, frame, fill, cues, style, transparent = false, timeline) {
   const box = frameBox(stage, frame, fill);
   const dir = join(root, '.film', 'cache', 'export', `burn-${process.pid}-${randomBytes(4).toString('hex')}`);
   await mkdir(dir, { recursive: true });
   try {
     await copyFile(fileURLToPath(new URL('../studio/server/film-subtitle.mjs', import.meta.url)), join(dir, 'film-subtitle.mjs'));
-  const entry = existsSync(join(root, FILM_FILE)) ? `/${FILM_FILE}` : '/index.html';
+  const entry = timeline !== undefined || existsSync(join(root, FILM_FILE)) ? `/${FILM_FILE}` : '/index.html';
   const x = (box.w - stage.w * box.scale) / 2, y = (box.h - stage.h * box.scale) / 2;
   const json = (/** @type {unknown} */ v) => JSON.stringify(v).replace(/</g, '\\u003c');
   await writeFile(join(dir, 'index.html'), `<!doctype html>
@@ -104,14 +105,14 @@ window.__filmSounds = () => inner?.__filmSounds?.() ?? [];
   return { dir, box, remove: () => tidy(dir) };
 }
 
-/** The film's stage, from film.html (or, for a single page, from the page). @param {string} root */
-export async function stageOf(root) {
+/** The film's stage, from film.html (or, for a single page, from the page). @param {string} root @param {string} [timeline] */
+export async function stageOf(root, timeline) {
   const file = join(root, FILM_FILE);
-  if (existsSync(file)) {
-    const { doc } = readFilmFile(readFileSync(file, 'utf8'));
+  if (timeline !== undefined || existsSync(file)) {
+    const { doc } = readFilmFile(timeline ?? readFileSync(file, 'utf8'));
     if (doc) return doc.stage;
   }
-  const probe = await open(root);
+  const probe = await open(root, { timeline });
   try { return { w: probe.film.meta.width, h: probe.film.meta.height }; } finally { await probe.close(); }
 }
 
@@ -119,14 +120,14 @@ export async function stageOf(root) {
  * The film with its subtitles burned in, when the ask wants them and the film has some (else null): what to render
  * instead of the project (see burnFilm). `captions(root)`: the film's cues and the person's style (captions.mjs).
  * @param {string} root @param {{ burnSubtitles?: boolean, frame?: string, fill?: 'contain' | 'cover' }} ask
- * @param {(root: string) => Promise<{ cues: Cue[], style: SubtitleStyle }>} captions @param {boolean} [transparent]
+ * @param {(root: string) => Promise<{ cues: Cue[], style: SubtitleStyle }>} captions @param {boolean} [transparent] @param {string} [timeline]
  */
-export async function burned(root, ask, captions, transparent = false) {
+export async function burned(root, ask, captions, transparent = false, timeline) {
   if (!ask.burnSubtitles) return null;
   /* the cues as stored: the page picks the shown language itself (filmSubtitleFrameHtml), and picking it twice
      puts a bilingual line's translation under it twice */
   const { cues, style, tracks } = /** @type {{ cues: Cue[], style: SubtitleStyle, tracks?: boolean }} */ (await captions(root));
   /* caption tracks are the film's own picture: drawn as it is, never burned in again */
   if (tracks || !filmSubtitleShown(cues, style).some((c) => c.durMs > 0 && c.text.trim())) return null;
-  return burnFilm(root, await stageOf(root), ask.frame ?? 'native', ask.fill ?? 'contain', cues, style, transparent);
+  return burnFilm(root, await stageOf(root, timeline), ask.frame ?? 'native', ask.fill ?? 'contain', cues, style, transparent, timeline);
 }

@@ -105,7 +105,7 @@ export function PreviewFrame({
       style={{ paddingTop: previewTop(navigator.platform), WebkitAppRegion: 'no-drag' } as React.CSSProperties}
       onClick={onClose}>
       <div ref={box} tabIndex={-1} role="dialog" aria-modal="true" aria-label={name}
-        className="relative isolate flex h-[min(900px,92dvh)] min-h-0 w-full max-w-[1480px] flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#181818] shadow-2xl outline-none"
+        className="relative isolate flex h-[min(900px,92dvh)] min-h-0 w-full max-w-[1480px] flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#191919] shadow-2xl outline-none"
         style={AREA_STYLE} onClick={event => event.stopPropagation()}>
         <header className="flex h-14 shrink-0 items-center gap-2.5 border-b border-white/10 px-4">
           {icon}

@@ -109,18 +109,17 @@ function LockedNotice() {
 }
 
 /**
- * Studio stopped (an update, a crash, the computer slept): a bar across the top while it is away, so nothing seems to
- * hang for no reason. Reconnecting is tried all along; once it has been away a while the page is covered (an export or
- * an edit made now would go nowhere) and the bar says how to start it again: this page reconnects by itself.
+ * The event connection is still down. The page keeps reconnecting and the desktop can copy local diagnostics.
  */
 function ConnectionNotice() {
   const t = useT();
   const state = useSyncExternalStore(studioConnection.subscribe, studioConnection.get);
-  const [copied, setCopied] = useState(false);
-  useEffect(() => { if (state === 'up') setCopied(false); }, [state]);
+  const [copyState, setCopyState] = useState<'idle' | 'copying' | 'copied' | 'failed'>('idle');
+  useEffect(() => { if (state === 'up') setCopyState('idle'); }, [state]);
   if (state === 'up') return null;
   if (state === 'locked') return <LockedNotice />;
   const gone = state === 'gone';
+  const copyReport = studioHost?.agents?.copyReport;
   const COMMAND = 'openfilm open';
   return (
     <>
@@ -128,15 +127,28 @@ function ConnectionNotice() {
       <div role="alert" className={`fixed inset-x-0 top-0 z-[10050] flex flex-wrap items-center justify-center gap-x-3 gap-y-1.5 px-4 py-2.5 text-[13px] font-medium text-white shadow-lg ${gone ? 'bg-[#b42318]' : 'bg-[#b54708]'}`}>
         <span aria-hidden className={`h-2 w-2 shrink-0 rounded-full bg-white ${gone ? '' : 'animate-pulse'}`} />
         <span>{t(gone ? (studioHost ? 'connection.goneApp' : 'connection.gone') : 'connection.lost')}</span>
-        {gone && !studioHost ? (
+        {copyReport ? (
           <button
             type="button"
-            onClick={() => { void navigator.clipboard?.writeText(COMMAND).then(() => setCopied(true), () => {}); }}
+            disabled={copyState === 'copying'}
+            onClick={() => {
+              setCopyState('copying');
+              void copyReport({ offline: true }).then(({ ok }) => setCopyState(ok ? 'copied' : 'failed'), () => setCopyState('failed'));
+            }}
+            className="rounded-md bg-white/15 px-2 py-0.5 text-[12.5px] ring-1 ring-inset ring-white/30 hover:bg-white/25"
+          >
+            {t(copyState === 'copied' ? 'settings.report.copied' : copyState === 'copying' ? 'settings.report.making' : 'settings.report.copy')}
+          </button>
+        ) : gone && !studioHost ? (
+          <button
+            type="button"
+            onClick={() => { void navigator.clipboard?.writeText(COMMAND).then(() => setCopyState('copied'), () => {}); }}
             className="rounded-md bg-white/15 px-2 py-0.5 font-mono text-[12.5px] ring-1 ring-inset ring-white/30 hover:bg-white/25"
           >
-            {copied ? t('connection.copied') : COMMAND}
+            {copyState === 'copied' ? t('connection.copied') : COMMAND}
           </button>
         ) : null}
+        {copyState === 'failed' ? <span>{t('settings.report.failed')}</span> : null}
       </div>
     </>
   );

@@ -65,6 +65,27 @@ export type FactsOf = (id: string) => ClipFacts | undefined;
 /** A cut: the clip ending there (`a`) and the one starting there (`b`); one of them alone is a clip's edge. */
 export interface CutRef { a: string | null; b: string | null }
 
+export interface PictureCut { a: string; b: string; atMs: number; track: number }
+
+/** The visible picture track's join points, in timeline order. Gaps and clip edges alone are not joins. */
+export function pictureCuts(model: EditModel, facts: FactsOf): PictureCut[] {
+  return model.flatMap((track) => {
+    if (track.locked || track.captions || track.role === 'audio') return [];
+    const cuts: PictureCut[] = [];
+    for (let i = 1; i < track.clips.length; i++) {
+      const a = track.clips[i - 1]!;
+      const b = track.clips[i]!;
+      if (Math.abs(a.endMs - b.startMs) > TOUCH_MS) continue;
+      const before = facts(a.id);
+      const after = facts(b.id);
+      if (before?.picture && !before.white && after?.picture && !after.white) {
+        cuts.push({ a: a.id, b: b.id, atMs: b.startMs, track: track.index });
+      }
+    }
+    return cuts;
+  });
+}
+
 export interface FilmTransition {
   /** Its name on the timeline (stays while its clips do). */
   key: string;
@@ -89,7 +110,7 @@ export interface FilmTransition {
 
 /** What the timeline asks of the editor: a transition put on a cut, made longer or shorter, or taken away. */
 export type TransitionAsk =
-  | { kind: 'add'; type: TransitionKind; cut: CutRef; move?: { in: CutPreset; out?: CutPreset } }
+  | { kind: 'add'; type: TransitionKind; cut: CutRef; durationMs?: number; move?: { in: CutPreset; out?: CutPreset } }
   | { kind: 'resize'; key: string; durationMs: number }
   | { kind: 'remove'; key: string };
 
@@ -133,10 +154,12 @@ export function findTransitions(model: EditModel, facts: FactsOf): FilmTransitio
   const used = new Set<string>();
   const out: FilmTransition[] = [];
   const whites = clips.filter(({ clip }) => facts(clip.id)?.white);
+  /* the clips a transition can come in by: a fade in, or a move of their own (a film of hundreds of clips has few) */
+  const incoming = clips.filter(({ clip }) => { const f = facts(clip.id); return f && !f.white && ((f.fade[0] > 0) || f.moveIn); });
   for (const { clip: a, track: ta } of [...clips].sort((x, y) => Number(facts(y.clip.id)?.picture) - Number(facts(x.clip.id)?.picture))) {
     const fa = facts(a.id);
     if (!fa || fa.white || used.has(`a:${a.id}`)) continue;
-    for (const { clip: b, track: tb } of clips) {
+    for (const { clip: b, track: tb } of incoming) {
       const fb = facts(b.id);
       if (!fb || b.id === a.id || fb.white || fb.picture !== fa.picture || (!(fb.fade[0] > 0) && !fb.moveIn) || used.has(`b:${b.id}`)) continue;
       /* an overlap the incoming clip fades in over: the outgoing one fades out with it, or (a picture under it) stays whole */

@@ -10,8 +10,13 @@ import { join } from 'node:path';
 import { AgentSession } from './agents.mjs';
 import { agentOffer } from './openfilm-agent.mjs';
 
+const commandTool = process.platform === 'win32' ? 'powershell' : 'bash';
+const appendProgress = (word) => commandTool === 'powershell'
+  ? `Add-Content -LiteralPath progress.txt -Value '${word}' -Encoding Ascii -ErrorAction Stop`
+  : `echo '${word}' >> progress.txt`;
+
 /** A service on the Chat Completions API that answers "ok" and notes the model each request named (and each request, and its key). */
-async function service({ broke = false, fails = null, busyOnce = false, largest = Infinity, reads = 0, bash = null } = {}) {
+async function service({ broke = false, fails = null, busyOnce = false, hold = null, disconnectAt = [], interruptToolAt = 0, largest = Infinity, reads = 0, command = null } = {}) {
   const asked = [];
   const bodies = [];
   const keys = [];
@@ -23,17 +28,36 @@ async function service({ broke = false, fails = null, busyOnce = false, largest 
       asked.push(model);
       bodies.push(JSON.parse(body || '{}'));
       keys.push(String(req.headers.authorization ?? ''));
+      if (disconnectAt.includes(asked.length)) { res.destroy(); return; }
       /* a proxy in front of the service refusing a body past its size, with its own HTML page */
       if (body.length > largest) { res.writeHead(413, { 'content-type': 'text/html' }); res.end('<html><head><title>413 Request Entity Too Large</title></head><body><center><h1>413 Request Entity Too Large</h1></center><hr><center>openresty</center></body></html>'); return; }
       if (broke) { res.writeHead(402, { 'content-type': 'application/json' }); res.end(JSON.stringify({ error: { message: 'Insufficient Balance' } })); return; }
-      if (busyOnce && asked.length === 1) { res.writeHead(503, { 'content-type': 'application/json' }); res.end(JSON.stringify({ error: { message: 'The service is busy.' } })); return; }
+      if (busyOnce && asked.length === 1) {
+        const status = typeof busyOnce === 'number' ? busyOnce : 503;
+        const failure = status === 524 ? { status, error_name: 'origin_response_timeout', ray_id: 'test-ray' }
+          : { error: { message: 'The service is busy.' } };
+        res.writeHead(status, { 'content-type': 'application/json' }).end(JSON.stringify(failure));
+        return;
+      }
       if (fails) { res.writeHead(400, { 'content-type': 'application/json' }); res.end(JSON.stringify({ error: { message: fails } })); return; }
-      res.writeHead(200, { 'content-type': 'text/event-stream' });
+      res.writeHead(200, { 'content-type': 'text/event-stream', 'x-request-id': 'fixture-model-request' });
       const chunk = (choice, extra = {}) => `data: ${JSON.stringify({ id: 'c', object: 'chat.completion.chunk', created: 0, model, choices: [choice], ...extra })}\n\n`;
-      /* `bash`: the first answer runs that command */
-      if (bash && asked.length === 1) {
+      if (asked.length === interruptToolAt) {
+        res.write(chunk({ index: 0, delta: { role: 'assistant', tool_calls: [{
+          index: 0, id: 'incomplete-tool', type: 'function', function: { name: commandTool, arguments: JSON.stringify({ command: appendProgress('interrupted') }) },
+        }] }, finish_reason: null }));
+        setTimeout(() => res.destroy(), 50);
+        return;
+      }
+      if (hold && asked.length === hold.at) {
+        res.write(chunk({ index: 0, delta: { role: 'assistant', content: 'partial' }, finish_reason: null }));
+        hold.started(() => res.destroy());
+        return;
+      }
+      /* When given a command, the first answer runs it through that platform's tool. */
+      if (command && asked.length === 1) {
         res.end(chunk({ index: 0, delta: { role: 'assistant', tool_calls: [{
-          index: 0, id: 'bash-1', type: 'function', function: { name: 'bash', arguments: JSON.stringify({ command: bash }) },
+          index: 0, id: 'command-1', type: 'function', function: { name: commandTool, arguments: JSON.stringify({ command }) },
         }] }, finish_reason: null })
           + chunk({ index: 0, delta: {}, finish_reason: 'tool_calls' }) + 'data: [DONE]\n\n');
         return;
@@ -84,6 +108,86 @@ test('OpenFilm runs Pi on the shared account, switches cloud models and sends Op
     assert.ok(svc.bodies[0].tools.length > 0, 'the built-in agent can use its tools');
     assert.ok(svc.bodies[0].messages.some((m) => m.role === 'system'));
   } finally { session.close(); svc.close(); }
+});
+
+test('a paused Pi turn resumes with the selected model and retries disconnects without replaying tools', { timeout: 30_000 }, async () => {
+  let firstStarted;
+  const began = new Promise((resolve) => { firstStarted = resolve; });
+  const svc = await service({ hold: { at: 2, started: firstStarted }, interruptToolAt: 3, disconnectAt: [4], command: appendProgress('first') });
+  const cwd = mkdtempSync(join(tmpdir(), 'of-pi-pause-'));
+  const home = mkdtempSync(join(tmpdir(), 'of-pi-pause-home-'));
+  const progress = () => readFileSync(join(cwd, 'progress.txt'), 'utf8').replaceAll('\r\n', '\n');
+  const updates = [];
+  const opts = { agent: 'byok', cwd, harness: { home, models: [own('test', svc.url), own('other', svc.url)], env: { OPENFILM_BYOK_KEY_test: 'test-key', OPENFILM_BYOK_KEY_other: 'test-key' } }, onUpdate: (update) => updates.push(update) };
+  let agent = new AgentSession(opts);
+  try {
+    const { sessionId } = await agent.start();
+    const pending = agent.prompt([{ type: 'text', text: 'Original edit request' }], { turnId: 'original' });
+    await began;
+    assert.equal(progress(), 'first\n', 'the first command finished before pausing');
+    await agent.cancel();
+    assert.equal(await pending, 'cancelled');
+    agent.close();
+    await agent.ended();
+    agent = new AgentSession({ ...opts, resume: sessionId });
+    assert.equal((await agent.start()).resumed, true);
+    await agent.setConfigOption('model', 'other');
+    assert.equal(await agent.prompt([], { turnId: 'original', recover: true }), 'end_turn');
+    assert.equal(svc.bodies.length, 5);
+    assert.deepEqual(svc.asked, ['test', 'test', 'other', 'other', 'other']);
+    for (const { messages } of svc.bodies.slice(2)) {
+      assert.deepEqual(messages.filter((message) => message.role === 'user').flatMap((message) => message.content).map((part) => part.text ?? part), ['Original edit request']);
+      assert.equal(messages.filter((message) => message.role === 'tool').length, 1);
+    }
+    assert.equal(updates.filter((update) => update._meta?.openfilm?.noticeKey === 'composer.modelConnectionRetry').length, 2);
+    assert.equal(updates.filter((update) => update.sessionUpdate === 'tool_call').length, 1);
+    assert.equal(progress(), 'first\n', 'the first command ran exactly once and the interrupted command never ran');
+    await assert.rejects(agent.prompt([], { turnId: 'original', recover: true }), /already finished/);
+  } finally {
+    agent.close();
+    svc.close();
+    await agent.ended();
+    rmSync(cwd, { recursive: true, force: true });
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('a dropped model stream keeps the partial reply and surfaces the interruption without replay', { timeout: 30_000 }, async () => {
+  let disconnect;
+  const svc = await service({ hold: { at: 1, started: (drop) => { disconnect = drop; } } });
+  const cwd = mkdtempSync(join(tmpdir(), 'of-pi-dropped-stream-'));
+  const home = mkdtempSync(join(tmpdir(), 'of-pi-dropped-stream-home-'));
+  let reply = '';
+  const session = new AgentSession({ agent: 'byok', cwd,
+    harness: { home, models: [own('test', svc.url)], env: { OPENFILM_BYOK_KEY_test: 'test-key' } },
+    onUpdate: (update) => {
+      if (update.sessionUpdate === 'agent_message_chunk') {
+        reply += update.content.text;
+        disconnect();
+      }
+    },
+  });
+  try {
+    await session.start();
+    await assert.rejects(session.prompt([{ type: 'text', text: 'Hello' }]), (error) => {
+      assert.match(error.message, /connection to the model service was interrupted/i);
+      const { modelConnection, details } = error.data;
+      assert.match(details, /terminated|connection error/i);
+      assert.deepEqual({ ...modelConnection, elapsedMs: Number.isFinite(modelConnection.elapsedMs) }, {
+        phase: 'streaming', host: new URL(svc.url).host, elapsedMs: true, status: 200,
+        requestId: 'fixture-model-request', code: 'UND_ERR_SOCKET', retries: 0, partial: true,
+      });
+      return true;
+    });
+    assert.equal(reply, 'partial');
+    assert.equal(svc.asked.length, 1);
+  } finally {
+    session.close();
+    svc.close();
+    await session.ended();
+    rmSync(cwd, { recursive: true, force: true });
+    rmSync(home, { recursive: true, force: true });
+  }
 });
 
 test('OpenFilm account model requests follow the configured HTTP proxy', { timeout: 30_000 }, async () => {
@@ -269,7 +373,7 @@ test('a service with no balance left is named for the model the turn was on, not
 test("the app's own agent's key goes to its model's service, never to a command it runs: not in its environment, nor Pi's", { timeout: 60_000, skip: process.platform === 'win32' }, async () => {
   const KEY = `sk-hidden-${randomBytes(8).toString('hex')}`;
   /* what a command sees: its own environment, and Pi's as another program of this user reads it (ps; the BSD form, read on Linux too) */
-  const svc = await service({ bash: 'env > seen.txt; ps ewwp $PPID >> seen.txt 2>&1; echo done >> seen.txt' });
+  const svc = await service({ command: 'env > seen.txt; ps ewwp $PPID >> seen.txt 2>&1; echo done >> seen.txt' });
   const cwd = mkdtempSync(join(tmpdir(), 'of-pi-env-'));
   const session = new AgentSession({
     agent: 'byok', cwd,
@@ -345,6 +449,29 @@ test('a service that fails and is tried again says so in the chat as a notice, a
     assert.equal(notices[0].severity, 'warning');
     assert.equal(notices[0].title, 'The model service failed; trying again (1 of 1).');
     assert.match(notices[0].description, /The service is busy/);
+  } finally {
+    session.close();
+    svc.close();
+  }
+});
+
+test('a Cloudflare 524 retries once and forwards a localizable notice without proxy JSON', { timeout: 60_000 }, async () => {
+  const svc = await service({ busyOnce: 524 });
+  const updates = [];
+  const session = new AgentSession({
+    agent: 'byok',
+    cwd: mkdtempSync(join(tmpdir(), 'of-pi-')),
+    harness: { home: mkdtempSync(join(tmpdir(), 'of-pi-home-')), models: [own('a', svc.url)], model: 'a', env: { OPENFILM_BYOK_KEY_a: 'sk' } },
+    onUpdate: (update) => updates.push(update),
+  });
+  try {
+    await session.start();
+    assert.equal(await session.prompt([{ type: 'text', text: 'hi' }]), 'end_turn');
+    assert.equal(svc.asked.length, 2);
+    const notices = updates.filter((update) => update.sessionUpdate === 'notice');
+    assert.equal(notices.length, 1);
+    assert.equal(notices[0]._meta?.openfilm?.noticeKey, 'composer.modelTimeoutRetry');
+    assert.equal(notices[0].description, undefined);
   } finally {
     session.close();
     svc.close();

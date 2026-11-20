@@ -105,8 +105,6 @@ export interface Wiring {
   srcsInUse?: () => readonly string[];
   /** Stop what plays: the canvas is about to be shown over the workbench. */
   pause?: () => void;
-  /** Motion was picked: the workbench opens what Motion is worked in. */
-  motionShown?: () => void;
   /**
    * What the workbench has on the page's top bar, which the shell draws (shell/top-bar). `tools`: its own buttons, drawn
    * before the workbench switch. `menu`: a menu of its own that pops up at the pointer, kept in the bar (a right click

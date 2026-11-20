@@ -32,6 +32,9 @@ function Fixture() {
   const initial = React.useMemo<TranscriptItem[]>(() => {
     const startedAt = Date.now() - 5000;
     if (scenario === 'idle') return [];
+    if (scenario === 'working-command') return Array.from({ length: 9 }, (_, i) => ({
+      id: `command-${i}`, kind: 'act', act: 'command.run', pending: false,
+    }));
     if (scenario === 'asset') return [
       { id: 'intro', kind: 'text', text: 'I will make a picture first.', pending: false },
       { id: 'image', kind: 'act', act: 'asset.genImage', detail: 'A red pixel', pending: false, asset: { kind: 'image', src: 'assets/pixel.png' } },
@@ -59,8 +62,10 @@ function Fixture() {
   // Real transcript updates preserve unchanged object identities; this also exercises the row cache.
   const items = React.useMemo(() => initial.map((item) => item.pending
     ? { ...item, pending: item.kind === 'act' || item.kind === 'thought' ? toolPending : active } : item)
-    .concat(phase === 'second-tool' ? [{ id: 'after', kind: 'act', act: 'command.run', detail: 'openfilm check', pending: true, startedAt: Date.now() }] : []),
-  [initial, active, toolPending, phase]);
+    .concat(phase === 'second-tool' || (scenario === 'working-command' && phase === 'tools-finished')
+      ? [{ id: 'after', kind: 'act', act: 'command.run', detail: 'openfilm check', pending: phase === 'second-tool', startedAt: Date.now() }]
+      : []),
+  [initial, active, toolPending, phase, scenario]);
   const thread = useStickToBottom();
   const tail = useTailSpacer(thread.viewport, thread.pinIfFollowing, active);
   const turns: ProjectVersion[] = [{

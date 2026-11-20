@@ -123,7 +123,8 @@ export function applicationMenuTemplate({ productName, packaged, language = 'en'
     {
       label: say('window'),
       submenu: [
-        { role: 'minimize', label: say('minimize') },
+        /* Studio's export reads Cmd+M in the editor. */
+        { role: 'minimize', label: say('minimize'), ...(mac ? { accelerator: 'Alt+Cmd+M' } : {}) },
         { role: 'zoom', label: say('zoom') },
         { type: 'separator' },
         { label: say('showNextTab'), accelerator: 'Control+Tab', click: () => tabs.step(1) },

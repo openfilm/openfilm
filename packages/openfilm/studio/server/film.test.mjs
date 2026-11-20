@@ -52,6 +52,14 @@ test('a film.html that does not read is never written over', async () => {
   assert.equal(readFileSync(join(root, 'film.html'), 'utf8'), '<section><video src="a.mp4"></section>');
 });
 
+test('an edit against the last complete revision cannot overwrite a temporarily empty file', async () => {
+  const root = folder(film([{ src: 'a.html', id: 'a' }]));
+  const base = (await readProjectFilm(root)).rev;
+  writeFileSync(join(root, 'film.html'), '');
+  await assert.rejects(editProjectFilm(root, base, [{ op: 'insert', clip: { src: 'b.html' } }]), (e) => e.kind === 'invalid');
+  assert.equal(readFileSync(join(root, 'film.html'), 'utf8'), '');
+});
+
 test('an edit that would break the film is refused with the reason', async () => {
   const root = folder(film([{ src: 'clip.mp4', id: 'clip' }]));
   await assert.rejects(editProjectFilm(root, null, [{ op: 'set', clip: 'clip', field: 'speed', value: 101 }]), (e) => e.kind === 'invalid' && /speed/.test(e.message));

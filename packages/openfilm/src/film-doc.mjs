@@ -458,6 +458,14 @@ export function clipSpeed(clip) {
   return isFinite(v) && v >= SPEED_MIN && v <= SPEED_MAX ? v : 1;
 }
 
+/** A trimmed clip whose entire span is outside the source ranges being drawn. */
+export function clipOutsideRanges(clip, ranges) {
+  if (!ranges?.length || clip.time?.length !== 2) return false;
+  const start = clip.at ?? 0;
+  const end = start + (clip.time[1] - clip.time[0]) / clipSpeed(clip);
+  return ranges.every(([from, to]) => start >= to || end <= from);
+}
+
 /**
  * Which part of its source a clip plays and how long it lasts on the film.
  *
@@ -782,8 +790,20 @@ function markup(text) {
   return out;
 }
 
-/** The line a place in the text is on, from 1. */
-const lineAt = (text, at) => { let n = 1; for (let i = 0; i < at; i++) if (text.charCodeAt(i) === 10) n++; return n; };
+/**
+ * The line a place in `text` is on, from 1: the text's line breaks found once (on the first place asked), each place
+ * looked up among them. Counted again from the start for each place, a film of hundreds of clips took seconds to read.
+ */
+function lineFinder(text) {
+  /** @type {number[] | null} */
+  let breaks = null;
+  return (/** @type {number} */ at) => {
+    if (!breaks) { breaks = []; for (let i = text.indexOf('\n'); i >= 0; i = text.indexOf('\n', i + 1)) breaks.push(i); }
+    let lo = 0, hi = breaks.length;
+    while (lo < hi) { const mid = (lo + hi) >> 1; if (breaks[mid] < at) lo = mid + 1; else hi = mid; }
+    return lo + 1;
+  };
+}
 
 /** Seconds as a media fragment writes them: plain seconds, `mm:ss` or `hh:mm:ss`, each with a fraction. */
 function fragmentSeconds(v) {
@@ -935,7 +955,8 @@ function clipOfTag(tag, where, problems) {
 export function readFilmFile(text) {
   const marks = markup(text);
   const problems = [];
-  const at = (m) => `${FILM_FILE}:${lineAt(text, m.start)}`;
+  const lineAt = lineFinder(text);
+  const at = (m) => `${FILM_FILE}:${lineAt(m.start)}`;
   let stage;
   let bodyStart = -1;
   let viewport = null;
@@ -1027,7 +1048,7 @@ export function readFilmFile(text) {
       track.tail = pending;
       pending = [];
       tracks.push(track.raw);
-      lines.push({ line: lineAt(text, track.open.start), clips: track.clips.map((c) => c.line) });
+      lines.push({ line: lineAt(track.open.start), clips: track.clips.map((c) => c.line) });
       layout.tracks.push({ open: track.open, close: m, lead: track.lead, tail: track.tail, clips: track.clips.map((c) => c.at) });
       track = null;
       continue;
@@ -1059,7 +1080,7 @@ export function readFilmFile(text) {
       const raw = clipOfTag(m, where, problems);
       if (raw) {
         track.raw.clips.push(raw);
-        track.clips.push({ line: lineAt(text, m.start), at: { start: m.start, end, lead: pending, named: Boolean(raw.id) } });
+        track.clips.push({ line: lineAt(m.start), at: { start: m.start, end, lead: pending, named: Boolean(raw.id) } });
       }
       pending = [];
       continue;

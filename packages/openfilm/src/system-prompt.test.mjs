@@ -47,7 +47,9 @@ test('in the app it says how the person points at Studio and how to point back; 
 
 test("`openfilm --help` in the app leaves out what is never run there: opening Studio and updating it", () => {
   const cli = fileURLToPath(new URL('../bin/openfilm.mjs', import.meta.url));
-  const help = (agent) => spawnSync(process.execPath, [cli, '--help'], { encoding: 'utf8', env: { ...process.env, OPENFILM_AGENT: agent, OPENFILM_NO_UPDATE_CHECK: '1' } }).stdout;
+  const help = (agent) => spawnSync(process.execPath, [cli, '--help'], {
+    encoding: 'utf8', env: { ...process.env, OPENFILM_AGENT: agent, OPENFILM_RUN: 'openfilm', OPENFILM_NO_UPDATE_CHECK: '1' },
+  }).stdout;
   const app = help('app:c1'), terminal = help('');
   for (const command of ['openfilm open', 'openfilm update']) {
     assert.ok(terminal.includes(command), `terminal: ${command}`);

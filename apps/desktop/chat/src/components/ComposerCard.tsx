@@ -15,8 +15,9 @@ import { useT } from '@/i18n';
 import { inChat } from '@/lib/chat-layer';
 
 /** The shell of floating layers (menus, dropdowns): the cards' shadow, on the surface color. */
+export const COMPOSER_SURFACE = 'var(--bg-raised)';
 export const POPOVER_CHROME: React.CSSProperties = {
-  background: 'var(--bg-raised)',
+  background: COMPOSER_SURFACE,
   border: '1px solid var(--border-strong)',
   borderRadius: 12,
   boxShadow: '0 16px 40px -8px rgba(0,0,0,0.4), 0 4px 12px rgba(0,0,0,0.18)',
@@ -51,7 +52,8 @@ export function ComposerCard({
   return (
     <div
       {...(role ? { role } : {})}
-      className={`relative rounded-[12px] border border-[var(--border)] bg-[var(--bg-raised)] px-3.5 shadow-[0_8px_24px_-12px_rgba(0,0,0,0.35)] ${collapsed ? 'py-2' : 'pb-3 pt-3'} ${className}`}
+      style={{ background: COMPOSER_SURFACE }}
+      className={`relative rounded-[12px] border border-[var(--border)] px-3.5 shadow-[0_8px_24px_-12px_rgba(0,0,0,0.35)] ${collapsed ? 'py-2' : 'pb-3 pt-3'} ${className}`}
     >
       <div className={`absolute right-2 flex items-center gap-0.5 ${collapsed ? 'top-1.5' : 'top-2'}`}>
         {collapse ? (

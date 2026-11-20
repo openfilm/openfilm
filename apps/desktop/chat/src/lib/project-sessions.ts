@@ -12,6 +12,8 @@ export interface ProjectSessionItem {
   updatedAt: string;
   /** How many turns the session has. 0: just opened, nothing said yet. */
   turns: number;
+  /** The Studio workbench last shown with this conversation. */
+  workbench?: string;
   /** The agent this conversation goes on with: the one it used last, after a restart too (lib/conversation-agent). */
   agent?: LocalAgentId;
   /** The options (model, effort) it used each agent with, by agent: they stand over the ones picked last. */

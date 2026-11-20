@@ -13,7 +13,7 @@
 import React from 'react';
 import { CircleAlert, Info, TriangleAlert, X } from 'lucide-react';
 import { useT } from '@/i18n';
-import { CardActions } from './ComposerCard';
+import { CardActions, COMPOSER_SURFACE } from './ComposerCard';
 
 export type NoticeTone = 'info' | 'warn' | 'error';
 
@@ -43,8 +43,8 @@ export function Notice({ tone = 'info', title, children, actions, below = false,
     </button>
   ) : null;
   return (
-    <div role={role ?? (tone === 'error' ? 'alert' : 'status')}
-      className="animate-[openfilm-rise_160ms_ease-out] rounded-[12px] border border-[var(--border)] bg-[var(--bg-raised)] px-3 py-2 shadow-[0_8px_24px_-12px_rgba(0,0,0,0.35)]">
+    <div role={role ?? (tone === 'error' ? 'alert' : 'status')} style={{ background: COMPOSER_SURFACE }}
+      className="animate-[openfilm-rise_160ms_ease-out] rounded-[12px] border border-[var(--border)] px-3 py-2 shadow-[0_8px_24px_-12px_rgba(0,0,0,0.35)]">
       {title ? (
         <>
           <div className="flex items-start gap-2">

@@ -70,6 +70,25 @@ test('Doubao public recordings play through the same local cache without keys or
   assert.equal(requests[0].redirect, 'error');
 });
 
+test('official BytePlus recordings and synthesized Doubao previews use the library player cache', async (t) => {
+  const official = 'voices/doubao/official.wav';
+  const made = 'voices/doubao/made.m4a';
+  const source = 'https://sf-bpcms.bytepluscdn.com/obj/byteplus-public-aiso/cloud-universal-doc/20260812141452-101140770855.wav';
+  writeFileSync(join(process.env.OPENFILM_BUILT_IN_LIBRARY, 'voices.json'), JSON.stringify({ providers: [], voices: [
+    { provider: 'doubao', id: 'official', sample: official, sampleSource: source },
+    { provider: 'doubao', id: 'made', sample: made, sampleSource: null },
+  ] }));
+  put(made, 'AAC preview');
+  const originalFetch = globalThis.fetch;
+  const fetch = t.mock.method(globalThis, 'fetch', async (url, init) => url === source
+    ? new Response('RIFF public preview', { headers: { 'content-type': 'audio/wav' } })
+    : originalFetch(url, init));
+
+  assert.equal(readFileSync(await libraryFileFetched(official), 'utf8'), 'RIFF public preview');
+  assert.equal(readFileSync(await libraryFileFetched(made), 'utf8'), 'AAC preview');
+  assert.deepEqual(fetch.mock.calls.map(({ arguments: [url] }) => url), [source, `${process.env.OPENFILM_LIBRARY_URL}/${made}`]);
+});
+
 test('an unofficial sample address is never fetched, and a provider HTML error is not cached as audio', async (t) => {
   const source = 'https://lf3-static.bytednsdoc.com/obj/eden-cn/lm_hz_ihsph/ljhwZthlaukjlkulzlp/portal/bigtts/failed.mp3';
   const bad = 'voices/doubao/bad.mp3', failed = 'voices/doubao/failed.mp3';

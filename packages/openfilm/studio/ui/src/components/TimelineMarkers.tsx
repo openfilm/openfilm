@@ -10,12 +10,11 @@ import { Trash2 } from 'lucide-react';
 
 import { useT } from '@/i18n';
 import { MARKER_COLORS, MARKER_NAME_MAX, MARKER_PAINT, type Marker, type MarkerColor, type PlacedMarker } from '@/lib/markers';
-import { formatTimecode, snapToFrame } from '@/lib/timecode';
+import { formatTimecode } from '@/lib/timecode';
 
 import type { MarkerLaneView } from './Timeline';
 
 export interface MarkerActions {
-  onSeek: (ms: number) => void;
   onChange: (id: string, change: { name?: string; color?: MarkerColor; t?: number }) => void;
   onRemove: (id: string) => void;
   /** The marker whose card is asked for (M again on a marker), and that it was opened. */
@@ -194,38 +193,70 @@ export function LaneMarkers({ placed, lane, actions }: { placed: readonly Placed
   const { open, openAt, card } = useMarkerCard(placed, actions);
   const [moving, setMoving] = React.useState<{ id: string; ms: number } | null>(null);
   const [hover, setHover] = React.useState<string | null>(null);
-  const { pxPerMs, widthPx, snap, guide } = lane;
+  const { pxPerMs, widthPx, snapForDrag, guide, preview, seek } = lane;
   /* the click after a drag is not one */
   const wasDragged = React.useRef(false);
+  const stopDrag = React.useRef<(() => void) | null>(null);
+  React.useEffect(() => () => stopDrag.current?.(), []);
   const press = (e: React.PointerEvent, p: PlacedMarker) => {
     e.preventDefault();
     e.stopPropagation();
-    if (e.button !== 0) return;
+    if (e.button !== 0 || stopDrag.current) return;
+    wasDragged.current = false;
     const el = e.currentTarget as HTMLElement;
-    el.setPointerCapture(e.pointerId);
+    const pointerId = e.pointerId;
+    el.setPointerCapture(pointerId);
     const x0 = e.clientX;
     const color = MARKER_PAINT[p.marker.color];
+    const snap = snapForDrag();
+    const timeAt = (x: number) => snap(Math.max(0, p.ms + (x - x0) / pxPerMs));
     let to = p.ms;
     let dragged = false;
-    const move = (ev: PointerEvent) => {
-      if (!dragged && Math.abs(ev.clientX - x0) < 4) return;
+    let frame = 0;
+    let clientX = x0;
+    const draw = () => {
+      frame = 0;
+      const next = timeAt(clientX);
+      if (next === to && dragged) return;
+      to = next;
       dragged = true;
-      to = snapToFrame(snap(Math.max(0, p.ms + (ev.clientX - x0) / pxPerMs)));
       setMoving({ id: p.marker.id, ms: to });
       guide({ ms: to, color, held: true });
+      preview(to);
     };
-    const up = () => {
+    const move = (ev: PointerEvent) => {
+      if (ev.pointerId !== pointerId) return;
+      if (!dragged && Math.abs(ev.clientX - x0) < 4) return;
+      clientX = ev.clientX;
+      if (!frame) frame = requestAnimationFrame(draw);
+    };
+    const cleanup = () => {
+      if (frame) cancelAnimationFrame(frame);
       el.removeEventListener('pointermove', move);
-      el.removeEventListener('pointerup', up);
-      el.removeEventListener('pointercancel', up);
+      el.removeEventListener('pointerup', finish);
+      el.removeEventListener('pointercancel', finish);
+      stopDrag.current = null;
+    };
+    const finish = (ev: PointerEvent) => {
+      if (ev.pointerId !== pointerId) return;
+      cleanup();
       setMoving(null);
       guide(null);
-      if (dragged && to !== p.ms) actions.onChange(p.marker.id, { t: to / 1000 });
+      if (ev.type === 'pointercancel') {
+        if (dragged) seek(p.ms);
+        return;
+      }
+      dragged ||= Math.abs(ev.clientX - x0) >= 4;
       wasDragged.current = dragged;
+      if (!dragged) return;
+      const at = timeAt(ev.clientX);
+      if (at !== p.ms) actions.onChange(p.marker.id, { t: at / 1000 });
+      seek(at);
     };
+    stopDrag.current = cleanup;
     el.addEventListener('pointermove', move);
-    el.addEventListener('pointerup', up);
-    el.addEventListener('pointercancel', up);
+    el.addEventListener('pointerup', finish);
+    el.addEventListener('pointercancel', finish);
   };
   const film = placed.filter((p) => !p.clip);
   /* where each pin is drawn, left to right: a name runs up to the next pin */
@@ -259,7 +290,7 @@ export function LaneMarkers({ placed, lane, actions }: { placed: readonly Placed
               /* a click: there, and its card */
               e.stopPropagation();
               if (wasDragged.current) { wasDragged.current = false; return; }
-              actions.onSeek(p.ms);
+              seek(p.ms);
               openAt(e.currentTarget, p);
             }}
             onDoubleClick={(e) => e.stopPropagation()}
@@ -289,12 +320,13 @@ export function LaneMarkers({ placed, lane, actions }: { placed: readonly Placed
 }
 
 /** A clip's markers on its row: notches along the bottom of the clip, where each moment of its file is. */
-export function ClipMarkers({ placed, pxPerMs, height, actions }: {
+export function ClipMarkers({ placed, pxPerMs, height, actions, onSeek }: {
   /** this track's clip markers */
   placed: readonly PlacedMarker[];
   pxPerMs: number;
   height: number;
   actions: MarkerActions;
+  onSeek: (ms: number) => void;
 }) {
   const t = useT();
   const { openAt, card } = useMarkerCard(placed, actions);
@@ -312,7 +344,7 @@ export function ClipMarkers({ placed, pxPerMs, height, actions }: {
             if (e.button !== 0) return;
             e.preventDefault();
             e.stopPropagation();
-            actions.onSeek(p.ms);
+            onSeek(p.ms);
             openAt(e.currentTarget, p);
           }}
           onDoubleClick={(e) => e.stopPropagation()}

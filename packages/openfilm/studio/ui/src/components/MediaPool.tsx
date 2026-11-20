@@ -80,7 +80,6 @@ import {
   type WorkspaceResource,
   type WorkspaceResourceKind,
   type MediaLink,
-  type MediaProxy,
 } from '@/lib/workspace-resources';
 import { ConfirmDialog } from './ConfirmDialog';
 import { ContextMenu, type ContextMenuEntry } from './ContextMenu';
@@ -143,7 +142,7 @@ export interface MediaPoolProps {
   /** The project's media and pages; null while the first listing loads (the pane stays blank). */
   listing: MediaListing | null;
   sources: MediaSources;
-  /** Every clip `src` on the timeline: how many clips a delete would take with it. */
+  /** Every clip `src` on the timeline, for the Added badge and the delete count. */
   usedSrcs?: readonly string[];
   /** The file the viewer and inspector are showing (the host owns it, so a click elsewhere can clear it). */
   selectedPath?: string | null;
@@ -428,6 +427,12 @@ export function MediaPool({
   }, [allFiles, scopedFiles, folders, at, query, view, assetRel, inMedia, wordsOf, stacked, browser?.flat, browser?.recent]);
   const items = listed?.items ?? null;
   const stackCounts = listed?.counts;
+  const addedPaths = React.useMemo(() => {
+    const used = [...new Set(usedSrcs)];
+    return new Set(used.length ? (items ?? []).flatMap((item) =>
+      item.type === 'file' && used.some((src) => srcHitsAsset(src, item.file.path)) ? [item.file.path] : [],
+    ) : []);
+  }, [items, usedSrcs]);
   React.useEffect(() => { browser?.onCount?.(items?.length ?? 0); }, [items?.length, browser?.onCount]);
   const entryProtected = (path: string) => (browser?.protectedEntry ?? browser?.protectedPath)?.(path) ?? false;
 
@@ -723,8 +728,6 @@ export function MediaPool({
     ...(onReveal ? [{ id: 'reveal', label: t('projects.revealFolder'), icon: <FolderOpen size={14} />, onSelect: () => onReveal(path) }] : []),
     { id: 'copy', label: t('media.copyPath'), icon: <Copy size={14} />, onSelect: () => { void navigator.clipboard?.writeText(path).catch(() => {}); } },
   ];
-  /** A proxy's mark: ready, or (one this browser needs) being prepared or failed. */
-  const proxyMark = (proxy: MediaProxy) => (proxy.state === 'ready' ? t('media.proxy') : proxy.state === 'failed' ? t('media.copyFailedMark') : t('media.copyMark'));
   /** Where a file or folder is linked from (a NAS), if it is a link. */
   const linkOf = (key: string): MediaLink | undefined => {
     const item = itemByKey.get(key);
@@ -1338,7 +1341,8 @@ export function MediaPool({
                 lit={litPath === item.file.path}
                 revealed={flash?.path === item.file.path}
                 {...(item.file.link ? { linkLabel: item.file.link.missing ? t('media.linkMissing') : t('media.linkedFrom').replace('{path}', item.file.link.to) } : {})}
-                {...(item.file.proxy ? { proxyLabel: proxyText(item.file.proxy, t), proxyMark: proxyMark(item.file.proxy) } : {})}
+                {...(addedPaths.has(item.file.path) ? { addedLabel: t('media.addedToTimeline') } : {})}
+                {...(item.file.proxy && item.file.proxy.state !== 'ready' ? { proxyLabel: proxyText(item.file.proxy, t) } : {})}
                 renaming={renaming === item.file.path}
                 {...(fileRef ? { studioRef: () => fileRef(item.file) } : {})}
                 cut={browser?.transfer && clipboard?.action === 'cut' && clipboard.paths.includes(item.file.path)}
@@ -1589,9 +1593,10 @@ function FileTile(p: {
   onPress: (e?: React.MouseEvent) => void; onMenu: (e: React.MouseEvent) => void; onRename: (name: string) => void; onCancelRename: () => void;
   /** A link to media kept elsewhere: what to say of it (where it is kept, or that it cannot be reached). */
   linkLabel?: string;
-  /** Heavy footage's proxy: what to say of it (being made, ready…), and its mark once ready. */
+  /** The short badge for a file used in the current timeline. */
+  addedLabel?: string;
+  /** Progress or failure for footage whose proxy is being prepared. */
   proxyLabel?: string;
-  proxyMark?: string;
   /** What kind of file it is, short (`PNG`, `Page`): the list view's Type. */
   typeText: string;
   /** A row of the list view, not a tile. */
@@ -1607,6 +1612,10 @@ function FileTile(p: {
   const bundle = p.file.bundle;
   const lit = p.lit || p.revealed;
   const FileIcon = KIND_ICON[p.file.kind];
+  const name = p.where ? p.file.path : p.file.name;
+  const addedBadge = p.addedLabel ? (
+    <span data-media-added="" className="truncate rounded bg-black/65 px-1 text-[9.5px] font-semibold leading-[15px] text-white/90">{p.addedLabel}</span>
+  ) : null;
   return (
     <div
       className={p.row
@@ -1619,7 +1628,7 @@ function FileTile(p: {
       data-media-key={p.file.path}
       data-chat-lit={p.lit ? '' : undefined}
       data-media-revealed={p.revealed ? '' : undefined}
-      title={p.where ? p.file.path : p.file.name}
+      title={p.file.proxy?.state === 'failed' && p.proxyLabel ? `${name}\n${p.proxyLabel}` : name}
       draggable={!p.renaming}
       /* a drag picks nothing: picking opens the inspector, and the pane laid out again under the pointer (or hidden for
          room) would lose the drag */
@@ -1643,6 +1652,7 @@ function FileTile(p: {
         <>
           <span className={`${ROW_THUMB} pointer-events-none`}>
             {p.deferPreview || p.file.link?.missing ? <span className="absolute inset-0 flex items-center justify-center text-[var(--text-faint)]"><FileIcon size={20} /></span> : p.file.kind === 'mg' ? <PagePoster file={p.file} sources={p.sources} /> : <MediaPreview file={p.file} sources={p.sources} />}
+            {addedBadge ? <span className="absolute inset-x-0.5 top-0.5 z-10 flex">{addedBadge}</span> : null}
             {p.file.proxy && p.file.proxy.state !== 'ready' && p.file.proxy.state !== 'failed' ? <UploadBar ratio={p.file.proxy.state === 'making' ? p.file.proxy.ratio ?? 0 : -1} /> : null}
           </span>
           <span className="flex min-w-0 flex-1 flex-col">
@@ -1673,28 +1683,26 @@ function FileTile(p: {
           ) : p.file.link ? (
             <span className="absolute bottom-1 left-1 z-10 flex h-4 w-4 items-center justify-center rounded bg-black/65 text-white" title={p.linkLabel}><Link2 size={10} /></span>
           ) : null}
-          {/* heavy footage's proxy: its making along the bottom, then a mark. Footage this browser does not decode is
-              marked while it is prepared to play, or when it could not be */}
-          {p.file.proxy?.state === 'ready' ? (
-            <span className="absolute right-1 top-1 z-10 rounded bg-black/65 px-1 text-[9.5px] font-semibold uppercase leading-[15px] tracking-wide text-white/90" title={p.proxyLabel}>{p.proxyMark}</span>
-          ) : null}
-          {p.file.proxy?.needed && p.file.proxy.state !== 'ready' ? (
-            <span className={`absolute right-1 top-1 z-10 rounded px-1 text-[9.5px] font-semibold leading-[15px] text-white/90 ${p.file.proxy.state === 'failed' ? 'bg-[var(--err)]' : 'bg-black/65'}`} title={p.proxyLabel}>{p.proxyMark}</span>
-          ) : null}
           {p.file.proxy && p.file.proxy.state !== 'ready' && p.file.proxy.state !== 'failed' ? (
             <span className="absolute inset-x-0 bottom-0 z-10 h-1" title={p.proxyLabel}><UploadBar ratio={p.file.proxy.state === 'making' ? p.file.proxy.ratio ?? 0 : -1} /></span>
           ) : null}
-          {/* a bundle of Saved: a component, and how many clips a group holds */}
-          {p.componentMark ? (
-            <span className="absolute left-1 top-1 z-10 flex items-center gap-0.5 rounded bg-black/65 px-1 text-[9.5px] font-semibold leading-[15px] text-white/90"><ComponentIcon size={9} />{p.componentMark}</span>
-          ) : null}
-          {p.versions ? (
-            <span data-media-versions="" title={p.versionsLabel} className="absolute left-1 top-1 z-10 flex items-center gap-0.5 rounded bg-black/65 px-1 text-[10.5px] tabular-nums leading-[16px] text-white"><Layers size={10} />{p.versions}</span>
+          {addedBadge || p.componentMark || p.versions || p.duration ? (
+            <div className="absolute inset-x-1 top-1 z-10 flex items-start justify-between gap-1">
+              <div className="flex min-w-0 items-center gap-1">
+                {addedBadge}
+                {p.componentMark ? (
+                  <span className="flex items-center gap-0.5 rounded bg-black/65 px-1 text-[9.5px] font-semibold leading-[15px] text-white/90"><ComponentIcon size={9} />{p.componentMark}</span>
+                ) : null}
+                {p.versions ? (
+                  <span data-media-versions="" title={p.versionsLabel} className="flex items-center gap-0.5 rounded bg-black/65 px-1 text-[10.5px] tabular-nums leading-[16px] text-white"><Layers size={10} />{p.versions}</span>
+                ) : null}
+              </div>
+              {p.duration ? <span className="shrink-0 rounded bg-black/65 px-1 text-[10.5px] tabular-nums leading-[16px] text-white">{p.duration}</span> : null}
+            </div>
           ) : null}
           {bundle?.kind === 'group' && bundle.count ? (
             <span className="absolute bottom-1 left-1 z-10 flex items-center gap-0.5 rounded bg-black/65 px-1 text-[10.5px] tabular-nums leading-[16px] text-white"><Layers size={10} />{bundle.count}</span>
           ) : null}
-          {p.duration ? <span className="absolute bottom-1 right-1 z-10 rounded bg-black/65 px-1 text-[10.5px] tabular-nums leading-[16px] text-white">{p.duration}</span> : null}
         </div>
       </div>
       <div data-card-caption="" className="mt-1 min-w-0 px-0.5">

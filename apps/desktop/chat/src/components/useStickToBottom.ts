@@ -65,16 +65,11 @@ export type StickToBottom = {
 export const StickToBottomContext = React.createContext<StickToBottom | null>(null);
 
 /**
- * While a turn runs, it may grow but not shrink.
+ * Give the live reply room to grow without moving the prompt. Once it fills the
+ * viewport, keep the tallest layout so shorter status and tool rows don't pull it back.
  *
- * Finished tool rows collapse into a summary while the answer keeps growing; that
- * shrink would make the bottom-pinned view bounce back. So the running turn gets a
- * min-height equal to the tallest it has been. Keep it when the run ends too: removing
- * the status row must not pull the reply down in a bottom-pinned view. The next turn
- * (or a viewport resize) releases it.
- *
- * The min-height only applies when the turn shrinks, so it is never a frame late: the
- * value was recorded while the turn grew.
+ * Keep this space through settlement. The next turn releases it, and a width change
+ * remeasures it because text wraps differently. Opening a composer notice only changes height.
  */
 export function useTailSpacer(
   viewport: HTMLDivElement | null,
@@ -85,19 +80,29 @@ export function useTailSpacer(
   const observer = React.useRef<ResizeObserver | null>(null);
   const activeRef = React.useRef(active);
   activeRef.current = active;
+  const watched = React.useRef(false);
   const tallest = React.useRef(0);
-  const viewportSize = React.useRef('');
+  const viewportWidth = React.useRef(0);
 
   const measure = React.useCallback(() => {
     const node = lastTurn.current;
     if (!viewport || !node) return;
-    const size = `${viewport.clientWidth}:${viewport.clientHeight}`;
-    if (viewportSize.current !== size) { tallest.current = 0; viewportSize.current = size; }
-    if (activeRef.current) {
-      tallest.current = Math.max(tallest.current, node.getBoundingClientRect().height);
+    if (activeRef.current) watched.current = true;
+    if (!watched.current || !viewport.clientWidth || !viewport.clientHeight) return;
+
+    if (viewportWidth.current !== viewport.clientWidth) {
+      viewportWidth.current = viewport.clientWidth;
+      tallest.current = 0;
+      node.style.minHeight = '';
     }
-    const min = Math.floor(tallest.current);
-    const next = min > 0 ? `${min}px` : '';
+    if (activeRef.current) {
+      const height = node.getBoundingClientRect().height;
+      const previousMinimum = Number.parseFloat(node.style.minHeight) || 0;
+      if (height > previousMinimum) tallest.current = Math.max(tallest.current, height);
+    }
+    const { paddingTop, paddingBottom } = getComputedStyle(viewport);
+    const available = viewport.clientHeight - Number.parseFloat(paddingTop) - Number.parseFloat(paddingBottom);
+    const next = `${Math.max(tallest.current, available)}px`;
     if (node.style.minHeight !== next) {
       node.style.minHeight = next;
       pinIfFollowing();
@@ -126,6 +131,7 @@ export function useTailSpacer(
     if (previous && previous !== node) {
       observer.current?.unobserve(previous);
       previous.style.minHeight = '';
+      watched.current = false;
       tallest.current = 0;
     }
     lastTurn.current = node;

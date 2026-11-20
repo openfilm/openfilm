@@ -70,26 +70,25 @@ function Bar({ frame, loaded }: { frame: ReturnType<typeof useProjectFrame>; loa
   const bar = useWiring('topBar')?.topBar;
   const {
     projectId, setLoaded, toast, reveal, title, setProjectsOpen, setSettingsOpen, desktopOpen, setDesktopOpen,
-    canvasOpen, setCanvasOpen, surface, showWorkbench, benchPlugins, pickBench, canToggleCanvas, colorOpen,
+    canvasOpen, setCanvasOpen, nowShown, showWorkbench, benchPlugins, pickBench, canToggleCanvas,
     /* the page's panels are being rearranged (shell/layout): the workbench shown stays the one it is meanwhile */
     layoutEditing,
   } = frame;
-  /* the workbench shown, as the top bar names it, and what it is for (by itself the first time it is shown) */
-  const shownBench = surface ?? (canvasOpen ? 'canvas' : colorOpen ? 'color' : 'edit');
-  const guide = useWorkbenchGuide(frame.noBench ? null : shownBench, benchPlugins);
+  /* the workbench shown, as the top bar names it, and its help when requested */
+  const guide = useWorkbenchGuide(nowShown, benchPlugins);
   /* ? (not while typing, nor over another dialog): the help of the editor shown, opened or put away */
-  const guideRef = React.useRef({ guide, shownBench, none: frame.noBench });
-  guideRef.current = { guide, shownBench, none: frame.noBench };
+  const guideRef = React.useRef({ guide, none: frame.noBench });
+  guideRef.current = { guide, none: frame.noBench };
   React.useEffect(() => {
     const press = (e: KeyboardEvent) => {
       if (e.key !== '?' || e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey) return;
       const el = e.target as HTMLElement | null;
       if (el?.closest('input, textarea, select, [contenteditable="true"], [data-studio-host-panel]')) return;
-      const { guide: g, shownBench: bench, none } = guideRef.current;
+      const { guide: g, none } = guideRef.current;
       if (g.plugin) { e.preventDefault(); g.close(); return; }
-      if (none || !bench || document.querySelector('[role="dialog"][aria-modal="true"]')) return;
+      if (none || document.querySelector('[role="dialog"][aria-modal="true"]')) return;
       e.preventDefault();
-      g.open(bench);
+      g.open();
     };
     window.addEventListener('keydown', press);
     return () => window.removeEventListener('keydown', press);
@@ -160,7 +159,7 @@ function Bar({ frame, loaded }: { frame: ReturnType<typeof useProjectFrame>; loa
         {/* the buttons plugins put on the bar (openfilm/studio topBar) */}
         <PluginTools />
         {/* the edit or the canvas, in the panes' place: the one shown, by its name, and a click for the other */}
-        {pickBench ? <ModeSwitcher now={shownBench} plugins={benchPlugins} onPick={showWorkbench} onGuide={() => guide.open(shownBench)} disabled={layoutEditing} />
+        {pickBench && nowShown ? <ModeSwitcher now={nowShown} plugins={benchPlugins} onPick={showWorkbench} onGuide={guide.open} disabled={layoutEditing} />
           : canToggleCanvas ? <Tooltip label={t(canvasOpen ? 'canvas.toEdit' : 'canvas.toCanvas')} action="work-mode" side="bottom">
           <button type="button" aria-label={t(canvasOpen ? 'canvas.toEdit' : 'canvas.toCanvas')} data-work-mode={canvasOpen ? 'canvas' : 'edit'} disabled={layoutEditing} onClick={() => setCanvasOpen(!canvasOpen)}
             className="flex h-[26px] shrink-0 items-center rounded-md bg-[var(--bg-hover)] px-2.5 text-[12.5px] font-medium text-[var(--text)] transition hover:bg-[var(--bg-pressed)]">

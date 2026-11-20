@@ -49,6 +49,112 @@ async function open(t, name, setup) {
 
 const notice = (page) => page.locator('[data-film-missing]');
 const shown = (page, src = 'card.html') => page.frameLocator('[data-viewer-picture] iframe[title="film"]:not([data-loading]):not([data-leaving])').frameLocator(`iframe[src*="/${src}"]`);
+const invalidFilm = film('card.html').replace('card.html#', 'card.html?scene=01#');
+const broken = (page) => page.locator('[data-film-broken]');
+
+function watchFilmNotices(page) {
+  return page.locator('[data-viewer-pane]').evaluate((viewer) => {
+    const notices = '[data-film-broken], [data-film-missing], [data-film-updating], [data-preview-updating], [role="alert"]';
+    window.flashedFilmNotice = Boolean(viewer.querySelector(notices));
+    new MutationObserver(() => {
+      if (viewer.querySelector(notices)) window.flashedFilmNotice = true;
+    }).observe(viewer, { childList: true, subtree: true });
+  });
+}
+
+function readInvalidFilm(page, address) {
+  return page.waitForResponse(async (res) => {
+    if (new URL(res.url()).pathname !== `/api${address}` || res.request().method() !== 'GET' || !res.ok()) return false;
+    const result = await res.json();
+    return !result.doc && result.text === invalidFilm;
+  }, { timeout: 6000 });
+}
+
+test('a short invalid write silently keeps the last picture and timeline until a valid film arrives', { timeout: 30_000 }, async (t) => {
+  const { root, page, address } = await open(t, 'Film still being written');
+  const before = shown(page).getByRole('heading', { name: 'Before' });
+  await before.waitFor();
+  await watchFilmNotices(page);
+  const draft = readInvalidFilm(page, address);
+  await writeFile(join(root, 'film.html'), invalidFilm);
+  await draft;
+  /* A changed scene also rechecks the film while the edit is still invalid. */
+  const previewRead = readInvalidFilm(page, address);
+  await writeFile(join(root, 'card.html'), card('Page saved during update'));
+  await previewRead;
+  assert.ok(await before.isVisible());
+  assert.ok(await page.locator('[data-block-title="card"]').isVisible());
+  await writeFile(join(root, 'card2.html'), card('After'));
+  await writeFile(join(root, 'film.html'), film('card2.html'));
+  await shown(page, 'card2.html').getByRole('heading', { name: 'After' }).waitFor({ timeout: 6000 });
+  assert.equal(await page.evaluate(() => window.flashedFilmNotice), false);
+});
+
+test('successful revisions appear during an agent turn and the drafts between them stay quiet', { timeout: 30_000 }, async (t) => {
+  const { root, page, address } = await open(t, 'Agent draft', async ({ page, address }) => {
+    await page.addInitScript((projectId) => {
+      const tab = { id: 'self', projectId, title: 'Agent draft', working: true, active: true };
+      const listeners = new Set();
+      window.openfilmHost = { version: 1, tabs: {
+        list: async () => ({ self: tab.id, tabs: [tab] }),
+        onChange: (fn) => { listeners.add(fn); return () => listeners.delete(fn); },
+        onPick: () => () => {},
+        report: () => {},
+      } };
+      window.finishFilmTurn = () => { tab.working = false; for (const listener of listeners) listener([tab]); };
+    }, address.split('/').pop());
+  });
+  const before = shown(page).getByRole('heading', { name: 'Before' });
+  await before.waitFor();
+  await watchFilmNotices(page);
+  await writeFile(join(root, 'card2.html'), card('First live revision'));
+  await writeFile(join(root, 'card3.html'), card('Second live revision'));
+  const draft = readInvalidFilm(page, address);
+  await writeFile(join(root, 'film.html'), invalidFilm);
+  await draft;
+  await page.waitForTimeout(2300);
+  assert.ok(await before.isVisible());
+  await writeFile(join(root, 'film.html'), film('card2.html'));
+  const first = shown(page, 'card2.html').getByRole('heading', { name: 'First live revision' });
+  await first.waitFor({ timeout: 6000 });
+  await page.locator('[data-block-title="card2"]').waitFor({ timeout: 5000 });
+
+  const nextDraft = readInvalidFilm(page, address);
+  await writeFile(join(root, 'film.html'), invalidFilm);
+  await nextDraft;
+  assert.ok(await first.isVisible());
+  await writeFile(join(root, 'film.html'), film('card3.html'));
+  const second = shown(page, 'card3.html').getByRole('heading', { name: 'Second live revision' });
+  await second.waitFor({ timeout: 6000 });
+  await page.locator('[data-block-title="card3"]').waitFor({ timeout: 5000 });
+
+  const finalDraft = readInvalidFilm(page, address);
+  await writeFile(join(root, 'film.html'), invalidFilm);
+  await finalDraft;
+  assert.equal(await page.evaluate(() => window.flashedFilmNotice), false);
+  await page.evaluate(() => window.finishFilmTurn());
+  await broken(page).waitFor({ timeout: 5000 });
+  assert.ok(await second.isVisible());
+  const diagnostic = broken(page).getByText('card.html?scene=01', { exact: false });
+  assert.equal(await diagnostic.isVisible(), false);
+  await broken(page).getByText('Details', { exact: true }).click();
+  assert.ok(await diagnostic.isVisible());
+  /* A new valid revision recovers even if it is byte-for-byte the last valid film. */
+  await writeFile(join(root, 'film.html'), film('card3.html'));
+  await broken(page).waitFor({ state: 'detached', timeout: 5000 });
+  assert.ok(await second.isVisible());
+
+  /* Opening a project mid-turn can have no last good frame or timeline at all. */
+  await writeFile(join(root, 'film.html'), invalidFilm);
+  const opening = readInvalidFilm(page, address);
+  await page.reload();
+  await opening;
+  await watchFilmNotices(page);
+  assert.equal(await page.getByText('card.html?scene=01', { exact: false }).count(), 0);
+  await writeFile(join(root, 'film.html'), film('card.html'));
+  await before.waitFor({ timeout: 6000 });
+  assert.equal(await page.evaluate(() => window.flashedFilmNotice), false);
+});
 
 test('an outside write refreshes the open timeline and preview even when its first read fails', { timeout: 30_000 }, async (t) => {
   const { root, page, address } = await open(t, 'Live refresh');
@@ -67,6 +173,68 @@ test('an outside write refreshes the open timeline and preview even when its fir
   await shown(page, 'card2.html').getByRole('heading', { name: 'After' }).waitFor({ timeout: 6000 });
   assert.ok(reads >= 2, 'a failed read is retried without another change or reopening');
   assert.equal(page.url(), original);
+});
+
+test('the timeline keeps its displayed revision until the new preview draws', { timeout: 30_000 }, async (t) => {
+  const { root, page, api } = await open(t, 'Match the timeline and picture');
+  const before = shown(page).getByRole('heading', { name: 'Before' });
+  await before.waitFor();
+  const { rev } = await (await api('')).json();
+  const arrived = Promise.withResolvers();
+  const release = Promise.withResolvers();
+  const releaseSettings = Promise.withResolvers();
+  const isExportApi = (url) => url.pathname.endsWith('/exports');
+  await page.route((url) => isExportApi(url) && url.searchParams.get('view') === 'settings', async (route) => {
+    await releaseSettings.promise;
+    await route.continue().catch(() => {});
+  });
+  await page.route((url) => url.pathname.endsWith('/card2.html'), async (route) => {
+    if (route.request().resourceType() !== 'document') return route.continue();
+    arrived.resolve();
+    await release.promise;
+    await route.continue();
+  });
+  try {
+    await writeFile(join(root, 'card2.html'), card('Ready together'));
+    const waiting = page.waitForRequest((req) => req.resourceType() === 'document' && new URL(req.url()).pathname.endsWith('/card2.html'), { timeout: 6000 });
+    await writeFile(join(root, 'film.html'), film('card2.html'));
+    await waiting;
+    await arrived.promise;
+    assert.ok(await before.isVisible());
+    assert.ok(await page.locator('[data-block-title="card"]').isVisible());
+    assert.equal(await page.locator('[data-block-title="card2"]').count(), 0);
+    const settings = page.waitForRequest((req) => isExportApi(new URL(req.url())) && new URL(req.url()).searchParams.get('view') === 'settings');
+    await page.getByRole('button', { name: 'Export', exact: true }).click();
+    await settings;
+    const queued = page.waitForResponse((res) => isExportApi(new URL(res.url())) && res.request().method() === 'POST');
+    await page.getByRole('dialog', { name: 'Export' }).getByRole('button', { name: 'Export', exact: true }).click({ timeout: 6000 });
+    const exportResponse = await queued;
+    assert.equal(exportResponse.status(), 200, 'the displayed timeline can queue without waiting for settings or the next preview');
+    assert.equal(exportResponse.request().postDataJSON().filmRev, rev);
+  } finally { release.resolve(); releaseSettings.resolve(); }
+  await shown(page, 'card2.html').getByRole('heading', { name: 'Ready together' }).waitFor({ timeout: 6000 });
+  assert.ok(await page.locator('[data-block-title="card2"]').isVisible());
+  assert.equal(await page.locator('[data-block-title="card"]').count(), 0);
+});
+
+test('the export tray shows muxing and elapsed time instead of a stalled percentage', { timeout: 30_000 }, async (t) => {
+  const { page } = await open(t, 'Export muxing status', async ({ page, address }) => {
+    await page.route((url) => url.pathname === `/api${address}/exports` && url.searchParams.get('view') === 'queue', (route) => {
+      const now = Date.now();
+      return route.fulfill({ json: { exports: [{ id: 'movie', project: address.split('/').at(-1), kind: 'video', label: 'H.264',
+        status: 'running', phase: 'muxing', phaseAt: now - 7000, phaseProgress: null, progress: 0.99, at: now - 8000, encoder: 'h264_videotoolbox' }] } });
+    });
+  });
+  const trigger = page.locator('[data-export-queue-trigger]');
+  await trigger.getByText('Muxing media').waitFor();
+  await trigger.click();
+  const tray = page.locator('[data-export-queue]');
+  assert.equal(await tray.getByRole('progressbar', { name: 'Muxing media' }).getAttribute('aria-valuenow'), null);
+  assert.equal(await tray.getByText('99%').count(), 0);
+  const elapsed = tray.getByText(/\d+:\d\d in this step/);
+  const before = await elapsed.textContent();
+  await page.waitForFunction((before) => [...document.querySelectorAll('[data-export-queue] span')]
+    .some((node) => /\d+:\d\d in this step/.test(node.textContent) && node.textContent !== before), before);
 });
 
 test('a failed edit and a failed recovery read cannot stall later disk changes or edits', { timeout: 30_000 }, async (t) => {

@@ -65,7 +65,7 @@ contextBridge.exposeInMainWorld('openfilmNative', {
     openSetup: (id) => ipcRenderer.invoke('desktop:agents:setup', { id }),
     report: () => ipcRenderer.invoke('desktop:agents:report'),
     /* the whole diagnostic report on the clipboard (main.mjs): the chat's, by a turn that failed */
-    copyReport: () => ipcRenderer.invoke('desktop:diagnostics:copy'),
+    copyReport: (options) => ipcRenderer.invoke('desktop:diagnostics:copy', options),
     saveOwnModel: (config) => ipcRenderer.invoke('desktop:agents:own-model', { config }),
     removeOwnModel: (id) => ipcRenderer.invoke('desktop:agents:own-model-remove', { id }),
     /* the MCP servers the person added to it themselves, each let into OpenFilm or not (skills-ipc.mjs) */
@@ -96,7 +96,7 @@ contextBridge.exposeInMainWorld('openfilmNative', {
     ack: (key, turnId) => invoke('desktop:local-agents:ack')({ key, turnId }),
     steer: (key, text, images) => invoke('desktop:local-agents:steer')({ key, text, images }),
     adopt: (key, turnId, meta) => invoke('desktop:local-agents:adopt')({ key, turnId, meta }),
-    cancel: (key) => invoke('desktop:local-agents:cancel')({ key }),
+    cancel: (key, turnId) => invoke('desktop:local-agents:cancel')({ key, turnId }),
     setOption: (key, configId, value) => invoke('desktop:local-agents:set-option')({ key, configId, value }),
     answerPermission: (key, requestId, optionId) => invoke('desktop:local-agents:permission')({ key, requestId, optionId }),
     answerQuestion: (key, requestId, answers) => invoke('desktop:local-agents:answer')({ key, requestId, answers }),
@@ -115,7 +115,7 @@ contextBridge.exposeInMainWorld('openfilmNative', {
     saveAttachment: (project, name, bytes) => ipcRenderer.invoke('desktop:chat:attachment', { project, name, bytes }),
     describePaths: (paths) => ipcRenderer.invoke('desktop:chat:paths', { paths }),
     unsaved: (project, except) => ipcRenderer.invoke('desktop:chat:unsaved', { project, except }),
-    snapshot: (project, turnId) => ipcRenderer.invoke('desktop:chat:snapshot', { project, turnId }),
+    snapshot: (project, turnId, recover) => ipcRenderer.invoke('desktop:chat:snapshot', { project, turnId, recover }),
     changes: (project, turnId) => ipcRenderer.invoke('desktop:chat:changes', { project, turnId }),
     undo: (project, turnId) => ipcRenderer.invoke('desktop:chat:undo', { project, turnId }),
   },

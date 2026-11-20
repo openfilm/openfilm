@@ -1,7 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { filmHtml, readFilmFile } from '../../../../src/film-doc.mjs';
 import { applyOps } from '../../../server/ops.mjs';
 import type { Op } from '../api.ts';
+import { filmShape } from './film-shape.ts';
 import {
   editModelOf,
   freshLink,
@@ -35,7 +37,7 @@ import {
   type EditPlan,
   type EditTrack,
 } from './timeline-edit.ts';
-import type { TimelineTrack } from './timeline-layout';
+import { layoutTracks, type TimelineTrack } from './timeline-layout.ts';
 
 /*
  * Every plan is checked the way it will be written: its operations applied to film.html's value by the server's own
@@ -382,6 +384,26 @@ test('a trim stops at the end of its source and at the shortest clip', () => {
   const later = model([['v', 3, 7, { inMs: 1000, sourceMs: 6000 }]]);
   assert.equal(planEdges(later, [{ id: 'v', kind: 'start' }], -5000).deltaMs, -1000, 'the head goes back to the source start');
   assert.equal(planEdges(m, [{ id: 'v', kind: 'end' }], -9000).deltaMs, -3900);
+});
+
+test('trimming a split still keeps its written source offset and updates its length', () => {
+  const film = {
+    stage: { w: 1920, h: 1080 },
+    tracks: [{ clips: [{ id: 'overlay', src: 'assets/overlay.png', at: 200, time: [70.511, 158.511] as [number, number] }] }],
+  };
+  const rows = layoutTracks(filmShape(film, []));
+  const editModel = editModelOf(rows);
+  const plans = [
+    { plan: planEdges(editModel, [{ id: 'overlay', kind: 'end' }], -17_495), at: 200, end: 141.016 },
+    { plan: planEdges(editModel, [{ id: 'overlay', kind: 'start' }], 19_201), at: 219.201, end: 139.31 },
+    { plan: planRippleTrim(editModel, ['overlay'], 'start', 19_201), at: 200, end: 139.31 },
+  ];
+  for (const { plan, at, end } of plans) {
+    const saved = readFilmFile(filmHtml(applyOps(structuredClone(film), plan.ops as never)));
+    assert.deepEqual(saved.problems, []);
+    assert.equal(saved.doc?.tracks[0]?.clips[0]?.at, at);
+    assert.deepEqual(saved.doc?.tracks[0]?.clips[0]?.time, [70.511, end]);
+  }
 });
 
 test('a slip changes what a clip shows, not where or how long, inside its source', () => {

@@ -13,8 +13,8 @@ import { createReadStream, existsSync } from 'node:fs';
 import { mkdir, mkdtemp, readFile, rename, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { audioClips, mix } from '../../src/shared.mjs';
-import { hasAlpha } from '../../src/seekable.mjs';
+import { audioClips, fileOf, knowAudioChannels, mix } from '../../src/shared.mjs';
+import { hasAlpha, keyFrameGap } from '../../src/seekable.mjs';
 import { readable } from './files.mjs';
 import { TOOL_DIR } from './projects.mjs';
 import { writeAtomic } from './atomic.mjs';
@@ -81,11 +81,10 @@ async function cached(/** @type {string} */ root, /** @type {string} */ kind, /*
  */
 export async function probe(root, rel) {
   const { abs, key } = await source(root, rel);
-  /* `.4`: since the size is as shown (an older answer has a turned video's sides as stored), with the codec, its
-     profile and level */
-  const bytes = await cached(root, 'probe', `${key}.4.json`, async () => {
+  const bytes = await cached(root, 'probe', `${key}.5.json`, async () => {
     const out = JSON.parse((await tool('ffprobe', ['-v', 'error', '-print_format', 'json', '-show_format', '-show_streams', abs])).toString());
-    const video = out.streams?.find((/** @type {{ codec_type: string }} */ s) => s.codec_type === 'video');
+    const video = out.streams?.find((/** @type {{ codec_type: string, disposition?: { attached_pic?: number } }} */ s) =>
+      s.codec_type === 'video' && !s.disposition?.attached_pic);
     const audio = out.streams?.some((/** @type {{ codec_type: string }} */ s) => s.codec_type === 'audio');
     const [n, d] = String(video?.avg_frame_rate ?? '0/1').split('/').map(Number);
     const duration = Number(out.format?.duration);
@@ -97,11 +96,23 @@ export async function probe(root, rel) {
       ...(d && n ? { fps: Math.round((n / d) * 100) / 100 } : {}),
       ...(video?.codec_name ? { codec: String(video.codec_name), pixfmt: String(video.pix_fmt ?? '') } : {}),
       ...(video?.profile ? { profile: String(video.profile) } : {}),
+      ...(video && hasAlpha(video) ? { alpha: true } : {}),
       ...(Number(video?.level) > 0 ? { level: Number(video.level) } : {}),
       audio: Boolean(audio),
     }));
   });
   return JSON.parse(bytes.toString());
+}
+
+/**
+ * How far apart a video's key frames are (s; null when it cannot tell): what a seek in it costs (src/seekable.mjs
+ * keyFrameGap). Kept with the file's probe.
+ * @param {string} root @param {string} rel @returns {Promise<number | null>}
+ */
+export async function keyGap(root, rel) {
+  const { abs, key } = await source(root, rel);
+  const bytes = await cached(root, 'probe', `${key}.gop.json`, async () => Buffer.from(JSON.stringify({ gap: await keyFrameGap(abs) })));
+  return JSON.parse(bytes.toString()).gap ?? null;
 }
 
 /**
@@ -195,6 +206,7 @@ const measuringMixes = new Map();
  * @returns {Promise<{ lufs: number | null, peak: number | null }>}
  */
 export async function mixLoudness(root, sounds, duration) {
+  await knowAudioChannels(sounds.map((s) => { try { return fileOf(root, 'film.html', s.src); } catch { return ''; } }).filter(Boolean));
   const clips = audioClips(root, 'film.html', sounds).filter((clip) => clip.at < duration && clip.volume > 0);
   if (!clips.length) return { lufs: null, peak: null };
   const versions = await Promise.all([...new Set(clips.map((clip) => clip.file))].map(async (file) => {

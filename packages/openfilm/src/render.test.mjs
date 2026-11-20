@@ -263,9 +263,11 @@ test('an encoder out of memory is said plainly, with fewer browsers to try', () 
   assert.equal(outOfMemory(other, 5), other, 'any other error is told as it is');
 });
 
-test('browsers: one per performance core but one, as many as the free memory holds with room to spare, enough frames each, at most four', () => {
+test('automatic browser count fits the CPU, free memory and number of frames', () => {
   const GB = 2 ** 30;
   assert.equal(defaultWorkers({ cores: 4, available: 6.5 * GB }), 3, 'an M5 with 16 GB, 41% free');
+  assert.equal(defaultWorkers({ cores: 4, efficiencyCores: 6, available: 6.5 * GB }), 3, 'memory still limits Apple silicon');
+  assert.equal(defaultWorkers({ cores: 4, efficiencyCores: 6, available: 12 * GB }), 5, 'more work fits with memory to spare');
   assert.equal(defaultWorkers({ cores: 4, available: 3 * GB }), 1, 'little memory free: one, never swapping');
   assert.equal(defaultWorkers({ cores: 12, available: 48 * GB }), 4, 'a big machine: four, as one graphics chip takes no more');
   assert.equal(defaultWorkers({ cores: 2, available: 16 * GB }), 1, 'two cores: one left for the person');

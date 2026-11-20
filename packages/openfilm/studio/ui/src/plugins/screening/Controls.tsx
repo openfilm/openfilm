@@ -45,7 +45,7 @@ export function SpeedMenu({ rate, label, normal, onRate }: { rate: number; label
       <Tooltip label={open ? undefined : label} shortcut="S">
         <button type="button" aria-label={label} aria-expanded={open} onMouseDown={(e) => e.preventDefault()} onClick={() => setOpen((o) => !o)}
           className={mediaButton(open || rate !== 1, 24)}>
-          <SpeedFace speed={rate} size={24} />
+          <SpeedFace speed={rate} />
         </button>
       </Tooltip>
       {open ? (

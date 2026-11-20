@@ -29,6 +29,19 @@ export const EMPTY_FILM = Object.freeze({ stage: Object.freeze({ w: 1920, h: 108
 /** The revision of a film.html text: what an edit is made against. */
 export const revOf = (/** @type {string} */ text) => createHash('sha256').update(text).digest('hex').slice(0, 16);
 
+/** Recently read versions that the editor may still be displaying while a new preview loads. */
+const recentFilms = new Map();
+function remember(/** @type {string} */ root, /** @type {string} */ rev, /** @type {string} */ text) {
+  if (text.length > 1024 * 1024) return;
+  const key = `${root}\0${rev}`;
+  recentFilms.delete(key);
+  recentFilms.set(key, text);
+  if (recentFilms.size > 32) recentFilms.delete(recentFilms.keys().next().value);
+}
+
+/** @returns {string | undefined} */
+export const recentFilm = (/** @type {string} */ root, /** @type {string} */ rev) => recentFilms.get(`${root}\0${rev}`);
+
 /**
  * The film as it is on disk: its text, revision, the raw value (clips named, see readFilm) and the checked edit, or the
  * problems that keep it from being one. A folder without film.html reads as an empty film.
@@ -44,6 +57,7 @@ export async function readProjectFilm(root) {
   const rev = revOf(text);
   if (!text.trim()) return { text, rev, value: null, doc: null, problems: [`${FILM_FILE} is empty`] };
   const { value, doc, problems } = readFilmFile(text);
+  if (doc) remember(root, rev, text);
   return { text, rev, value: doc ? value : null, doc, problems };
 }
 
@@ -109,6 +123,7 @@ async function settle(/** @type {string} */ root, stable = false, tries = 0) {
   /* written again meanwhile: that write is the one to merge */
   if (!(await replaceIfStill(join(root, FILM_FILE), current.text, text))) return settle(root, stable, tries + 1);
   const rev = revOf(text);
+  remember(root, rev, text);
   filmMerged(root, merge.value, rev, merge.kept);
   const { doc, problems } = readFilm(merge.value);
   /* the merged value is what the file reads as (it is written from it): not read again, which takes long in a long film */
@@ -134,6 +149,7 @@ export function changeProjectFilm(root, change, edit = {}) {
       const text = filmHtml(made.value, current.text);
       if (await replaceIfStill(join(root, FILM_FILE), current.text, text)) {
         const rev = revOf(text);
+        remember(root, rev, text);
         filmWritten(root, current.value, made.value, rev, edit);
         return { ...made, text, rev, current };
       }
@@ -152,7 +168,9 @@ export function changeProjectFilm(root, change, edit = {}) {
 export async function editProjectFilm(root, base, ops, { undo = false } = {}) {
   const done = await changeProjectFilm(root, (start, current) => {
     /* a film.html that does not read is the agent's to fix: Studio never writes over it */
-    if (!current.value && current.text.trim()) throw new EditError(current.problems.join('\n'), 'invalid');
+    if (!current.value && (current.text.trim() || (base != null && base !== current.rev))) {
+      throw new EditError(current.problems.join('\n'), 'invalid');
+    }
     if (base != null && base !== current.rev && Array.isArray(ops) && ops.some((op) => op.op === 'track-layout')) {
       throw new EditError('the film changed while editing its tracks: try again', 'conflict');
     }

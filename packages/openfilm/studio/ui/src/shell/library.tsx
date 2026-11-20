@@ -165,14 +165,12 @@ export function LibraryPlace({ frame }: { frame: ReturnType<typeof useProjectFra
   const pickFile = React.useCallback((file: WorkspaceResource | null) => { wiringStore.get()?.library?.pick(file); }, []);
   const pickSavedFile = React.useCallback((file: WorkspaceResource | null) => { wiringStore.get()?.library?.pick(file, { saved: true }); }, []);
   const pauseWorkbench = React.useCallback(() => { wiringStore.get()?.pause?.(); }, []);
-  /* a plugin with a workbench turned on in the plugins' window: where it now is (the edit's views, Motion, on its timeline;
-     any other on the top bar's switch), with the way to show it */
+  /* an editor turned on in the plugins' window is available in the top bar's switch */
   const { show: showToast } = toast;
   const workbenchOn = React.useCallback((plugin: Plugin) => {
     const workbench = plugin.workbench;
     if (!workbench) return;
-    const onTimeline = workbench !== 'edit' && plugin.blocks === 'edit';
-    showToast(t(onTimeline ? 'assetDrawer.workbenchAddedTimeline' : 'assetDrawer.workbenchAdded'), { label: t('assetDrawer.workbenchOpen'), run: () => showWorkbench(workbench) });
+    showToast(t('assetDrawer.workbenchAdded'), { label: t('assetDrawer.workbenchOpen'), run: () => showWorkbench(workbench) });
   }, [showToast, showWorkbench, t]);
   /* a project that brings skills not allowed in it yet says so as it opens, once, with the way to look at them
      (src/skills.mjs projectSkillAllowed): nothing of them reaches an agent until then */

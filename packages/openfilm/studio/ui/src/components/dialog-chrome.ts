@@ -1,7 +1,7 @@
 /**
  * The large windows (settings, features, projects, export, version history): one size, one surface, one side. The side
- * is on the left in the side's color (the panels' in the dark, rgb 24), the page on the right in the raised color
- * (rgb 32); in the light, the side a quiet step darker than the white page (globals.css `--dialog-side`, `--dialog-main`).
+ * is on the left in the panel color in dark mode, with the page on the right in the raised color. In light mode,
+ * the side is a step darker than the white page (globals.css `--dialog-side`, `--dialog-main`).
  * Settings and Features are framed by components/LargeDialog.
  */
 export const LARGE_DIALOG_SIZE = 'h-[88dvh] max-h-[1000px] w-[92vw] max-w-[1600px]';

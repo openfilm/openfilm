@@ -20,7 +20,8 @@ test('a click or a box in the dark around the picture selects no text: the pictu
   try {
     const root = join(process.env.OPENFILM_LIBRARY, 'Dark');
     await mkdir(join(root, 'assets'), { recursive: true });
-    execFileSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'testsrc2=size=540x960:rate=25:duration=4', '-pix_fmt', 'yuv420p', join(root, 'assets', 'clip.mp4')]);
+    // The selection test needs ordinary video, without a long keyframe gap that queues background proxies.
+    execFileSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'testsrc2=size=540x960:rate=25:duration=4', '-g', '12', '-pix_fmt', 'yuv420p', join(root, 'assets', 'clip.mp4')]);
     await writeFile(join(root, 'card.html'), `<!doctype html><body style="margin:0">
   <h1 id="title" style="position:absolute;left:80px;top:200px;margin:0;font:700 90px sans-serif;color:#fff">Every parcel</h1>
   <p id="sub" style="position:absolute;left:80px;top:400px;margin:0;font:60px sans-serif;color:#fff">Arrives on time</p>
@@ -88,6 +89,6 @@ test('a click or a box in the dark around the picture selects no text: the pictu
       if (value === undefined) delete process.env[name];
       else process.env[name] = value;
     }
-    await rm(scratch, { recursive: true, force: true });
+    await rm(scratch, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
   }
 });

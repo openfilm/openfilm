@@ -51,9 +51,16 @@ async function withCard(name, run, { chat = false, again = false, mixed = false 
       if (withChat) window.openfilmHost = { version: 1, refer: () => {} };
     }, chat);
     await page.goto(`${studio.origin}/projects/${project.id}?key=${studio.key}`);
-    const film = page.locator('[data-viewer-picture] iframe').first();
+    const shownFilm = '[data-viewer-picture] iframe[title="film"]:not([data-loading]):not([data-leaving])';
+    const film = page.locator(shownFilm);
     await film.waitFor({ state: 'visible' });
     await page.locator('[data-layers-panel] [role="treeitem"]').filter({ hasText: 'On time' }).waitFor({ state: 'visible' });
+    /* Measure after the portrait frame fits its selection overlay, accounting for the frame's one-pixel bleed. */
+    await page.waitForFunction((selector) => {
+      const frame = document.querySelector(selector)?.getBoundingClientRect();
+      const overlay = document.querySelector('[data-film-select]')?.getBoundingClientRect();
+      return frame && overlay && frame.top >= 0 && Math.abs(frame.width - overlay.width) <= 2 && Math.abs(frame.height - overlay.height) <= 2;
+    }, shownFilm);
     const box = await film.boundingBox();
     const scale = box.width / 1080;
     /** A point of the film (its px) on the screen. */

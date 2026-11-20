@@ -135,7 +135,14 @@ export interface StudioPrefs {
 }
 /** Where the projects library is (src/locations.mjs): the folder, its default, whether the person chose it, the free space on its disk, how many projects are in it. */
 export interface StudioLocation { path: string; default: string; chosen: boolean; free: number | null; count: number }
-export interface StudioLocations { projects: StudioLocation }
+export interface StudioLocations { projects: StudioLocation; saved: { path: string; target: string; followsProjects: boolean } }
+interface StorageMove {
+  moved: number;
+  failed: { name: string; error: string }[];
+  left: { name: string; path: string; error: string }[];
+  savedMove: { recycled: boolean; from: string } | null;
+  locations: StudioLocations;
+}
 /** Said on the window when they change, for what plays by them (the preview's proxies). */
 export const PREFS_EVENT = 'openfilm:prefs';
 /** Said on the window when the library moved, for the Projects list. */
@@ -156,24 +163,25 @@ export const api = {
   /** the newest openfilm, run in the background (`openfilm update`): Studio starts again on it; refused (ApiError, `body.code`) while busy */
   update: () => call<{ update: NonNullable<StudioVersion['update']> }>('update', { method: 'POST', json: {} }),
   /** `openfilm doctor`, run by this Studio: the report to paste into an issue (src/doctor.mjs) */
-  doctor: () => call<{ ok: boolean; text: string }>('doctor'),
+  doctor: (signal?: AbortSignal) => call<{ ok: boolean; text: string }>('doctor', { signal }),
   /** what went wrong in the last two weeks, newest first (src/problems.mjs) */
   problems: () => call<{ problems: StudioProblem[] }>('diagnostics/problems').then((r) => r.problems),
   /** the diagnostic file (server/diagnostics.mjs): `report` and the rest, zipped into the exports folder and shown there */
   exportDiagnostics: (report: string, conversations: boolean) => call<{ path: string; files: string[]; conversations: boolean }>('diagnostics/export', { method: 'POST', json: { report, conversations } }),
   projects: () => call<{ projects: Project[] }>('projects').then((r) => r.projects),
   prefs: () => call<StudioPrefs>('prefs'),
-  /** where new projects and exports go, and the free space there */
+  /** where new projects and personal assets go, and the free space on the projects disk */
   locations: () => call<StudioLocations>('locations'),
   /** the room every project takes and what of it is cache that can be cleared (studio/server/storage.mjs); cleared, the bytes that came back */
   storage: () => call<StorageUsage>('storage'),
   clearStorage: () => call<StorageUsage & { freed: number }>('storage/clear', { method: 'POST', json: {} }),
   /** move the library to `path` (null: the default); with `move`, its projects go too (those that could not are in `failed`) */
   /** `failed`: projects that stay where they were; `left`: moved across disks, their old folder left there (the trash would not take it) */
-  moveLibrary: (path: string | null, move: boolean) => call<{ moved: number; failed: { name: string; error: string }[]; left: { name: string; path: string; error: string }[]; locations: StudioLocations }>('locations/projects', { method: 'PUT', json: { path, move } }).then((done) => {
+  moveLibrary: (path: string | null, move: boolean) => call<StorageMove>('locations/projects', { method: 'PUT', json: { path, move } }).then((done) => {
     window.dispatchEvent(new Event(LIBRARY_EVENT));
     return done;
   }),
+  moveSaved: () => call<StorageMove>('locations/saved', { method: 'PUT' }),
   /** a project's folder, shown in the system's file manager */
   revealProject: (id: string) => call<object>(`projects/${encodeURIComponent(id)}/reveal`, { method: 'POST', json: {} }),
   /** one of them in the system's file manager */

@@ -36,7 +36,7 @@ test(
         await writeFile(join(root, 'film.html'), filmHtml({ stage: { w: 1280, h: 720 }, tracks: [] }));
         projects.push(await openProject(root));
       }
-      studio = await startStudio({ port: 0, openBrowser: () => {} });
+      studio = await startStudio({ port: 0, openBrowser: () => {}, editorDir: process.env.OPENFILM_TEST_EDITOR_DIR });
       const api = async (path, method = 'GET', body) => {
         const response = await fetch(`${studio.origin}/api/${path}`, {
           method,
@@ -64,6 +64,7 @@ test(
         window.openedProjects = [];
         window.openfilmHost = {
           version: 1,
+          settings: { onOpen: (listener) => { window.openAccountSettings = listener; return () => {}; } },
           tabs: {
             list: async () => ({ self: null, tabs: [] }),
             onChange: () => () => {},
@@ -83,8 +84,25 @@ test(
       });
       // Keep poster rendering out of these input tests.
       await page.route('**/api/projects/*/poster*', (route) => route.fulfill({ status: 404, body: '' }));
+      const services = Promise.withResolvers();
+      const identity = { source: 'file', env: 'OPENFILM_API_KEY', account: 'editor@example.com', keysUrl: 'https://openfilm.dev/account' };
+      const signingIn = { provider: null, error: null, errorFor: null };
+      await page.route((url) => url.pathname === '/api/providers/openfilm/account', (route) => route.fulfill({ json: { account: identity, signingIn } }));
+      await page.route((url) => url.pathname === '/api/providers', async (route) => {
+        await services.promise;
+        await route.fulfill({ json: { providers: [{ id: 'openfilm', name: 'OpenFilm', ...identity, profile: { name: 'Studio editor', avatar: null } }], signingIn } });
+      });
       await page.goto(`${studio.origin}/?key=${studio.key}`);
       const dialog = page.getByRole('dialog', { name: /^(Resource center|资源中心)$/ });
+      try {
+        await dialog.locator('[data-projects-account="signed-in"]').getByText(identity.account).waitFor();
+        await page.evaluate(() => window.openAccountSettings());
+        const account = page.getByRole('heading', { name: 'Account', exact: true }).locator('..');
+        await account.getByText(identity.account).waitFor();
+        services.resolve();
+        await account.getByText('Studio editor', { exact: true }).waitFor();
+        await page.getByRole('dialog', { name: 'General', exact: true }).getByRole('button', { name: 'Done', exact: true }).click();
+      } finally { services.resolve(); }
       const item = (name) => dialog.getByRole('option', { name, exact: true });
       const chooseView = async (label, mode) => {
         await dialog.getByRole('button', { name: /^(View|查看)$/, exact: true }).click();

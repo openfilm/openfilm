@@ -9,12 +9,12 @@ import { Check, Copy, Download, Loader2 } from 'lucide-react';
 import { useLanguage, useT } from '@/i18n';
 import { studioHost } from '@/lib/host';
 import { fullReport, pageFacts } from '@/lib/diagnostics';
-import { api, type StudioProblem } from '@/api';
+import { api, studioConnection, type StudioProblem } from '@/api';
 import { SettingsButton, SettingsGroup, SettingsInset, SettingsItem, SettingsSwitch } from './ui';
 
 /** The report as text, made now: the computer's (with its problems), this browser's, and the app's agents. */
-async function makeReport(): Promise<string> {
-  const [computer, app] = await Promise.all([api.doctor(), studioHost?.agents?.report?.().catch(() => null) ?? null]);
+async function makeReport(signal?: AbortSignal): Promise<string> {
+  const [computer, app] = await Promise.all([api.doctor(signal), studioHost?.agents?.report?.().catch(() => null) ?? null]);
   return fullReport(computer.text, pageFacts(), app);
 }
 
@@ -27,9 +27,15 @@ export function useReportCopy() {
   const [shown, setShown] = React.useState<string | null>(null);
   const copy = () => {
     setState('making');
-    void makeReport()
-      .then((text) => navigator.clipboard.writeText(text).then(() => { setShown(null); setState('copied'); }, () => { setShown(text); setState('idle'); }))
-      .catch(() => setState('failed'));
+    setShown(null);
+    const copyLocal = async () => {
+      const result = await studioHost?.agents?.copyReport?.({ offline: true }).catch(() => null);
+      setState(result?.ok ? 'copied' : 'failed');
+    };
+    if (studioHost?.agents?.copyReport && studioConnection.get() !== 'up') { void copyLocal(); return; }
+    void makeReport(AbortSignal.timeout(5000))
+      .then((text) => navigator.clipboard.writeText(text).then(() => setState('copied'), () => { setShown(text); setState('idle'); }))
+      .catch(copyLocal);
   };
   return { state, shown, copy };
 }

@@ -1365,9 +1365,13 @@ test('playing through a stretch rendered for the preview, its render shows, the 
         const render = [...document.querySelectorAll('body > video')].at(-1);
         log.push({ t, drew: page.drawn.length > before, render: render.style.visibility });
       }
-      await window.__filmEditor.watch(1.5);
       const render = [...document.querySelectorAll('body > video')].at(-1);
-      return { log, still: { drew: page.drawn.at(-1), render: render.style.visibility, paused: render.paused } };
+      const stale = await window.__filmEditor.showCachedSeek(1.25, () => false);
+      const cached = await window.__filmEditor.showCachedSeek(1.5, () => true);
+      const beforeLive = { cached, render: render.style.visibility, paused: render.paused };
+      const media = { time: render.currentTime, ready: render.readyState, seeking: render.seeking, error: render.error?.message, src: render.currentSrc, network: render.networkState };
+      await window.__filmEditor.watch(1.5);
+      return { log, stale, beforeLive, media, still: { drew: page.drawn.at(-1), render: render.style.visibility, paused: render.paused } };
     });
     const inside = seen.log.filter((f) => f.t >= 1 && f.t < 1.9);
     assert.ok(inside.length > 10 && inside.every((f) => f.render === 'visible'), `inside the render: ${JSON.stringify(inside.slice(0, 3))}`);
@@ -1377,6 +1381,8 @@ test('playing through a stretch rendered for the preview, its render shows, the 
     assert.ok(seen.log.filter((f) => f.t < 0.4).every((f) => f.drew && f.render === 'hidden'), 'before it: the film itself');
     assert.ok(seen.log.filter((f) => f.t >= 2.1 && f.t < 2.45).every((f) => f.drew), 'just before it ends: the clips are drawn again under it');
     assert.ok(seen.log.filter((f) => f.t >= 2.55).every((f) => f.drew && f.render === 'hidden'), 'after it: the film itself');
+    assert.equal(seen.stale, false, 'a superseded seek cannot show a cached picture');
+    assert.deepEqual(seen.beforeLive, { cached: true, render: 'visible', paused: true }, `a decoded cached frame is shown before the live draw ${JSON.stringify(seen.media)}`);
     assert.deepEqual(seen.still, { drew: 1.5, render: 'hidden', paused: true }, 'stopped: the film itself, exact');
   } finally {
     await s.close();

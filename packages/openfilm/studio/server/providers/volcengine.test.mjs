@@ -163,3 +163,26 @@ test('a Seedream picture: its size in pixels, opaque or transparent, no mark; 4K
   assert.equal(JSON.parse(seen.at(-1).body).background, 'opaque');
   await assert.rejects(volcengine.run('image', { out: 'a', prompt: 'x', ref: ['a.png'], mask: 'm.png' }, ctx({}, 'doubao-seedream-5-5-261028')), /--mask: Seedream changes a picture as the prompt says/);
 });
+
+test('Seedream sends small known reference bytes inline and keeps large references linked in order', async () => {
+  seen.length = 0;
+  const sample = new Uint8Array([1, 2, 3]);
+  reply = () => [200, { data: [{ b64_json: 'AQID' }] }];
+  const link = async (path) => 'https://assets.example/' + path;
+  const size = { 'small.png': sample.byteLength, 'large.png': 9 * 1024 * 1024 };
+  await volcengine.run('image', { out: 'test', prompt: 'a lantern', ref: ['small.png', 'large.png'] }, {
+    ...ctx({ 'small.png': sample }, 'doubao-seedream-5-5-261028', link),
+    inputSize: (path) => size[path],
+  });
+  assert.deepEqual(JSON.parse(seen[0].body).image, ['data:image/png;base64,AQID', 'https://assets.example/large.png']);
+  assert.equal(seen.length, 1);
+});
+
+test('Seedream reports signed reference download failures without exposing the link or resubmitting', async () => {
+  seen.length = 0;
+  reply = () => [400, { error: { message: 'Timeout while downloading url=https://assets.example/file?signature=test' } }];
+  const context = ctx({}, 'doubao-seedream-5-5-261028', async () => 'https://assets.example/file?signature=test');
+  await assert.rejects(volcengine.run('image', { out: 'test', prompt: 'a lantern', ref: ['large.png'] }, context),
+    (error) => /timed out downloading a Seedream reference image/.test(error.message) && !error.message.includes('signature'));
+  assert.equal(seen.length, 1);
+});

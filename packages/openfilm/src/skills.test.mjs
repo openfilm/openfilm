@@ -389,8 +389,8 @@ test("OpenFilm's own skills: in order, each listed after the system prompt, prin
   assert.deepEqual(core.map((s) => s.uid), ['openfilm/film', 'openfilm/media', 'openfilm/canvas', 'openfilm/color'], 'in the order they are listed');
   for (const s of core) {
     assert.ok(s.shown?.title['zh-CN'] && s.shown.summary.en, `${s.name} has a title and a summary for people`);
-    /* the skills of plugins off at first are not listed until they are on */
-    if (s.name !== 'color') assert.ok(manual.includes(`- \`${s.name}\`${s.requires ? ` (after ${s.requires.map((n) => `\`${n}\``).join(', ')})` : ''}: ${s.description}`), `the list names ${s.name} by what it says it is for`);
+    const name = `- \`${s.name}\`${s.requires ? ` (after ${s.requires.map((n) => `\`${n}\``).join(', ')})` : ''}: ${s.description}`;
+    assert.equal(manual.includes(name), s.name !== 'color', `the prompt lists ${s.name} when it is enabled`);
     assert.ok(s.description.length > 40, `${s.name} says when it is read`);
   }
   assert.ok(manual.split(/\s+/).length < 400, 'a line for each: how a film is made is in the skill');

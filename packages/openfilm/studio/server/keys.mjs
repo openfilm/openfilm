@@ -135,9 +135,9 @@ export async function readSettings(file = providersFile(), { strict = false } = 
     }
     return /** @type {ProviderSettings} */ ({ keys, use, model: strings(raw.model), off, custom, accounts: strings(raw.accounts), libraryOff: raw.libraryOff === true });
   } catch (e) {
-    /* none yet, or not JSON, reads as none; a file that is there but cannot be read is not "none" */
+    /* Non-strict callers can work with defaults. An account read must distinguish a failed read from a missing file. */
     const code = /** @type {NodeJS.ErrnoException} */ (e).code;
-    if (strict && code && code !== 'ENOENT') throw e;
+    if (strict && code !== 'ENOENT') throw e;
     return /** @type {ProviderSettings} */ ({ keys: {}, use: {}, model: {}, off: [], custom: [], accounts: {}, libraryOff: false });
   }
 }

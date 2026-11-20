@@ -3,9 +3,7 @@ import assert from 'node:assert/strict';
 import { assetClipElement, assetClipKindOf, assetDropInsert, assetDropPreview, assetDropSpot, assetDropTargetOf, assetFitBox, assetPageFit, assetRunInsert, soundLaneHit } from './asset-timeline.ts';
 import type { TimelineTrack } from './timeline-layout.ts';
 
-/* A file from the media pane lands on the row under the pointer when it is a track of its kind (a sound on a sound
-   track, a picture on a picture track), or, where its time is taken, on a new track right beside it; let go over a
-   track of the other kind, on the nearest of its own kind free there, else a new one where its kind's tracks are. */
+/* A file lands on a compatible row with room. A sound pointed at a picture gets its own track beside it. */
 
 const row = (docIndex: number, role: TimelineTrack['role'], spans: [number, number][]): TimelineTrack => ({
   lane: `doc-${docIndex}`,
@@ -26,8 +24,6 @@ test('footage dropped on a free stretch of a page track goes onto it', () => {
   assert.deepEqual(spot, { action: 'into', laneIndex: 0, lane: 'doc-0', docIndex: 0, locked: false });
   const plan = assetDropInsert(video, tracks, assetDropTargetOf(spot), 12_000);
   assert.deepEqual(plan, { element: { src: video.path }, kind: 'video', at: 12, track: 0 });
-  /* a sound let go on a picture track: on the sound track, free there */
-  assert.deepEqual(assetDropSpot(sound, tracks, { lane: 1, band: 'body' }, 10_000), { action: 'into', laneIndex: 2, lane: 'doc-2', docIndex: 2, locked: false });
 });
 
 test('where the time is taken, a new track right above a picture row, right below a sound row', () => {
@@ -36,13 +32,19 @@ test('where the time is taken, a new track right above a picture row, right belo
   assert.deepEqual(assetDropSpot(sound, tracks, { lane: 2, band: 'body' }, 2000), { action: 'new-track', laneIndex: 3, docAt: 3 });
 });
 
-test('a picture let go on a sound track goes on a picture track, never among the sounds; a sound never among the pictures', () => {
+test('a picture let go on a sound track goes to a picture track; a sound pointed at a picture opens a track beside it', () => {
   /* free there: onto the nearest picture track */
   assert.deepEqual(assetDropSpot(video, tracks, { lane: 2, band: 'body' }, 12_000), { action: 'into', laneIndex: 1, lane: 'doc-1', docIndex: 1, locked: false });
   /* taken on every picture track: a new one right above V1, which stays the main track */
   assert.deepEqual(assetDropSpot(video, tracks, { lane: 2, band: 'body' }, 2000), { action: 'new-track', laneIndex: 1, docAt: 1 });
-  /* a sound at the edge of a page row: under the sound tracks, not between the pictures */
-  assert.deepEqual(assetDropSpot(sound, tracks, { lane: 0, band: 'below' }, 2000), { action: 'new-track', laneIndex: 3, docAt: 3 });
+  /* a free audio track elsewhere does not pull the drop away from the pointer */
+  const spot = assetDropSpot(sound, tracks, { lane: 1, band: 'body' }, 10_000);
+  assert.deepEqual(spot, { action: 'new-track', laneIndex: 1, docAt: 1 });
+  assert.deepEqual(assetDropInsert(sound, tracks, assetDropTargetOf(spot), 10_000), {
+    element: { src: sound.path }, kind: 'audio', at: 10, track: { insert: 1 },
+  });
+  assert.deepEqual(assetDropSpot(sound, tracks, { lane: 0, band: 'below' }, 2000), { action: 'new-track', laneIndex: 1, docAt: 1 });
+  assert.deepEqual(assetDropSpot(sound, tracks, { lane: -1, band: 'above' }, 12_000), { action: 'new-track', laneIndex: 0, docAt: 0 });
 });
 
 test('the edges of a row and the space around the rows open a track there', () => {

@@ -3,7 +3,7 @@ export declare const HOST_FLAG: string;
 export declare const SEEK_INSIDE_FRAME: string;
 export declare const FILM_CLOCK: string;
 export declare function injectFirst(html: string, tag: string): string;
-export declare function serve(root: string, opts?: { port?: number }): Promise<{ url: string; close(): Promise<void> }>;
+export declare function serve(root: string, opts?: { port?: number; timeline?: string; renderRanges?: [number, number][] }): Promise<{ url: string; close(): Promise<void> }>;
 /** Listen on 127.0.0.1 at `port`; for port 0, never at a port browsers refuse to open. The port it listens on. */
 export declare function listenLocal(server: import('node:net').Server, port?: number): Promise<number>;
 export interface LaunchOptions { headed?: boolean; channel?: string | null; args?: string[]; env?: Record<string, string | undefined> }
@@ -42,4 +42,4 @@ export declare class FilmPage {
 /** Serves one request for the files of `root` at `path`; false when the path leaves the folder. */
 /** A video graded by LUT files (SPEC.md `--of-lut`): its graded copy's key once made, `making` while it is, null: played as it is. */
 export type Grade = (file: string, luts: string[], time: [number, number] | null) => { key: string, from?: number } | { making: true } | null | Promise<{ key: string, from?: number } | { making: true } | null>;
-export declare function folderFiles(root: string, opts?: { inject?: string; timelineInject?: string; headers?: Record<string, string>; swap?: (file: string, query?: URLSearchParams) => string | null; grade?: Grade }): (req: import('node:http').IncomingMessage, res: import('node:http').ServerResponse, path: string, query?: URLSearchParams) => boolean;
+export declare function folderFiles(root: string, opts?: { inject?: string; timelineInject?: string; staleRevisionPage?: string; headers?: Record<string, string>; swap?: (file: string, query?: URLSearchParams) => string | null; grade?: Grade }): (req: import('node:http').IncomingMessage, res: import('node:http').ServerResponse, path: string, query?: URLSearchParams) => boolean;

@@ -59,14 +59,15 @@ test('project cards open on click and rename in place; desktop tabs keep switchi
     for (const name of ['Rename', 'Set current frame as cover', 'Show folder', 'All projects…']) {
       assert.equal(await card.getByRole('button', { name, exact: true }).isVisible(), true, `${name} remains in the project card`);
     }
-    assert.match(await card.innerText(), /1 clip/);
+    /* The card can open while the first film frame is still loading. */
+    await card.getByText('1 clip', { exact: true }).waitFor({ state: 'visible' });
     assert.equal(await card.getByRole('button', { name: 'Recent only', exact: true }).count(), 0, 'recent projects stay in All projects');
     assert.equal(await card.getByText('Recent', { exact: true }).count(), 0, 'the project card has no recent section');
-    assert.equal(await card.locator('img').count(), 1, 'the cover remains in a film with content');
     await page.waitForFunction(() => {
       const img = document.querySelector('[data-project-card] img');
       return img instanceof HTMLImageElement && img.complete && img.naturalWidth > 0;
     });
+    assert.equal(await card.locator('img').count(), 1, 'the cover remains in a film with content');
     await card.locator('img').evaluate((img) => img.decode());
     assert.ok(posterRequests >= 2, 'a poster still being drawn is asked for again without reopening the card');
     const cover = await card.locator('img').evaluate((img) => ({

@@ -1,5 +1,53 @@
 # openfilm
 
+## 0.4.1
+
+### Patch Changes
+
+- [`25c0ac7`](https://github.com/openfilm/openfilm/commit/25c0ac70c1f71c60293d0e3ba277064609a873d1) Thanks [@riverisbuilding](https://github.com/riverisbuilding)! - Play videos that the device cannot decode natively, including HEVC Main 10 and ProRes, in the timeline, Canvas, and asset previews. Studio prepares and reuses a local playback copy with audio and keeps the original for downloads and exports.
+
+- [`25c0ac7`](https://github.com/openfilm/openfilm/commit/25c0ac70c1f71c60293d0e3ba277064609a873d1) Thanks [@riverisbuilding](https://github.com/riverisbuilding)! - Fill in Doubao voice previews with official BytePlus recordings and short samples synthesized in the remaining voices.
+
+- [`25c0ac7`](https://github.com/openfilm/openfilm/commit/25c0ac70c1f71c60293d0e3ba277064609a873d1) Thanks [@riverisbuilding](https://github.com/riverisbuilding)! - Export the timeline shown when you click Export, even if you keep editing while the job queues or runs. The export dialog loads its settings and progress without scanning the project folder. A trimmed clip outside a selected range can stay offline. Video exports mix audio while drawing the picture, prepare pages as needed, and fall back sooner when a hardware encoder stalls. On Apple silicon, Auto can use more drawing workers when enough memory is available. PNG stills use the browser's image directly when it already has the requested dimensions, and editing-project exports probe media in parallel. Closing the window on Windows minimizes it while an export is running.
+
+  The export queue shows each stage and its elapsed time, including audio mixing, loudness adjustment, muxing and saving. Percentages appear when work in that stage can be measured.
+
+- [`25c0ac7`](https://github.com/openfilm/openfilm/commit/25c0ac70c1f71c60293d0e3ba277064609a873d1) Thanks [@riverisbuilding](https://github.com/riverisbuilding)! - Export the range marked on the timeline. Use I and O or the Time Range menu to mark it, then open Export with Command+M or Ctrl+M.
+
+- [`25c0ac7`](https://github.com/openfilm/openfilm/commit/25c0ac70c1f71c60293d0e3ba277064609a873d1) Thanks [@riverisbuilding](https://github.com/riverisbuilding)! - The preview's files are served from a thread of their own: footage, pictures and pages keep loading at once while Studio is busy (a film read, a waveform made, an export prepared), where before each read of a video waited behind that work and the picture stood still.
+
+- [`25c0ac7`](https://github.com/openfilm/openfilm/commit/25c0ac70c1f71c60293d0e3ba277064609a873d1) Thanks [@riverisbuilding](https://github.com/riverisbuilding)! - Set music or sound effects to None to turn off generation while keeping other services connected. Disconnecting the selected service keeps that kind of generation off. If a request's outcome is uncertain, OpenFilm preserves the original request and avoids submitting the same paid take again.
+
+- [`25c0ac7`](https://github.com/openfilm/openfilm/commit/25c0ac70c1f71c60293d0e3ba277064609a873d1) Thanks [@riverisbuilding](https://github.com/riverisbuilding)! - Let the timeline drag show available frames while the pointer is moving and draw the exact position on release. Valid cached previews can show a frame before a slow chapter finishes opening. Playback recovers when an exact still-frame request cannot finish. Remove the loading message over the picture.
+
+- [`25c0ac7`](https://github.com/openfilm/openfilm/commit/25c0ac70c1f71c60293d0e3ba277064609a873d1) Thanks [@riverisbuilding](https://github.com/riverisbuilding)! - Open the first available Community subcategory when its parent is selected. Make library navigation react immediately to hover, mark media already on the timeline, and keep the Community's editor shelf focused on editors ready to use.
+
+- [`25c0ac7`](https://github.com/openfilm/openfilm/commit/25c0ac70c1f71c60293d0e3ba277064609a873d1) Thanks [@riverisbuilding](https://github.com/riverisbuilding)! - Stop polling finished media failures, send small Seedream reference images directly, retry explicit voice service overloads once, and give clearer model timeout and voice selection errors.
+
+- [#505](https://github.com/openfilm/openfilm/pull/505) Thanks [@hobostay](https://github.com/hobostay)! - Fix an infinite loop in Studio's edit-history byte-cap eviction when only the first and last two versions of a tracked file remain.
+
+- [`25c0ac7`](https://github.com/openfilm/openfilm/commit/25c0ac70c1f71c60293d0e3ba277064609a873d1) Thanks [@riverisbuilding](https://github.com/riverisbuilding)! - Keep a play request while a chapter loads after a timeline jump. Playback starts when the selected frame is ready. A play request can reuse the seek already in progress.
+
+- [`25c0ac7`](https://github.com/openfilm/openfilm/commit/25c0ac70c1f71c60293d0e3ba277064609a873d1) Thanks [@riverisbuilding](https://github.com/riverisbuilding)! - Restore the viewer when switching workspaces and retry when the film changes while its first frame is loading.
+
+- [`25c0ac7`](https://github.com/openfilm/openfilm/commit/25c0ac70c1f71c60293d0e3ba277064609a873d1) Thanks [@riverisbuilding](https://github.com/riverisbuilding)! - The preview of a long film with hundreds of clips plays at once again after a seek or a scrub, its picture and sound moving from the first frame. Studio read the whole film.html again for every stretch it had seen play late, many times a second while the film played, and footage waited behind it; it now reads it once, and a film is read about thirty times faster.
+
+- [`25c0ac7`](https://github.com/openfilm/openfilm/commit/25c0ac70c1f71c60293d0e3ba277064609a873d1) Thanks [@riverisbuilding](https://github.com/riverisbuilding)! - The preview opens, scrubs and plays a long film faster. Footage whose key frames are far apart (a phone's or a camera's H.264, a screen recording, a generated clip) now plays in the preview from a light copy made in the background, the most used footage first, so a scrub across a film cut from one recording shows its frames at once. Opening a film of hundreds of clips no longer holds Studio while its captions and sounds are read, and the timeline no longer works through every clip again as the playhead moves.
+
+- [`25c0ac7`](https://github.com/openfilm/openfilm/commit/25c0ac70c1f71c60293d0e3ba277064609a873d1) Thanks [@riverisbuilding](https://github.com/riverisbuilding)! - Protect existing projects and personal media during Windows updates and uninstalls by checking installation folders before removing app files. Keep new projects outside the app's installation directory and recover the project list from a local backup if its index is damaged.
+
+- [`25c0ac7`](https://github.com/openfilm/openfilm/commit/25c0ac70c1f71c60293d0e3ba277064609a873d1) Thanks [@riverisbuilding](https://github.com/riverisbuilding)! - Storage settings now move the personal asset library with the projects folder, including across drives. If you already changed the projects folder, use Move asset library in Storage to bring your existing assets with it.
+
+- [`25c0ac7`](https://github.com/openfilm/openfilm/commit/25c0ac70c1f71c60293d0e3ba277064609a873d1) Thanks [@riverisbuilding](https://github.com/riverisbuilding)! - New timeline jumps take priority while a slow chapter loads. Studio cancels the chapter load if it is no longer needed, so a frame that is already available can appear immediately. During playback, Studio starts preparing the next page up to twelve seconds before its cut.
+
+- [`25c0ac7`](https://github.com/openfilm/openfilm/commit/25c0ac70c1f71c60293d0e3ba277064609a873d1) Thanks [@riverisbuilding](https://github.com/riverisbuilding)! - Keep retrying after a failed Studio restart and let users copy local diagnostics while Studio is disconnected.
+
+- [`25c0ac7`](https://github.com/openfilm/openfilm/commit/25c0ac70c1f71c60293d0e3ba277064609a873d1) Thanks [@riverisbuilding](https://github.com/riverisbuilding)! - Drag onto a clip to preview a replacement and confirm it, or drop near its edges to insert. The insertion preview follows the pointer even when a new track is needed for audio. Clips on locked tracks cannot be selected. Collapse track controls from the boundary and open them from each track's menu.
+
+  Keep thumbnails at their aspect ratio when zooming, show linked clips following the main track as it moves, and preview a marker's frame while the playhead stays put. Playback starts from the previewed marker.
+
+- [`25c0ac7`](https://github.com/openfilm/openfilm/commit/25c0ac70c1f71c60293d0e3ba277064609a873d1) Thanks [@riverisbuilding](https://github.com/riverisbuilding)! - + and − zoom the edit's timeline again with Premiere Pro's keys (+ is the = key with ⇧, and the keypad's +) and with Final Cut Pro's, and they zoom it from the viewer and the picture too, not only from the timeline. With a cover, the line between the track heads and the rest now sits on the cover's left: the heads, the line, then the cover beside the clips.
+
 ## 0.4.0
 
 ### Minor Changes

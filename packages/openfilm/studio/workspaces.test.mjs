@@ -57,6 +57,7 @@ async function withWorkspace(run, {hasChat=true, clips=[]}={}) {
     });
     await page.goto(`${studio.origin}/projects/${project.id}?key=${studio.key}`);
     await page.locator('[data-work-mode="edit"]').waitFor();
+    await waitForEditDock(page);
     try { await run(page); assert.deepEqual(errors, []); }
     catch (error) {
       console.error('Workspace failure:', await page.evaluate(() => ({ text: document.body.innerText.slice(-2200), profile: localStorage.getItem('openfilm.workspace.current.v3') })), errors);
@@ -71,8 +72,27 @@ async function withWorkspace(run, {hasChat=true, clips=[]}={}) {
 }
 const library = page => page.locator('[data-workspace-library]');
 const menu = page => page.locator('[data-layout-menu]');
-async function openLayout(page) { if (!await menu(page).count()) await page.getByRole('button', { name: 'Layout', exact: true }).click(); return menu(page); }
-async function closeLayout(page) { if (await menu(page).count()) await page.keyboard.press('Escape'); }
+async function waitForEditDock(page) {
+  /* The shell and viewer mount before the first film frame makes the timeline available. */
+  await page.waitForFunction(() => {
+    const view = document.querySelector('[data-viewer-pane]')?.getBoundingClientRect();
+    const timeline = document.querySelector('[data-workspace-timeline]')?.getBoundingClientRect();
+    return view && timeline && timeline.height > 0 && view.bottom <= timeline.top;
+  });
+}
+async function openLayout(page) {
+  const layout = menu(page);
+  if (!await layout.count()) await page.getByRole('button', { name: 'Layout', exact: true }).click();
+  await layout.waitFor();
+  return layout;
+}
+async function closeLayout(page) {
+  const layout = menu(page);
+  if (await layout.count()) {
+    await page.keyboard.press('Escape');
+    await layout.waitFor({ state: 'detached' });
+  }
+}
 async function rect(locator) { const value = await locator.boundingBox(); assert.ok(value); return value; }
 async function profile(page, mode = 'edit', { hasTree, libraryDock, changedFrom } = {}) {
   await page.waitForFunction(({ mode, hasTree, libraryDock, changedFrom }) => {
@@ -187,9 +207,9 @@ test('normal panels have no new library header and every preset stays in the cur
 
 test('export progress stays in the title bar as the workspace changes', { timeout: 60_000 }, async () => {
   await withWorkspace(async page => {
-    await page.route('**/api/projects/*/exports', route => route.fulfill({ json: { exports: [{
+    await page.route('**/api/projects/*/exports?view=queue', route => route.fulfill({ json: { exports: [{
       id: 'active', label: 'Wide export', kind: 'video', status: 'running', phase: 'rendering',
-      progress: 0.42, framesDone: 42, framesTotal: 100, rate: 30, etaMs: 2000, encoder: 'h264', outputs: [],
+      progress: 0.42, phaseProgress: 0.42, framesDone: 42, framesTotal: 100, rate: 30, etaMs: 2000, encoder: 'h264', outputs: [],
     }] } }));
     await page.reload();
     const badge = page.locator('[data-titlebar] [data-export-queue-trigger]');
@@ -224,7 +244,8 @@ test('export progress stays in the title bar as the workspace changes', { timeou
 
 test('edit mode moves real panels into nested splits, supports undo and cancel, and never persists a draft', { timeout:60_000 },async()=>{
   await withWorkspace(async page=>{
-    const before=await profile(page),viewer=await rect(page.locator('[data-viewer-pane]'));
+    const before = await profile(page);
+    const viewer = await rect(page.locator('[data-viewer-pane]'));
     await beginEdit(page);
     assert.equal(await page.locator('[data-work-mode="edit"]').isDisabled(),true);
     await page.keyboard.press('Tab');
@@ -376,31 +397,48 @@ test('library placement is a reversible separate switch and visibility never cha
   });
 });
 
-test('preset thumbnail panel bounds match actual panels at the current window size, mode and host', {timeout:90_000},async()=>{
-  for(const hasChat of [true,false])await withWorkspace(async page=>{
-    for(const viewport of [{width:1800,height:1100},{width:1000,height:700}]){
+test('preset thumbnail panel bounds match actual panels at the current window size, mode and host', { timeout: 90_000 }, async () => {
+  const selectors = {
+    chat: '#test-chat', viewer: '[data-viewer-pane]', canvas: '[data-studio-canvas]', library: '[data-workspace-library]',
+    inspector: '[data-workspace-inspector]', layers: '[data-workspace-layers]', timeline: '[data-workspace-timeline]',
+  };
+  for (const hasChat of [true, false]) await withWorkspace(async page => {
+    for (const viewport of [{ width: 1800, height: 1100 }, { width: 1000, height: 700 }]) {
       await page.setViewportSize(viewport);
-      for(const mode of ['edit','canvas']){
+      for (const mode of ['edit', 'canvas']) {
         await showWorkbench(page, mode);
-        if(mode==='canvas')await page.waitForFunction(()=>document.querySelector('[data-studio-canvas]')?.dataset.canvasReady==='1');
-        const layout=await openLayout(page);
-        for(const preset of ['Default','Library','Focus']){
-          const button=layout.getByRole('button',{name:preset,exact:true});
-          await button.click();await page.waitForTimeout(100);
-          const svg=button.locator('[data-workspace-preview]');
-          assert.equal(await svg.getAttribute('viewBox'),`0 0 ${viewport.width} ${viewport.height}`);
-          const bounds=await svg.locator('[data-preview-panel]').evaluateAll(items=>items.map(el=>({panel:el.dataset.previewPanel,x:Number(el.getAttribute('x')),y:Number(el.getAttribute('y')),width:Number(el.getAttribute('width')),height:Number(el.getAttribute('height'))})));
-          assert.equal(bounds.some(r=>r.panel==='chat'),hasChat&&preset!=='Focus',`${mode}/${preset}/${hasChat}/${viewport.width}`);
-          const selectors={chat:'#test-chat',viewer:'[data-viewer-pane]',canvas:'[data-studio-canvas]',library:'[data-workspace-library]',inspector:'[data-workspace-inspector]',layers:'[data-workspace-layers]',timeline:'[data-workspace-timeline]'};
-          for(const expected of bounds){
-            const actual=await rect(page.locator(selectors[expected.panel]));
-            for(const key of ['x','y','width','height'])assert.ok(Math.abs(actual[key]-expected[key])<=2,`${mode}/${preset}/${hasChat}/${viewport.width} ${expected.panel}.${key}: actual ${actual[key]}, preview ${expected[key]}`);
-          }
+        if (mode === 'edit') await waitForEditDock(page);
+        else await page.locator('[data-studio-canvas][data-canvas-ready="1"]').waitFor();
+        const layout = await openLayout(page);
+        await layout.getByText(mode === 'edit' ? 'Edit layouts' : 'Canvas layouts', { exact: true }).waitFor();
+        for (const preset of ['Default', 'Library', 'Focus']) {
+          await layout.getByRole('button', { name: preset, exact: true }).click();
+          const button = layout.getByRole('button', { name: preset, exact: true, pressed: true });
+          const viewBox = `0 0 ${viewport.width} ${viewport.height}`;
+          const svg = button.locator(`[data-workspace-preview][viewBox="${viewBox}"]`);
+          await svg.waitFor();
+          /* Measure a single render of the thumbnail and the real panels. Shell geometry can update after a preset or resize. */
+          const context = { preset, viewBox, mode, hasChat, selectors };
+          const settled = await page.waitForFunction(({ preset, viewBox, mode, hasChat, selectors }) => {
+            const svg = document.querySelector(`[data-layout-menu] button[aria-label="${preset}"][aria-pressed="true"] [data-workspace-preview]`);
+            if (svg?.getAttribute('viewBox') !== viewBox) return false;
+            const preview = new Map([...svg.querySelectorAll('[data-preview-panel]')].map(panel => [panel.dataset.previewPanel, panel]));
+            if (preview.has('chat') !== (hasChat && preset !== 'Focus') || preview.has('library') !== (preset === 'Library')) return false;
+            if (!preview.has(mode === 'edit' ? 'viewer' : 'canvas') || (mode === 'edit' && !preview.has('timeline'))) return false;
+            return Object.entries(selectors).every(([panel, selector]) => {
+              const node = document.querySelector(selector);
+              const box = node?.getBoundingClientRect();
+              const visible = box && box.width > 0 && box.height > 0 && !node.closest('[inert]') && getComputedStyle(node).visibility === 'visible';
+              const expected = preview.get(panel);
+              return expected ? visible && ['x', 'y', 'width', 'height'].every(key => Math.abs(box[key] - Number(expected.getAttribute(key))) <= 2) : !visible;
+            });
+          }, context).catch(error => { throw new Error(`Preset panels did not match: ${mode}/${preset}/${hasChat}/${viewport.width}`, { cause: error }); });
+          await settled.dispose();
         }
         await closeLayout(page);
       }
     }
-  },{hasChat});
+  }, { hasChat });
 });
 
 test('Screening picked over the canvas is shown, the canvas kept under it', {timeout:60_000},async()=>{

@@ -11,9 +11,9 @@
  *
  * Reads no Studio module, so the command can use it.
  */
-import { accessSync, constants, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, statfsSync, writeFileSync } from 'node:fs';
+import { accessSync, constants, existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, statfsSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { dirname, isAbsolute, join, resolve, sep } from 'node:path';
+import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 
 /** Studio's own home (its settings and keys, not the person's work): OPENFILM_HOME, else ~/.openfilm. */
 export const studioHomeDir = () => process.env.OPENFILM_HOME || join(homedir(), '.openfilm');
@@ -39,11 +39,16 @@ export function sharedPref(key, home = sharedHome()) {
  * what this one does not know of it is written back as it was. @param {string} key @param {unknown} value
  */
 export function setSharedPref(key, value, home = sharedHome()) {
+  setSharedPrefs({ [key]: value }, home);
+}
+
+/** Keep related shared preferences in a single write. @param {Record<string, unknown>} patch */
+export function setSharedPrefs(patch, home = sharedHome()) {
   const at = join(home, 'prefs.json');
   let kept = {};
   try { const raw = JSON.parse(readFileSync(at, 'utf8')); if (raw && typeof raw === 'object' && !Array.isArray(raw)) kept = raw; } catch { /* none yet */ }
   mkdirSync(home, { recursive: true });
-  writeFileSync(`${at}.${process.pid}.tmp`, `${JSON.stringify({ ...kept, [key]: value }, null, 2)}\n`);
+  writeFileSync(`${at}.${process.pid}.tmp`, `${JSON.stringify({ ...kept, ...patch }, null, 2)}\n`);
   renameSync(`${at}.${process.pid}.tmp`, at);
 }
 
@@ -60,18 +65,18 @@ export const exportsDefault = () => process.env.OPENFILM_EXPORTS
   || (process.env.OPENFILM_HOME ? join(process.env.OPENFILM_HOME, 'exports') : '')
   || join(homedir(), 'Desktop');
 
-/**
- * Where what the person saved goes (clips and files kept to use again in any project, studio/server/saved.mjs): beside
- * the projects' default folder, `Saved` (~/Movies/OpenFilm/Saved on macOS), else OPENFILM_SAVED. Not moved with the
- * projects folder: what was saved stays where it was found.
- */
-export const savedRoot = () => process.env.OPENFILM_SAVED || join(dirname(libraryDefault()), 'Saved');
+const savedDefault = () => join(dirname(libraryDefault()), 'Saved');
 
-/** The folders the person can choose, by their key in prefs.json. */
-export const LOCATION_KEYS = /** @type {const} */ ({ projects: 'projectsFolder' });
+/** Where Saved goes with the selected projects folder. Keep the original layout at the default. */
+export function savedTarget(projects = chosenFolder('projectsFolder')) {
+  return process.env.OPENFILM_SAVED || (projects && relative(libraryDefault(), projects) ? join(projects, 'Saved') : savedDefault());
+}
+
+/** The active library stays readable at its original location until the move finishes. */
+export const savedRoot = () => process.env.OPENFILM_SAVED || chosenFolder('savedFolder') || savedDefault();
 
 /** A folder the person chose, as kept in prefs.json: an absolute path, or null (none chosen, or not one). */
-export function chosenFolder(/** @type {'projectsFolder'} */ key) {
+export function chosenFolder(/** @type {'projectsFolder' | 'savedFolder'} */ key) {
   const value = sharedPref(key);
   return typeof value === 'string' && isAbsolute(value) ? resolve(value) : null;
 }
@@ -90,11 +95,12 @@ export const libraryRoot = () => chosenFolder('projectsFolder') ?? libraryDefaul
  * The projects in a library, by full path: its folders that hold a film (film.html, or Studio's `.film/id` for one
  * that lost it), not hidden ones. Nothing deeper: a project is a folder of the library.
  */
-export function libraryProjects(root = libraryRoot()) {
+export function libraryProjects(root = libraryRoot(), saved = savedRoot()) {
   try {
     return readdirSync(root, { withFileTypes: true })
-      .filter((d) => d.isDirectory() && !d.name.startsWith('.') && (existsSync(join(root, d.name, 'film.html')) || existsSync(join(root, d.name, '.film', 'id'))))
-      .map((d) => join(root, d.name));
+      .filter((d) => d.isDirectory() && !d.name.startsWith('.'))
+      .map((d) => join(root, d.name))
+      .filter((folder) => relative(folder, saved) !== '' && (existsSync(join(folder, 'film.html')) || existsSync(join(folder, '.film', 'id'))));
   } catch {
     return [];
   }
@@ -116,14 +122,34 @@ export function freeSpace(/** @type {string} */ folder) {
 }
 
 /**
- * Each folder the person can choose, for Settings: where it is now, its default, whether it was chosen, the free
- * space on its disk, and how many projects are in it (Settings asks whether they move with it).
+ * The projects folder and its disk space, and the current and intended locations of the personal asset library.
  */
 export function locations() {
   const one = (/** @type {string} */ path, /** @type {string} */ fallback, /** @type {boolean} */ chosen) => ({ path, default: fallback, chosen, free: freeSpace(path), count: libraryProjects(path).length });
   return {
     projects: one(libraryRoot(), libraryDefault(), chosenFolder('projectsFolder') !== null),
+    saved: { path: savedRoot(), target: savedTarget(), followsProjects: !process.env.OPENFILM_SAVED },
   };
+}
+
+/** Resolve junctions and links even when the last few components have yet to be created. @param {string} path @returns {string} */
+function diskPath(path) {
+  const parent = dirname(path);
+  try { return realpathSync.native(path); }
+  catch { return parent === path ? path : join(diskPath(parent), relative(parent, path)); }
+}
+
+/** A packaged app can replace everything in its installation directory during an update. */
+export function requireOutsideInstallation(/** @type {string} */ path) {
+  const installed = process.env.OPENFILM_INSTALL_DIR;
+  if (!installed) return;
+  const inside = (/** @type {string} */ root, /** @type {string} */ folder) => {
+    const back = relative(root, folder);
+    return !isAbsolute(back) && back.split(sep)[0] !== '..';
+  };
+  if (inside(installed, path) || inside(diskPath(resolve(installed)), diskPath(resolve(path)))) {
+    throw new Error(`Choose a folder outside the OpenFilm installation directory (${installed}). An update can replace that directory.`);
+  }
 }
 
 /**
@@ -135,6 +161,7 @@ export function usableFolder(value) {
   if (typeof value !== 'string' || !isAbsolute(value)) throw new Error('Choose a folder by its full path.');
   const path = resolve(value);
   if (dirname(path) === path) throw new Error('Choose a folder on that disk, not the disk itself.');
+  requireOutsideInstallation(path);
   for (const home of new Set([resolve(studioHomeDir()), resolve(sharedHome())])) {
     if (path === home || path.startsWith(home + sep)) throw new Error('OpenFilm keeps its own settings there: choose another folder.');
   }

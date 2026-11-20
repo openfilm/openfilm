@@ -40,6 +40,7 @@ export function Popover({
   children,
   placement = 'bottom',
   align = 'start',
+  anchorRef,
   insideRefs = EMPTY_INSIDE_REFS,
   bare = false,
 }: {
@@ -50,6 +51,8 @@ export function Popover({
   placement?: 'top' | 'bottom' | 'auto';
   /** end: the panel's right edge aligns with the trigger's (keeps triggers near the right edge on screen). */
   align?: 'start' | 'end';
+  /** The visible trigger when its margins extend it outside the wrapper. */
+  anchorRef?: React.RefObject<HTMLElement | null>;
   insideRefs?: Array<React.RefObject<HTMLElement | null>>;
   /** bare: no card styling on the panel (children draw their own, e.g. several cards side by side). */
   bare?: boolean;
@@ -60,7 +63,7 @@ export function Popover({
   const [panelStyle, setPanelStyle] = React.useState<React.CSSProperties | null>(null);
 
   const update = React.useCallback(() => {
-    const el = ref.current;
+    const el = anchorRef?.current ?? ref.current;
     if (!el) return;
     const r = el.getBoundingClientRect();
     const gap = 6;
@@ -95,7 +98,7 @@ export function Popover({
             overscrollBehavior: 'contain',
           }),
     });
-  }, [placement, align, bare]);
+  }, [placement, align, anchorRef, bare]);
 
   React.useLayoutEffect(() => {
     if (!open) {

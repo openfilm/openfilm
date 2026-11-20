@@ -26,13 +26,20 @@ export const madeOfSpeech = (vtt) => vtt.notes.some((n) => n.startsWith(SPEECH_N
  * the film are still Studio's; words changed are the person's. @param {readonly VttCue[]} cues
  */
 function cuesPrint(cues) {
+  /* the same cues read once are asked again each time an editor draws them: printed once */
+  const known = printed.get(cues);
+  if (known) return known;
   let h = 0x811c9dc5;
   for (const c of cues) {
     const line = `${cuePlain(c.text)}\n`;
     for (let i = 0; i < line.length; i += 1) { h ^= line.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
   }
-  return h.toString(16).padStart(8, '0');
+  const print = h.toString(16).padStart(8, '0');
+  printed.set(cues, print);
+  return print;
 }
+/** @type {WeakMap<readonly VttCue[], string>} */
+const printed = new WeakMap();
 /** The note of a file of what is said with these cues: SPEECH_NOTE and their print. @param {readonly VttCue[]} cues */
 export const speechNote = (cues) => `${SPEECH_NOTE} ${cuesPrint(cues)}`;
 /** Whether a file of what is said has its words as Studio wrote them, not changed by hand since. @param {Vtt} vtt */
@@ -194,6 +201,59 @@ export function cuePlain(/** @type {string} */ text) {
 /** Text for a cue's payload, escaped (`<`, `&` as entities; a blank line, which would end the cue, closed up). */
 export function cueEscape(/** @type {string} */ text) {
   return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n\s*\n/g, '\n');
+}
+
+/* The inline controls offered in Studio's voice generator. Other angle-bracket text can be dialogue. */
+const VOICE_CONTROL = String.raw`\s*(?:break\s+time|(?:speed|volume)\s+ratio|emotion\s+value)\s*=\s*(?:"[^"<>]*"|'[^'<>]*')\s*\/\s*`;
+const AUDIO_TAG = new RegExp(String.raw`\[[a-z][a-z '-]{1,30}\]|<${VOICE_CONTROL}>`, 'g');
+const ESCAPED_VOICE_CONTROL = new RegExp(`&lt;${VOICE_CONTROL}&gt;`, 'g');
+
+/**
+ * Remove performance tags spanning multiple tokens while keeping each fragment in its original part.
+ * @param {readonly string[]} parts @param {string} [separator] @param {RegExp} [pattern]
+ */
+export function stripAudioTagParts(parts, separator = ' ', pattern = AUDIO_TAG) {
+  const matches = parts.join(separator).matchAll(pattern);
+  let tag = matches.next().value;
+  if (!tag) return parts;
+  let offset = 0;
+  return parts.map((part) => {
+    const end = offset + part.length;
+    let from = offset;
+    let kept = '';
+    while (tag && tag.index < end) {
+      if (tag.index > from) kept += part.slice(from - offset, tag.index - offset);
+      const tagEnd = tag.index + tag[0].length;
+      from = Math.max(from, tagEnd);
+      if (tagEnd > end) break;
+      tag = matches.next().value;
+    }
+    kept += part.slice(from - offset);
+    offset = end + separator.length;
+    return kept;
+  });
+}
+
+/**
+ * Older voice-over sidecars escaped the controls as dialogue and could split them across cues. Clean the payload
+ * as one stream, keeping WebVTT tags and timestamps outside the text used to match the controls.
+ * @param {string} path @param {string} body
+ */
+export function voiceTranscriptText(path, body) {
+  if (!path.startsWith('assets/audio/vo/') || !body.includes('&lt;')) return body;
+  const vtt = readVtt(body);
+  const payloads = vtt.cues.map((cue) => cue.text.split(/(<[^>]*>)/g));
+  const parts = payloads.flatMap((payload) => [...payload.filter((_, i) => i % 2 === 0), '\n']);
+  const cleaned = stripAudioTagParts(parts, '', ESCAPED_VOICE_CONTROL);
+  if (cleaned === parts) return body;
+  let at = 0;
+  vtt.cues = vtt.cues.flatMap((cue, i) => {
+    const text = payloads[i].map((part, j) => j % 2 === 0 ? cleaned[at++] : part).join('');
+    at += 1; // cue separator
+    if (text === cue.text) return [cue];
+    return cuePlain(text).trim() ? [{ ...cue, text }] : [];
+  });
+  return writeVtt(vtt);
 }
 
 /* a character written as a word of its own (Chinese, Japanese): each is timed apart */

@@ -2,6 +2,7 @@ import React from 'react';
 import { Camera, Loader2, Pause, Play, VideoOff, Volume2, VolumeX } from 'lucide-react';
 import { useT } from '@/i18n';
 import type { WorkspaceResource } from '@/lib/workspace-resources';
+import { useVideoPlayback } from '@/lib/video-playback';
 import { useBoard } from './board';
 import { frameOf } from './pixels';
 import styles from './video.module.css';
@@ -60,7 +61,8 @@ function watchSound(notify: () => void) {
 export function CanvasVideo({ id, file, selected }: { id: string; file: WorkspaceResource; selected: boolean }) {
   const board = useBoard();
   const t = useT();
-  const src = board.sources.file(file);
+  const playback = useVideoPlayback(file, board.sources);
+  const { src, failed, preparing } = playback;
   const player = React.useRef<HTMLVideoElement>(null);
   const firstFrame = React.useRef<HTMLCanvasElement>(null);
   const captureButton = React.useRef<HTMLButtonElement>(null);
@@ -68,8 +70,8 @@ export function CanvasVideo({ id, file, selected }: { id: string; file: Workspac
   const volumeSlider = React.useRef<HTMLInputElement>(null);
   const pointerInside = React.useRef(false);
   const rewindFrame = React.useRef(0);
-  const [ready, setReady] = React.useState(false);
-  const [failed, setFailed] = React.useState(false);
+  const [readySource, setReadySource] = React.useState<string>();
+  const ready = src !== undefined && readySource === src;
   const [playing, setPlaying] = React.useState(false);
   const [firstFrameReady, setFirstFrameReady] = React.useState(false);
   const [atStart, setAtStart] = React.useState(true);
@@ -142,7 +144,7 @@ export function CanvasVideo({ id, file, selected }: { id: string; file: Workspac
   }, []);
   const capture = async (mode: typeof frameModes[number]) => {
     const video = player.current;
-    if (!video || capturing) return;
+    if (!video || !src || capturing) return;
     video.pause();
     const at = mode === 'first' ? 0 : mode === 'last' ? video.duration : video.currentTime;
     const base = file.name.replace(/\.[^.]+$/, '');
@@ -203,15 +205,19 @@ export function CanvasVideo({ id, file, selected }: { id: string; file: Workspac
               setFirstFrameReady(true);
             }
           }
-          setReady(true);
-        }} onError={() => setFailed(true)}
+          setReadySource(src);
+        }} onError={playback.onError}
         onTimeUpdate={(event) => setSeconds(event.currentTarget.currentTime)}
         onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} onEnded={() => setPlaying(false)}
         className={`pointer-events-none absolute inset-0 size-full object-contain ${showFirstFrame ? 'invisible' : ''}`} />
       <canvas ref={firstFrame} width={1} height={1} aria-hidden="true"
         className="pointer-events-none absolute inset-0 size-full object-contain"
         hidden={!showFirstFrame} />
-      {failed ? (
+      {preparing ? (
+        <div role="status" className="pointer-events-none absolute inset-0 grid place-content-center justify-items-center gap-2 bg-black/50 px-3 text-center text-xs text-white">
+          <Loader2 size={20} className="animate-spin" />{playback.message(t)}
+        </div>
+      ) : failed ? (
         <div role="status" className="pointer-events-none absolute inset-0 grid place-content-center justify-items-center gap-2 bg-black/50 px-3 text-center text-xs text-white">
           <VideoOff size={20} />{t('canvas.video.unavailable')}
         </div>

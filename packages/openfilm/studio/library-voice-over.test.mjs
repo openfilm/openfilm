@@ -43,7 +43,7 @@ test('voice-over and captions are the library’s: recording is a line of voice-
     assert.equal(await page.locator('[data-timeline]').getByRole('button', { name: /Record audio|Voice-over/ }).count(), 0);
     const voices = drawer.getByRole('button', { name: 'Voices', exact: true });
     await voices.click();
-    /* the voice-over's side bar: Favorites, Mine, Services; recording is a tab of Mine, beside the voices and cloning */
+    /* recording is a tab of Mine, beside the voices and cloning */
     assert.deepEqual(await drawer.locator('nav[data-studio-host-panel] [data-rail-section] > button[aria-expanded], nav[data-studio-host-panel] button[aria-pressed]').evaluateAll((rows) => rows.slice(0, 3).map((r) => r.textContent?.trim())), ['Favorites', 'Mine', 'Services']);
     await drawer.getByRole('button', { name: 'Mine', exact: true }).click();
     /* Mine: recording at the top, then cloning a voice */

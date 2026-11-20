@@ -36,6 +36,38 @@ test('an existing film.html is never touched, and reopening keeps the id and mov
   assert.deepEqual((await listProjects()).map((p) => p.name), ['agent-made', 'other']);
 });
 
+test('existing projects in an old installation stay accessible while new projects are refused there', async (t) => {
+  const installed = join(scratch, 'OpenFilm');
+  const old = await openProject(join(installed, 'Old project'));
+  const before = readFileSync(join(old.path, 'film.html'), 'utf8');
+  const prior = process.env.OPENFILM_INSTALL_DIR;
+  process.env.OPENFILM_INSTALL_DIR = installed;
+  t.after(() => { if (prior === undefined) delete process.env.OPENFILM_INSTALL_DIR; else process.env.OPENFILM_INSTALL_DIR = prior; });
+  assert.equal((await openProject(old.path, { create: false })).id, old.id);
+  await assert.rejects(openProject(join(installed, 'New project')), /installation directory/);
+  assert.equal(existsSync(join(installed, 'New project')), false);
+  chooseFolder('projectsFolder', installed);
+  await assert.rejects(createProject('New project'), /installation directory/);
+  await assert.rejects(duplicateProject(old.id), /installation directory/);
+  assert.equal(readFileSync(join(old.path, 'film.html'), 'utf8'), before);
+});
+
+test('a damaged project index recovers the linked project and preserves the damaged index for recovery', async () => {
+  const external = await openProject(join(scratch, 'External project'));
+  const path = join(process.env.OPENFILM_HOME, 'studio.json');
+  const corrupted = '{"recent":[';
+  writeFileSync(path, corrupted);
+  assert.ok((await listProjects()).some(p => p.id === external.id));
+  const project = await createProject('New project');
+  assert.deepEqual((await listProjects()).map(p => p.id), [project.id, external.id]);
+  const oldIndex = readdirSync(process.env.OPENFILM_HOME).find(name => name.endsWith('.damaged'));
+  assert.equal(readFileSync(join(process.env.OPENFILM_HOME, oldIndex), 'utf8'), corrupted);
+  assert.ok(existsSync(join(external.path, 'film.html')));
+
+  rmSync(path);
+  assert.deepEqual((await listProjects()).map(p => p.id), [project.id, external.id]);
+});
+
 test('a copied folder brings its original id and gets its own', async () => {
   const a = await openProject(join(scratch, 'original'));
   cpSync(a.path, join(scratch, 'copy'), { recursive: true });

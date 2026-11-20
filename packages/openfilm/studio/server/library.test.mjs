@@ -166,7 +166,7 @@ test('the voices are the voice-over services\' own, each once, said as `openfilm
     assert.ok(Array.isArray(v.tags));
     assert.equal(typeof v.featured, 'boolean', `${key}: featured or not`);
     assert.ok(v.uses === null || v.uses >= 0, `${key}: uses`);
-    if (v.sample) assert.match(v.sample, new RegExp(`^voices/${v.provider}/[\\w.-]+\\.${v.provider === 'doubao' ? '(mp3|wav)' : 'm4a'}$`));
+    if (v.sample) assert.match(v.sample, new RegExp(`^voices/${v.provider}/[\\w.-]+\\.${v.provider === 'doubao' ? '(mp3|wav|m4a)' : 'm4a'}$`));
   }
   for (const p of providers) assert.ok(voices.some((v) => v.provider === p.id), `${p.id} has voices`);
   /* ElevenLabs: its own voices and its library's featured ones, picked, first */

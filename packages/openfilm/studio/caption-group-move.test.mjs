@@ -53,24 +53,31 @@ test('unlocked caption tracks move with a mixed selection, with one undo for med
       assert.fail(why);
     };
     await page.goto(`${studio.origin}/projects/${project.id}?key=${studio.key}`);
-    const clip = page.locator('[data-block-kind="mg"]').first();
-    await page.locator('[data-block-kind="caption"]').first().waitFor();
-    const drag = async (locator, seconds) => {
-      const b = await locator.boundingBox();
-      const dx = seconds * b.width / 4;
-      await page.mouse.move(b.x + 25, b.y + 10);
-      await page.mouse.down();
-      await page.mouse.move(b.x + 25 + dx, b.y + 10, { steps: 10 });
-      await page.mouse.up();
-    };
-    await clip.click({ position: { x: 25, y: 10 } });
+    const clip = page.locator('[data-block-kind="mg"][data-can-move="1"]').first();
+    const unlockedCues = page.locator('[data-block-id^="cue:captions.vtt#"]');
+    const lockedCue = page.locator('[data-block-id="cue:locked.vtt#locked"]');
+    /* The two VTT files load independently. Wait for the row that participates in the drag. */
+    await lockedCue.waitFor();
+    await until(async () => await unlockedCues.count() === 183, 'the unlocked caption cues are ready to select');
+    const body = await clip.boundingBox();
+    assert.ok(body, 'the movable clip is drawn');
+    await clip.click({ position: { x: body.width / 4, y: 10 } });
+    await clip.locator('[data-block-frame]').waitFor();
     await page.keyboard.press('ControlOrMeta+a');
-    await drag(clip, 2);
-    /* a slow machine can miss the first drag while it lays the timeline out: one that moved nothing is made again */
-    const moved = async () => (await shots())[0].at > 2.5;
-    for (let i = 0; i < 100 && !(await moved()); i++) await page.waitForTimeout(50);
-    if ((await shots())[0].at === 1) await drag(clip, 2);
-    await until(moved, 'the mixed selection can move right with captions unlocked');
+    await until(async () => await unlockedCues.locator('[data-block-frame]').count() === 183
+      && await page.locator('[data-block-kind="mg"] [data-block-frame]').count() === 2,
+      'select all picks both media clips and all unlocked captions');
+    assert.equal(await lockedCue.locator('[data-block-frame]').count(), 0, 'the locked cue is never selected');
+    const b = await clip.boundingBox();
+    assert.ok(b, 'the selected clip is drawn');
+    const x = b.x + b.width / 4;
+    const y = b.y + 10;
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    /* The four-second clip is drawn one pixel short to leave a gap at its end. */
+    await page.mouse.move(x + (b.width + 1) / 2, y, { steps: 10 });
+    await page.mouse.up();
+    await until(async () => (await shots())[0].at > 2.5, 'the mixed selection can move right with captions unlocked');
     const delta = (await shots())[0].at - 1;
     assert.ok(Math.abs(delta - 2) < .05);
     const movedCues = await cues();

@@ -391,9 +391,13 @@ async function queued(model, input, ctx, every) {
   try {
     for (;;) {
       const status = await (await call(NAME, statusUrl, { headers: auth }, ctx)).json();
-      if (['FAILED','CANCELLED','CANCELED'].includes(status?.status)) throw new Error(`${NAME} could not make it: ${text(status.error) || status.status}`);
+      if (['FAILED','CANCELLED','CANCELED'].includes(status?.status)) {
+        throw Object.assign(new Error(`${NAME} could not make it: ${text(status.error) || status.status}`), { rejected: true });
+      }
       if (status?.status === 'COMPLETED') {
-        if (status.error) throw new Error(`${NAME} could not make it: ${text(status.error) || JSON.stringify(status.error)}`);
+        if (status.error) {
+          throw Object.assign(new Error(`${NAME} could not make it: ${text(status.error) || JSON.stringify(status.error)}`), { rejected: true });
+        }
         break;
       }
       await sleep(every, ctx.signal);

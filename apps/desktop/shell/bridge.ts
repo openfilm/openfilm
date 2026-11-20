@@ -11,7 +11,7 @@
  */
 import { flushSync } from 'react-dom';
 import { workspaceChatWidth } from 'openfilm/studio-ui/lib/workspaces.ts';
-import type { CommunityItem, HostAgent, HostAsk, HostProject as Project, HostUpdate, HostUpdateState, StudioCommand, StudioHost, StudioRef, StudioSelection } from 'openfilm/studio-ui/lib/host.ts';
+import type { CommunityItem, HostAgent, HostAsk, HostProject as Project, HostUpdate, HostUpdateState, HostWorkbench, StudioCommand, StudioHost, StudioRef, StudioSelection } from 'openfilm/studio-ui/lib/host.ts';
 
 type Listener<T> = (value: T) => void;
 type Stop = () => void;
@@ -64,6 +64,7 @@ function signal<T>(value: T) {
   };
 }
 const events = <T,>() => signal<T>(undefined as T);
+const workbench = signal<HostWorkbench | null>(null);
 
 /* ── the chat's column, left of Studio: open or not, how wide, and the assets drawer over it ── */
 const TOP_BAR = 32;
@@ -297,6 +298,7 @@ export const host: StudioHost = {
   version: 1,
   name: 'OpenFilm',
   projectChanged,
+  workbenchChanged: workbench.set,
   ...(mac ? { titlebar: { get inset() { return fullScreen.get() ? 0 : INSET; }, onChange: (listener: Listener<number>) => { fullScreen.on((full) => listener(full ? 0 : INSET)); } } } : {}),
   ...(windows ? { titlebar: { inset: 0, insetRight: INSET_RIGHT } } : {}),
   /* in order, each with its picture: two pointed at quickly must not swap or share a screenshot */
@@ -416,6 +418,9 @@ function commandFor(ref: StudioRef): StudioCommand {
   onTheme: theme.on,
   onLanguage: language.on,
   onProject: (listener: Listener<Project>) => project.on((p) => { if (p) listener(p); }),
+  workbench: workbench.get,
+  onWorkbench: workbench.on,
+  showWorkbench: (projectId: string, id: string) => command?.({ type: 'show-workbench', projectId, workbench: id }),
   onChatOpen: chatOpenSignal.on,
   onStudioBrowser: native.onStudioBrowser,
   /* Studio failing to start leaves no page to tell: the app shows that itself (src/main.mjs) */

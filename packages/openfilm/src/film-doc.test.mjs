@@ -432,3 +432,15 @@ test('a video clip\'s LUTs are its style\'s --of-lut url()s, in order, as writte
   assert.deepEqual(lutsOf({ src: 'a.mov', style: "--of-lut: url( 'a.cube' )   url(b.cube); --of-lut: url(c.cube)" }), ['c.cube'], 'the last one written');
   assert.deepEqual(lutsOf({ src: 'a.mov', style: '--of-lut: none' }), []);
 });
+
+test('each problem names the line it is on, however far into a long film', () => {
+  const clips = Array.from({ length: 600 }, (_, i) => `<video src="a.mp4#t=${i},${i + 1}" at="${i}"></video>`);
+  const text = page([clips, ['<p>a stray line</p>', '<video src="b.mp4#t=0,1" at="600"><source src="b.mp4"></video>']]);
+  const lines = text.split('\n');
+  const line = (needle) => lines.findIndex((l) => l.includes(needle)) + 1;
+  const start = performance.now();
+  const found = readFilmFile(text).problems;
+  assert.ok(performance.now() - start < 2000, 'read in a moment, not counted from the start for each clip');
+  assert.match(found.find((p) => p.includes('<p> in a track')) ?? '', new RegExp(`^film\\.html:${line('<p>a stray')}: `));
+  assert.match(found.find((p) => p.includes('holds nothing')) ?? '', new RegExp(`^film\\.html:${line('<source')}: `));
+});

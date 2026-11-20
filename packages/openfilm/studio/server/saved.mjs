@@ -25,11 +25,12 @@ import { copyFile, cp, lstat, mkdir, readFile, readdir, readlink, stat, writeFil
 import { basename, dirname, isAbsolute, join, posix, sep } from 'node:path';
 import { animationsOf, withAnimations } from '../../src/clip-motion.mjs';
 import { FILM_FILE, clipKind, filmHtml } from '../../src/film-doc.mjs';
-import { savedRoot } from '../../src/locations.mjs';
+import { chosenFolder, savedRoot } from '../../src/locations.mjs';
 import { readableLink } from '../../src/media-links.mjs';
 import { STUDIO_STATE, filmClosure, folderView } from './closure.mjs';
 import { playedBy } from './compound.mjs';
 import { readProjectFilm } from './film.mjs';
+import { HttpError } from './http.mjs';
 import { bringIn, cleanName, importFile, inProject, inside, kindOf, readable } from './files.mjs';
 import { BUILT_IN, builtInRoot, fetchLibrary, libraryIndex } from './library.mjs';
 
@@ -63,7 +64,11 @@ const BUNDLE = 'saved.json';
  */
 export async function libraryRoot() {
   const root = savedRoot();
-  await mkdir(root, { recursive: true });
+  if (!process.env.OPENFILM_SAVED && chosenFolder('savedFolder')) {
+    if (!(await stat(root).catch(() => null))?.isDirectory()) throw new HttpError(409, `The asset library is unavailable at ${root}. Reconnect its disk and try again.`);
+  } else {
+    await mkdir(root, { recursive: true });
+  }
   return root;
 }
 

@@ -73,8 +73,8 @@ test('resizing video and sound tracks grows their waveforms and keeps the sound 
       await until(async () => canvas.evaluate((el) => el.height === Math.round(el.getBoundingClientRect().height * window.devicePixelRatio)), `${kind} canvas redraws at the new height`);
       assert.ok((await peakHeight()) > peakBefore, 'the drawn peaks grow with the canvas');
       if (kind !== 'audio') {
-        assert.equal((await audioBand.boundingBox()).height, Math.round(((await head.boundingBox()).height - 15) * 0.3), 'audio band keeps its share of the content area');
         const box = await clip.boundingBox();
+        assert.equal((await audioBand.boundingBox()).height, Math.round((box.height - 15) * 0.3), 'audio band keeps its share of the clip content area');
         await page.mouse.move(box.x + box.width / 2, box.y + 10);
         const band = await clip.locator('[data-audio-band="on"]').boundingBox();
         const dot = await clip.locator('[data-fade-handle="in"] > span').boundingBox();
@@ -90,16 +90,16 @@ test('resizing video and sound tracks grows their waveforms and keeps the sound 
       const main = (await head.getAttribute('data-main-track')) !== null;
       for (const height of main ? [] : [kind === 'audio' ? 30 : 36, 28]) {
         await resize(head, height);
-        assert.equal((await canvas.boundingBox()).height, kind === 'audio' ? height - 17 : 13, 'small waveforms keep their original height');
+        assert.equal((await canvas.boundingBox()).height, kind === 'audio' ? (await clip.boundingBox()).height - 17 : 13, 'small waveforms fit below the clip info row');
         if (kind !== 'audio') assert.equal((await audioBand.boundingBox()).height, 15, 'the video sound band never shrinks below 15px');
       }
       if (main) {
         await resize(head, 28, 64);
-        assert.equal((await audioBand.boundingBox()).height, Math.round((64 - 15) * 0.3), 'the main track at its lowest keeps its share');
+        assert.equal((await audioBand.boundingBox()).height, Math.max(15, Math.round(((await clip.boundingBox()).height - 15) * 0.3)), 'the main track at its lowest keeps its share');
       }
       await resize(head, 160);
       if (kind !== 'audio') {
-        assert.equal((await audioBand.boundingBox()).height, 44, '30 percent of the maximum content height is 44px');
+        assert.equal((await audioBand.boundingBox()).height, Math.round(((await clip.boundingBox()).height - 15) * 0.3), 'audio band keeps its share at maximum height');
       }
       assert.ok((await canvas.boundingBox()).height > before, 'waveform grows at maximum height');
       assert.equal(await canvas.getAttribute('data-wave-volume'), volume, 'resizing preserves clip volume');

@@ -17,7 +17,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { existsSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, extname, join, relative, sep } from 'node:path';
 import { colorTagsOf, encoders, h264ColorTags, hardwareEncoder, hardwareOptions, onTheChip } from './encoders.mjs';
-import { kindOf, lutsOf, readFilmFile, srcHref } from './film-doc.mjs';
+import { clipOutsideRanges, kindOf, lutsOf, readFilmFile, srcHref } from './film-doc.mjs';
 import { ffmpeg, fileOf, hash, kill, outDir } from './shared.mjs';
 
 /** A key frame further apart than this is slow to seek to frame by frame. */
@@ -57,6 +57,29 @@ export function hasAlpha(stream) {
 }
 
 /**
+ * How far apart the key frames of `file`'s picture are (s), among the packets of its first 20 s (read, not decoded): a
+ * seek decodes from the key frame before it, so the further apart they are, the slower a seek. Null when it cannot tell.
+ * @param {string} file @returns {Promise<number | null>}
+ */
+export async function keyFrameGap(file) {
+  let keys = 0, span = 0;
+  try {
+    const lines = (await probe(file, ['-select_streams', 'v:0', '-read_intervals', '%+20', '-show_entries', 'packet=pts_time,flags', '-of', 'csv=p=0'])).trim().split('\n');
+    let first = null, last = null;
+    for (const line of lines) {
+      const [pts, flags] = line.split(',');
+      const t = Number(pts);
+      if (!Number.isFinite(t)) continue;
+      first ??= t;
+      last = t;
+      if (flags?.startsWith('K')) keys++;
+    }
+    span = first == null || last == null ? 0 : last - first;
+  } catch { return null; }
+  return keys === 0 || span <= 0 ? null : span / keys;
+}
+
+/**
  * What a copy of `file` would be made from: its first video stream, when it is one worth copying (8-bit 4:2:0, no
  * alpha, not too big or long, key frames far apart). Null when it is better left alone.
  * @param {string} file
@@ -72,23 +95,9 @@ export async function slowSeeking(file) {
   if (!(seconds > 0) || seconds > MAX_SECONDS || stream.width > MAX_SIDE || stream.height > MAX_SIDE) return null;
   const [n, d] = String(stream.avg_frame_rate).split('/').map(Number);
   const fps = n > 0 && d > 0 ? n / d : 30;
-  /* the key frames among the packets of its first 20 s (read, not decoded) */
-  let keys = 0, span = 0;
-  try {
-    const lines = (await probe(file, ['-select_streams', 'v:0', '-read_intervals', '%+20', '-show_entries', 'packet=pts_time,flags', '-of', 'csv=p=0'])).trim().split('\n');
-    let first = null, last = null;
-    for (const line of lines) {
-      const [pts, flags] = line.split(',');
-      const t = Number(pts);
-      if (!Number.isFinite(t)) continue;
-      first ??= t;
-      last = t;
-      if (flags?.startsWith('K')) keys++;
-    }
-    span = first == null || last == null ? 0 : last - first;
-  } catch { return null; }
-  if (keys === 0 || span <= 0) return null;
-  return span / keys > SLOW_GOP_S ? { fps, seconds, w: Number(stream.width), h: Number(stream.height) } : null;
+  const gap = await keyFrameGap(file);
+  if (gap == null) return null;
+  return gap > SLOW_GOP_S ? { fps, seconds, w: Number(stream.width), h: Number(stream.height) } : null;
 }
 
 /** Every Chromium decodes these by itself, with its own decoders, on any machine: no need to ask it. */
@@ -135,15 +144,16 @@ const copyBase = (/** @type {string} */ file, /** @type {string} */ root, /** @t
 const found = new Map();
 /**
  * The copy of `file` already made in `root`'s cache (seekableCopies), or null; nothing is made. Asked on every request
- * a playing video makes, so a copy found is remembered, and one not found is looked for again a moment later.
- * @param {string} file @param {string} root
+ * a playing video makes, so a copy found is remembered, and one not found is looked for again a moment later; at once
+ * with `recheck` (asked from another thread than the one that makes copies, which would hear of a new one too late).
+ * @param {string} file @param {string} root @param {{ recheck?: boolean }} [options]
  */
-export function madeCopy(file, root) {
+export function madeCopy(file, root, { recheck = false } = {}) {
   let stat;
   try { stat = statSync(file); } catch { return null; }
   const key = `${root}\0${file}\0${stat.size}\0${stat.mtimeMs}`;
   const hit = found.get(key);
-  if (hit && (hit.copy ? existsSync(hit.copy) : Date.now() - hit.at < 2000)) return hit.copy;
+  if (hit && (hit.copy ? existsSync(hit.copy) : !recheck && Date.now() - hit.at < 2000)) return hit.copy;
   const base = copyBase(file, root, stat);
   const copy = [`${base}.mp4`, `${base}.webm`].find((f) => existsSync(f)) ?? null;
   found.set(key, { copy, at: Date.now() });
@@ -153,15 +163,16 @@ export function madeCopy(file, root) {
 /**
  * The files of a film's video clips: film.html at `film` (a path in `root`, as a URL says it), as a render, a look or
  * a still of it plays them. `ungraded`: only those of clips not graded by LUTs (a graded one plays its graded copy).
- * @param {string} root @param {string} film @param {{ ungraded?: boolean }} [options]
+ * @param {string} root @param {string} film @param {{ ungraded?: boolean, timeline?: string, renderRanges?: [number, number][] }} [options]
  */
-export function filmVideos(root, film, { ungraded = false } = {}) {
+export function filmVideos(root, film, { ungraded = false, timeline, renderRanges } = {}) {
   let doc;
-  try { doc = readFilmFile(readFileSync(join(root, decodeURI(film)), 'utf8')).doc; } catch { return []; }
+  try { doc = readFilmFile(timeline ?? readFileSync(join(root, decodeURI(film)), 'utf8')).doc; } catch { return []; }
   const files = new Set();
   for (const track of doc?.tracks ?? []) {
+    if (renderRanges && track.hidden) continue;
     for (const clip of track.clips) {
-      if (kindOf(clip) !== 'video' || (ungraded && lutsOf(clip).length)) continue;
+      if (kindOf(clip) !== 'video' || (ungraded && lutsOf(clip).length) || (renderRanges && clip.disabled) || clipOutsideRanges(clip, renderRanges)) continue;
       try { files.add(fileOf(root, film, srcHref(clip.src))); } catch { /* a source out of the folder: not served either */ }
     }
   }
@@ -444,16 +455,18 @@ export function gradedCopy(root, key) {
 /**
  * The film's video clips graded by LUTs (lutsOf): film.html at `film` (a path in `root`, as a URL says it), each one's
  * file, LUT files and the part of the file it plays (gradeRange), once each.
- * @param {string} root @param {string} film @returns {{ file: string, luts: string[], range: { from: number, to: number } | null }[]}
+ * @param {string} root @param {string} film @param {{ timeline?: string, renderRanges?: [number, number][] }} [options]
+ * @returns {{ file: string, luts: string[], range: { from: number, to: number } | null }[]}
  */
-export function filmGrades(root, film) {
+export function filmGrades(root, film, { timeline, renderRanges } = {}) {
   let doc;
-  try { doc = readFilmFile(readFileSync(join(root, decodeURI(film)), 'utf8')).doc; } catch { return []; }
+  try { doc = readFilmFile(timeline ?? readFileSync(join(root, decodeURI(film)), 'utf8')).doc; } catch { return []; }
   const grades = new Map();
   for (const track of doc?.tracks ?? []) {
+    if (renderRanges && track.hidden) continue;
     for (const clip of track.clips) {
       const luts = lutsOf(clip);
-      if (!luts.length) continue;
+      if (!luts.length || (renderRanges && clip.disabled) || clipOutsideRanges(clip, renderRanges)) continue;
       try {
         const range = gradeRange(clip.time);
         const grade = { file: fileOf(root, film, srcHref(clip.src)), luts: luts.map((lut) => fileOf(root, film, srcHref(lut))), range };

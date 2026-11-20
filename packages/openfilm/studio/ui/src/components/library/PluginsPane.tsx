@@ -78,8 +78,6 @@ export function PluginDetails({ text, className = '', small = false }: { text: s
   );
 }
 
-/** Where a workbench is picked: the edit's views (Motion: laid out in the edit's arrangement, lib/blocks) at the top of its timeline, any other at the top right. */
-const pickedOnTimeline = (plugin: Plugin) => plugin.workbench !== 'edit' && plugin.blocks === 'edit';
 
 /** A page asked for of one of OpenFilm's own plugins: `plugin:<id>` (anything else names a skill). */
 export const PLUGIN_PAGE = 'plugin:';
@@ -443,8 +441,8 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
           items={[...(connectorStates ? connectorItems(p) : []),
             ...manageItems({ on: p.on, title, onTurn: (on) => turnPlugin(p, on), onRemove: () => dropPlugin(p), onOpen: () => open(`${PLUGIN_PAGE}${p.id}`) })]} /> };
     });
-    /* the keys the top right's menu gives them (Motion is picked on the edit's timeline) */
-    const keyed = benchList.filter((p) => p.on && p.workbench && p.workbench !== 'motion');
+    /* the keys the top right's menu gives them */
+    const keyed = benchList.filter((p) => p.on && p.workbench);
     const benchItems = benchList.map((p): BenchTileItem => {
       const k = skillOf.get(p.id);
       const at = keyed.indexOf(p);
@@ -778,7 +776,7 @@ function PluginPage({ plugin, error, onBack, onTurn, onRemove, connector }: {
   const { title, summary } = usePluginWords()(plugin);
   const keyHint = useKeyHint();
   const details = inLanguage(plugin.details, lang);
-  const how = plugin.workbench ? (pickedOnTimeline(plugin) ? 'assetDrawer.howTimeline' : 'assetDrawer.howWorkbench') : plugin.tab ? 'assetDrawer.howTab' : null;
+  const how = plugin.workbench ? 'assetDrawer.howWorkbench' : plugin.tab ? 'assetDrawer.howTab' : null;
   const got = isInstalled(plugin);
   const kind = t(plugin.mcpServers ? 'assetDrawer.kind_connector' : plugin.workbench || plugin.tab ? 'assetDrawer.kind_editor' : 'assetDrawer.kind_skill');
   const actions = plugin.soon ? <SoonMark /> : !onTurn ? null : connector

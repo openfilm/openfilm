@@ -69,7 +69,8 @@ const TYPES = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css',
   '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
   '.webp': 'image/webp', '.gif': 'image/gif', '.mp3': 'audio/mpeg', '.m4a': 'audio/mp4', '.wav': 'audio/wav',
-  '.ogg': 'audio/ogg', '.mp4': 'video/mp4', '.webm': 'video/webm', '.woff2': 'font/woff2', '.woff': 'font/woff',
+  '.ogg': 'audio/ogg', '.mp4': 'video/mp4', '.m4v': 'video/mp4', '.mov': 'video/quicktime', '.webm': 'video/webm',
+  '.mkv': 'video/x-matroska', '.avi': 'video/x-msvideo', '.ogv': 'video/ogg', '.woff2': 'font/woff2', '.woff': 'font/woff',
   '.ttf': 'font/ttf', '.otf': 'font/otf', '.glb': 'model/gltf-binary', '.gltf': 'model/gltf+json', '.wasm': 'application/wasm',
   '.glsl': 'text/plain', '.txt': 'text/plain',
 };
@@ -90,10 +91,15 @@ const TYPES = {
  * `grade(file, luts, time)` says a video graded by LUT files (SPEC.md `--of-lut`), of which a clip plays `time` ([in,
  * out] source seconds, or null): the key of its graded copy (seekable.mjs gradeKey) and the source second it starts at
  * (`from`) once it is made, `making` while it is, null when it is played as it is. Without it, every video is.
- * @param {string} root @param {{ inject?: string, timelineInject?: string, headers?: Record<string, string>, swap?: (file: string, query?: URLSearchParams, source?: string) => string | null, missed?: (file: string) => void, grade?: Grade }} [options]
+ * @param {string} root @param {{ inject?: string, timelineInject?: string, staleRevisionPage?: string, headers?: Record<string, string>, swap?: (file: string, query?: URLSearchParams, source?: string) => string | null, missed?: (file: string) => void, grade?: Grade, timeline?: string, renderRanges?: [number, number][] }} [options]
  */
-export function folderFiles(root, { inject = `<script>${HOST_FLAG}</script>`, timelineInject = inject, headers: extraHeaders = {}, swap, missed, grade } = {}) {
+export function folderFiles(root, { inject = `<script>${HOST_FLAG}</script>`, timelineInject = inject, staleRevisionPage, headers: extraHeaders = {}, swap, missed, grade, timeline, renderRanges } = {}) {
   root = resolve(root);
+  const rootFilm = join(root, FILM_FILE);
+  const scope = renderRanges ? `<script>window.filmHost.renderRanges=${JSON.stringify(renderRanges)}</script>` : '';
+  const timelinePage = (/** @type {string} */ html, /** @type {boolean} */ main) =>
+    injectFirst(holdPages(html), timelineInject + (main ? scope : '') + filmStart(readFilmFile(html).doc?.stage ?? DEFAULT_STAGE));
+  const frozen = timeline === undefined ? null : timelinePage(timeline, true);
   return (req, res, path, query) => {
     if (serveVision(req, res, path, extraHeaders)) return true;
     /* beside any film, wherever in the folder it is (its page asks for them relative to itself) */
@@ -166,6 +172,13 @@ export function folderFiles(root, { inject = `<script>${HOST_FLAG}</script>`, ti
     if (rel.endsWith('/')) rel += 'index.html';
     const asked = normalize(join(root, rel));
     if (asked !== root && !asked.startsWith(root + sep)) return false;
+    /* A queued export serves its timeline at the original URL so all relative sources still resolve in the project. */
+    if (frozen != null && asked === rootFilm) {
+      const headers = { ...extraHeaders, 'content-type': TYPES['.html'], 'cache-control': 'no-store' };
+      const body = query?.get('film-host') === '0' ? timeline : frozen;
+      res.writeHead(200, headers).end(req.method === 'HEAD' ? undefined : body);
+      return true;
+    }
     const linked = referenceSource(root, asked);
     try { statSync(linked ?? asked); } catch { missed?.(asked); res.writeHead(404, extraHeaders).end('not found'); return true; }
     // a link out of the folder is not followed: a film from elsewhere can bring one to any of the person's files. Only
@@ -173,8 +186,9 @@ export function folderFiles(root, { inject = `<script>${HOST_FLAG}</script>`, ti
     let inRoot = Boolean(linked);
     if (!inRoot) try { inRoot = within(realpathSync(root), realpathSync(asked)) || readableLink(root, asked); } catch { /* gone meanwhile */ }
     if (!inRoot) { missed?.(asked); return false; }
-    /* what a file is (its length and size: `film-facts`) is the file's own, never its copy's */
-    const file = (query?.has('film-facts') ? null : swap?.(asked, query, linked ?? asked)) ?? linked ?? asked;
+    /* Reads for source bytes or metadata bypass the picture used by the timeline. */
+    const original = query?.has('film-facts') || query?.has('of-original');
+    const file = (original ? null : swap?.(asked, query, linked ?? asked)) ?? linked ?? asked;
     /* given up while its file was being made (a media element that seeked on, a page closed): nothing to send, and a
        pipe to the closed response would throw */
     if (res.destroyed) return true;
@@ -187,12 +201,17 @@ export function folderFiles(root, { inject = `<script>${HOST_FLAG}</script>`, ti
     };
     /* a HEAD has no body (the browser cancels one that brings it) */
     if (req.method === 'HEAD') { res.writeHead(200, headers).end(); return true; }
-    if (type.startsWith('text/html') && query?.get('film-host') !== '0') {
+    const film = rel === `/${FILM_FILE}` || rel.endsWith(`/${FILM_FILE}`);
+    const revision = film ? query?.get('film-rev') : null;
+    if (type.startsWith('text/html') && (revision || query?.get('film-host') !== '0')) {
       const html = readFileSync(file, 'utf8');
+      if (revision && createHash('sha256').update(html).digest('hex').slice(0, 16) !== revision) {
+        res.writeHead(409, headers).end(staleRevisionPage ?? 'The film has changed.');
+        return true;
+      }
+      if (query?.get('film-host') === '0') { res.writeHead(200, headers).end(html); return true; }
       /* the film itself: played by the timeline, and the host's driving of it (`timelineInject`) put in */
-      const film = rel === `/${FILM_FILE}` || rel.endsWith(`/${FILM_FILE}`);
-      const start = film ? timelineInject + filmStart(readFilmFile(html).doc?.stage ?? DEFAULT_STAGE) : inject;
-      res.writeHead(200, headers).end(injectFirst(film ? holdPages(html) : html, start));
+      res.writeHead(200, headers).end(film ? timelinePage(html, asked === rootFilm) : injectFirst(html, inject));
       return true;
     }
     /* A cancelled preview is normal: pipeline closes its file; its callback deliberately ignores the error. */
@@ -311,8 +330,8 @@ export async function listenLocal(server, port = 0) {
  * Serve `root`. HTML gets the host flag injected before any page script;
  * ?film-host=0 serves the page untouched, as a visitor would see it.
  */
-export async function serve(root, { port = 0, swap, missed, grade } = {}) {
-  const files = folderFiles(root, { swap, missed, grade });
+export async function serve(root, { port = 0, swap, missed, grade, timeline, renderRanges } = {}) {
+  const files = folderFiles(root, { swap, missed, grade, timeline, renderRanges });
   const server = createServer((req, res) => {
     const url = new URL(req.url, 'http://x');
     if (!files(req, res, url.pathname, url.searchParams)) res.writeHead(403).end();

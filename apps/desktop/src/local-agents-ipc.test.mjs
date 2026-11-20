@@ -46,6 +46,14 @@ test('the error as the agent sent it, under any rewording on the way; none when 
   assert.equal(sentError(new Error('not installed')), null);
 });
 
+test('model transport details are present in the desktop diagnostic report', () => {
+  const modelConnection = { host: 'relay.example', phase: 'streaming', status: 200, code: 'UND_ERR_SOCKET', elapsedMs: 3873, retries: 2 };
+  const error = Object.assign(new Error('The connection to the model service was interrupted.'), { code: -32603, data: { modelConnection } });
+  const problem = agentProblem({ agent: 'openfilm', cwd: '/p' }, 'prompt', error);
+  assert.equal(problem.code, 'UND_ERR_SOCKET');
+  assert.ok(problem.what.endsWith(JSON.stringify(modelConnection)));
+});
+
 test("a Copilot turn's model, read once its usage record has reached the file; another agent's turn doesn't wait", async () => {
   const home = mkdtempSync(join(tmpdir(), 'openfilm-copilot-'));
   mkdirSync(join(home, 'session-state', 'cop-24680'), { recursive: true });
@@ -181,6 +189,68 @@ process.stdin.on('data', d => { buf+=d; let n; while((n=buf.indexOf('\\n'))>=0){
   updating = true;
   assert.equal((await prompt()).code, 'agent-updating');
   assert.equal(api.isAgentBusy('deepseek'), false, 'a refused turn never starts');
+});
+
+test('an external ACP agent can continue in the same session after a stop', { timeout: 15_000 }, async (t) => {
+  const { setChosenPaths } = await import('./agents.mjs');
+  const cwd = mkdtempSync(join(tmpdir(), 'of-acp-recovery-'));
+  const program = join(cwd, 'dsh.mjs');
+  writeFileSync(program, `
+import { createInterface } from 'node:readline';
+let pending;
+let ignoreCancel = false;
+const send = (message) => process.stdout.write(JSON.stringify({ jsonrpc: '2.0', ...message }) + '\\n');
+const answer = (id) => send({ id, result: { stopReason: 'end_turn' } });
+for await (const line of createInterface({ input: process.stdin })) {
+  const { id, method, params } = JSON.parse(line);
+  if (method === 'initialize') send({ id, result: { protocolVersion: 1, agentCapabilities: { sessionCapabilities: { resume: {} } }, authMethods: [] } });
+  if (method === 'session/new') send({ id, result: { sessionId: 's1' } });
+  if (method === 'session/resume') send({ id, result: {} });
+  if (method === 'session/prompt') {
+    const text = params.prompt.map(({ text }) => text).join('\\n');
+    send({ method: 'session/update', params: { sessionId: params.sessionId, update: {
+      sessionUpdate: 'agent_message_chunk', content: { type: 'text', text },
+    } } });
+    if (text.includes('Continue the interrupted task') || text.includes('Resume using the handoff record')) answer(id);
+    else { pending = id; ignoreCancel = text.includes('Hold through cancellation'); }
+  }
+  if (method === 'session/cancel' && pending != null && !ignoreCancel) answer(pending);
+}
+`);
+  setChosenPaths({ deepseek: program });
+  const handlers = new Map();
+  const api = registerLocalAgentIpc({ handle: (channel, fn) => handlers.set(channel, fn) }, { trusted: () => true });
+  t.after(() => { api.closeAll(); setChosenPaths({}); });
+  const messages = [];
+  let first;
+  const started = new Promise((resolve) => { first = resolve; });
+  const event = { sender: { once() {}, isDestroyed: () => false, send(_channel, data) {
+    if (data.update?.sessionUpdate !== 'agent_message_chunk') return;
+    messages.push(data.update.content.text);
+    first();
+  } } };
+  const request = (method, opts) => handlers.get(`desktop:local-agents:${method}`)(event, opts);
+  const { key } = await request('start', { agent: 'deepseek', cwd });
+  assert.ok(key);
+  const meta = { turnId: 'local:resume1' };
+  const pending = request('prompt', { key, meta, text: 'Original request' });
+  await started;
+  await request('cancel', { key, turnId: meta.turnId });
+  assert.equal((await pending).stopReason, 'cancelled', 'the stop is kept even if the adapter reports end_turn');
+  assert.equal((await request('prompt', { key, meta: { ...meta, recovery: true }, text: 'Saved partial answer' })).stopReason, 'end_turn');
+  assert.match(messages.at(-1), /Continue the interrupted task[\s\S]*Saved partial answer/);
+  const stuck = { turnId: 'local:resume2' };
+  const unfinished = request('prompt', { key, meta: stuck, text: 'Hold through cancellation' });
+  await request('cancel', { key, turnId: stuck.turnId });
+  assert.equal((await request('running'))[0].stopping, true);
+  assert.deepEqual(await unfinished, { ok: true, stopReason: 'cancelled', sessionClosed: true });
+  const reopened = await request('start', { agent: 'deepseek', cwd, resume: 's1' });
+  assert.ok(reopened.info?.resumed);
+  assert.notEqual(reopened.key, key);
+  assert.equal((await request('prompt', { key: reopened.key, meta: { ...stuck, recovery: true }, text: 'Saved reply' })).stopReason, 'end_turn');
+  const handoff = 'Resume using the handoff record';
+  assert.equal((await request('prompt', { key: reopened.key, meta: { ...stuck, recovery: true, handoff: true }, text: handoff })).stopReason, 'end_turn');
+  assert.equal(messages.at(-1), handoff, 'the receiving agent gets the handoff as a prompt in its own session');
 });
 
 test("a project folder about to be renamed: the chat's sessions between turns in it close and their processes end, others stay", async () => {

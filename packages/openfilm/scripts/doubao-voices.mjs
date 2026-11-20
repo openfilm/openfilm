@@ -1,11 +1,9 @@
 // @ts-check
-/** Doubao's public TTS 2.0 catalog. The official documentation includes both the main and multilingual tables.
- * Preview files are public provider recordings, never paid synthesis with somebody's API key.
- * https://docs.volcengine.com/docs/doubao-voice/tone-list-3?lang=zh
- * CDN layout: the official voice-tech/tts site's @speechfe/portal-components voice list.
- */
+/** Doubao's public TTS 2.0 catalog and the recordings published by Volcengine and BytePlus. */
+import { DOUBAO_SAMPLES, doubaoSampleUrl } from '../studio/server/providers/doubao-samples.mjs';
+
 export const DOUBAO_TONES = 'https://docs.volcengine.com/docs/zh/doubao-voice/tone-list-3.md';
-export const DOUBAO_SAMPLES = 'https://lf3-static.bytednsdoc.com/obj/eden-cn/lm_hz_ihsph/ljhwZthlaukjlkulzlp/portal/bigtts/';
+export const BYTEPLUS_TONES = 'https://docs.byteplus.com/docs/en/byteplusvoice/tts-voice-list.md';
 
 const plain = (/** @type {string} */ value) => value.replace(/\[([^\]]+)\]\([^)]*\)/g, '$1').replace(/(?:<br\s*\/?\s*>\s*)+/gi, '；').replace(/[\u200b\ufeff*`]/g, '').replace(/\\-/g, '-').trim();
 
@@ -32,21 +30,61 @@ export function parseDoubaoVoices(markdown) {
   return [...found.values()];
 }
 
-/** Refreshable without credentials. HEAD verifies actual samples; missing recordings remain explicitly absent.
+/** BytePlus embeds audio and its exact voice ID in the same table row. @param {string} markdown */
+function bytePlusSamples(markdown) {
+  const samples = new Map();
+  for (const row of markdown.split('\n')) {
+    if (!row.startsWith('|')) continue;
+    const [, audio, , , , , speaker] = row.split('|');
+    const id = plain((speaker ?? '').replace(/<[^>]*>/g, ' ')).split(/\s+/, 1)[0];
+    const source = audio?.match(/<audio\b[^>]*\bsrc="([^"]+)"/i)?.[1];
+    const url = source ? doubaoSampleUrl(source) : null;
+    if (url && /^[\w-]+$/.test(id) && !samples.has(id)) samples.set(id, url);
+  }
+  if (!samples.size) throw new Error('BytePlus did not return a voice sample table. The existing catalog was kept.');
+  return samples;
+}
+
+/** @param {typeof fetch} request @param {string} url */
+async function documentation(request, url) {
+  const res = await request(url, { signal: AbortSignal.timeout(60_000) });
+  if (!res.ok) throw new Error(`Voice documentation at ${url} answered ${res.status}. The existing catalog was kept.`);
+  return res.text();
+}
+
+/** Only a confirmed miss can lead to synthesis. Retry transient CDN errors during a refresh.
+ * @param {typeof fetch} request @param {string} url */
+async function hasSample(request, url) {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      const res = await request(url, { method: 'HEAD', redirect: 'error', signal: AbortSignal.timeout(15_000) });
+      if (res.status === 404 || res.status === 410) return false;
+      if (res.ok && /^audio\//i.test(res.headers.get('content-type') ?? '')) return true;
+      throw new Error(`Sample returned ${res.status} (${res.headers.get('content-type') ?? 'no content type'}).`);
+    } catch (cause) {
+      if (attempt === 2) throw new Error(`Could not check ${url}. The existing catalog was kept.`, { cause });
+      await new Promise((done) => setTimeout(done, 500 * 2 ** attempt));
+    }
+  }
+}
+
+/** Refresh without credentials. Check both providers' public sources before handing missing voices to synthesis.
  * @param {typeof fetch} [request] */
 export async function doubaoVoices(request = fetch) {
-  const res = await request(DOUBAO_TONES, { signal: AbortSignal.timeout(60_000) });
-  if (!res.ok) throw new Error(`Doubao voice documentation answered ${res.status}.`);
-  const voices = parseDoubaoVoices(await res.text());
+  const [volcengine, bytePlus] = await Promise.all([documentation(request, DOUBAO_TONES), documentation(request, BYTEPLUS_TONES)]);
+  const voices = parseDoubaoVoices(volcengine);
+  const samples = bytePlusSamples(bytePlus);
   let next = 0;
   await Promise.all(Array.from({ length: 12 }, async () => {
     while (next < voices.length) {
       const voice = voices[next++];
-      for (const ext of ['mp3', 'wav']) {
-        const url = `${DOUBAO_SAMPLES}${encodeURIComponent(voice.id)}.${ext}`;
-        const sample = await request(url, { method: 'HEAD', redirect: 'error', signal: AbortSignal.timeout(15_000) }).catch(() => null);
-        if (!sample?.ok || !/^audio\//i.test(sample.headers.get('content-type') ?? '')) continue;
-        voice.sample = `voices/doubao/${voice.id}.${ext}`;
+      const base = `${DOUBAO_SAMPLES}${voice.id}`;
+      const candidates = [`${base}.mp3`, `${base}.wav`];
+      const international = samples.get(voice.id);
+      if (international) candidates.push(international);
+      for (const url of candidates) {
+        if (!await hasSample(request, url)) continue;
+        voice.sample = `voices/doubao/${voice.id}${url.slice(-4)}`;
         voice.sampleSource = url;
         break;
       }

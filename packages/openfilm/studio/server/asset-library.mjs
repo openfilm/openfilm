@@ -274,6 +274,17 @@ async function takenPresent(root, taken) {
   return present.every(Boolean);
 }
 
+/** Reconnect a project that was offline when its library moved. An existing file or working link stays in use. */
+export async function repairLibraryReferences(/** @type {string} */ root) {
+  return editBindings(async () => {
+    for (const binding of await bindingsOf(root)) {
+      if (binding.mode !== 'link' || !('path' in binding.taken) || await takenPresent(root, binding.taken)) continue;
+      try { await relink(root, binding.taken.path, readable(await libraryRoot(), libraryRel(binding.source))); }
+      catch { /* A deleted link or an offline source cannot be reconnected. */ }
+    }
+  });
+}
+
 /** Existing library additions are also reused by the editor's usual drag/insert path. */
 export async function existingLibraryAsset(/** @type {string} */ root, /** @type {unknown} */ source) {
   const meta = typeof source === 'string' ? (await readCatalog()).items[source] : null;
