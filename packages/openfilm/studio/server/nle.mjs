@@ -156,11 +156,13 @@ function objectOffset(position, roomX, roomY) {
  * when it is a size of its own. The browser falls back to the stage's shape when it could not read the file's (see
  * timeline.mjs), and the stage's shape is not the picture's: taking it over the probed size stretched a landscape
  * clip on a portrait stage, and pushed it off the stage where it sat low (#501).
- * @param {SourceFacts} probed @param {{ w: number | null, h: number | null }} seen @param {{ w: number, h: number }} stage
+ * @param {SourceFacts | null} probed @param {{ w: number | null, h: number | null } | null} seen
+ * @param {{ w: number, h: number }} stage
  * @returns {{ w: number, h: number } | null}
  */
 export function ownSize(probed, seen, stage) {
-  if (probed?.w > 0 && probed?.h > 0) return { w: probed.w, h: probed.h };
+  const pw = probed?.w ?? 0, ph = probed?.h ?? 0;
+  if (pw > 0 && ph > 0) return { w: pw, h: ph };
   const w = seen?.w ?? 0, h = seen?.h ?? 0;
   if (!(w > 0 && h > 0)) return null;
   /* the stage's shape: the browser's fallback, not the picture's */
