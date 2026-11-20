@@ -73,12 +73,13 @@ test('real person segmentation is shared by exact frames, backward seeks, previe
     await film.page.waitForFunction(({ before, after, frames, profile }) => {
       const editor = window.__filmEditor;
       const video = document.querySelector('video');
-      const t = video.currentTime;
-      void editor.watch(t, { now: t, t, rate: 0.25 });
       const state = editor.stage.vision('v');
       if (state.error) throw new Error(state.error);
-      return state.frames >= before + frames && state.sourceTime > after &&
-        video.hasAttribute('data-film-vision-source') && state.preview === profile;
+      if (state.frames >= before + frames && state.sourceTime > after &&
+          state.preview === profile && video.hasAttribute('data-film-vision-source')) return true;
+      const t = video.currentTime;
+      void editor.watch(t, { now: t, t, rate: 0.25 });
+      return false;
     }, { before, after, frames, profile }, { timeout: 30_000 });
   };
   for (const time of [1.5, 0.4, 2, 0.4]) {
