@@ -17,93 +17,105 @@ process.env.OPENFILM_HOME = testHome;
 process.on('exit', () => rmSync(testHome, { recursive: true, force: true }));
 const hasFfmpeg = (() => { try { execFileSync('ffmpeg', ['-version'], { stdio: 'ignore' }); return true; } catch { return false; } })();
 
-test('real person segmentation is shared by exact frames, backward seeks, preview, compare and reset', { timeout: 120000, skip: !cached ? 'vision model not cached (enable cutout once to run the real-model test offline)' : !hasFfmpeg ? 'no ffmpeg' : process.env.CI ? 'the real model is not reliable on CI runners without a GPU (#499)' : false }, async () => {
+test('real person segmentation is shared by exact frames, backward seeks, preview, compare and reset', {
+  timeout: 180_000,
+  skip: !cached ? 'bundled person model missing' : !hasFfmpeg && 'no ffmpeg',
+}, async (t) => {
   const root = mkdtempSync(join(tmpdir(), 'of-video-effects-'));
-  let site, browser, film;
-  try {
-    execFileSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'color=c=red:size=320x180:rate=10:duration=3', '-vf', "drawbox=x=0:y=0:w=iw:h=ih:color=blue:t=fill:enable='gte(t,1)'", '-pix_fmt', 'yuv420p', join(root, 'v.mp4')]);
-    writeFileSync(join(root, 'back.svg'), '<svg xmlns="http://www.w3.org/2000/svg" width="320" height="180"><path fill="#00ff00" d="M0 0h320v180H0z"/></svg>');
-    const value = { stage: { w: 320, h: 180 }, tracks: [
-      { clips: [{ id: 'v', src: 'v.mp4', time: [0, 3], style: '--of-cutout: 1; --of-cutout-mode: 0' }] },
-      { clips: [{ id: 'back', src: 'back.svg', time: [0, 3] }] },
-    ] };
-    writeFileSync(join(root, 'film.html'), filmHtml(value));
-    site = await serve(root);
-    browser = await chromium.launch({ headless: true, args: ['--use-angle=swiftshader'] });
-    film = await FilmPage.open(browser, site.url, 'film.html');
-    const colour = async () => {
-      const data = (await film.capture({ format: 'png' })).toString('base64');
-      return film.page.evaluate(async (data) => {
-        const image = new Image(); image.src = `data:image/png;base64,${data}`; await image.decode();
-        const canvas = Object.assign(document.createElement('canvas'), { width: 320, height: 180 }); const ctx = canvas.getContext('2d'); ctx.drawImage(image, 0, 0);
-        return [...ctx.getImageData(160, 90, 1, 1).data];
-      }, data);
-    };
-    for (const time of [1.5, 0.4, 2, 0.4]) {
-      await film.seek(time, { timeoutMs: 60000 });
-      const pixel = await colour();
-      assert.ok(pixel[1] > 230 && pixel[0] < 30, `background visible after cutout at ${time}: ${pixel}`);
-      assert.equal(await film.page.evaluate(() => window.__filmEditor.stage.vision('v').phase), 'ready');
-    }
-    await film.page.evaluate(() => window.__filmEditor.stage.look('v', '--of-cutout: 1; --of-cutout-mode: 0; --of-vision-bypass: 1'));
-    await film.page.waitForTimeout(100);
-    const original = await colour();
-    assert.ok(original[0] > 230 && original[1] < 60, `compare shows the original video: ${original}`);
-    await film.page.evaluate(() => window.__filmEditor.stage.look('v', '--of-cutout: 1; --of-cutout-mode: 0'));
-    await film.page.waitForFunction(() => document.querySelector('video').hasAttribute('data-film-vision-source'));
-    assert.ok((await colour())[1] > 230);
-    await film.page.evaluate(() => window.__filmEditor.watch(1.2));
-    assert.ok((await colour())[1] > 230, 'preview uses the same effects');
-    await film.page.evaluate(async () => {
-      for (let i = 0; i < 15; i++) {
-        const now = 1.2 + i / 30;
-        await window.__filmEditor.watch(now, { now, t: now, rate: 1 });
-        await new Promise((resolve) => setTimeout(resolve, 34));
-      }
-    });
-    await film.page.waitForFunction(() => window.__filmEditor.stage.vision('v').sourceTime > 1.3);
-    assert.ok(await film.page.evaluate(() => window.__filmEditor.stage.vision('v').frames > 4), 'processed frames advance during playback');
-    await film.page.evaluate(() => window.__filmEditor.stage.look('v', '--of-beauty-smooth: 0.35'));
-    await film.page.evaluate(() => window.__filmEditor.watch(0.2));
-    const unchanged = await colour();
-    assert.ok(unchanged[0] > 230, `retouching without a face preserves the source picture: ${unchanged}`);
-    await film.page.evaluate(async () => {
-      for (let i = 0; i < 38; i++) {
-        const now = 0.2 + i / 30;
-        await window.__filmEditor.watch(now, { now, t: now, rate: 1 });
-        await new Promise((resolve) => setTimeout(resolve, 34));
-      }
-    });
-    await film.page.waitForFunction(() => window.__filmEditor.stage.vision('v').sourceTime > 1.1);
-    const moving = await colour();
-    assert.ok(moving[2] > 230 && moving[0] < 60, `processed playback shows new decoded frames after the source turns blue: ${moving}`);
-    const qualityPlayback = await film.page.evaluate(async () => {
-      window.__filmEditor.stage.visionPreview({mode:'quality'});
-      const before = window.__filmEditor.stage.vision('v').frames;
-      /* playback over the blue second, for at most 6 s on a slow machine (CI), until three processed frames are shown */
-      const stop=performance.now()+6000;
-      for (let i=0;i<42 && window.__filmEditor.stage.vision('v').frames-before<=2 && performance.now()<stop;i++) {
-        const t=1.5+i/30; await window.__filmEditor.watch(t,{now:t,t,rate:1});
-        await new Promise((resolve)=>setTimeout(resolve,34));
-      }
-      const state = window.__filmEditor.stage.vision('v');
-      window.__filmEditor.stage.visionPreview({mode:'auto'});
-      return { frames:state.frames-before, profile:state.preview };
-    });
-    assert.ok(qualityPlayback.frames >= 1, 'quality priority must present processed frames during playback');
-    assert.equal(qualityPlayback.profile,'quality');
-    await film.page.evaluate(() => window.__filmEditor.watch(0.4));
-    await film.page.evaluate(() => window.__filmEditor.stage.look('v', ''));
-    assert.equal(await film.page.locator('[data-film-vision]').count(), 0);
-    assert.equal(await film.page.locator('[data-film-vision-source]').count(), 0);
-    assert.ok((await colour())[0] > 230, 'disabling restores the original');
+  let site, browser;
+  // The test runner also calls this hook when a page evaluation is stuck at the test deadline.
+  t.after(async () => {
+    try { await Promise.all([browser?.close(), site?.close()]); }
+    finally { rmSync(root, { recursive: true, force: true }); }
+  });
 
-    const out = join(root, 'cutout.mp4');
-    execFileSync(process.execPath, [fileURLToPath(new URL('../bin/openfilm.mjs', import.meta.url)), 'render', root, '0-0.6', '--fps', '5', '--workers', '2', '--out', out], { timeout: 60000, stdio: 'pipe' });
-    const pixels = execFileSync('ffmpeg', ['-v', 'error', '-i', out, '-frames:v', '1', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-']);
-    const at = (90 * 320 + 160) * 3;
-    assert.ok(pixels[at + 1] > 220 && pixels[at] < 40, 'the encoded parallel export includes the cutout and lower track');
-  } finally { await film?.close(); await browser?.close(); await site?.close(); rmSync(root, { recursive: true, force: true }); }
+  // VP8 plays in the headless shell on every CI OS. The long blue tail leaves room for model startup during playback.
+  execFileSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'color=c=red:size=320x180:rate=10:duration=20', '-vf', "drawbox=x=0:y=0:w=iw:h=ih:color=blue:t=fill:enable='gte(t,1)'", '-c:v', 'libvpx', '-g', '10', '-pix_fmt', 'yuv420p', join(root, 'v.webm')]);
+  writeFileSync(join(root, 'back.svg'), '<svg xmlns="http://www.w3.org/2000/svg" width="320" height="180"><path fill="#00ff00" d="M0 0h320v180H0z"/></svg>');
+  const value = { stage: { w: 320, h: 180 }, tracks: [
+    { clips: [{ id: 'v', src: 'v.webm', time: [0, 20], style: '--of-cutout: 1; --of-cutout-mode: 0' }] },
+    { clips: [{ id: 'back', src: 'back.svg', time: [0, 20] }] },
+  ] };
+  writeFileSync(join(root, 'film.html'), filmHtml(value));
+  site = await serve(root);
+  browser = await chromium.launch({ headless: true, args: ['--use-angle=swiftshader'] });
+  const film = await FilmPage.open(browser, site.url, 'film.html');
+  const colour = async () => {
+    const data = (await film.capture({ format: 'png' })).toString('base64');
+    return film.page.evaluate(async (data) => {
+      const image = new Image(); image.src = `data:image/png;base64,${data}`; await image.decode();
+      const canvas = Object.assign(document.createElement('canvas'), { width: 320, height: 180 }); const ctx = canvas.getContext('2d'); ctx.drawImage(image, 0, 0);
+      return [...ctx.getImageData(160, 90, 1, 1).data];
+    }, data);
+  };
+  // Chromium can composite the old video surface for a moment after the effect canvas is hidden.
+  const expectRed = async (message) => {
+    const deadline = performance.now() + 10_000;
+    let pixel;
+    do {
+      pixel = await colour();
+      if (pixel[0] > 230 && pixel[1] < 60) return;
+    } while (performance.now() < deadline);
+    assert.fail(`${message}: ${pixel}`);
+  };
+  const watchAt = async (time) => {
+    await film.page.evaluate((time) => window.__filmEditor.watch(time), time);
+    await film.page.waitForFunction((time) => {
+      const state = window.__filmEditor.stage.vision('v');
+      if (state.error) throw new Error(state.error);
+      return state.sourceTime === time && document.querySelector('video').hasAttribute('data-film-vision-source');
+    }, time, { timeout: 30_000 });
+  };
+  const playUntil = async ({ after, frames = 1, profile }) => {
+    const before = await film.page.evaluate(() => window.__filmEditor.stage.vision('v').frames);
+    // Quarter-speed playback leaves software inference time to meet the preview's frame-lag budget.
+    // The page clock is frozen by exact seeks, so Playwright owns the deadline.
+    await film.page.waitForFunction(({ before, after, frames, profile }) => {
+      const editor = window.__filmEditor;
+      const video = document.querySelector('video');
+      const t = video.currentTime;
+      void editor.watch(t, { now: t, t, rate: 0.25 });
+      const state = editor.stage.vision('v');
+      if (state.error) throw new Error(state.error);
+      return state.frames >= before + frames && state.sourceTime > after &&
+        video.hasAttribute('data-film-vision-source') && state.preview === profile;
+    }, { before, after, frames, profile }, { timeout: 30_000 });
+  };
+  for (const time of [1.5, 0.4, 2, 0.4]) {
+    await film.seek(time, { timeoutMs: 60000 });
+    const pixel = await colour();
+    assert.ok(pixel[1] > 230 && pixel[0] < 30, `background visible after cutout at ${time}: ${pixel}`);
+    assert.equal(await film.page.evaluate(() => window.__filmEditor.stage.vision('v').phase), 'ready');
+  }
+  await film.page.evaluate(() => window.__filmEditor.stage.look('v', '--of-cutout: 1; --of-cutout-mode: 0; --of-vision-bypass: 1'));
+  await expectRed('compare shows the original video');
+  await film.page.evaluate(() => window.__filmEditor.stage.look('v', '--of-cutout: 1; --of-cutout-mode: 0'));
+  await film.page.waitForFunction(() => document.querySelector('video').hasAttribute('data-film-vision-source'));
+  assert.ok((await colour())[1] > 230);
+  await watchAt(1.2);
+  assert.ok((await colour())[1] > 230, 'preview uses the same effects');
+  await playUntil({ after: 1.3, frames: 2, profile: 'draft' });
+  await film.page.evaluate(() => window.__filmEditor.stage.look('v', '--of-beauty-smooth: 0.35'));
+  await watchAt(0.2);
+  const unchanged = await colour();
+  assert.ok(unchanged[0] > 230, `retouching without a face preserves the source picture: ${unchanged}`);
+  await playUntil({ after: 1.1, profile: 'draft' });
+  const moving = await colour();
+  assert.ok(moving[2] > 230 && moving[0] < 60, `processed playback shows new decoded frames after the source turns blue: ${moving}`);
+  await film.page.evaluate(() => window.__filmEditor.stage.visionPreview({ mode: 'quality' }));
+  await playUntil({ after: 1.3, profile: 'quality' });
+  await film.page.evaluate(() => window.__filmEditor.stage.visionPreview({ mode: 'auto' }));
+  await watchAt(0.4);
+  await film.page.evaluate(() => window.__filmEditor.stage.look('v', ''));
+  assert.equal(await film.page.locator('[data-film-vision]').count(), 0);
+  assert.equal(await film.page.locator('[data-film-vision-source]').count(), 0);
+  await expectRed('disabling restores the original');
+
+  const out = join(root, 'cutout.mp4');
+  execFileSync(process.execPath, [fileURLToPath(new URL('../bin/openfilm.mjs', import.meta.url)), 'render', root, '0-0.6', '--fps', '5', '--workers', '2', '--out', out], { timeout: 60000, stdio: 'pipe' });
+  const pixels = execFileSync('ffmpeg', ['-v', 'error', '-i', out, '-frames:v', '1', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-']);
+  const at = (90 * 320 + 160) * 3;
+  assert.ok(pixels[at + 1] > 220 && pixels[at] < 40, 'the encoded parallel export includes the cutout and lower track');
 });
 
 const portrait = process.env.OPENFILM_VISION_TEST_PORTRAIT;
