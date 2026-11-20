@@ -29,7 +29,8 @@ test('a page and a still graded by LUT files are drawn through them, the same as
   await writeFile(join(root, 'looks', 'shot-p.ctf'), LAYER);
   const hex = `#${COLOR.map((c) => c.toString(16).padStart(2, '0')).join('')}`;
   await writeFile(join(root, 'flat.html'), `<!doctype html><style>html,body{margin:0;background:${hex}}</style><script>window.film = { duration: 2, frame() {} };</script>`);
-  execFileSync('ffmpeg', ['-v', 'error', '-y', '-f', 'lavfi', '-i', `color=c=${hex.replace('#', '0x')}:size=160x180`, '-frames:v', '1', join(root, 'flat.png')]);
+  // Generate in RGB so a YUV round trip cannot shift the still away from the page's COLOR.
+  execFileSync('ffmpeg', ['-v', 'error', '-y', '-f', 'lavfi', '-i', `color=c=${hex.replace('#', '0x')}:size=160x180,format=rgb24`, '-frames:v', '1', join(root, 'flat.png')]);
   /* the page left, the still right; the input and output files are not in the folder: a page or a still needs neither */
   await writeFile(join(root, 'film.html'), `<!doctype html><html><head><meta name="viewport" content="width=320, height=180"></head><body>
 <section><iframe id="p" src="flat.html#t=0,2" style="--of-lut: ${CHAIN}; width: 160px; height: 180px; left: 0; top: 0"></iframe></section>

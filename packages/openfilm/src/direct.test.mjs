@@ -113,7 +113,8 @@ test('a film in runs: footage alone from one whole second to another, the rest d
 
 /** A file of footage whose every frame says its own number: a gray that brightens by two levels a frame (up to 109 frames: a video's white). */
 function numbered(file, fps, frames, size = '1280x720') {
-  execFileSync('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', '-f', 'lavfi', '-i', `color=gray:s=${size}:r=${fps},format=yuv420p,geq=lum='16+2*N':cb=128:cr=128`,
+  /* Declare the source's color space too: an implicit YUV conversion can change the levels that identify frames. */
+  execFileSync('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', '-f', 'lavfi', '-i', `color=gray:s=${size}:r=${fps},format=yuv420p,geq=lum='16+2*N':cb=128:cr=128,setparams=colorspace=bt709:color_primaries=bt709:color_trc=bt709:range=tv`,
     '-frames:v', String(frames), '-c:v', 'libx264', '-preset', 'ultrafast', '-qp', '0', '-g', '12', '-bf', '2', '-colorspace', 'bt709', '-color_primaries', 'bt709', '-color_trc', 'bt709', file]);
 }
 /** The number each frame of a file says (see numbered). */
@@ -128,9 +129,10 @@ test('read straight, each of the film\'s frames is the footage\'s frame on scree
   try {
     const at24 = join(dir, '24.mp4'), at60 = join(dir, '60.mp4');
     const at30 = join(dir, '30.mp4');
-    numbered(at24, 24, 96);
-    numbered(at60, 60, 100);
-    numbered(at30, 30, 100);
+    for (const [file, fps, frames] of [[at24, 24, 96], [at60, 60, 100], [at30, 30, 100]]) {
+      numbered(file, fps, frames);
+      assert.deepEqual(numbers(file), Array.from({ length: frames }, (_, n) => n), `${fps} fps fixture preserves its frame numbers`);
+    }
     const segment = (file, want, speed, frames) => ({ file, range: 'tv', matrix: 'bt709', tone: 'none', fit: 'contain', bars: false, want, speed, frames });
     /* the frame on screen a millisecond after the moment asked (host.mjs SEEK_INSIDE_FRAME), as a browser shows it */
     const shown = (want, speed, n, fps, of) => Math.floor((want + (n / fps) * speed + 0.001) * of);
