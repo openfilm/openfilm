@@ -29,6 +29,8 @@
  * Windows: an NSIS installer (OpenFilm-Setup-<version>-<arch>.exe, per user, no admin) and its feed (latest.yml). It is
  * built on this Mac: the program's icon and version are written into OpenFilm.exe with resedit (rcedit would need
  * wine). Not code-signed yet (no Windows certificate): SmartScreen asks once, "More info" → "Run anyway".
+ * Installing, updating and uninstalling remove the program's own files only (build/installer.nsh): whatever else is
+ * in the installation folder stays.
  *
  * Output: .release/<arch>/out (git-ignored). Nothing is uploaded: official builds are published by the project's
  * release pipeline.
@@ -39,6 +41,7 @@ import { createRequire } from 'node:module';
 import { createHash } from 'node:crypto';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { programFiles, unlistedProgramFiles } from './installer-files.mjs';
 import { lockedOverrides, versionsOffLock } from './locked-versions.mjs';
 
 const require = createRequire(import.meta.url);
@@ -134,7 +137,7 @@ await builder.build({
   ...(win ? { win: ['nsis'] } : { mac: ['dmg', 'zip'] }),
   [arch]: true,
   config: {
-    afterPack: win ? (context) => windowsResources(context) : undefined,
+    afterPack: win ? async (context) => { await windowsResources(context); requireListedProgramFiles(context); } : undefined,
     /* unsigned on a Mac: signed ad hoc, whole, before the .dmg and .zip are made. Electron's fuses are written into
        its framework after the linker signed it, and an Apple chip kills a program whose pages no longer match its
        signature ("Code Signature Invalid") the moment it starts */
@@ -228,6 +231,19 @@ if (FEED && !existsSync(join(out, win ? 'latest.yml' : 'latest-mac.yml'))) proce
 /** An unsigned Mac app signed ad hoc (no identity), all of it, so it starts. @param {{ appOutDir: string }} context */
 function adHocSign(context) {
   execFileSync('codesign', ['--force', '--deep', '--sign', '-', join(context.appOutDir, `${NAME}.app`)], { stdio: 'inherit' });
+}
+
+/**
+ * The Windows uninstaller removes the program files build/installer.nsh names and nothing else, so what people keep in
+ * the installation folder stays: a file of this package that it does not name would be left behind for good.
+ * @param {{ appOutDir: string }} context
+ */
+function requireListedProgramFiles(context) {
+  const lists = programFiles(readFileSync(join(desktop, 'build/installer.nsh'), 'utf8'), `${NAME}.exe`);
+  const unlisted = unlistedProgramFiles(context.appOutDir, lists);
+  if (unlisted.length) {
+    throw new Error(`build/installer.nsh does not list these program files, so the uninstaller would leave them behind:\n${unlisted.map((path) => `  ${path}`).join('\n')}`);
+  }
 }
 
 /** OpenFilm.exe's icon and version, as rcedit would write them. */

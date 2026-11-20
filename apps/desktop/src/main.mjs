@@ -687,7 +687,9 @@ async function start() {
     shell: shellEnv,
     extra: {
       OPENFILM_HOME: STUDIO_HOME,
-      ...(app.isPackaged ? { OPENFILM_INSTALL_DIR: mac ? dirname(dirname(process.resourcesPath)) : dirname(process.execPath) } : {}),
+      /* an update replaces the Mac app whole, so nothing of the person's may be kept inside it (locations.mjs). On
+         Windows the installer removes the program's own files only (build/installer.nsh): any folder will do */
+      ...(app.isPackaged && mac ? { OPENFILM_INSTALL_DIR: dirname(dirname(process.resourcesPath)) } : {}),
       ...(FLAVOR !== 'release' ? { OPENFILM_ACCOUNT_DEVICE: PRODUCT_NAME } : {}),
       ...((IDENTITY.library ?? process.env.OPENFILM_LIBRARY) ? { OPENFILM_LIBRARY: IDENTITY.library ?? process.env.OPENFILM_LIBRARY } : {}),
       /* a flavour with a home of its own still shares the person's library (src/locations.mjs) */

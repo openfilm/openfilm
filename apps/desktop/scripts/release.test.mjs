@@ -2,11 +2,11 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { readFileSync } from 'node:fs';
-import { mkdir, mkdtemp, readFile, rename, rm, symlink, writeFile } from 'node:fs/promises';
+import { existsSync, readFileSync } from 'node:fs';
+import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
-import { join, parse } from 'node:path';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 test('the Windows installer keeps the videos under node_modules', () => {
@@ -15,86 +15,50 @@ test('the Windows installer keeps the videos under node_modules', () => {
   assert.match(script, /nsis: \{[^}]*preCompressedFileExtensions: null/s);
 });
 
-const powershell = process.env.OPENFILM_TEST_POWERSHELL || (process.platform === 'win32' ? 'powershell.exe' : null);
-test('installer preflight accepts an app-only tree and refuses to remove projects, personal assets or junctions', { skip: !powershell }, async (t) => {
-  const scratch = await mkdtemp(join(tmpdir(), 'of-installer-protection-'));
-  t.after(() => rm(scratch, { recursive: true, force: true }));
-  const install = join(scratch, 'OpenFilm 安装');
-  const home = join(scratch, 'profile');
-  const runtime = join(install, 'resources', 'runtime');
-  await mkdir(runtime, { recursive: true });
-  await mkdir(home);
-  await writeFile(join(install, 'OpenFilm.exe'), 'binary');
-  const script = fileURLToPath(new URL('../build/protect-install.ps1', import.meta.url));
-  const verify = (path, code) => {
-    const result = spawnSync(powershell, ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', script,
-      '-AppFile', 'OpenFilm.exe', '-UninstallFile', 'Uninstall OpenFilm.exe'], {
-      env: { ...process.env, OPENFILM_HOME: home, OPENFILM_SHARED_HOME: home, USERPROFILE: scratch, OPENFILM_INSTALL_CHECK_PATH: path },
-      encoding: 'utf8', windowsHide: true, timeout: 15000,
-    });
-    assert.ifError(result.error);
-    assert.equal(result.status, code, result.stderr || result.stdout);
-  };
-  verify(install, 0);
-  verify(join(scratch, 'Not installed'), 0);
-  verify(parse(install).root, 20);
-
-  const project = join(runtime, 'Project');
-  await mkdir(project);
-  await writeFile(join(project, 'FILM.HTML'), 'user work');
-  verify(install, 10);
-  await rm(join(project, 'FILM.HTML'));
-  await mkdir(join(project, '.film'));
-  verify(install, 10);
-  await rm(join(project, '.film'), { recursive: true });
-
-  const prefs = join(home, 'prefs.json');
-  await writeFile(prefs, JSON.stringify({ projectsFolder: project }));
-  verify(install, 10);
-  await writeFile(prefs, '{');
-  verify(install, 0);
-
-  const saved = join(runtime, '.openfilm-library.json');
-  await writeFile(saved, '{}');
-  verify(install, 10);
-  await rm(saved);
-  await writeFile(join(install, 'notes.txt'), 'personal');
-  verify(install, 10);
-  await rm(join(install, 'notes.txt'));
-  await symlink(home, join(runtime, 'folder link'), process.platform === 'win32' ? 'junction' : 'dir');
-  verify(install, 10);
-});
-
-test('a Windows upgrade refuses to run a legacy uninstaller while a project is in its install directory', {
-  skip: process.platform !== 'win32', timeout: 240_000,
+test('a Windows update or uninstall removes the program and keeps everything else in its folder', {
+  skip: process.platform !== 'win32', timeout: 480_000,
 }, async () => {
   const scratch = await mkdtemp(join(tmpdir(), 'of-windows-upgrade-'));
   const name = `openfilm-fixture-${randomUUID()}`;
-  const install = join(scratch, 'Installed app');
-  const project = join(install, 'resources', 'runtime', 'User project');
+  /* a folder name with a space and non-ASCII characters, as many people's are */
+  const install = join(scratch, 'Installed app 安装');
+  const alone = join(scratch, 'App alone');
   const bootstrap = join(scratch, 'builder');
-  const resources = fileURLToPath(new URL('../build/', import.meta.url));
   const require = createRequire(import.meta.url);
   const builder = require('electron-builder');
   const run = (exe, args) => {
-    const result = spawnSync(exe, args, { encoding: 'utf8', windowsHide: true, windowsVerbatimArguments: true, timeout: 45_000 });
+    const result = spawnSync(exe, args, { encoding: 'utf8', windowsHide: true, windowsVerbatimArguments: true, timeout: 90_000 });
     assert.ifError(result.error);
     return result.status;
   };
-  const build = async (version, protectedInstall) => {
+  /* the installed uninstaller, run as electron-builder runs it: from a copy, so it can remove itself, and waited for */
+  const uninstall = async (folder) => {
+    const copy = join(scratch, 'uninstall.exe');
+    await copyFile(join(folder, `Uninstall ${name}.exe`), copy);
+    return run(copy, ['/S', `_?=${folder}`]);
+  };
+  const put = async (file, text) => {
+    await mkdir(dirname(file), { recursive: true });
+    await writeFile(file, text);
+  };
+  /* an app laid out as OpenFilm's is; `ours`: with OpenFilm's installer script, else electron-builder's own, whose
+     uninstaller deletes the whole folder (OpenFilm 0.4.0 and earlier) */
+  const build = async (version, ours) => {
     const app = join(scratch, `app-${version}`);
     const output = join(scratch, `out-${version}`);
-    await mkdir(join(app, 'resources', 'runtime'), { recursive: true });
-    await writeFile(join(app, `${name}.exe`), version);
-    await writeFile(join(app, 'resources', 'runtime', 'native.exe'), 'bundled');
-    await writeFile(join(bootstrap, 'package.json'), JSON.stringify({ name, version, author: 'OpenFilm', description: 'Installer test' }));
+    await put(join(app, `${name}.exe`), version);
+    for (const file of ['ffmpeg.dll', 'locales/en-US.pak', 'resources/app.asar', 'resources/app.asar.unpacked/node_modules/openfilm/package.json',
+      'resources/runtime/ffmpeg/ffmpeg.exe', `resources/runtime/ms-playwright/browser-${version}/headless.exe`]) {
+      await put(join(app, file), 'bundled');
+    }
+    await put(join(bootstrap, 'package.json'), JSON.stringify({ name, version, author: 'OpenFilm', description: 'Installer test' }));
     const paths = await builder.build({
       projectDir: bootstrap, prepackaged: app, publish: 'never', win: ['nsis'], x64: true,
       config: {
         appId: `dev.openfilm.${name}`, productName: name, electronVersion: require('electron/package.json').version,
         directories: { output, buildResources: bootstrap }, win: { signAndEditExecutable: false },
         nsis: {
-          ...(protectedInstall ? { include: join(bootstrap, 'installer.nsh') } : {}),
+          ...(ours ? { include: fileURLToPath(new URL('../build/installer.nsh', import.meta.url)) } : {}),
           oneClick: false, perMachine: false, allowToChangeInstallationDirectory: true,
           createDesktopShortcut: false, createStartMenuShortcut: false, deleteAppDataOnUninstall: false,
         },
@@ -102,30 +66,57 @@ test('a Windows upgrade refuses to run a legacy uninstaller while a project is i
     });
     return paths.find(path => path.endsWith('.exe'));
   };
+  /* what a person keeps in the folder the app is installed in: a project, a file of their own, and files inside
+     the folders the app shares with them */
+  const kept = {
+    'My project/film.html': 'user work',
+    'My project/.film/history/original': 'version history',
+    'notes.txt': 'personal',
+    'resources/footage.mp4': 'footage',
+    'resources/runtime/User project/film.html': 'more user work',
+  };
+  const keptAll = async () => {
+    for (const [file, text] of Object.entries(kept)) assert.equal(await readFile(join(install, file), 'utf8'), text, file);
+  };
+  const browser = (version) => join(install, 'resources', 'runtime', 'ms-playwright', `browser-${version}`);
   try {
-    await mkdir(bootstrap);
     const legacy = await build('1.0.0', false);
-    for (const file of ['installer.nsh', 'protect-install.ps1']) {
-      await writeFile(join(bootstrap, file), await readFile(join(resources, file)));
-    }
-    const upgrade = await build('1.0.1', true);
+    const update = await build('1.0.1', true);
     assert.equal(run(legacy, ['/S', `/D=${install}`]), 0);
-    await mkdir(join(project, '.film', 'history'), { recursive: true });
-    await writeFile(join(project, 'film.html'), 'user work');
-    await writeFile(join(project, '.film', 'history', 'original'), 'version history');
-    assert.equal(run(upgrade, ['/S']), 2);
-    assert.equal(await readFile(join(install, `${name}.exe`), 'utf8'), '1.0.0');
-    assert.equal(await readFile(join(project, 'film.html'), 'utf8'), 'user work');
-    assert.equal(await readFile(join(project, '.film', 'history', 'original'), 'utf8'), 'version history');
-    const preserved = join(scratch, 'Preserved project');
-    await rename(project, preserved);
-    assert.equal(run(upgrade, ['/S']), 0);
+    for (const [file, text] of Object.entries(kept)) await put(join(install, file), text);
+
+    /* over a version whose own uninstaller deletes the whole folder: no question, nothing lost */
+    assert.equal(run(update, ['/S']), 0);
     assert.equal(await readFile(join(install, `${name}.exe`), 'utf8'), '1.0.1');
-    assert.equal(await readFile(join(preserved, 'film.html'), 'utf8'), 'user work');
+    await keptAll();
+    /* the previous version's program files went, they are not left under the new ones */
+    assert.equal(existsSync(browser('1.0.0')), false);
+    assert.equal(existsSync(browser('1.0.1')), true);
+
+    /* over a version that has this uninstaller */
+    assert.equal(run(update, ['/S']), 0);
+    assert.equal(await readFile(join(install, `${name}.exe`), 'utf8'), '1.0.1');
+    await keptAll();
+
+    /* uninstalling removes the program and leaves the folder with what the person keeps in it */
+    assert.equal(await uninstall(install), 0);
+    for (const gone of [`${name}.exe`, `Uninstall ${name}.exe`, 'ffmpeg.dll', 'locales', 'resources/app.asar', 'resources/app.asar.unpacked',
+      'resources/runtime/ffmpeg', 'resources/runtime/ms-playwright']) {
+      assert.equal(existsSync(join(install, gone)), false, gone);
+    }
+    await keptAll();
+
+    /* a folder with nothing but the program goes with it */
+    assert.equal(run(update, ['/S', `/D=${alone}`]), 0);
+    assert.equal(await readFile(join(alone, `${name}.exe`), 'utf8'), '1.0.1');
+    assert.equal(await uninstall(alone), 0);
+    assert.equal(existsSync(alone), false);
   } finally {
-    const uninstaller = join(install, `Uninstall ${name}.exe`);
-    await rm(project, { recursive: true, force: true });
-    await readFile(uninstaller).then(() => run(uninstaller, ['/S', `_?=${install}`]), () => {});
+    for (const folder of [install, alone]) {
+      if (existsSync(join(folder, `Uninstall ${name}.exe`))) await uninstall(folder).catch(() => {});
+    }
+    /* the copy of itself an installer keeps for the updater */
+    if (process.env.LOCALAPPDATA) await rm(join(process.env.LOCALAPPDATA, `${name}-updater`), { recursive: true, force: true });
     await rm(scratch, { recursive: true, force: true });
   }
 });
