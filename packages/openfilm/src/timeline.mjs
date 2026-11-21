@@ -501,12 +501,14 @@ function unfollowShown(v, seen) {
  * before proves nothing. Nor is such a video followed: the browser is left to present its frames as it did. Where the
  * frame held cannot be read, the first frame presented once the seek is done counts, as it always did.
  */
+/** How long a video has to have been in the picture before the frame it was seen at is taken as shown (videoShown). */
+const SHOWN_SETTLE_MS = 1000;
 function videoShown(v, limit, steady) {
   return new Promise((resolve) => {
     const callback = typeof v.requestVideoFrameCallback === 'function';
     let seen = v.__filmShown;
     if (callback && !seen) {
-      seen = v.__filmShown = { at: null, steady: false, on: false, chain: 0, handle: 0 };
+      seen = v.__filmShown = { at: null, steady: false, on: false, chain: 0, handle: 0, since: null };
       /* another file in the element: what was seen says nothing of it */
       v.addEventListener('emptied', () => { seen.at = null; });
     }
@@ -526,7 +528,11 @@ function videoShown(v, limit, steady) {
       /* still seeking (the file's first data came before its seek landed), or playing by itself: there is no one
          frame it ends on */
       const want = v.paused && !v.seeking && v.readyState >= 2 ? frameHeld(v) : null;
-      if (steady && want != null && seen.at != null && sameFrame(seen.at, want)) { done(); return; }
+      /* seen last already, by a video that has been in the picture a while: one that has just come on can keep the
+         frame it had for a second or so though its new one is said presented (see above), and the frame after the one
+         it came on at, asked to hold the same picture, would be taken in that second. Until then it is waited for as
+         before */
+      if (steady && seen.since != null && realNow() - seen.since >= SHOWN_SETTLE_MS && want != null && seen.at != null && sameFrame(seen.at, want)) { done(); return; }
       const next = () => v.requestVideoFrameCallback((_now, meta) => {
         if (over) return;
         if (want == null || sameFrame(meta.mediaTime * 1e6, want)) done(); else next();
@@ -546,6 +552,7 @@ function videoShown(v, limit, steady) {
  * drawn (see videoShown). Whether any of its videos is followed.
  */
 async function mediaShown(page, steady) {
+  const began = realNow();
   const videos = [...page.querySelectorAll('video')];
   const waited = videos.filter((v) => v.seeking || v.readyState < 2);
   await Promise.all(waited.map((v) => videoShown(v, 10000, steady)));
@@ -557,7 +564,10 @@ async function mediaShown(page, steady) {
     if (!seen) continue;
     followed = true;
     seen.steady = v.paused && inPicture(v);
-    if (!seen.steady) { unfollowShown(v, seen); continue; }
+    if (!seen.steady) { seen.since = null; unfollowShown(v, seen); continue; }
+    /* when it came into the picture, by the real clock: no later than this frame's wait began (videoShown trusts what
+       it saw only a while after) */
+    seen.since ??= began;
     if (waited.includes(v) && !v.seeking && v.readyState >= 2) seen.at = frameHeld(v);
     followShown(v, seen);
   }

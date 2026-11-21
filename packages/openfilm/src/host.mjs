@@ -796,11 +796,14 @@ export class FilmPage {
         seen.at = null;
       };
       const waited = new Set();
+      // the real clock (the page's own is the film's, see FILM_CLOCK)
+      const realNow = () => (window.filmHost?.now ?? performance.now.bind(performance))();
+      const began = realNow();
       const videoShown = (v, limit) => new Promise((resolve) => {
         const callback = typeof v.requestVideoFrameCallback === 'function';
         let seen = v.__filmShown;
         if (callback && !seen) {
-          seen = v.__filmShown = { at: null, steady: false, on: false, chain: 0, handle: 0 };
+          seen = v.__filmShown = { at: null, steady: false, on: false, chain: 0, handle: 0, since: null };
           v.addEventListener('emptied', () => { seen.at = null; });
         }
         if (callback) waited.add(v);
@@ -818,7 +821,9 @@ export class FilmPage {
           if (!callback) { done(); return; }
           // still seeking, or playing by itself: there is no one frame it ends on, and the first presented counts
           const want = v.paused && !v.seeking && v.readyState >= 2 ? frameHeld(v) : null;
-          if (steady && want != null && seen.at != null && sameFrame(seen.at, want)) { done(); return; }
+          // seen last already, by a video in the picture for a second or more: one that has just come on can keep the
+          // frame it had for about that long though its new one is said presented, and is waited for as before
+          if (steady && seen.since != null && realNow() - seen.since >= 1000 && want != null && seen.at != null && sameFrame(seen.at, want)) { done(); return; }
           const next = () => v.requestVideoFrameCallback((_now, meta) => {
             if (over) return;
             if (want == null || sameFrame(meta.mediaTime * 1e6, want)) done(); else next();
@@ -841,7 +846,9 @@ export class FilmPage {
         const seen = v.__filmShown;
         if (!seen) continue;
         seen.steady = v.paused && inPicture(v);
-        if (!seen.steady) { unfollow(v, seen); continue; }
+        if (!seen.steady) { seen.since = null; unfollow(v, seen); continue; }
+        // when it came into the picture, by the real clock: no later than this frame's wait began
+        seen.since ??= began;
         if (waited.has(v) && !v.seeking && v.readyState >= 2) seen.at = frameHeld(v);
         follow(v, seen);
       }
