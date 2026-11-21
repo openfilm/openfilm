@@ -331,8 +331,6 @@ export const es: Words = {
     back: "Volver a la biblioteca",
   },
   projectBrowser: {
-    cut: 'Cortar',
-    paste: 'Mover aquí',
     sidebar: "Navegación de proyectos",
     folders: "Carpetas",
     search: "Buscar proyectos y carpetas",
@@ -429,6 +427,7 @@ export const es: Words = {
     agentRunningDelete: 'Un agente está trabajando en este proyecto. Detenlo primero y luego elimina el proyecto.',
     agentRunningDeleteMany: 'Un agente está trabajando en {n} de estos proyectos. Detenlo primero y luego elimínalos.',
     removeFromList: 'Quitar de la lista',
+    removeFromListFailed: 'No se pudo quitar el proyecto de la lista.',
     removeTitle: '¿Quitar de la lista?',
     removeDesc: 'Esto quita de la lista el proyecto no disponible. Los archivos que queden en su carpeta se conservan.',
     removeAlso: 'Los proyectos no disponibles solo se quitan de la lista; los archivos restantes se conservan.',

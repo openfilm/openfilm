@@ -329,8 +329,6 @@ export const ko: Words = {
     back: "소재 라이브러리로 돌아가기",
   },
   projectBrowser: {
-    cut: '잘라내기',
-    paste: '여기로 이동',
     sidebar: "프로젝트 탐색",
     folders: "폴더",
     search: "프로젝트 및 폴더 검색",
@@ -427,6 +425,7 @@ export const ko: Words = {
     agentRunningDelete: '이 프로젝트에서 에이전트가 실행 중입니다. 먼저 중지한 다음 프로젝트를 삭제하세요.',
     agentRunningDeleteMany: '{n}개 프로젝트에서 에이전트가 실행 중입니다. 먼저 중지한 다음 삭제하세요.',
     removeFromList: '목록에서 제거',
+    removeFromListFailed: '목록에서 프로젝트를 제거하지 못했습니다.',
     removeTitle: '목록에서 제거할까요?',
     removeDesc: '찾을 수 없는 프로젝트를 목록에서 제거합니다. 폴더에 남아 있는 파일은 유지됩니다.',
     removeAlso: '찾을 수 없는 프로젝트는 목록에서만 제거되며, 남아 있는 파일은 유지됩니다.',

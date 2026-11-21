@@ -503,10 +503,6 @@
   }
 }
 
-.cut {
-  opacity: 0.45;
-}
-
 .dialog {
   border-radius: 18px;
   border-color: color-mix(in srgb, var(--text) 12%, transparent);

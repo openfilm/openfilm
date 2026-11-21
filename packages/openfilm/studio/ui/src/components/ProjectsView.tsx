@@ -4,7 +4,6 @@ import { createPortal } from 'react-dom';
 import {
   ArrowLeft,
   ArrowRight,
-  ClipboardPaste,
   Check,
   ChevronDown,
   ChevronRight,
@@ -14,10 +13,10 @@ import {
   FolderPlus,
   Github,
   LayoutGrid,
+  ListX,
   MoreHorizontal,
   Pencil,
   Plus,
-  Scissors,
   Search,
   SlidersHorizontal,
   Trash2,
@@ -69,6 +68,7 @@ export function ProjectsView({
   onOpen,
   onRename,
   onDuplicate,
+  onRemoveFromList,
   onDelete,
   onDeleteItems,
   folders,
@@ -102,6 +102,7 @@ export function ProjectsView({
   /** A new name for the project (its folder is renamed). Never empty. */
   onRename: (projectId: string, name: string) => void;
   onDuplicate: (project: LibraryProject) => void;
+  onRemoveFromList: (projectIds: string[]) => void;
   /** Ask to delete these projects (the popover confirms first). */
   onDelete: (projectIds: string[]) => void;
   onDeleteItems: (projectIds: string[], folderIds: string[]) => void;
@@ -143,7 +144,6 @@ export function ProjectsView({
   });
   const folderId = location.entries[location.index] ?? null;
   const [selected, setSelected] = React.useState<Set<string>>(new Set());
-  const [cut, setCut] = React.useState<string[]>([]);
   const anchor = React.useRef<string | null>(null);
   const [renaming, setRenaming] = React.useState<string | null>(null);
   const [moving, setMoving] = React.useState<string[] | null>(null);
@@ -286,7 +286,6 @@ export function ProjectsView({
       }
     }
     setSelected(new Set());
-    setCut([]);
   };
   async function newFolder() {
     setQuery('');
@@ -334,16 +333,16 @@ export function ProjectsView({
         return projectMenuItems(
           t,
           project.missing
-            ? { onLocate: () => onLocate(project), onRemove: () => remove(picked) }
+            ? { onLocate: () => onLocate(project), onRemove: () => onRemoveFromList([project.id]) }
             : {
                 onOpen: () => onOpen(project),
                 onRename: () => rename(single),
                 onDuplicate: () => onDuplicate(project),
-                onCut: () => setCut(picked),
                 onMoveToFolder: () => setMoving(picked),
                 onChangeCover: cover ? () => cover.change(project) : undefined,
                 onRestoreCover: cover && project.cover ? () => cover.restore(project) : undefined,
                 onReveal: () => void api.revealProject(project.id).catch(() => {}),
+                onRemove: () => onRemoveFromList([project.id]),
                 onDelete: () => remove(picked),
               },
         );
@@ -357,7 +356,6 @@ export function ProjectsView({
           shortcut: 'F2',
           onSelect: () => rename(single),
         },
-        { id: 'cut', icon: <Scissors size={14} />, label: t('projectBrowser.cut'), onSelect: () => setCut(picked) },
         { id: 'move', icon: <FolderInput size={14} />, label: t('projects.moveTo'), onSelect: () => setMoving(picked) },
         { id: 'sep', separator: true },
         {
@@ -370,8 +368,11 @@ export function ProjectsView({
       ];
     }
     return [
-      { id: 'cut', icon: <Scissors size={14} />, label: t('projectBrowser.cut'), onSelect: () => setCut(picked) },
       { id: 'move', icon: <FolderInput size={14} />, label: t('projects.moveTo'), onSelect: () => setMoving(picked) },
+      ...(picked.every((key) => key.startsWith('project:')) ? [{
+        id: 'remove', icon: <ListX size={14} />, label: t('projects.removeFromList'),
+        onSelect: () => onRemoveFromList(picked.map((key) => key.slice('project:'.length))),
+      }] : []),
       {
         id: 'delete',
         icon: <Trash2 size={14} />,
@@ -392,13 +393,6 @@ export function ProjectsView({
     { id: 'folder', icon: <FolderPlus size={14} />, label: t('projects.newFolder'), onSelect: () => void newFolder() },
     { id: 'import', icon: <FolderOpen size={14} />, label: t('projects.openFolder'), onSelect: onOpenFolder },
     { id: 'github', icon: <Github size={14} />, label: t('projects.getFromGitHub'), onSelect: onGetFromGitHub },
-    {
-      id: 'paste',
-      icon: <ClipboardPaste size={14} />,
-      label: t('projectBrowser.paste'),
-      disabled: !cut.length || !!(folderId && excluded(cut).has(folderId)),
-      onSelect: () => move(cut, folderId),
-    },
     { id: 'sep', separator: true },
     { id: 'all', label: t('library.selectAll'), disabled: !keys.length, onSelect: () => setSelected(new Set(keys)) },
   ];
@@ -431,10 +425,9 @@ export function ProjectsView({
       else history(event.key === 'ArrowLeft' ? -1 : 1);
       return;
     }
-    if (event.key === 'Escape' && (selected.size || cut.length)) {
+    if (event.key === 'Escape' && selected.size) {
       event.preventDefault();
       setSelected(new Set());
-      setCut([]);
       anchor.current = null;
       return;
     }
@@ -452,16 +445,6 @@ export function ProjectsView({
     if (mod && event.key.toLowerCase() === 'a') {
       event.preventDefault();
       setSelected(new Set(keys));
-      return;
-    }
-    if (mod && event.key.toLowerCase() === 'x' && selected.size) {
-      event.preventDefault();
-      setCut([...selected]);
-      return;
-    }
-    if (mod && event.key.toLowerCase() === 'v' && cut.length) {
-      event.preventDefault();
-      move(cut, folderId);
       return;
     }
     const single = selected.size === 1 ? entries.find(e => selected.has(e.key)) : undefined;
@@ -603,7 +586,7 @@ export function ProjectsView({
         data-browser-folder={folder?.id}
         className={`${styles.item} ${view === 'cards' ? styles.card : styles.row} ${
           folder && dropTarget === folder.id ? styles.dropTarget : ''
-        } ${cut.includes(entry.key) ? styles.cut : ''}`}
+        }`}
         onClick={(event) => choose(entry, event)}
         onDoubleClick={(event) => {
           if (!(event.target as HTMLElement).closest('button,input') && !event.ctrlKey && !event.metaKey)

@@ -337,8 +337,6 @@ export const zhCN: Words = {
     back: "返回素材库",
   },
   projectBrowser: {
-    cut: '剪切',
-    paste: '粘贴到此处',
     sidebar: "项目导航",
     folders: "文件夹",
     search: "搜索项目和文件夹",
@@ -435,6 +433,7 @@ export const zhCN: Words = {
     agentRunningDelete: 'Agent 正在这个项目里运行，请先停止它，再删除项目。',
     agentRunningDeleteMany: '其中 {n} 个项目里有 Agent 正在运行，请先停止，再删除。',
     removeFromList: '从列表中移除',
+    removeFromListFailed: '无法从列表中移除项目。',
     removeTitle: '从列表中移除？',
     removeDesc: '这里只会把无法找到的项目从列表中移除，文件夹中的剩余文件会保留。',
     removeAlso: '无法找到的项目只会从列表中移除，剩余文件会保留。',

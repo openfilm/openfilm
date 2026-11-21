@@ -331,8 +331,6 @@ export const ja: Words = {
     back: "素材ライブラリに戻る",
   },
   projectBrowser: {
-    cut: '切り取り',
-    paste: 'ここに移動',
     sidebar: "プロジェクトのナビゲーション",
     folders: "フォルダ",
     search: "プロジェクトとフォルダを検索",
@@ -429,6 +427,7 @@ export const ja: Words = {
     agentRunningDelete: 'このプロジェクトでエージェントが実行中です。先に停止してから削除してください。',
     agentRunningDeleteMany: '{n} 件のプロジェクトでエージェントが実行中です。先に停止してから削除してください。',
     removeFromList: 'リストから削除',
+    removeFromListFailed: 'プロジェクトをリストから削除できませんでした。',
     removeTitle: 'リストから削除しますか？',
     removeDesc: '見つからないプロジェクトをリストから外します。フォルダーに残っているファイルは保持されます。',
     removeAlso: '見つからないプロジェクトはリストから外すだけで、残っているファイルは保持されます。',

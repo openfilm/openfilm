@@ -201,7 +201,8 @@ export const api = {
     studioHost?.projectChanged?.(r.project);
     return r.project;
   }),
-  forget: (id: string) => call<object>(p(id), { method: 'DELETE' }),
+  deleteProject: (id: string) => call<object>(p(id), { method: 'DELETE' }),
+  unlistProject: (id: string) => call<object>(`${p(id)}/listing`, { method: 'DELETE' }),
   film: async (id: string, signal?: AbortSignal) => {
     const film = await call<ProjectFilm>(p(id), { signal });
     if (typeof film?.rev !== 'string' || !film.project) throw new Error('Studio did not return the project film.');

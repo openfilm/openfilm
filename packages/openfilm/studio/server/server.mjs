@@ -43,7 +43,7 @@ import { HttpError, cookie, json, readJson } from './http.mjs';
 import { acceptWebSocket } from './websocket.mjs';
 import {
   ProjectError, createFolder, createProject, deleteFolder, deleteProject, duplicateProject, libraryRoot, listFolders, listProjects, locateProject, markOpened, moveFolder, moveLibrary,
-  agentKeyOf, moveProjectToFolder, openProject, projectById, renameFolder, renameProject, studioHome, studioKey, TOOL_DIR,
+  agentKeyOf, moveProjectToFolder, openProject, projectById, renameFolder, renameProject, studioHome, studioKey, TOOL_DIR, unlistProject,
 } from './projects.mjs';
 import { FetchError, createFetches, fetchFilm, parseRepoUrl } from './fetch-repo.mjs';
 import { sealKeysWith, sealPlainKeys } from './keys.mjs';
@@ -404,7 +404,7 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
       /* a relative path would be read from Studio's own folder, not the caller's */
       if (folder != null && !isAbsolute(folder)) throw new HttpError(400, 'the folder\'s full path, please');
       /* the last one still there as a project: a folder whose film.html was taken away is not made one again */
-      const last = folder == null ? (await listProjects()).find((p) => !p.missing && existsSync(join(p.path, FILM_FILE))) : null;
+      const last = folder == null ? (await listProjects({ listedOnly: true })).find((p) => !p.missing && existsSync(join(p.path, FILM_FILE))) : null;
       const project = folder != null ? await openProject(folder) : last ? await openProject(last.path) : null;
       const to = project ? `/projects/${encodeURIComponent(project.id)}` : '/';
       /* an agent is given an address with its own key; a browser Studio opens itself, Studio's */
@@ -769,7 +769,7 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     /* the web editor's folder browser (browse.mjs): `path`'s folders, only under the home folder, and where to start */
     if (parts[0] === 'browse' && parts.length === 1 && req.method === 'GET') {
       const listing = await browseFolder(url.searchParams.get('path'));
-      const places = await browsePlaces({ library: libraryRoot(), recent: (await listProjects()).filter((p) => !p.missing).map((p) => p.path) });
+      const places = await browsePlaces({ library: libraryRoot(), recent: (await listProjects({ listedOnly: true })).filter((p) => !p.missing).map((p) => p.path) });
       return json(res, 200, { ...listing, ...places });
     }
     /* the example films (examples.mjs): none when the index cannot be read */
@@ -1070,7 +1070,7 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
 
     if (parts[0] !== 'projects') throw new HttpError(404, 'no such API');
     if (parts.length === 1) {
-      if (req.method === 'GET') return json(res, 200, { projects: (await listProjects()).map((p) => (agentIn(p.path) ? { ...p, working: true } : p)) });
+      if (req.method === 'GET') return json(res, 200, { projects: (await listProjects({ listedOnly: true })).map((p) => (agentIn(p.path) ? { ...p, working: true } : p)) });
       /* `create` false: only a folder holding a film opens (the editor asks before starting one in a folder) */
       if (req.method === 'POST') {
         const body = /** @type {{ path?: string, name?: string, create?: boolean, subtitleStyle?: unknown }} */ (await readJson(req));
@@ -1121,6 +1121,10 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     if (parts.length === 3 && parts[2] === 'duplicate' && req.method === 'POST') {
       const { name } = /** @type {{ name?: string }} */ (await readJson(req));
       return json(res, 200, { project: await duplicateProject(parts[1], name) });
+    }
+    if (parts.length === 3 && parts[2] === 'listing' && req.method === 'DELETE') {
+      await unlistProject(parts[1]);
+      return json(res, 200, {});
     }
     const project = await projectById(parts[1]);
     const rest = parts.slice(2).join('/');

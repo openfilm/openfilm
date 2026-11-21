@@ -4,7 +4,7 @@ import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, 
 import { spawn } from 'node:child_process';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createFolder, createProject, deleteProject, duplicateProject, forgetProject, listFolders, listProjects, locateProject, moveFolder, moveLibrary, moveProjectToFolder, openProject, projectById, renameProject, ProjectError } from './projects.mjs';
+import { createFolder, createProject, deleteFolder, deleteProject, duplicateProject, forgetProject, listFolders, listProjects, locateProject, markOpened, moveFolder, moveLibrary, moveProjectToFolder, openProject, projectById, renameProject, unlistProject, ProjectError } from './projects.mjs';
 import { chooseFolder } from '../../src/locations.mjs';
 import { readFilmFile } from '../../src/film-doc.mjs';
 
@@ -257,6 +257,27 @@ test('forgetting a project leaves its folder; a deleted folder shows as missing'
   rmSync(join(r.path, 'film.html'));
   mkdirSync(join(r.path, 'film.html'));
   assert.equal((await projectById(r.id)).missingReason, 'film', 'a directory named film.html is not a film file');
+});
+
+test('a project removed from the list keeps its files and can be added back by opening its folder', async () => {
+  const p = await createProject('Keep on disk');
+  const file = join(p.path, 'film.html');
+  const original = readFileSync(file, 'utf8');
+  const folder = await createFolder('Archive');
+  await moveProjectToFolder(p.id, folder.id);
+
+  await unlistProject(p.id);
+  await markOpened(p.id);
+  assert.equal((await projectById(p.id)).path, p.path, 'an open editor can still use its project');
+  assert.deepEqual(await listProjects({ listedOnly: true }), [], 'a scan of the projects folder keeps it hidden');
+  assert.equal((await listProjects())[0].id, p.id, 'internal services still know the registered project');
+
+  assert.equal((await openProject(p.path, { create: false })).id, p.id);
+  assert.equal((await listProjects({ listedOnly: true }))[0].folderId, folder.id);
+  await unlistProject(p.id);
+  assert.deepEqual(await deleteFolder(folder.id), [], 'deleting a list folder cannot delete an unlisted project');
+  assert.deepEqual(await listProjects({ listedOnly: true }), []);
+  assert.equal(readFileSync(file, 'utf8'), original);
 });
 
 test('taking an unavailable project off the list preserves its remaining assets and history', async () => {

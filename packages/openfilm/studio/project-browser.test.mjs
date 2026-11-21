@@ -1,7 +1,7 @@
 /** Exercise the project manager against a real Studio with an isolated library. */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { chromium } from 'playwright-core';
@@ -151,16 +151,19 @@ test(
         'committing a rename does not open the project',
       );
       await item('Brand story final').click({ button: 'right' });
-      await page.getByRole('menuitem', { name: 'Cut', exact: true }).waitFor();
+      const removeFromList = page.getByRole('menuitem', { name: 'Remove from list', exact: true });
+      await removeFromList.waitFor();
+      assert.equal(await page.getByRole('menuitem', { name: 'Cut', exact: true }).count(), 0);
+      assert.equal(await page.getByRole('menuitem', { name: 'Delete', exact: true }).count(), 1);
       assert.equal(await page.getByRole('menuitem', { name: 'Select', exact: true }).count(), 0);
       await page.keyboard.press('Escape');
       await item('Brand story final').getByRole('button').focus();
       await page.keyboard.press('Space');
-      await page.getByRole('menuitem', { name: 'Cut', exact: true }).waitFor();
+      await removeFromList.waitFor();
       assert.deepEqual(await page.evaluate(() => window.openedProjects), [], 'Space on the menu button opens its menu');
       await page.keyboard.press('Escape');
       await page.keyboard.press('Shift+F10');
-      await page.getByRole('menuitem', { name: 'Cut', exact: true }).waitFor();
+      await removeFromList.waitFor();
       await page.keyboard.press('Escape');
 
       await item('Clients').dblclick();
@@ -179,27 +182,20 @@ test(
         .getByRole('button', { name: 'Projects', exact: true })
         .click();
 
-      await item('Clients').click();
-      await page.keyboard.press('Control+x');
-      await item('Clients').dblclick();
-      await item('Campaigns').dblclick();
-      await page.keyboard.press('Control+v');
-      assert.equal(
-        (await api('projects/folders')).folders.find((f) => f.id === clients.id).parentId,
-        undefined,
-        'a folder cannot move into its own descendant',
-      );
+      await item('Clients').click({ button: 'right' });
+      await page.getByRole('menuitem', { name: 'Move to…', exact: true }).click();
+      const folderPicker = page.getByRole('dialog', { name: 'Move “Clients”', exact: true });
+      await folderPicker.getByRole('treeitem', { name: 'Archive', exact: true }).waitFor();
+      assert.equal(await folderPicker.getByRole('treeitem', { name: 'Campaigns', exact: true }).count(), 0);
       await page.keyboard.press('Escape');
-      await dialog
-        .getByRole('navigation', { name: 'Folder path', exact: true })
-        .getByRole('button', { name: 'Projects', exact: true })
-        .click();
 
-      // Cut survives folder navigation, and paste moves into the destination.
-      await item('Brand story final').click();
-      await page.keyboard.press('Control+x');
+      await item('Brand story final').click({ button: 'right' });
+      await page.getByRole('menuitem', { name: 'Move to folder', exact: true }).click();
+      const projectPicker = page.getByRole('dialog', { name: 'Move “Brand story final”', exact: true });
+      const moved = page.waitForResponse((r) => r.url().endsWith(`/api/projects/${projects[1].id}/folder`) && r.request().method() === 'PUT');
+      await projectPicker.getByRole('treeitem', { name: 'Archive', exact: true }).dblclick();
+      assert.ok((await moved).ok());
       await item('Archive').dblclick();
-      await page.keyboard.press('Control+v');
       await item('Brand story final').waitFor();
       assert.equal((await api('projects')).projects.find((p) => p.id === projects[1].id).folderId, archive.id);
       await dialog
@@ -298,6 +294,22 @@ test(
         (await api('projects/folders')).folders.some((f) => f.id === nested.id),
         false,
       );
+
+      const hidden = projects.slice(3, 5);
+      const films = await Promise.all(hidden.map((project) => readFile(join(project.path, 'film.html'), 'utf8')));
+      await item('Design in motion').click();
+      await item('Evening light').click({ modifiers: ['Meta'] });
+      await item('Evening light').click({ button: 'right' });
+      await removeFromList.click();
+      await item('Evening light').waitFor({ state: 'detached' });
+      await page.reload();
+      await item('Archive').waitFor();
+      const listed = (await api('projects')).projects.map((p) => p.id);
+      assert.ok(hidden.every((project) => !listed.includes(project.id)), 'removed projects stay off the list after a rescan');
+      assert.deepEqual(await Promise.all(hidden.map((project) => readFile(join(project.path, 'film.html'), 'utf8'))), films);
+      const { project: reopened } = await api('projects', 'POST', { path: projects[4].path, create: false });
+      assert.equal(reopened.id, projects[4].id);
+      await page.reload();
 
       await item('Evening light').dblclick();
       await page.waitForFunction(() => window.openedProjects.length === 1);

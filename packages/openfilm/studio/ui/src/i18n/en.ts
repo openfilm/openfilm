@@ -338,8 +338,6 @@ export const en = {
     back: "Back to library",
   },
   projectBrowser: {
-    cut: 'Cut',
-    paste: 'Move here',
     sidebar: "Project navigation",
     folders: "Folders",
     search: "Search projects and folders",
@@ -436,6 +434,7 @@ export const en = {
     agentRunningDelete: 'An agent is running in this project. Stop it first, then delete the project.',
     agentRunningDeleteMany: 'An agent is running in {n} of these projects. Stop it first, then delete them.',
     removeFromList: 'Remove from list',
+    removeFromListFailed: 'Could not remove the project from the list.',
     removeTitle: 'Remove from the list?',
     removeDesc: 'This removes the unavailable project from the list. Any files remaining in its folder are kept.',
     removeAlso: 'Unavailable projects are only taken off the list; any remaining files are kept.',

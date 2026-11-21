@@ -1,7 +1,8 @@
 // @ts-check
 /**
  * Projects: folders, and the list of them (~/.openfilm/studio.json): every project in the library (src/locations.mjs,
- * one folder each, found again at each listing) and the ones opened from elsewhere. A project is its folder, and
+ * one folder each, found again at each listing) and the ones opened from elsewhere. Projects removed from the list
+ * keep their registration for open editors and can be added back by opening their folder. A project is its folder, and
  * everything about it is in the folder, so moving or copying the folder moves or copies the project:
  *
  *   film.html, its pages and code, assets/   the work
@@ -75,7 +76,7 @@ export const agentKeyOf = (key) => createHmac('sha256', key).update('openfilm-ag
 export { libraryRoot };
 
 /**
- * @typedef {{ id: string, path: string, openedAt: number, folderId?: string }} Recent
+ * @typedef {{ id: string, path: string, openedAt: number, folderId?: string, unlisted?: boolean }} Recent
  * @typedef {{ id: string, name: string, createdAt: number, parentId?: string }} ProjectFolder   a folder of the Projects
  *   list (not on disk); `parentId` the folder it is in (none: the top level)
  * @typedef {{ recent: Recent[], folders: ProjectFolder[] }} StudioState
@@ -354,7 +355,7 @@ async function followLibrary(state) {
   if (!existsSync(root)) return false;
   const real = realpathSync(root);
   const before = state.recent.length;
-  state.recent = state.recent.filter((r) => !((dirname(r.path) === real || dirname(r.path) === root) && !existsSync(r.path)));
+  state.recent = state.recent.filter((r) => r.unlisted || !((dirname(r.path) === real || dirname(r.path) === root) && !existsSync(r.path)));
   let changed = state.recent.length !== before;
   for (const found of libraryProjects(real)) {
     if (state.recent.some((r) => r.path === found)) continue;
@@ -372,15 +373,16 @@ async function followLibrary(state) {
   return changed;
 }
 
-/** Every project of the library and the ones opened from elsewhere, most recent first; one whose folder is gone says so (`missing`). */
-export async function listProjects() {
+/** Registered projects, most recent first, with missing folders marked. The project browser and recent places show
+ * only listed projects. Internal callers still need the full set for media links, storage, and open editors. */
+export async function listProjects({ listedOnly = false } = {}) {
   return exclusive(async () => {
     const state = await readState();
     if (await followLibrary(state)) await writeState(state);
     const folders = new Set(state.folders.map((f) => f.id));
     /* a project in a folder that was deleted is back at the top level; a compound clip's film is reached through
        its project, not listed (parts.mjs) */
-    return state.recent.filter((r) => compoundOuter(r.path) === resolve(r.path)).map((r) => describe(r.folderId && !folders.has(r.folderId) ? { ...r, folderId: undefined } : r));
+    return state.recent.filter((r) => !(listedOnly && r.unlisted) && compoundOuter(r.path) === resolve(r.path)).map((r) => describe(r.folderId && !folders.has(r.folderId) ? { ...r, folderId: undefined } : r));
   });
 }
 
@@ -453,8 +455,8 @@ export function folderTree(folders, id) {
 }
 
 /**
- * Take a folder off the list, with the folders inside it; their projects go back to the top level. Returns the ids of
- * the projects that were in them (deleting a folder deletes them too: the caller deletes each, see deleteProject).
+ * Take a folder off the list, with the folders inside it; their projects become ungrouped. Returns the ids of the
+ * listed projects in those folders for the caller to delete (see deleteProject).
  */
 export async function deleteFolder(/** @type {string} */ id) {
   return exclusive(async () => {
@@ -465,7 +467,7 @@ export async function deleteFolder(/** @type {string} */ id) {
     const inside = state.recent.filter((r) => r.folderId && gone.has(r.folderId));
     for (const r of inside) delete r.folderId;
     await writeState(state);
-    return inside.map((r) => r.id);
+    return inside.filter((r) => !r.unlisted).map((r) => r.id);
   });
 }
 
@@ -499,6 +501,7 @@ export async function markOpened(/** @type {string} */ id) {
     const state = await readState();
     const entry = state.recent.find((r) => r.id === id);
     if (!entry) throw new ProjectError('no such project', 404);
+    if (entry.unlisted) return describe(entry);
     entry.openedAt = Date.now();
     state.recent = [entry, ...state.recent.filter((r) => r !== entry)];
     await writeState(state);
@@ -588,7 +591,19 @@ export async function deleteProject(/** @type {string} */ id) {
   await forgetProject(id);
 }
 
-/** Take a project off the list. Its folder stays as it is. */
+/** Hide a project from the list, including when the library finds its folder again. Open editors keep their id. */
+export async function unlistProject(/** @type {string} */ id) {
+  return exclusive(async () => {
+    const state = await readState();
+    const entry = state.recent.find((r) => r.id === id);
+    if (!entry) throw new ProjectError('no such project', 404);
+    if (entry.unlisted) return;
+    entry.unlisted = true;
+    await writeState(state);
+  });
+}
+
+/** Drop the registration of a project after deletion. */
 export async function forgetProject(/** @type {string} */ id) {
   return exclusive(async () => {
     const state = await readState();

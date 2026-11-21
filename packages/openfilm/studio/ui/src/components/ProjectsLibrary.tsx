@@ -4,9 +4,8 @@
  * file projects in folders of the list; or, with "Examples" picked in the project header, to start from an example
  * (ExamplesGallery). Its projects are ProjectsView; this file holds the data and actions.
  *
- * Studio's projects are folders on disk: deleting one moves its folder to the system's Trash. One whose folder or film
- * file is gone (`missing`) cannot be opened; it can be located (the folder it is in now) or taken off the list,
- * preserving any remaining files.
+ * Studio's projects are folders on disk. Deleting one moves its folder to the Recycle Bin. Removing it from the list
+ * keeps the folder. One whose folder or film file is gone (`missing`) can be located or removed from the list.
  *
  * A folder is picked with the app's own dialog where there is an app (lib/host.ts `folders`), else with Studio's
  * folder browser; one without a film is opened only once the person agrees to start a film in it.
@@ -54,6 +53,7 @@ function useProjectLibrary(open: boolean) {
   const [loadFailed, setLoadFailed] = React.useState(false);
   const [tries, setTries] = React.useState(0);
   const [error, setError] = React.useState<string | null>(null);
+  const listRevision = React.useRef(0);
   const errorTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   React.useEffect(() => () => { if (errorTimer.current) clearTimeout(errorTimer.current); }, []);
 
@@ -74,10 +74,11 @@ function useProjectLibrary(open: boolean) {
     const refresh = () => {
       if (!alive || loading) return;
       loading = true;
+      const revision = listRevision.current;
       void Promise.all([within(api.projects(), LIST_WAIT_MS), within(folderApi.list(), LIST_WAIT_MS)]).then(
         ([list, folderList]) => {
           if (!alive) return;
-          setProjects(list.map((p) => ({ ...p, poster: posterOf(p) })));
+          if (revision === listRevision.current) setProjects(list.map((p) => ({ ...p, poster: posterOf(p) })));
           setFolders(folderList);
           setLoaded(true);
           setLoadFailed(false);
@@ -94,12 +95,16 @@ function useProjectLibrary(open: boolean) {
   const retryLoad = React.useCallback(() => setTries((n) => n + 1), []);
 
   const reloadFolders = React.useCallback(() => {
+    const revision = listRevision.current;
     void folderApi.list().then(setFolders, () => {});
     /* a card keeps the picture it shows, unless its cover changed meanwhile (from the editor, or another window) */
-    void api.projects().then((list) => setProjects((cur) => list.map((p) => {
-      const shown = cur.find((c) => c.id === p.id);
-      return { ...p, poster: shown && shown.cover === p.cover ? shown.poster ?? posterOf(p) : posterOf(p) };
-    })), () => {});
+    void api.projects().then((list) => {
+      if (revision !== listRevision.current) return;
+      setProjects((cur) => list.map((p) => {
+        const shown = cur.find((c) => c.id === p.id);
+        return { ...p, poster: shown && shown.cover === p.cover ? shown.poster ?? posterOf(p) : posterOf(p) };
+      }));
+    }, () => {});
   }, []);
 
   /** A project's cover set or taken off (null): its card asks for its picture again. */
@@ -132,6 +137,16 @@ function useProjectLibrary(open: boolean) {
   /** What to say when an agent is working in `n` of the projects asked to be deleted (`of` of them). */
   const agentRunning = (n: number, of: number) => (n === 1 && of === 1 ? t('projects.agentRunningDelete') : t('projects.agentRunningDeleteMany').replace('{n}', String(n)));
 
+  async function removeFromList(ids: string[]) {
+    const results = await Promise.allSettled(ids.map((id) => api.unlistProject(id)));
+    const removed = new Set(ids.filter((_, index) => results[index]?.status === 'fulfilled'));
+    if (removed.size) {
+      listRevision.current++;
+      setProjects((list) => list.filter((p) => !removed.has(p.id)));
+    }
+    if (removed.size < ids.length) flash(t('projects.removeFromListFailed'));
+  }
+
   /** Delete projects (their folders go to the Trash), optimistically; the ones that fail come back. Returns the ids deleted. */
   async function deleteProjects(ids: string[]): Promise<Set<string>> {
     const before = projects;
@@ -140,7 +155,7 @@ function useProjectLibrary(open: boolean) {
     /* null: deleted; else why not ('agent-running': an agent started in it since the list was read) */
     /* `lost`: no answer came (the request was cut off, as when the page showing one of them leaves it) */
     /* `kept` (Windows): the Recycle Bin would not take its folder, so it stays where it is, and the person hears why */
-    const results = await Promise.all(ids.map((id) => api.forget(id).then(() => null, (e: unknown) => ({
+    const results = await Promise.all(ids.map((id) => api.deleteProject(id).then(() => null, (e: unknown) => ({
       id, working: e instanceof ApiError && e.body.code === 'agent-running', lost: !(e instanceof ApiError),
       kept: e instanceof ApiError ? recycleRefusalOf(e.body) : null,
     }))));
@@ -230,7 +245,7 @@ function useProjectLibrary(open: boolean) {
     }
   }
 
-  return { projects, folders, loaded, loadFailed, retryLoad, error, flash, reload: reloadFolders, agentRunning, workingIn, deleteProjects, renameProject, createFolder, renameFolder, moveFolder, moveProject, deleteFolder, coverChanged };
+  return { projects, folders, loaded, loadFailed, retryLoad, error, flash, reload: reloadFolders, agentRunning, workingIn, removeFromList, deleteProjects, renameProject, createFolder, renameFolder, moveFolder, moveProject, deleteFolder, coverChanged };
 }
 
 /** The resource center's project, asset-library, and example views, picked in its sidebar. */
@@ -553,6 +568,7 @@ export function ProjectsPopover({
                 onOpen={(project) => { void openListed(project); }}
                 onRename={(projectId, name) => void lib.renameProject(projectId, name)}
                 onDuplicate={(project) => void duplicateProject(project)}
+                onRemoveFromList={(ids) => void lib.removeFromList(ids)}
                 /* an agent working in one: said at once, before asking (the server refuses it too) */
                 onDelete={(ids) => void lib.workingIn(ids).then((working) => {
                   if (working) lib.flash(lib.agentRunning(working, ids.length));
