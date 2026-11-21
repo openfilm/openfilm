@@ -22,7 +22,15 @@ const hash = (n) => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return
 const root = document.documentElement;
 const css = (name) => getComputedStyle(root).getPropertyValue(name).trim();
 const canvas = document.querySelector('canvas'), ctx = canvas.getContext('2d');
-function fit() {
+/*
+ * The dots are drawn into a canvas of their own and copied into the picture. On a GPU canvas a fill in a blend mode
+ * that reads what is under it ('multiply', which this page used to print them with) is drawn alone, after a copy of
+ * the canvas: the 1,800 dots inside the panel took 85 ms a frame at 1080p. Nothing is under the dots and they do not
+ * overlap, so 'source-over' paints the same; but in the picture's own canvas, in a frame that also fills the paper's
+ * and the burst's paths, Chromium 149 gives the small dots other edges. Alone in their canvas they keep the ones they had.
+ */
+const dotCanvas = document.createElement('canvas'), dotCtx = dotCanvas.getContext('2d');
+function fit(canvas, ctx) {
   const d = devicePixelRatio || 1, w = Math.round(innerWidth * d), h = Math.round(innerHeight * d);
   if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
   ctx.setTransform(d, 0, 0, d, 0, 0);
@@ -30,7 +38,7 @@ function fit() {
 }
 const LETTER = '"Comic Sans MS", "Chalkboard SE", "Marker Felt", "Arial Black", sans-serif';
 // halftone: dots on a 45° grid, larger toward the corner (cx, cy), fading out by radius R
-function halftone(cx, cy, R, step, color) {
+function halftone(ctx, cx, cy, R, step, color) {
   ctx.fillStyle = color;
   const c = Math.SQRT1_2;
   for (let a = -R * 1.5; a <= R * 1.5; a += step) {
@@ -55,18 +63,20 @@ function burst(cx, cy, rx, ry, spikes, seed) {
 }
 window.film = {
   frame(t) {
-    fit();
+    fit(canvas, ctx);
+    if (!canvas.width || !canvas.height) return; // no size: nothing to draw, and the dots' grid would have no step
     const w = innerWidth, h = innerHeight, u = Math.min(w, h) / 100;
     const paper = css('--color') || '#fbf7ec', capColor = css('--caption') || '#ffe14d', dots = css('--dots') || '#e8336d';
     const g = 2.8 * u, ink = 1.3 * u;
     const px = g, py = g, pw = w - 2 * g, ph = h - 2 * g;
     // halftone in two corners of the panel, printed over the picture
-    ctx.save();
-    ctx.beginPath(); ctx.rect(px, py, pw, ph); ctx.clip();
-    ctx.globalCompositeOperation = 'multiply';
-    halftone(px + pw, py, Math.min(pw, ph) * 0.62, 1.55 * u, dots);
-    halftone(px, py + ph, Math.min(pw, ph) * 0.5, 1.4 * u, 'rgba(30,30,40,0.85)');
-    ctx.restore();
+    fit(dotCanvas, dotCtx);
+    dotCtx.save();
+    dotCtx.beginPath(); dotCtx.rect(px, py, pw, ph); dotCtx.clip();
+    halftone(dotCtx, px + pw, py, Math.min(pw, ph) * 0.62, 1.55 * u, dots);
+    halftone(dotCtx, px, py + ph, Math.min(pw, ph) * 0.5, 1.4 * u, 'rgba(30,30,40,0.85)');
+    dotCtx.restore();
+    ctx.save(); ctx.resetTransform(); ctx.drawImage(dotCanvas, 0, 0); ctx.restore(); // pixel for pixel
     // the paper gutter and the inked border
     ctx.fillStyle = paper;
     ctx.beginPath(); ctx.rect(0, 0, w, h); ctx.rect(px, py, pw, ph); ctx.fill('evenodd');
