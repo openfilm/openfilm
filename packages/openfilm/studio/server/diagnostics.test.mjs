@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { inflateRawSync } from 'node:zlib';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { recordProblem, problemsFile } from '../../src/problems.mjs';
@@ -17,6 +18,22 @@ const TURN = [
   { t: 4.4, kind: 'question', message: 'Which secret?' },
   { t: 5, kind: 'done', ok: false, error: 'Codex stopped while answering without saying why.' },
 ].map((e) => JSON.stringify(e)).join('\n');
+
+/** What a zip's entries hold, each inflated when it was deflated (its text is, zip.mjs), one after another as text. @param {string} file */
+function zipText(file) {
+  const buf = readFileSync(file);
+  const end = buf.lastIndexOf(Buffer.from([0x50, 0x4b, 0x05, 0x06]));
+  let at = buf.readUInt32LE(end + 16);
+  const texts = [];
+  for (let n = buf.readUInt16LE(end + 10); n > 0; n--) {
+    const local = buf.readUInt32LE(at + 42);
+    const data = local + 30 + buf.readUInt16LE(local + 26) + buf.readUInt16LE(local + 28);
+    const bytes = buf.subarray(data, data + buf.readUInt32LE(at + 20));
+    texts.push((buf.readUInt16LE(at + 10) === 8 ? inflateRawSync(bytes) : bytes).toString('utf8'));
+    at += 46 + buf.readUInt16LE(at + 28) + buf.readUInt16LE(at + 30) + buf.readUInt16LE(at + 32);
+  }
+  return texts.join('\n');
+}
 
 test("a turn's log goes in as how it went, without what was said unless asked", () => {
   const kept = turnLogForFile(TURN, false);
@@ -65,7 +82,7 @@ test('the diagnostic file: the report, the problems, the logs, the failed turns,
   const made = await exportDiagnostics({ report: 'OpenFilm doctor\n✓ Node', folder: join(root, 'out'), home, appLogs, now: new Date('2026-10-18T14:00:00Z') });
   assert.equal(made.path, join(root, 'out', diagnosticsName(new Date('2026-10-18T14:00:00Z'))));
   assert.deepEqual(made.files.filter((f) => f !== 'agents/codex.txt'), ['report.txt', 'problems.jsonl', 'logs/studio/studio.log', 'logs/app/updates.log', 'turns/local-abc.jsonl']);
-  const zip = readFileSync(made.path).toString('utf8');
+  const zip = zipText(made.path);
   assert.match(zip, /OpenFilm doctor/);
   assert.match(zip, /export failed: no codec/);
   assert.match(zip, /Reconnecting\.\.\. 2\/5/);

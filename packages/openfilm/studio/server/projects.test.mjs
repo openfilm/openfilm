@@ -96,6 +96,12 @@ test('duplicate creates an independent edit in the same project group with a uni
     mkdirSync(join(path, '..'), { recursive: true });
     writeFileSync(path, value);
   }
+  /* footage, large enough to be cloned where the disk makes clones (clone.mjs): copied like the rest, and left out like
+     the rest where it is not the project's work */
+  const footage = Buffer.alloc(3 * 2 ** 20, 0x5a);
+  writeFileSync(join(source.path, 'assets/footage.mov'), footage);
+  writeFileSync(join(source.path, '.film/cache/seek-copy.mp4'), footage);
+  writeFileSync(join(source.path, '.git/pack.bin'), footage);
 
   const [a, b] = await Promise.all([duplicateProject(source.id, 'Launch 副本'), duplicateProject(source.id, 'Launch 副本')]);
   assert.deepEqual([a.name, b.name].sort(), ['Launch 副本 2', 'Launch 副本 3']);
@@ -108,9 +114,15 @@ test('duplicate creates an independent edit in the same project group with a uni
     assert.equal(readFileSync(join(copy.path, 'film.html'), 'utf8'), film);
     for (const [name, value] of Object.entries(contents)) assert.equal(readFileSync(join(copy.path, name), 'utf8'), value);
     for (const name of excluded) assert.equal(existsSync(join(copy.path, name)), false, name);
+    assert.ok(readFileSync(join(copy.path, 'assets/footage.mov')).equals(footage), 'its footage, whole');
+    for (const name of ['.film/cache/seek-copy.mp4', '.git/pack.bin']) assert.equal(existsSync(join(copy.path, name)), false, name);
   }
   writeFileSync(join(a.path, 'film.html'), 'edited copy');
   writeFileSync(join(a.path, 'assets/take.wav'), 'edited media');
+  /* a clone is a file of its own: the copy's footage changed, the original's and the other copy's are as they were */
+  writeFileSync(join(a.path, 'assets/footage.mov'), 'edited footage');
+  assert.ok(readFileSync(join(source.path, 'assets/footage.mov')).equals(footage));
+  assert.ok(readFileSync(join(b.path, 'assets/footage.mov')).equals(footage));
   assert.equal(readFileSync(join(source.path, 'film.html'), 'utf8'), film);
   assert.equal(readFileSync(join(source.path, 'assets/take.wav'), 'utf8'), contents['assets/take.wav']);
   assert.equal((await listProjects()).length, 4);

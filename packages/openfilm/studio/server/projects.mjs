@@ -19,12 +19,13 @@ import { moveToTrash } from './trash.mjs';
 import { recycle } from './recycle-bin.mjs';
 import { createHmac, randomBytes } from 'node:crypto';
 import { constants, existsSync, mkdirSync, readFileSync, realpathSync, statSync, writeFileSync } from 'node:fs';
-import { cp, mkdir, mkdtemp, readFile, readdir, readlink, rename, rm, stat, symlink, unlink, writeFile } from 'node:fs/promises';
+import { cp, lstat, mkdir, mkdtemp, readFile, readdir, readlink, rename, rm, stat, symlink, unlink, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { EMPTY_FILM } from './film.mjs';
 import { FILM_FILE, filmHtml } from '../../src/film-doc.mjs';
 import { writeAtomic } from './atomic.mjs';
+import { CLONE_MIN_BYTES, cloneFile, eachLimited } from './clone.mjs';
 import { coverAt } from './cover.mjs';
 import { libraryProjects, libraryRoot, requireOutsideInstallation, savedRoot } from '../../src/locations.mjs';
 import { projectMissing } from './project-presence.mjs';
@@ -268,13 +269,23 @@ export async function duplicateProject(/** @type {string} */ id, /** @type {stri
   /* While large media files are copied, the half-built copy is hidden and the Projects list stays available. */
   const staging = await mkdtemp(join(library, '.duplicate-'));
   try {
+    /* On macOS Node's copy writes every byte again even when asked to clone (clone.mjs): the files worth cloning
+       (footage, mostly) are left out of the copy and cloned into its folders after it, at once and taking no room. */
+    /** @type {{ from: string, to: string }[]} */
+    const cloned = [];
     await cp(source.path, staging, {
       recursive: true, preserveTimestamps: true, verbatimSymlinks: true, mode: constants.COPYFILE_FICLONE,
-      filter: (path) => {
+      filter: async (path, to) => {
         const parts = relative(source.path, path).split(sep);
-        return !parts.includes('.git') && !parts.some((part, i) => part === TOOL_DIR && DUPLICATE_SKIP.has(parts[i + 1]));
+        if (parts.includes('.git') || parts.some((part, i) => part === TOOL_DIR && DUPLICATE_SKIP.has(parts[i + 1]))) return false;
+        if (process.platform !== 'darwin') return true;
+        const info = await lstat(path).catch(() => null);
+        if (!info?.isFile() || info.size < CLONE_MIN_BYTES) return true;
+        cloned.push({ from: path, to });
+        return false;
       },
     });
+    await eachLimited(cloned, 4, ({ from, to }) => cloneFile(from, to));
     await rebaseCopyLinks(source.path, staging);
     if (projectMissing(staging)) throw new ProjectError('The project’s film could not be copied.', 409);
     await mkdir(join(staging, TOOL_DIR), { recursive: true });

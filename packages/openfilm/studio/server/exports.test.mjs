@@ -2,6 +2,8 @@ import { test, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { crc32, inflateRawSync } from 'node:zlib';
+import { randomBytes } from 'node:crypto';
 import { homedir, tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -101,18 +103,26 @@ function zipNames(file) {
   }
   return { names, buf };
 }
-/** The entries of a stored zip, by name. */
-function zipEntries(file) {
+/** The entries of a zip, by name: each as it was before it went in (a deflated one inflated). `methods`: how each was written (0 stored, 8 deflated). */
+function zipEntries(file, methods = new Map()) {
   const buf = readFileSync(file);
   const end = buf.lastIndexOf(Buffer.from([0x50, 0x4b, 0x05, 0x06]));
   let at = buf.readUInt32LE(end + 16);
   const out = new Map();
   for (let n = buf.readUInt16LE(end + 10); n > 0; n--) {
     const len = buf.readUInt16LE(at + 28);
-    const size = buf.readUInt32LE(at + 20);
+    const method = buf.readUInt16LE(at + 10);
+    const packed = buf.readUInt32LE(at + 20);
     const local = buf.readUInt32LE(at + 42);
     const data = local + 30 + buf.readUInt16LE(local + 26) + buf.readUInt16LE(local + 28);
-    out.set(buf.subarray(at + 46, at + 46 + len).toString('utf8'), buf.subarray(data, data + size));
+    const name = buf.subarray(at + 46, at + 46 + len).toString('utf8');
+    const bytes = buf.subarray(data, data + packed);
+    assert.equal(buf.readUInt16LE(local + 8), method, `${name}: its own header and the directory name the same method`);
+    assert.equal(buf.readUInt32LE(local + 18), packed, `${name}: its own header and the directory give the same size`);
+    out.set(name, method === 8 ? inflateRawSync(bytes) : bytes);
+    assert.equal(out.get(name).length, buf.readUInt32LE(at + 24), `${name}: the size it says it has`);
+    assert.equal(crc32(out.get(name)), buf.readUInt32LE(at + 16), `${name}: its checksum`);
+    methods.set(name, method);
     at += 46 + len + buf.readUInt16LE(at + 30) + buf.readUInt16LE(at + 32);
   }
   return out;
@@ -1623,6 +1633,49 @@ test('a zip of many files, readable', async () => {
     assert.equal(execFileSync('unzip', ['-p', join(dir, 'out.zip'), 'frames/2.txt']).toString(), 'file 2 ünïcode');
   } catch (e) {
     if (e.code !== 'ENOENT') throw e; // no unzip here: the directory read above is the check
+  }
+});
+
+test('a zip deflates what is written out in full and stores what is compressed already', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'of-zip-deflate-'));
+  try {
+    const page = `<!doctype html>\n${'<section class="scene"><h1>Title</h1><p>words that repeat, as markup does</p></section>\n'.repeat(400)}`;
+    const data = JSON.stringify({ cues: Array.from({ length: 500 }, (_, i) => ({ start: i, end: i + 1, text: `line ${i}` })) });
+    /* bytes with no pattern, as footage has: deflating gains nothing, whatever the name */
+    const noise = randomBytes(300_000);
+    writeFileSync(join(dir, 'film.html'), page);
+    writeFileSync(join(dir, 'clip.mp4'), noise);
+    writeFileSync(join(dir, 'noise.txt'), noise);
+    writeFileSync(join(dir, 'empty.json'), '');
+    let told = 0;
+    await zipFiles(join(dir, 'out.zip'), [
+      { name: 'p/film.html', file: join(dir, 'film.html') },
+      { name: 'p/clip.mp4', file: join(dir, 'clip.mp4') },
+      { name: 'p/noise.txt', file: join(dir, 'noise.txt') },
+      { name: 'p/empty.json', file: join(dir, 'empty.json') },
+      { name: 'p/DATA.JSON', data: Buffer.from(data) },
+      { name: 'p/markup.mp4', data: Buffer.from(page) },
+    ], undefined, (n) => { told = n; });
+    assert.equal(told, page.length * 2 + noise.length * 2 + data.length, 'told in bytes of the files, not of the zip');
+    const methods = new Map();
+    const entries = zipEntries(join(dir, 'out.zip'), methods);
+    assert.equal(entries.get('p/film.html').toString(), page);
+    assert.ok(entries.get('p/clip.mp4').equals(noise));
+    assert.ok(entries.get('p/noise.txt').equals(noise));
+    assert.equal(entries.get('p/empty.json').length, 0);
+    assert.equal(entries.get('p/DATA.JSON').toString(), data);
+    assert.deepEqual(Object.fromEntries(methods), { 'p/film.html': 8, 'p/clip.mp4': 0, 'p/noise.txt': 0, 'p/empty.json': 0, 'p/DATA.JSON': 8, 'p/markup.mp4': 0 },
+      'deflated by its name when it gains from it; media, and text that gains nothing, as they are');
+    const stored = page.length * 2 + noise.length * 2 + data.length;
+    assert.ok(readFileSync(join(dir, 'out.zip')).length < stored - page.length * 0.8, 'the page takes a fraction of its size');
+    try {
+      assert.match(execFileSync('unzip', ['-t', join(dir, 'out.zip')]).toString(), /No errors detected/);
+      assert.equal(execFileSync('unzip', ['-p', join(dir, 'out.zip'), 'p/film.html']).toString(), page);
+    } catch (e) {
+      if (e.code !== 'ENOENT') throw e; // no unzip here: the entries read above are the check
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
   }
 });
 
