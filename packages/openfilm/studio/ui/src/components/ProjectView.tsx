@@ -90,6 +90,7 @@ import { clipThumbId, overridesToken } from '@/lib/thumb-frame';
 import { useLoadedThumbs } from '@/lib/use-loaded-thumbs';
 import { stillHasSmallCopy, useStillThumbs } from '@/lib/still-thumbs';
 import { stripCell, stripHas, stripShots, useThumbStrips } from '@/lib/thumb-strips';
+import { versionOf } from '@/lib/thumb-versions';
 import { droppedOverrides, overrideTarget, undoneFields, type DroppedEdits, type PersonEdit } from '@/lib/dropped-overrides';
 import { filmFrameBox, type FilmFrameId } from '@/lib/film-frame';
 import { canvasFor, firstPictureSize, fitToCanvas } from '@/lib/canvas-fit';
@@ -4486,6 +4487,8 @@ export function ProjectView({ projectId, onProject }: {
   const shownThumbs = React.useMemo(() => {
     if (!strips.size || !thumbView) return loadedThumbs;
     const out = new Map<string, string>();
+    /* each clip drawn from a strip, and the version of its file the strip stands for */
+    const current = new Map<string, string>();
     const span = thumbView.toMs - thumbView.fromMs;
     const fromMs = Math.max(0, thumbView.fromMs - span);
     const toMs = thumbView.toMs + span;
@@ -4495,14 +4498,24 @@ export function ProjectView({ projectId, onProject }: {
       if (!strip) continue;
       const speed = b.speed && b.speed > 0 ? b.speed : 1;
       const trimMs = (b.anchor?.trimFrom ?? 0) * 1000;
-      const version = mtimeOf.get(b.src) ?? 0;
-      for (const i of stripShots(strip.times, trimMs, trimMs + (b.endMs - b.startMs) * speed)) out.set(`${version}:${clipThumbId(b)}@${strip.times[i]}#v`, stripCell(strip, i));
+      /* the clip's version, as its own frames' keys say it (thumbs, above) */
+      const token = b.clipId ? tweakTokens.get(b.clipId) ?? '' : '';
+      const version = `${mtimeOf.get(b.src) ?? 0}${token ? `.${token}` : ''}:${clipThumbId(b)}`;
+      current.set(clipThumbId(b), version);
+      for (const i of stripShots(strip.times, trimMs, trimMs + (b.endMs - b.startMs) * speed)) out.set(`${version}@${strip.times[i]}#v`, stripCell(strip, i));
     }
     if (!out.size) return loadedThumbs;
-    for (const [key, url] of loadedThumbs) out.set(key, url);
+    for (const [key, url] of loadedThumbs) {
+      /* a frame of the file as it was before (kept while none of the new file's is asked for by itself: its strip
+         has every cell) is not drawn beside the new strip's pictures */
+      const of = versionOf(key);
+      const now = of ? current.get(of.clip) : undefined;
+      if (now !== undefined && of!.version !== now) continue;
+      out.set(key, url);
+    }
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loadedThumbs, strips, thumbView, timelineTracks, mtimeOf]);
+  }, [loadedThumbs, strips, thumbView, timelineTracks, mtimeOf, tweakTokens]);
   const posters = React.useMemo(() => {
     const out: Record<string, string> = {};
     for (const b of blocksRef.current) {

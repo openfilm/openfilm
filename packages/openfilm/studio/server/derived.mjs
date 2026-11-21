@@ -19,7 +19,7 @@ import { clipKind } from '../../src/film-doc.mjs';
 import { hasAlpha, keyFrameGap } from '../../src/seekable.mjs';
 import { readable } from './files.mjs';
 import { TOOL_DIR } from './projects.mjs';
-import { writeAtomic } from './atomic.mjs';
+import { replaceFile, writeAtomic } from './atomic.mjs';
 
 export class MediaError extends Error {
   /** @param {string} message @param {number} status */
@@ -247,8 +247,9 @@ const stripFailed = new Set();
 
 /** A strip kept at `picture` with its index at `list`; null when it is not (the index is written last). */
 const keptStrip = async (/** @type {string} */ picture, /** @type {string} */ list) => {
-  const index = await readFile(list, 'utf8').then((t) => /** @type {StripIndex} */ (JSON.parse(t)), () => null);
-  return index && existsSync(picture) ? { index, picture } : null;
+  /* an index cut short (a disk that filled, a folder synced halfway) is no index: the strip is made again */
+  const index = await readFile(list, 'utf8').then((t) => /** @type {StripIndex} */ (JSON.parse(t))).catch(() => null);
+  return index && Array.isArray(index.times) && existsSync(picture) ? { index, picture } : null;
 };
 
 /**
@@ -287,8 +288,11 @@ function makeStrip(abs, rel, picture, list, plan, keys, chip = []) {
         at.forEach((t, i) => { if (picked.length < most && t - last >= plan.step * 0.9) { picked.push(i); last = t; } });
         const unread = ['-discard:v', 'nokey', '-skip_frame', 'nokey'];
         const these = picked.map((i) => `eq(n\\,${i})`).join('+');
+        /* as many pictures as were picked, or the list is not of the frames the decoder gives (a key frame the file
+           says to leave out, another stream than the one ffmpeg reads): each would stand at another one's moment */
         const ran = picked.length
-          ? await (chip.length ? run([...chip, ...unread], these).catch(() => run(unread, these)) : run(unread, these)).then(() => true, () => false)
+          ? await (chip.length ? run([...chip, ...unread], these).catch(() => run(unread, these)) : run(unread, these))
+            .then((log) => said(log).length === picked.length, () => false)
           : false;
         if (ran) times = picked.map((i) => Math.max(0, Math.round(at[i] * 1000)));
         /* a file whose key frames cannot be listed or read apart: decoded as they come, the others skipped, each at
@@ -301,7 +305,7 @@ function makeStrip(abs, rel, picture, list, plan, keys, chip = []) {
         times = said(await (chip.length ? run(chip, apart, STRIP_SLOTS, true).catch(light) : light()));
       }
       if (!times.length || !existsSync(part)) throw new MediaError(`${rel}: no picture could be read from it`, 422);
-      await rename(part, picture);
+      await replaceFile(part, picture);
       /** @type {StripIndex} */
       const index = { cols: STRIP_COLS, rows: Math.ceil(times.length / STRIP_COLS), w: plan.w, h: plan.h, times };
       await writeAtomic(list, Buffer.from(JSON.stringify(index)));
@@ -322,7 +326,9 @@ async function keyTimes(/** @type {string} */ abs) {
   for (const line of listed.toString().split('\n')) {
     const [pts, flags] = line.split(',');
     const t = Number(pts);
-    if (flags?.startsWith('K') && Number.isFinite(t)) out.push(t);
+    /* `K`: a key frame; `D` after it: one the file says to leave out (before an edit's start), which is decoded and
+       not given */
+    if (flags?.startsWith('K') && flags[1] !== 'D' && Number.isFinite(t)) out.push(t);
   }
   return out.sort((a, b) => a - b);
 }

@@ -1207,8 +1207,10 @@ function nearOf(kind, max, t, only, exact, ahead = WAKE_AHEAD) {
     }
   }
   const keep = new Set(wanted.slice(0, most));
-  /* a video on at t is woken at the frame it shows there; one coming up, where it is sought ahead of its cut (getReady) */
-  for (const c of keep) wake(c, kind !== 'video' ? null : t >= c.at ? sourceAt(c.span, Math.min(Math.max(0, t - c.at), c.span.length), c.row) : cueOf(c));
+  /* a video on at t is woken at the frame it shows there; one coming up, where it is sought ahead of its cut
+     (getReady) while a person watches, and at its first frame for an exact frame (an export never runs up to a cut:
+     woken anywhere else, its first frame was one more seek, straight after its file loaded) */
+  for (const c of keep) wake(c, kind !== 'video' ? null : exact || t >= c.at ? sourceAt(c.span, Math.min(Math.max(0, t - c.at), c.span.length), c.row) : cueOf(c));
   /* a still moment asked for while the files of another were still loading (a drag that moved on, a seek that took
      another's place, the neighbors woken once the last one rested): those are let go at once. Left to load, each still
      opens its file and decodes a frame nobody sees, and the frame wanted now waits behind them: a drag across many
@@ -1785,7 +1787,9 @@ async function draw(t, live, play = null, how = null) {
     complete = live && turn === watched && drawn.every((ready) => ready !== false);
     partial = drawn.includes(LEFT_OUT);
     if (playing && turn === watched) idleFootage(t);
-    if (live && !playing) return complete;
+    /* a drag's frame with a page left out is said so (`partial`, not true): whoever asked may still have the whole
+       picture of the moment to show (Studio's bridge, a render of the stretch) */
+    if (live && !playing) return complete && partial ? 'partial' : complete;
   } finally {
     if (!live) hideRenders();
     for (const c of coming) if (c.coming === turn) c.coming = 0;

@@ -85,6 +85,10 @@ test('a video\'s strip: pictures from all along it in one image, from its key fr
   const before = statSync(made.picture).mtimeMs;
   assert.deepEqual((await strip(root, 'assets/keys.mp4')).index, made.index);
   assert.equal(statSync(made.picture).mtimeMs, before);
+  /* its index cut short (a disk that filled): the strip is made again, not refused for ever */
+  const list = join(root, '.film', 'cache', 'strips', readdirSync(join(root, '.film', 'cache', 'strips')).find((name) => name.endsWith('.json')));
+  writeFileSync(list, '{"cols":12,');
+  assert.deepEqual((await strip(root, 'assets/keys.mp4')).index, made.index);
 });
 
 test('a video whose key frames are far apart has a first strip of those at once, and a closer one made behind it', { skip: !hasFfmpeg && 'no ffmpeg', timeout: 60_000 }, async () => {

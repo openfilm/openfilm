@@ -102,6 +102,8 @@
   const SCRUB_SETTLE_MS = 120;
   const pendingFrame = Symbol('pending frame');
   const supersededFrame = Symbol('superseded frame');
+  /* a drag's frame drawn with a page left out (the timeline's watch says 'partial') */
+  const partialFrame = Symbol('partial frame');
   /* a load of the film behind the one shown: the editor swaps it in at its first picture, so that picture is waited
      for whole (its videos' files loaded, sought there), up to this long; let go sooner, it swapped in black */
   const BEHIND_WAIT_MS = 20_000;
@@ -164,7 +166,7 @@
       try {
         const wait = behind ? BEHIND_WAIT_MS : seek?.scrub && watch ? SCRUB_DRAW_MS : FRAME_WAIT_MS;
         const waiting = [
-          drawingFrame.then((ready) => ready !== false),
+          drawingFrame.then((ready) => (ready === 'partial' ? partialFrame : ready !== false)),
           new Promise((done) => { timer = setTimeout(() => done(pendingFrame), wait); }),
         ];
         if (watch && seek && !behind) {
@@ -175,11 +177,13 @@
           else waiting.push(new Promise((done) => { yieldScrubDraw = () => done(supersededFrame); }));
         }
         completed = await Promise.race(waiting);
-        if (completed !== true && seek?.publish) throw new Error('The new film did not draw its first frame in time.');
+        if (completed !== true && completed !== partialFrame && seek?.publish) throw new Error('The new film did not draw its first frame in time.');
       } finally { clearTimeout(timer); clearTimeout(cacheTimer); yieldLiveDraw = null; yieldScrubDraw = null; }
       if (seek) {
-        if (completed === true) {
-          seek.liveDrawn = true;
+        if (completed === true || completed === partialFrame) {
+          /* a drag's frame with a page left out is drawn, and is not the whole picture: a render of the moment may
+             still take its place (tryCachedSeek), which a whole frame never lets it */
+          if (completed === true) seek.liveDrawn = true;
           if (!seek.cached && (!seek.scrub || isCurrent(seek))) seekResult(seek, true);
         } else if (completed === pendingFrame) {
           if (!seek.cached && (!seek.scrub || isCurrent(seek))) seekResult(seek, false);
@@ -188,7 +192,7 @@
             void drawingFrame.then((ready) => {
               if (!isCurrent(seek)) return;
               if (ready === false) { failSeek(seek); return; }
-              seek.liveDrawn = true;
+              if (ready !== 'partial') seek.liveDrawn = true;
               if (!seek.cached) post({ type: 'seek-ready', t, seq: seek.seq, seekSeq: seek.seekSeq });
             }, () => failSeek(seek));
           }

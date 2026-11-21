@@ -535,7 +535,10 @@ export async function projectFiles(root, parts, skip) {
  */
 async function checkProjectMedia(root, files) {
   const byName = new Map(files.map(({ name, file }) => [name, file]));
-  const foldedNames = new Map(files.map(({ name, file }) => [name.toLowerCase(), file]));
+  /* the same name whatever its case and however its accents are written (a disk may keep `é` as one character or as
+     two, and opens either) */
+  const folded = (/** @type {string} */ name) => name.normalize('NFC').toLowerCase();
+  const foldedNames = new Map(files.map(({ name, file }) => [folded(name), file]));
   const missing = new Set();
   const seen = new Set();
   /** @type {string[]} */
@@ -557,7 +560,7 @@ async function checkProjectMedia(root, files) {
         if (!nested && kind !== 'sound' && kind !== 'video') continue;
         /* A case-insensitive volume can open a spelling different from the directory entry. Only accept that
            spelling if it also resolves on the exporting machine, and is going to be copied. */
-        const copied = foldedNames.get(path.toLowerCase());
+        const copied = foldedNames.get(folded(path));
         if (!byName.has(path) && copied) {
           const local = inProject(root, path);
           const actual = local && await realpath(local).catch(() => null);

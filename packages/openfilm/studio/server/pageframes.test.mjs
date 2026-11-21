@@ -298,6 +298,34 @@ test('pages\' pictures are drawn a few at once where the machine has the cores: 
   assert.ok(Date.now() - t0 >= 3000);
 });
 
+test('a page kept open is not what a file it loads has become: a frame and its facts are of the file as it is now', async () => {
+  const { project } = await (await api('/api/projects', { method: 'POST', body: { path: join(scratch, 'Kept open') } })).json();
+  const scene = (seconds, color) => writeFileSync(join(project.path, 'scene.js'), `document.body.style.background = '${color}'; window.film = { duration: ${seconds}, frame() {} };`);
+  scene(5, '#a00');
+  writeFileSync(join(project.path, 'p.html'), '<!doctype html><body style="margin:0"><script src="scene.js"></script></body>');
+  const media = (q) => api(`/api/projects/${project.id}/media?path=p.html&${q}`);
+  const facts = async () => (await media('what=probe')).json();
+  /* its poster: the page is open, and what it says of itself is kept */
+  assert.equal((await media('what=poster')).status, 200);
+  assert.equal((await facts()).duration, 5);
+  const red = Buffer.from(await (await media('what=frame&ms=1000&w=160')).arrayBuffer());
+  /* the script it loads changes: its length, and its look */
+  await new Promise((r) => setTimeout(r, 30));
+  scene(8, '#00a');
+  assert.equal((await facts()).duration, 8);
+  /* a frame never drawn before knows only the page's own file, and finds the page still open from before: drawn
+     on it, it showed the old look, and the old length was kept as the page's */
+  const blue = Buffer.from(await (await media('what=frame&ms=2000&w=160')).arrayBuffer());
+  assert.notDeepEqual(blue, red, 'drawn as the script is now');
+  assert.equal((await facts()).duration, 8, 'its facts are still the ones of the script as it is');
+  /* what is kept of a page, cut short (a disk that filled): read again, not an error for ever */
+  const kept = join(project.path, '.film', 'cache', 'pagefacts');
+  for (const name of readdirSync(kept)) writeFileSync(join(kept, name), '{"facts":');
+  const again = await media('what=probe');
+  assert.equal(again.status, 200);
+  assert.equal((await again.json()).duration, 8);
+});
+
 test('a page that is long in failing to say its facts holds no other page\'s picture behind it', { timeout: 60_000 }, async () => {
   const { project } = await (await api('/api/projects', { method: 'POST', body: { path: join(scratch, 'Apart') } })).json();
   /* its film never comes ready: the browser waits for it until it gives it up, a quarter of a minute */

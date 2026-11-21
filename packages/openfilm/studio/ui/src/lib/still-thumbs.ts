@@ -54,8 +54,9 @@ export function useStillThumbs(projectId: string, wanted: ReadonlyMap<string, nu
       /* ahead of the frames asked for one by one: one picture fills every cell of its clips */
       void mediaImage(url, () => wantedRef.current.get(path) === version, 'visible').then((ok) => {
         asking.current.delete(id);
-        /* not wanted any more at its turn (null), or another project's */
-        if (ok === null || project.current !== projectId) return;
+        /* not wanted any more at its turn (null), another project's, or the file as it was before (it changed while
+           this was loading, and the newer one may be in already: an old answer does not take its place) */
+        if (ok === null || project.current !== projectId || wantedRef.current.get(path) !== version) return;
         have.current.set(path, version);
         const from = ok ? url : fileRef.current(path);
         setShown((cur) => (cur.get(path) === from ? cur : new Map(cur).set(path, from)));

@@ -1736,6 +1736,19 @@ test('a project\'s export takes the files of a linked folder the film uses, as f
   assert.ok(!existsSync(join(copied, 'assets', 'linked', 'unused.mp4')) && !existsSync(join(copied, 'assets', 'linked', 'day2', 'unused.wav')));
 });
 
+test('a project export takes a timeline file whose name the disk keeps with its accents written another way', async (t) => {
+  const dir = fullProject();
+  /* on the disk as a letter and an accent after it; in the film as the one character an agent types */
+  const stored = 'assets/audio/cafe\u0301.mp3';
+  const written = 'assets/audio/caf\u00e9.mp3';
+  mkdirSync(dirname(join(dir, stored)), { recursive: true });
+  writeFileSync(join(dir, stored), 'a recording');
+  if (!existsSync(join(dir, written)) || readdirSync(dirname(join(dir, stored))).includes('caf\u00e9.mp3')) return t.skip('this disk keeps a name one way only');
+  writeFileSync(join(dir, 'film.html'), filmHtml({ tracks: [{ clips: [{ src: written, id: 'voice', time: [0, 1] }] }] }));
+  const zipped = await exported({ kind: 'project' }, 'Accents', dir);
+  assert.ok([...zipEntries(zipped.out).keys()].some((name) => name.normalize('NFC') === `Accents/${written}`), 'the recording is in the export');
+});
+
 test('a project export reports offline audio sources before producing a ZIP or folder', async () => {
   const dir = fullProject();
   const library = join(dir, '..', 'Recordings');

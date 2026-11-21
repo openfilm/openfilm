@@ -103,6 +103,29 @@ test('a drag that rests on a cold page has it opened there, and the moment drawn
   assert.deepEqual(prepared, [6]);
 });
 
+test('a drag\'s frame with a page left out does not keep a render of the moment from showing; a whole frame does', async () => {
+  const page = filmPage();
+  await page.settle();
+  const lookups = [];
+  /* a render has this stretch: the editor says the drag cannot be drawn whole, and looks the moment up in it */
+  page.window.__filmEditor.canScrub = () => false;
+  page.window.__filmEditor.showCachedSeek = (t, isCurrent) => new Promise((resolve) => lookups.push({ t, isCurrent, resolve }));
+  page.send({ type: 'seek', t: 4, seq: 1, scrub: true });
+  await page.settle();
+  assert.deepEqual(lookups.map((l) => l.t), [4]);
+  /* drawn at once without its page: said drawn, and the render may still take its place */
+  page.drawn[0].done('partial');
+  await page.settle();
+  assert.equal(page.said.some((m) => m.type === 'seeked' && m.seq === 1 && m.drawn === true), true);
+  assert.equal(lookups[0].isCurrent(), true, 'the render of the moment is still wanted');
+  /* the next moment drawn whole (its pages were open): no older picture goes over it */
+  page.send({ type: 'seek', t: 5, seq: 2, scrub: true });
+  await page.settle();
+  page.drawn[1].done(true);
+  await page.settle();
+  assert.equal(lookups[1].isCurrent(), false);
+});
+
 test('a drag can draw its own frame while a superseded playback frame is still pending', async () => {
   const page = filmPage();
   await page.settle();

@@ -108,6 +108,8 @@ export function useThumbStrips(projectId: string, wanted: ReadonlyMap<string, nu
   const asking = React.useRef(new Set<string>());
   const tries = React.useRef(new Map<string, number>());
   const timers = React.useRef(new Set<ReturnType<typeof setTimeout>>());
+  /* false once the timeline is gone: nothing is asked for again after it */
+  const alive = React.useRef(true);
   const project = React.useRef(projectId);
 
   const ask = React.useCallback((path: string, version: number, again = 0) => {
@@ -118,6 +120,7 @@ export function useThumbStrips(projectId: string, wanted: ReadonlyMap<string, nu
     const of = project.current;
     const address = (what: string, more = '') => `/api/projects/${encodeURIComponent(of)}/media?what=${what}&path=${encodeURIComponent(path)}&v=${version}${more}`;
     const later = (ms: number, next: number) => {
+      if (!alive.current) return;
       const timer = setTimeout(() => {
         timers.current.delete(timer);
         if (wantedRef.current.get(path) === version) ask(path, version, next);
@@ -143,7 +146,7 @@ export function useThumbStrips(projectId: string, wanted: ReadonlyMap<string, nu
           if (!(await mediaImage(url, undefined, again ? 'normal' : 'visible'))) throw new Error('no picture');
           if (project.current !== of) return;
           have.current.set(path, { version, url, whole: whole || !closer });
-          if (wantedRef.current.get(path) === version) setStrips((cur) => new Map(cur).set(path, { url, cols: index.cols, rows: index.rows, w: index.w, h: index.h, times: index.times, version, whole: whole || !closer }));
+          if (alive.current && wantedRef.current.get(path) === version) setStrips((cur) => new Map(cur).set(path, { url, cols: index.cols, rows: index.rows, w: index.w, h: index.h, times: index.times, version, whole: whole || !closer }));
         } else if (!closer && !same.whole) have.current.set(path, { ...same, whole: true });
         tries.current.delete(id);
       } catch {
@@ -173,6 +176,13 @@ export function useThumbStrips(projectId: string, wanted: ReadonlyMap<string, nu
     }
     for (const [path, version] of wanted) ask(path, version);
   }, [projectId, wanted, ask]);
-  React.useEffect(() => () => { for (const timer of timers.current) clearTimeout(timer); }, []);
+  React.useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+      for (const timer of timers.current) clearTimeout(timer);
+      timers.current.clear();
+    };
+  }, []);
   return strips;
 }

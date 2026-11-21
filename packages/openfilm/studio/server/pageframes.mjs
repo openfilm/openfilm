@@ -75,8 +75,14 @@ const PICTURE_LANES = Math.max(1, Math.min(3, Math.floor(availableParallelism() 
 const MOST = { pictures: PICTURE_LANES, facts: 1 };
 /** how many of each line are at work now */
 const atWork = { pictures: 0, facts: 0 };
-/** @type {{ line: 'pictures' | 'facts', key: string, go: () => void }[]} what waits its turn, in the order asked */
+/** @type {{ line: 'pictures' | 'facts', key: string, alone: boolean, go: () => void }[]} what waits its turn, in the order asked */
 const waiting = [];
+/** how many wait or are at work that must be drawn alone (see withPage): nothing else begins meanwhile */
+let solo = 0;
+/** how many uses of a page have begun: one that began alone and ended with this unchanged had the browser to itself */
+let begun = 0;
+/** @type {WeakMap<FilmPage, number>} when each open page was opened (ms): what it shows is of its files as they were then */
+const openedAt = new WeakMap();
 /** @type {Set<string>} the pages in use now (by keyOf): not used by another, and not closed to make room */
 const inUse = new Set();
 /** how many times the browser was closed for a page that took too long: what was at work beside it is drawn again */
@@ -85,6 +91,21 @@ let givenUp = 0;
 let idle = null;
 
 export class PageFrameError extends Error {}
+
+/** What a kept file of JSON says; null when it is not there or cannot be read as one (cut short, written by hand). */
+const readJson = (/** @type {string} */ path) => readFile(path, 'utf8').then((t) => JSON.parse(t)).catch(() => null);
+
+/**
+ * Whether each of `files` (project relative) is as it was at `since` (ms): none written or put there after it, none
+ * gone. A page kept open is found again by its own version, or by the files it was known to load: one it loads that
+ * changed since it was opened is not in that, and what the page shows and says is then of the file as it was.
+ */
+async function unchangedSince(/** @type {string} */ root, /** @type {string[]} */ files, /** @type {number} */ since) {
+  const infos = await Promise.all(files.map((f) => stat(join(root, f)).catch(() => null)));
+  /* by the whole millisecond: `since` is one (the clock's), a file's time has a fraction, and a file written in the
+     millisecond the page was opened in is the one the page read */
+  return infos.every((info) => info != null && Math.floor(Math.max(info.mtimeMs, info.ctimeMs)) <= since);
+}
 
 /** The whole film, as the timeline page plays it (served on the film origin beside the project's files). */
 export const FILM_PAGE = FILM_FILE;
@@ -114,7 +135,8 @@ export async function pageFrame(root, base, rel, ms, width, overrides = null, si
   const file = join(dir, `${key}.${clear ? 'webp' : 'jpg'}`);
   /* a frame is good while every file the page loaded to draw it is as it was then: the page, and its styles, code,
      fonts, pictures (a page's look changes with a stylesheet it shares as much as with itself) */
-  const known = await readFile(join(dir, `${key}.json`), 'utf8').then((t) => /** @type {string[]} */ (JSON.parse(t).files), () => null);
+  const listed = (await readJson(join(dir, `${key}.json`)))?.files;
+  const known = Array.isArray(listed) ? /** @type {string[]} */ (listed) : null;
   const files = known?.includes(rel) ? known : [rel];
   const version = await stampOf(root, files);
   if (known && version === await readFile(join(dir, `${key}.stamp`), 'utf8').catch(() => '')) {
@@ -139,20 +161,29 @@ export async function pageFrame(root, base, rel, ms, width, overrides = null, si
     if (rel === FILM_PAGE) await filmCopies(root, base, info);
     /* a page drawn with tweaks is one of its own: the page kept open for another clip of the same file has none */
     const drawn = tweaks ? `${version}:${createHash('sha256').update(tweaks).digest('hex').slice(0, 12)}` : version;
-    const { jpeg, duration, loaded, facts } = await draw(pageUrl(base, rel), ms, w, drawn, base, tweaks ? overrides : null, laid ? size : null, clear).catch((e) => {
+    const drawOnce = (/** @type {boolean} */ anew) => draw(pageUrl(base, rel), ms, w, drawn, base, tweaks ? overrides : null, laid ? size : null, clear, anew).catch((e) => {
       if (e instanceof BrowserMemoryError) heavy.set(`${root}\0${rel}`, { version: pageVersion, error: e });
       failures.set(id, { error: e, at: Date.now() });
       if (failures.size > 500) failures.delete(failures.keys().next().value ?? '');
       throw e;
     });
+    const depsOf = (/** @type {string[]} */ loaded) => [...new Set([rel, ...loaded])].filter((f) => existsSync(join(root, f)));
+    let out = await drawOnce(false);
+    /* drawn on a page opened before a file it loads was changed (see unchangedSince): opened again, once */
+    let current = await unchangedSince(root, depsOf(out.loaded), out.since);
+    if (!current && existsSync(root)) {
+      out = await drawOnce(true);
+      current = await unchangedSince(root, depsOf(out.loaded), out.since);
+    }
+    const { jpeg, duration, loaded, facts } = out;
     /* the project's folder went while the frame was drawn (deleted, moved): nothing is written where it was */
     if (!existsSync(root)) return jpeg;
-    const deps = [...new Set([rel, ...loaded])].filter((f) => existsSync(join(root, f)));
+    const deps = depsOf(loaded);
     await mkdir(dir, { recursive: true });
     await writeAtomic(file, jpeg);
     await writeAtomic(join(dir, `${key}.json`), JSON.stringify({ files: deps }));
     /* its facts, learnt on the way: the editor asks them of every page, and need not have it opened again for them */
-    if (facts && rel !== FILM_PAGE && !tweaks) await keepFacts(root, rel, { facts }, deps).catch(() => {});
+    if (facts && current && rel !== FILM_PAGE && !tweaks) await keepFacts(root, rel, { facts }, deps).catch(() => {});
     if (rel === FILM_PAGE) {
       /* the whole film's length, learnt on the way: the projects list shows it (projects.mjs filmDuration) */
       if (Number.isFinite(duration)) await writeAtomic(join(root, TOOL_DIR, 'cache', FILM_DURATION), JSON.stringify({ film: `${info.mtimeMs}:${info.size}`, duration }));
@@ -301,14 +332,14 @@ async function closeBrowser() {
  * relative (`base`: where the project is served), so the frame is known stale when one of them changes. `clear`: on
  * nothing rather than black, as a WebP.
  */
-function draw(/** @type {string} */ url, /** @type {number} */ ms, /** @type {number} */ w, /** @type {string} */ version, /** @type {string} */ base, /** @type {object[] | null} */ overrides = null, /** @type {{ w: number, h: number } | null} */ size = null, clear = false) {
+function draw(/** @type {string} */ url, /** @type {number} */ ms, /** @type {number} */ w, /** @type {string} */ version, /** @type {string} */ base, /** @type {object[] | null} */ overrides = null, /** @type {{ w: number, h: number } | null} */ size = null, clear = false, anew = false) {
   /* a page is opened once for its poster and its thumbnails, at the poster's width, and a smaller picture is taken of
      it there: opened again at each width asked, every page of a film was loaded twice before its first thumbnail */
   const open = Math.max(w, POSTER_W);
   const shot = (/** @type {FilmPage} */ page, /** @type {{ format: 'jpeg' | 'webp', quality: number }} */ how) => page.capture({
     ...how, ...(open === w ? {} : { width: w * (page.meta.width / (size?.w ?? 1920)) }),
   });
-  return withPage(url, open, version, size, async (page) => {
+  return withPage(url, open, version, size, async (page, since) => {
     const duration = lengthOf(page);
     const end = duration != null ? Math.max(0, duration - 1e-3) : Infinity;
     /* a poster: the fullest of a few moments around the middle (a page's middle is often a scene's first, faded-in
@@ -338,10 +369,10 @@ function draw(/** @type {string} */ url, /** @type {number} */ ms, /** @type {nu
         }).catch(() => {});
       }
     }
-    return { jpeg: /** @type {Buffer} */ (jpeg), duration, loaded: await loadedFiles(page, base),
+    return { jpeg: /** @type {Buffer} */ (jpeg), duration, loaded: await loadedFiles(page, base), since,
       /* what the page says of itself, when it is open as it is on its own (no clip's size): kept for whoever asks */
       facts: size ? null : factsOf(page) };
-  });
+  }, 'pictures', undefined, anew);
 }
 
 /** What a page says of itself (see pageFacts). */
@@ -399,12 +430,21 @@ export async function pageFacts(root, base, rel) {
      would say what it said then. The page its pictures are drawn on, when one is open (the same files, the same
      width): not opened a second time for this. At its turn it may have been learnt meanwhile (a picture of the page
      was drawn): then the page is not asked at all */
-  const asked = withPage(pageUrl(base, rel), POSTER_W, stamp, null, async (page) => ({ facts: /** @type {object} */ (factsOf(page)), loaded: /** @type {string[] | null} */ (await loadedFiles(page, base)) }), 'facts',
-    async () => { const now = await readFacts(root, rel); return now && 'facts' in now ? { facts: now.facts, loaded: /** @type {string[] | null} */ (null) } : undefined; },
-  ).then(async ({ facts, loaded }) => {
-    if (loaded) await keepFacts(root, rel, { facts }, loaded).catch(() => {});
-    return facts;
-  }, async (e) => {
+  const ask = (/** @type {boolean} */ anew) => withPage(pageUrl(base, rel), POSTER_W, stamp, null,
+    async (page, since) => ({ facts: /** @type {object} */ (factsOf(page)), loaded: /** @type {string[] | null} */ (await loadedFiles(page, base)), since }), 'facts',
+    async () => { const now = await readFacts(root, rel); return now && 'facts' in now ? { facts: now.facts, loaded: /** @type {string[] | null} */ (null), since: 0 } : undefined; }, anew);
+  const asked = (async () => {
+    const present = (/** @type {string[]} */ loaded) => [...new Set([rel, ...loaded])].filter((f) => existsSync(join(root, f)));
+    let said = await ask(false);
+    /* said by a page opened before a file it loads was changed (see unchangedSince): asked of it opened again, once */
+    let current = !said.loaded || await unchangedSince(root, present(said.loaded), said.since);
+    if (!current) {
+      said = await ask(true);
+      current = !said.loaded || await unchangedSince(root, present(said.loaded), said.since);
+    }
+    if (said.loaded && current) await keepFacts(root, rel, { facts: said.facts }, said.loaded).catch(() => {});
+    return said.facts;
+  })().catch(async (e) => {
     /* the page's own doing (FrameError: no film in it, a file it asks for not there), not the browser's (it could not
        start, it ran out of memory, it was closed under it): those are tried again */
     if (e instanceof FrameError) await keepFacts(root, rel, { failed: String(e.message ?? e), at: Date.now() }, []).catch(() => {});
@@ -419,7 +459,7 @@ export async function pageFacts(root, base, rel) {
 const factsFile = (/** @type {string} */ root, /** @type {string} */ rel) => join(root, TOOL_DIR, 'cache', 'pagefacts', `${createHash('sha256').update(rel).digest('hex').slice(0, 24)}.json`);
 /** What the files a page's kept facts were read with are now (the page alone when none are kept), as one text. */
 async function factsStamp(/** @type {string} */ root, /** @type {string} */ rel) {
-  const kept = await readFile(factsFile(root, rel), 'utf8').then((t) => JSON.parse(t), () => null);
+  const kept = await readJson(factsFile(root, rel));
   return stampOf(root, Array.isArray(kept?.files) && kept.files.includes(rel) ? kept.files : [rel]);
 }
 /**
@@ -429,7 +469,7 @@ async function factsStamp(/** @type {string} */ root, /** @type {string} */ rel)
  * @param {string} root @param {string} rel @returns {Promise<{ facts: object } | { failed: string } | null>}
  */
 async function readFacts(root, rel) {
-  const kept = await readFile(factsFile(root, rel), 'utf8').then((t) => JSON.parse(t), () => null);
+  const kept = await readJson(factsFile(root, rel));
   if (!kept || !Array.isArray(kept.files) || !kept.files.includes(rel) || kept.stamp !== await stampOf(root, kept.files)) return null;
   if (kept.facts) return { facts: kept.facts };
   return typeof kept.failed === 'string' && Date.now() - Number(kept.at) < FACTS_FAILED_MS ? { failed: kept.failed } : null;
@@ -442,8 +482,10 @@ async function keepFacts(/** @type {string} */ root, /** @type {string} */ rel, 
   await mkdir(join(name, '..'), { recursive: true });
   await writeAtomic(name, JSON.stringify({ ...what, files: deps, stamp: await stampOf(root, deps) }));
 }
-/** How long a page that could not say its facts is not asked again, its file as it was. */
-const FACTS_FAILED_MS = 10 * 60_000;
+/** How long a page that could not say its facts is not asked again, its file as it was: a minute. Not longer: what it
+    waits for is often a file about to be written beside it (a script, its data), which the page's own file does not
+    say, and nothing on screen waits for a page's facts. */
+const FACTS_FAILED_MS = 60_000;
 /** @type {Map<string, Promise<object>>} the facts being read now, by project, page and version: asked again meanwhile, read once */
 const factsAsked = new Map();
 
@@ -473,15 +515,19 @@ const lengthOf = (/** @type {FilmPage} */ page) => {
  * (see MOST), one use of a page at a time. A page that failed, or never finished a frame, is not kept: the next
  * request opens it fresh.
  * @template T @param {string} url @param {number} w @param {string} version @param {{ w: number, h: number } | null} size
- * @param {(page: FilmPage) => Promise<T>} use @param {'pictures' | 'facts'} [line]
+ * @param {(page: FilmPage, since: number) => Promise<T>} use `since`: when the page was opened (ms)
+ * @param {'pictures' | 'facts'} [line]
  * @param {() => Promise<T | undefined>} [had] asked when its turn comes: what it gives is the answer, the page not opened
+ * @param {boolean} [anew] the page kept is let go first, and opened again
  * @returns {Promise<T>}
  */
-function withPage(url, w, version, size, use, line = 'pictures', had) {
+function withPage(url, w, version, size, use, line = 'pictures', had, anew = false) {
   const key = keyOf(url, w, version, size);
   const once = async () => {
     const already = await had?.().catch(() => undefined);
     if (already !== undefined) return already;
+    /* at its turn, so the page is in no one's use: let go, and opened again as its files are now */
+    if (anew) forget(url, w, version, size);
     /** @type {NodeJS.Timeout | undefined} */
     let timer;
     const late = new Promise((_, fail) => {
@@ -492,7 +538,7 @@ function withPage(url, w, version, size, use, line = 'pictures', had) {
       }, JOB_MS);
     });
     const using = started();
-    const work = pageFor(url, w, version, size).then(use);
+    const work = pageFor(url, w, version, size).then((page) => use(page, openedAt.get(page) ?? Date.now()));
     /* given up on, it fails later (its browser closed): heard, so it cannot end the process */
     work.catch(() => {});
     try {
@@ -505,20 +551,33 @@ function withPage(url, w, version, size, use, line = 'pictures', had) {
       clearTimeout(timer);
     }
   };
-  return new Promise((done, fail) => {
-    waiting.push({ line, key, go: () => {
+  /** Its turn in the line; `alone`: with nothing else at work, and nothing else begun until it has ended (turn). */
+  const inTurn = (/** @type {boolean} */ alone) => new Promise((done, fail) => {
+    const job = { line, key, alone, go: () => {
       if (idle) clearTimeout(idle);
       idle = null;
       const gave = givenUp;
+      const mark = (begun += 1);
+      const single = atWork.pictures + atWork.facts === 1;
       once().catch((e) => {
         /* the browser was closed under it for another page's sake (one drawn beside it took too long): its own page
            did nothing wrong, and is drawn again, once */
         if (givenUp === gave || e?.late || e instanceof BrowserMemoryError) throw e;
         unopened.delete(key);
         return once();
-      }).then(done, fail).finally(() => {
+      }).then((value) => ({ value }), (error) => ({ error })).then((out) => {
+        /* the browser was ended for its memory while other pages were drawn beside this one: which of them took it
+           is not known (the browser's memory is one), and each would be held too heavy to draw. Each is drawn again
+           alone: the one that takes it fails by itself, and the others are drawn */
+        const beside = 'error' in out && out.error instanceof BrowserMemoryError && !alone && !(single && begun === mark);
         atWork[line] -= 1;
         inUse.delete(key);
+        if (alone) solo -= 1;
+        if (beside) {
+          unopened.delete(key);
+          inTurn(true).then(done, fail);
+        } else if ('error' in out) fail(out.error);
+        else done(out.value);
         /* closed once nothing has been asked of it for a while */
         if (!atWork.pictures && !atWork.facts && !waiting.length) {
           idle = setTimeout(() => void closeBrowser(), IDLE_MS);
@@ -526,16 +585,24 @@ function withPage(url, w, version, size, use, line = 'pictures', had) {
         }
         turn();
       });
-    } });
+    } };
+    if (alone) {
+      solo += 1;
+      waiting.unshift(job);
+    } else waiting.push(job);
     turn();
   });
+  return inTurn(false);
 }
 
-/** Start what waits and can go now: its line has room, and the page it is for is not in use. */
+/**
+ * Start what waits and can go now: its line has room, and the page it is for is not in use. While one waits to be
+ * drawn alone (withPage), only such a one begins, and only when nothing is at work.
+ */
 function turn() {
   for (let i = 0; i < waiting.length; i += 1) {
     const job = waiting[i];
-    if (atWork[job.line] >= MOST[job.line] || inUse.has(job.key)) continue;
+    if (solo ? !(job.alone && atWork.pictures + atWork.facts === 0) : (atWork[job.line] >= MOST[job.line] || inUse.has(job.key))) continue;
     waiting.splice(i, 1);
     i -= 1;
     atWork[job.line] += 1;
@@ -574,8 +641,10 @@ async function pageFor(/** @type {string} */ url, /** @type {number} */ w, /** @
   /* a page is 1920 wide (or its clip's size) unless it says otherwise; the device scale makes the capture `w` px
      without a resize */
   /* on black, as the film shows a page with nothing below it (white, the browser's default, hid a white title) */
+  const since = Date.now();
   const opening = (async () => FilmPage.open(await starting, origin, url, { scale: w / (size?.w ?? 1920), ...(size ? { size } : {}), black: true, waitMs: 15_000, readyMs: FRAME_MS }))();
   open.set(key, opening);
+  opening.then((page) => openedAt.set(page, since), () => {});
   opening.catch((e) => {
     open.delete(key);
     unopened.set(key, { error: e, at: Date.now() });

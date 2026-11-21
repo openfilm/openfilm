@@ -971,7 +971,8 @@ test('a drag\'s moment is drawn at once with what is there: a page not open is l
       const drawn = await window.__filmEditor.watch(t, null, { scrub: true });
       return { whole, drawn };
     }, pass + 0.5);
-    assert.deepEqual(passed, { whole: false, drawn: true });
+    /* drawn, and said to be without a page: whoever asked may have the whole picture of the moment to show */
+    assert.deepEqual(passed, { whole: false, drawn: 'partial' });
     let now = await state();
     assert.equal(now.open[pass], null, 'the page passed over is not opened');
     assert.deepEqual(now.seen, ['under'], 'the rest of the picture is drawn, and the page left behind is gone');
