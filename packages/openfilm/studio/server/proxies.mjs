@@ -5,7 +5,8 @@
  * scrubbed, and footage whose key frames are far apart is slow to scrub (slowToScrub); its proxy is an H.264 copy `height` px on its short side, with the same frames at the
  * same times (passthrough: none added or dropped) and a key frame every half second, so a scrub lands at once. Made in
  * the background, one at a time, kept in the project's cache: decoded and written on the graphics chip when it can
- * (src/encoders.mjs), so the processor stays free; by x264 otherwise. Copies carry sound for direct playback.
+ * (src/encoders.mjs), so the processor stays free (H.264 on a Mac of many cores is decoded by the processor, see
+ * processorDecodes); by x264 otherwise. Copies carry sound for direct playback.
  * Footage with transparency uses VP9 with alpha instead of H.264.
  *
  * Footage the editor's browser does not decode at all (HEVC on a computer without a chip for it, ProRes…) shows
@@ -18,6 +19,7 @@
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, renameSync, rmSync, statSync } from 'node:fs';
+import { availableParallelism, setPriority } from 'node:os';
 import { join } from 'node:path';
 import { clipKind } from '../../src/film-doc.mjs';
 import { colorTagsOf, encoders, h264ColorTags, hardwareEncoder, hardwareOptions, onTheChip } from '../../src/encoders.mjs';
@@ -262,7 +264,7 @@ async function queueProxies(root, rels, height, on, told) {
       const seconds = Number(facts.duration) > 0 ? Number(facts.duration) : 0;
       /** @type {ProxyState & { make?: (signal: AbortSignal) => Promise<void> }} */
       const fresh = { state: 'waiting' };
-      fresh.make = (signal) => proxy(abs, out, size, fps, seconds, alpha ? String(facts.codec) : null, (ratio) => { fresh.ratio = ratio; }, signal);
+      fresh.make = (signal) => proxy(abs, out, size, fps, seconds, String(facts.codec), alpha, (ratio) => { fresh.ratio = ratio; }, signal);
       jobs.set(out, fresh);
       job = fresh;
     }
@@ -275,17 +277,33 @@ async function queueProxies(root, rels, height, on, told) {
 }
 
 /**
+ * Whether footage is decoded by the processor while the chip writes its proxy: H.264 on a Mac of ten cores or more.
+ * The Mac's media engine decodes 4K H.264 at a few times the speed it plays, and the editor's own preview decodes
+ * its videos on the same engine; the processor decodes it on every core. Measured on an Apple M5 (ten cores), 100 s
+ * of 4K H.264: 23 s decoded and written on the chip, 10.5 s decoded by the processor at low priority; a fast drag of
+ * the playhead meanwhile drew 39 and 44 frames a second (52 with no proxy being made), and playing was the same
+ * either way. HEVC is the other way round (the chip decodes it three times sooner), and other codecs, machines of
+ * fewer cores and other systems are not measured: they stay as they were.
+ * @param {string} codec
+ */
+const processorDecodes = (codec) => codec === 'h264' && process.platform === 'darwin' && availableParallelism() >= 10;
+
+/**
  * Make one proxy, decoded and written on the graphics chip when it can, else (or when it fails) by x264. Stopped by
  * `signal`.
  * @param {string} abs @param {string} out @param {{ w: number, h: number }} size @param {number} fps @param {number} seconds
- * @param {string | null} alphaCodec @param {(ratio: number) => void} progress @param {AbortSignal} signal
+ * @param {string} codec the footage's @param {boolean} alpha @param {(ratio: number) => void} progress @param {AbortSignal} signal
  */
-async function proxy(abs, out, size, fps, seconds, alphaCodec, progress, signal) {
-  if (alphaCodec) {
-    const decoding = alphaCodec === 'vp9' ? ['-c:v', 'libvpx-vp9'] : alphaCodec === 'vp8' ? ['-c:v', 'libvpx'] : [];
+async function proxy(abs, out, size, fps, seconds, codec, alpha, progress, signal) {
+  if (alpha) {
+    const decoding = codec === 'vp9' ? ['-c:v', 'libvpx-vp9'] : codec === 'vp8' ? ['-c:v', 'libvpx'] : [];
     return make(abs, out, size, fps, seconds, progress, null, decoding, signal, true);
   }
   const chip = await hardwareEncoder('h264', await encoders());
+  if (chip && processorDecodes(codec)) {
+    /* decoded by the processor, giving way to the editor; what fails here is tried the usual ways below */
+    try { return await make(abs, out, size, fps, seconds, progress, chip, [], signal, false, true); } catch (e) { if (signal.aborted) throw e; }
+  }
   await onTheChip(chip, (encoder, decoding) => make(abs, out, size, fps, seconds, progress, encoder, decoding, signal), signal);
 }
 
@@ -295,9 +313,9 @@ async function proxy(abs, out, size, fps, seconds, alphaCodec, progress, signal)
  * color tags, which it keeps only when told them; null for x264. `decoding`: the input options that decode on the chip.
  * @param {string} abs @param {string} out @param {{ w: number, h: number }} size @param {number} fps @param {number} seconds
  * @param {(ratio: number) => void} progress @param {string | null} encoder @param {string[]} decoding
- * @param {AbortSignal} signal @param {boolean} [alpha]
+ * @param {AbortSignal} signal @param {boolean} [alpha] @param {boolean} [low] at low priority: it gives way to the editor
  */
-async function make(abs, out, size, fps, seconds, progress, encoder, decoding, signal, alpha = false) {
+async function make(abs, out, size, fps, seconds, progress, encoder, decoding, signal, alpha = false, low = false) {
   mkdirSync(join(out, '..'), { recursive: true });
   const part = `${out}.part.${alpha ? 'webm' : 'mp4'}`;
   const gop = Math.max(1, Math.round(fps * GOP_S));
@@ -311,6 +329,7 @@ async function make(abs, out, size, fps, seconds, progress, encoder, decoding, s
       '-map', '0:V:0', '-map', '0:a?', '-sn', '-dn', '-fps_mode', 'passthrough', '-vf', `scale=${size.w}:${size.h}`, ...codec,
       ...(alpha ? ['-c:a', 'libopus'] : ['-c:a', 'aac', '-profile:a', 'aac_low', '-movflags', '+faststart']),
       '-ac', '2', '-b:a', '160k', '-progress', 'pipe:1', '-nostats', part], { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true, signal });
+    if (low) try { if (proc.pid) setPriority(proc.pid, 10); } catch { /* left as it is */ }
     let err = '';
     proc.stderr.on('data', (d) => { err += d; });
     proc.stdout.on('data', (d) => {

@@ -126,6 +126,8 @@ export class VisionComposite {
       alpha: true,
       premultipliedAlpha: false,
       preserveDrawingBuffer: true,
+      /* on the stronger graphics chip where a computer has two */
+      powerPreference: 'high-performance',
     }));
     if (!gl) throw new Error('WebGL is required for video effects. Enable graphics acceleration and retry.');
     const shader = (kind, source) => {

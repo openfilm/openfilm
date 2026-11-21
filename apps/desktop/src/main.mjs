@@ -55,6 +55,12 @@ const overlayColours = (t) => ({ color: t === 'dark' ? '#111114' : '#e9e9eb', sy
 
 /* HTML-in-Canvas in Studio's viewer, as in the renderer (the `openfilm` package's src/host.mjs) */
 app.commandLine.appendSwitch('enable-blink-features', 'CanvasDrawElement');
+/* The preview is drawn, and its videos decoded, by the graphics chip: on a computer with two (a laptop's own beside a
+   stronger one) the stronger one, as an editor asks of it, where Chromium by itself takes the one that saves power;
+   and pages are rastered on the chip wherever there is one that can. A chip Chromium knows to be faulty is still left
+   out (its blocklist stays). */
+app.commandLine.appendSwitch('force_high_performance_gpu');
+app.commandLine.appendSwitch('enable-gpu-rasterization');
 /* Some Windows networks/drivers fail Chromium's HTTP/3 requests in the main process. Use TCP for downloads
    and update checks as well as the window's requests, before any network session is created. */
 app.commandLine.appendSwitch('disable-quic');

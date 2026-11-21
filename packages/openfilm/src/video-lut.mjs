@@ -46,7 +46,8 @@ let style;
 function context() {
   if (chip !== undefined) return chip;
   const canvas = document.createElement('canvas');
-  const gl = canvas.getContext('webgl2', { premultipliedAlpha: false, preserveDrawingBuffer: true, antialias: false });
+  /* on the stronger graphics chip where a computer has two: every graded video's frames go through here */
+  const gl = canvas.getContext('webgl2', { premultipliedAlpha: false, preserveDrawingBuffer: true, antialias: false, powerPreference: 'high-performance' });
   if (!gl) return (chip = null);
   const shader = (/** @type {number} */ type, /** @type {string} */ text) => {
     const s = /** @type {WebGLShader} */ (gl.createShader(type));
