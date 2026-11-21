@@ -574,8 +574,7 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
   if (line === 'plugins') {
     const officialCatalog = byInstalls(catalogPlugins.filter((k) => !communityOf(k)));
     const community = byInstalls(catalogPlugins.filter((k) => communityOf(k)));
-    const deferredEditors = new Set(['sound', 'motion', 'stage', 'composite']);
-    const editors = ownPlugins.filter((p) => !p.mcpServers && !deferredEditors.has(p.id));
+    const editors = ownPlugins.filter((p) => !p.mcpServers);
     const connectors = ownPlugins.filter((p) => p.mcpServers);
     const sorts = [
       { key: 'editors' as const, label: t('assetDrawer.shelfEditors'), note: t('assetDrawer.note_shelfEditors'), cards: [...editors.map(pluginCard), ...officialCatalog.map(catalogCard)] },

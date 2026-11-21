@@ -10,11 +10,11 @@ import { readBlocks } from './plugin-blocks.mjs';
 const home = () => mkdtempSync(join(tmpdir(), 'of-plugins-'));
 const where = (h) => ({ home: h, mine: join(h, 'mine'), official: join(h, 'official') });
 
-test('the screening, the edit and the canvas are on until the person says, Color is not; the choice is kept by plugin', () => {
+test('the screening, the edit and the canvas are on until the person says, Color, Motion and 3D are not; the choice is kept by plugin', () => {
   const h = home();
   assert.deepEqual(workbenchesOn(h), ['screening', 'edit', 'canvas']);
   assert.deepEqual(pluginStates(h).filter((p) => p.workbench && !p.soon).map((p) => [p.id, p.on]),
-    [['screening', true], ['edit', true], ['canvas', true], ['color', false], ['motion', false]]);
+    [['screening', true], ['edit', true], ['canvas', true], ['color', false], ['motion', false], ['stage', false]]);
   setPluginOn('color', true, h);
   setPluginOn('canvas', false, h);
   assert.deepEqual(workbenchesOn(h), ['screening', 'edit', 'color']);
@@ -120,15 +120,18 @@ test('every plugin made has a switch; what is not made yet is never on, and no a
       ['sound', [], ['film']], ['motion', ['motion'], ['film']], ['stage', ['stage'], []], ['composite', [], ['film']],
       ...['dropbox', 'frameio', 'notion', 'adobe', 'canva', 'vimeo'].map((id) => [id, [], []])]);
   mkdirSync(h, { recursive: true });
-  writeFileSync(join(h, 'prefs.json'), JSON.stringify({ plugins: { sound: true, stage: true, composite: true } }));
-  for (const id of ['sound', 'stage', 'composite']) {
+  writeFileSync(join(h, 'prefs.json'), JSON.stringify({ plugins: { sound: true, composite: true } }));
+  for (const id of ['sound', 'composite']) {
     assert.throws(() => setPluginOn(id, true, h), /not made yet/);
     assert.equal(state(id).workbench, id);
     assert.equal(state(id).soon, true);
     assert.equal(state(id).on, false);
   }
-  assert.doesNotMatch(String(pluginsOffLine(h)), /sound|stage|composite/);
-  assert.doesNotMatch(promptSkills(h), /^- `stage`/m);
+  assert.doesNotMatch(String(pluginsOffLine(h)), /sound|composite/);
+  /* 3D is made: it can be turned on, as Motion can, and is off until it is */
+  setPluginOn('stage', true, h);
+  assert.equal(state('stage').on, true);
+  assert.equal(state('stage').soon, undefined);
 });
 
 test('a plugin is a folder with an openfilm.json that has a title; they are listed in their order', () => {
