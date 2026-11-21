@@ -127,7 +127,7 @@ import type { LayerRow, LayerSelection } from '@/lib/layers-tree';
 import { SourcePreview } from './SourcePreview';
 import { ResourceInspector, type MadeProps } from './ResourceInspector';
 import { FilmInspector } from './FilmInspector';
-import { Timeline, timelineFitHeight, type TimelineCommands, type TimelineHistory } from './Timeline';
+import { EDIT_TIMELINE_MIN_H, Timeline, timelineFitHeight, type TimelineCommands, type TimelineHistory } from './Timeline';
 import { useEditorTools } from './use-editor-tools';
 import { AudioMeters, METERS_W } from './AudioMeters';
 import { trackFlagStep, type SessionTimeline } from './OperationHistory';
@@ -797,6 +797,7 @@ export function ProjectView({ projectId, onProject }: {
     fitTimelineHeight.current = Math.max(TIMELINE_H, Math.min(timelineFitHeight(timelineTracks), cap));
   }
   const timelineFit = fitTimelineHeight.current;
+  const timelineMin = timelineTracks.length ? EDIT_TIMELINE_MIN_H : MIN_DOCK_H;
 
   /* what is selected in the picture: a layer of a page, or a clip in hand */
   const [stageElement, setStageElement] = React.useState<StageElement | null>(null);
@@ -899,11 +900,13 @@ export function ProjectView({ projectId, onProject }: {
     const storedTimelineHeight = places.timeline?.size ?? null;
     const timelineHeight = storedTimelineHeight ?? timelineFit;
     const timelineTallest = colHeight ? Math.max(MIN_DOCK_H, colHeight - MIN_STAGE_H - DOCK_GAP) : Infinity;
-    const timelineShownHeight = storedTimelineHeight !== null
+    const timelineMinHeight = Math.min(timelineMin, timelineTallest);
+    const preferredTimelineHeight = storedTimelineHeight !== null
       ? Math.min(timelineHeight ?? TIMELINE_H, timelineTallest)
       : colHeight
         ? Math.min(timelineHeight, timelineTallest, timelineFit + TIMELINE_SPARE, Math.max(MIN_DOCK_H, Math.round(colHeight * TIMELINE_SHARE)))
         : Math.min(timelineHeight ?? TIMELINE_H, timelineFit + TIMELINE_SPARE);
+    const timelineShownHeight = Math.max(timelineMinHeight, preferredTimelineHeight);
     const rowNarrow = rowWidth > 0 && rowWidth < MIN_VIEWER + DEFAULT_INSPECTOR + 240;
     const inspectorShown = Boolean(places.inspector?.open) && (Boolean(free) || !(rowNarrow && inspectorIdle));
     const inspectorWanted = places.inspector?.size ?? DEFAULT_INSPECTOR;
@@ -914,10 +917,10 @@ export function ProjectView({ projectId, onProject }: {
     const layersFit = Boolean(free) || !rowWidth || layersShownWidth >= 180;
     const layersShown = Boolean(places.layers?.open) && layersFit;
     return {
-      timelineShownHeight, timelineShown: Boolean(places.timeline?.open) && filmRead, inspectorShown, inspectorShownWidth,
+      timelineShownHeight, timelineMinHeight, timelineShown: Boolean(places.timeline?.open) && filmRead, inspectorShown, inspectorShownWidth,
       layersWidth, layersShownWidth, layersFit, layersShown,
     };
-  }, [timelineFit, inspectorIdle, filmRead]);
+  }, [timelineFit, timelineMin, inspectorIdle, filmRead]);
   const { inspectorShown, inspectorShownWidth, layersShownWidth, layersFit, layersShown } = editSizes(arrangement.room, own.places, own.free);
 
   /* ── edits: the timeline's and the inspector's, turned into the server's operations by clip id ── */
@@ -5410,7 +5413,7 @@ export function ProjectView({ projectId, onProject }: {
       viewer: { shown: true, size: 0 },
       layers: { shown: drawn.layersShown, size: drawn.layersShown ? drawn.layersShownWidth : drawn.layersWidth, seam: { min: 180, minRest: MIN_VIEWER, label: t('layers.resize') } },
       inspector: { shown: drawn.inspectorShown, size: drawn.inspectorShownWidth, seam: { min: MIN_INSPECTOR, minRest: MIN_VIEWER, label: t('inspector.resize') } },
-      timeline: { shown: drawn.timelineShown, size: drawn.timelineShownHeight, seam: { min: MIN_DOCK_H, minRest: MIN_STAGE_H, label: t('timeline.resize') }, fit: timelineFit },
+      timeline: { shown: drawn.timelineShown, size: drawn.timelineShownHeight, seam: { min: drawn.timelineMinHeight, minRest: MIN_STAGE_H, label: t('timeline.resize') }, fit: timelineFit },
     };
   }, [editSizes, timelineFit, t]);
   /* the library is the shell's (shell/library); what it does in the edit is given here: a file of the media pane put in
