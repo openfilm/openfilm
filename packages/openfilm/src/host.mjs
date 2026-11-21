@@ -25,8 +25,18 @@ export const SEEK_INSIDE_FRAME = `(()=>{const d=Object.getOwnPropertyDescriptor(
 // was drawn before. The host calls `filmHost.time(t)` before `film.frame(t)` and `filmHost.settle(t)` after it;
 // `filmHost.now()` is the real clock, for the host's own waiting.
 export const FILM_CLOCK = `(()=>{const H=window.filmHost;if(!H||H.time)return;const P=performance,now=P.now.bind(P),D=Date,raf=window.requestAnimationFrame.bind(window),EPOCH=D.UTC(2026,0,1);let v=null,seed=0x2545f491;H.now=now;P.now=()=>v==null?now():v;function FilmDate(...a){const d=a.length||v==null?new D(...a):new D(EPOCH+v);return new.target?d:d.toString()}FilmDate.prototype=D.prototype;FilmDate.now=()=>v==null?D.now():EPOCH+v;FilmDate.parse=D.parse;FilmDate.UTC=D.UTC;window.Date=FilmDate;window.requestAnimationFrame=(cb)=>raf((ts)=>cb(v==null?ts:v));Math.random=()=>{seed=seed+0x6d2b79f5|0;let x=Math.imul(seed^seed>>>15,1|seed);x=x+Math.imul(x^x>>>7,61|x)^x;return((x^x>>>14)>>>0)/4294967296};const mine=new WeakSet();H.time=(t)=>{v=t*1000;seed=(Math.round(t*1e6)^0x2545f491)|0};H.settle=(t)=>{for(const a of document.getAnimations?.()??[]){if(typeof CSSTransition!=='undefined'&&a instanceof CSSTransition){a.finish();continue}if(!mine.has(a)){if(a.playState==='paused'||a.playState==='idle')continue;mine.add(a)}a.pause();a.currentTime=t*1000}}})();`;
-// Before any page script: the host flag, the seek fix and the clock above.
-export const HOST_FLAG = `window.filmHost={version:'0.1',name:'film'};${SEEK_INSIDE_FRAME}${FILM_CLOCK}`;
+// Canvas text at sizes that never share a font. Chromium sets text at the font size floored to 0.01 px and finds the
+// font for it by `unsigned(size * 100)`, which is the same for some neighbouring steps (9.72 and 9.73 px: 9.73f * 100
+// is 972.99994). The size used first then decides how both are laid out and measured, until the cached font is let
+// go: a line of small text whose size follows a camera came out wider or narrower depending on the frames drawn
+// before it (thousands of pixels of the picture, by tens of levels). A px size given to a 2D context's `font` is
+// rounded to 1/32 px, a grid on which no two sizes share a key (its steps floor to 0.03 or 0.04 px apart; swept
+// from 1 to 600 px, growing and shrinking); `ctx.font` reads back the size the text is set in. A size in another
+// unit passes as it is, and so does anything that is not a font.
+// Not reached from here: a 2D context in a worker, and DOM text, whose `font-size` takes the same road.
+export const FONT_GRID = `(()=>{const SIZE=/^((?:[^"'(),\\/]*?\\s)?)\\+?((?:\\d+\\.?\\d*|\\.\\d+)(?:e[+-]?\\d+)?)px(?=[\\s\\/"'])/i;for(const C of[self.CanvasRenderingContext2D,self.OffscreenCanvasRenderingContext2D]){const d=C&&Object.getOwnPropertyDescriptor(C.prototype,'font');if(!d||!d.set||d.set.__film)continue;const set=function(v){const s=String(v),m=SIZE.exec(s);d.set.call(this,m?m[1]+Math.round(m[2]*32)/32+'px'+s.slice(m[0].length):s)};set.__film=true;Object.defineProperty(C.prototype,'font',{configurable:true,enumerable:true,get:d.get,set})}})();`;
+// Before any page script: the host flag, the seek fix, the clock and the font sizes above.
+export const HOST_FLAG = `window.filmHost={version:'0.1',name:'film'};${SEEK_INSIDE_FRAME}${FILM_CLOCK}${FONT_GRID}`;
 
 const TIMELINE = readFileSync(fileURLToPath(new URL('./timeline.mjs', import.meta.url)), 'utf8');
 /* what film.html says, as Studio reads it too: the timeline imports it from here */
