@@ -14,11 +14,15 @@
  *
  * Studio previews play them. The timeline's sound is mixed from the original, and an export reads the originals.
  * Nothing in film.html changes.
+ *
+ * A proxy is kept for as long as it is used: each says when it was last used and what it is a proxy of, and the ones no
+ * one used for a month, or whose footage changed since, are swept away (sweepProxies, src/cache-sweep.mjs).
  */
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, renameSync, rmSync, statSync } from 'node:fs';
 import { join } from 'node:path';
+import { markUsed, sweepCopies } from '../../src/cache-sweep.mjs';
 import { clipKind } from '../../src/film-doc.mjs';
 import { colorTagsOf, encoders, h264ColorTags, hardwareEncoder, hardwareOptions, onTheChip } from '../../src/encoders.mjs';
 import { decodedAnywhere } from '../../src/seekable.mjs';
@@ -96,23 +100,57 @@ export function proxySize(/** @type {number} */ w, /** @type {number} */ h, /** 
   return { w: even(w * k), h: even(h * k) };
 }
 
+/** Where a project's proxies are kept. */
+const proxiesDir = (/** @type {string} */ root) => join(root, TOOL_DIR, 'cache', 'proxies');
+
+/** What a proxy says it is a proxy of (src/cache-sweep.mjs): the file as its name was made from it (proxyFile). */
+const sourceNote = (/** @type {string} */ file, /** @type {import('node:fs').Stats} */ info) =>
+  ({ v: VERSION, file, id: `${info.dev}:${info.ino}`, size: info.size, mtimeMs: Math.round(info.mtimeMs) });
+
 /**
  * Where `rel`'s proxy at `height` is kept: named by the file itself (so it stays its proxy when the file is renamed or
- * moved) and its version (so a changed file gets a new one).
+ * moved) and its version (so a changed file gets a new one). `note`: what the proxy says it is a proxy of.
  */
 function proxyFile(/** @type {string} */ root, /** @type {string} */ rel, /** @type {number} */ height) {
   const abs = readable(root, rel);
   const info = statSync(abs);
   const name = createHash('sha1').update(`${VERSION}\0${info.dev}:${info.ino}\0${info.size}\0${Math.round(info.mtimeMs)}\0${height}`).digest('hex').slice(0, 20);
-  return { abs, base: join(root, TOOL_DIR, 'cache', 'proxies', name) };
+  return { abs, base: join(proxiesDir(root), name), note: sourceNote(abs, info) };
 }
 
-/** The proxy of `rel` at `height`, when it is made; else null. */
+/** The proxy of `rel` at `height`, when it is made; else null. One found is said to be used (src/cache-sweep.mjs). */
 export function readyProxy(/** @type {string} */ root, /** @type {string} */ rel, /** @type {number} */ height) {
   try {
-    const { base } = proxyFile(root, rel, height);
-    return [`${base}.mp4`, `${base}.webm`].find(existsSync) ?? null;
+    const { base, note } = proxyFile(root, rel, height);
+    const proxy = [`${base}.mp4`, `${base}.webm`].find(existsSync) ?? null;
+    if (proxy) markUsed(proxy, note);
+    return proxy;
   } catch { return null; }
+}
+
+const KEPT = {
+  copy: /^[0-9a-f]{20}\.(?:mp4|webm)$/,
+  /* a proxy while it is written (make) */
+  part: /^[0-9a-f]{20}\.(?:mp4|webm)\.part\.(?:mp4|webm)$/,
+  /* made by an older way of making proxies, or of a file that is there and no longer the one it was made from (gone,
+     it may only be on a disk that is not plugged in: not told from a file removed) */
+  stale: (/** @type {Record<string, unknown>} */ note) => {
+    if (Number(note.v) < VERSION) return true;
+    if (typeof note.file !== 'string') return false;
+    try {
+      const now = sourceNote(note.file, statSync(note.file));
+      return now.id !== note.id || now.size !== note.size || now.mtimeMs !== note.mtimeMs;
+    } catch { return false; }
+  },
+};
+
+/**
+ * Sweep `root`'s proxies (src/cache-sweep.mjs sweepCopies): those no one used for a month, and after a day those of
+ * footage changed since.
+ * @param {string} root @param {{ now?: number, force?: boolean }} [options]
+ */
+export function sweepProxies(root, options) {
+  return sweepCopies(proxiesDir(root), KEPT, options);
 }
 
 /**
@@ -246,14 +284,14 @@ async function queueProxies(root, rels, height, on, told) {
     if (!(Number(facts.width) > 0 && Number(facts.height) > 0)) continue;
     let file;
     try { file = proxyFile(root, rel, height); } catch { continue; }
-    const { abs, base } = file;
+    const { abs, base, note } = file;
     const alpha = facts.alpha === true;
     const out = `${base}.${alpha ? 'webm' : 'mp4'}`;
     if (told.includes(rel)) needsCopy(abs);
     const needed = undecoded.has(abs);
     if (!needed && !(on && (heavy(facts) || await slowToScrub(root, rel, facts)))) continue;
     const mark = needed ? { needed: /** @type {const} */ (true) } : {};
-    if (existsSync(out)) { states[rel] = { state: 'ready', ...mark }; continue; }
+    if (existsSync(out)) { markUsed(out, note); states[rel] = { state: 'ready', ...mark }; continue; }
     /* asked for once; one that failed (footage ffmpeg cannot read) is said, not tried again and again */
     let job = jobs.get(out);
     if (!job) {
@@ -262,7 +300,7 @@ async function queueProxies(root, rels, height, on, told) {
       const seconds = Number(facts.duration) > 0 ? Number(facts.duration) : 0;
       /** @type {ProxyState & { make?: (signal: AbortSignal) => Promise<void> }} */
       const fresh = { state: 'waiting' };
-      fresh.make = (signal) => proxy(abs, out, size, fps, seconds, alpha ? String(facts.codec) : null, (ratio) => { fresh.ratio = ratio; }, signal);
+      fresh.make = (signal) => proxy(abs, out, size, fps, seconds, alpha ? String(facts.codec) : null, (ratio) => { fresh.ratio = ratio; }, signal).then(() => markUsed(out, note));
       jobs.set(out, fresh);
       job = fresh;
     }
@@ -271,6 +309,8 @@ async function queueProxies(root, rels, height, on, told) {
   }
   stopLightening();
   void drain();
+  /* the proxies asked about are said to be used: the project's others no one used for a month go (once a day) */
+  void sweepProxies(root);
   return states;
 }
 

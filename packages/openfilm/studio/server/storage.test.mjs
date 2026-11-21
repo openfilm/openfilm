@@ -1,10 +1,10 @@
 import { test, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, mkdtempSync, realpathSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createProject } from './projects.mjs';
-import { clearProjectCache, projectUsage, storage } from './storage.mjs';
+import { clearProjectCache, projectUsage, storage, sweepProjectCopies } from './storage.mjs';
 
 const KEYS = ['OPENFILM_HOME', 'OPENFILM_SHARED_HOME', 'OPENFILM_LIBRARY'];
 let before;
@@ -89,4 +89,33 @@ test('every listed project with what it takes, the biggest first, and the sums',
   assert.deepEqual(all.projects.map((p) => [p.id, p.name, p.clearable]), [[big.id, 'Big', 1550], [small.id, 'Small', 1550]]);
   assert.equal(all.clearable, 3100);
   assert.equal(all.total, all.projects[0].total + all.projects[1].total);
+});
+
+test('the copies of footage no one used for a month are swept in every listed project, open or not; the rest of its cache is left', async () => {
+  const DAY = 864e5;
+  /** A copy by its name in a project's cache, last used `days` ago. */
+  const copy = (root, rel, bytes, days) => {
+    put(root, rel, bytes);
+    put(root, `${rel}.used`, 0);
+    utimesSync(join(root, `${rel}.used`), new Date(Date.now() - days * DAY), new Date(Date.now() - days * DAY));
+  };
+  const old = await project('Old');
+  copy(old.root, '.film/cache/seek/0123456789ab.mp4', 5000, 60);
+  copy(old.root, '.film/cache/seek/0123456789ab-fine.mp4', 7000, 3);
+  copy(old.root, '.film/cache/proxies/0123456789abcdef0123.mp4', 3000, 60);
+  const fresh = await project('Fresh');
+  copy(fresh.root, '.film/cache/seek/0123456789ab.mp4', 5000, 1);
+  /* a project whose folder is gone (its disk is not plugged in) is passed over */
+  const gone = await project('Gone');
+  rmSync(gone.root, { recursive: true, force: true });
+
+  assert.equal(await sweepProjectCopies({ force: true }), 8000);
+  assert.equal(existsSync(join(old.root, '.film/cache/seek/0123456789ab.mp4')), false);
+  assert.equal(existsSync(join(old.root, '.film/cache/seek/0123456789ab.mp4.used')), false);
+  assert.equal(existsSync(join(old.root, '.film/cache/proxies/0123456789abcdef0123.mp4')), false);
+  for (const kept of ['.film/cache/seek/0123456789ab-fine.mp4', '.film/cache/seek/a/copy.mp4', '.film/cache/proxies/a.mp4', '.film/cache/frames/a/1.jpg', '.film/cache/render/r1/part-0.mp4', 'assets/a.mp4']) {
+    assert.equal(existsSync(join(old.root, kept)), true, kept);
+  }
+  assert.equal(existsSync(join(fresh.root, '.film/cache/seek/0123456789ab.mp4')), true);
+  assert.equal(await sweepProjectCopies({ force: true }), 0);
 });

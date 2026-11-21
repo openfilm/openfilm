@@ -10,7 +10,7 @@ import { memoryError } from './browser-memory.mjs';
 import { encoderWait } from './encoder-wait.mjs';
 import { FilmPage, launch, SOFTWARE_GL } from './host.mjs';
 import { exactRate, ffmpegRate } from './rate.mjs';
-import { browserCopies, filmGrades, filmVideos, gradedCopies, gradeKey, gradeRange } from './seekable.mjs';
+import { browserCopies, filmGrades, filmVideos, gradedCopies, gradeKey, gradeRange, sweepSeek } from './seekable.mjs';
 import { ffmpeg, filmSound, fmt, hash, kill, locate, mix, open, outDir, parseTarget, shown, UsageError, write } from './shared.mjs';
 import { burned } from './burn.mjs';
 import { renderSelection, selectionClips, selectionFrame } from './render-ranges.mjs';
@@ -610,6 +610,9 @@ export async function render(args, opts = {}) {
     await pool?.give(lent, { retire: failed });
   }
   const seconds = (Date.now() - started) / 1000;
+  /* the film is drawn, so every copy it plays is said to be used: the project's other copies no one used for a month,
+     or made from a file changed since, go (seekable.mjs sweepSeek; once a day) */
+  await sweepSeek(root);
   return {
     out,
     encoder,

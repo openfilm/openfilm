@@ -1,10 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { ensurePlayback, ensureProxies, heavy, playType, proxySize, readyProxy, slowToScrub, undecodable } from './proxies.mjs';
+import { ensurePlayback, ensureProxies, heavy, playType, proxySize, readyProxy, slowToScrub, sweepProxies, undecodable } from './proxies.mjs';
 
 const hasFfmpeg = (() => { try { execFileSync('ffmpeg', ['-version'], { stdio: 'ignore' }); return true; } catch { return false; } })();
 
@@ -124,4 +124,47 @@ test('a compatibility copy of ProRes 4444 keeps transparency', { skip: !hasFfmpe
   const alpha = execFileSync('ffmpeg', ['-v', 'error', '-c:v', 'libvpx-vp9', '-i', copy, '-frames:v', '1', '-vf', 'alphaextract', '-f', 'rawvideo', '-']);
   assert.equal(alpha.length, 64 * 64);
   assert.ok(alpha.every((value) => value >= 60 && value <= 68), 'the quarter-opaque frame keeps its alpha');
+});
+
+test('a proxy says what it is a proxy of; the one of footage changed since is swept a day on, the one in use a month after its last use', { skip: !hasFfmpeg && 'no ffmpeg' }, async () => {
+  const root = mkdtempSync(join(tmpdir(), 'of-proxies-swept-'));
+  const DAY = 864e5;
+  try {
+    mkdirSync(join(root, 'assets'));
+    const footage = join(root, 'assets', 'big.mp4');
+    const shoot = (/** @type {number} */ seconds) => execFileSync('ffmpeg', ['-v', 'error', '-y', '-f', 'lavfi', '-i', `testsrc=size=2560x1440:rate=25:duration=${seconds}`, '-pix_fmt', 'yuv420p', footage]);
+    const made = async () => {
+      for (const end = Date.now() + 30_000; Date.now() < end; await new Promise((r) => setTimeout(r, 100))) {
+        if ((await ensureProxies(root, ['assets/big.mp4'], 540))['assets/big.mp4']?.state === 'ready') break;
+      }
+      return /** @type {string} */ (readyProxy(root, 'assets/big.mp4', 540));
+    };
+    /* what is kept there but the notes of the proxies' use and of the folder's last sweep */
+    const kept = () => readdirSync(join(root, '.film/cache/proxies')).filter((f) => !f.endsWith('.used') && f !== '.swept');
+    shoot(1);
+    const first = await made();
+    const was = statSync(footage);
+    const note = JSON.parse(readFileSync(`${first}.used`, 'utf8'));
+    assert.equal(realpathSync(note.file), realpathSync(footage));
+    assert.deepEqual({ ...note, file: '' }, { v: 2, file: '', id: `${was.dev}:${was.ino}`, size: was.size, mtimeMs: Math.round(was.mtimeMs) });
+
+    /* the footage is made again in place: its proxy is another, and the one before can't be used again */
+    shoot(2);
+    const second = await made();
+    assert.notEqual(second, first);
+    const bytes = statSync(first).size;
+    assert.deepEqual(await sweepProxies(root, { force: true }), { files: 0, bytes: 0 }, 'not the day it was last used');
+    assert.deepEqual(await sweepProxies(root, { force: true, now: Date.now() + 2 * DAY }), { files: 1, bytes });
+    assert.equal(existsSync(`${first}.used`), false);
+    assert.deepEqual(kept(), [second.split(/[\\/]/).pop()]);
+    assert.equal(readyProxy(root, 'assets/big.mp4', 540), second);
+
+    /* its footage gone (a disk not plugged in, for all a sweep knows), it is kept for its month, no longer */
+    rmSync(footage);
+    assert.equal((await sweepProxies(root, { force: true, now: Date.now() + 20 * DAY })).files, 0);
+    assert.equal((await sweepProxies(root, { force: true, now: Date.now() + 32 * DAY })).files, 1);
+    assert.deepEqual(kept(), []);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
