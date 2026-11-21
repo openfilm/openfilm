@@ -50,7 +50,7 @@ import { isLibraryText, layoutTracks, type TimelineBlock, type TimelineTrack } f
 import { organizeTracks } from '@/lib/organize-tracks';
 import { useAgentWorking } from '@/lib/agent-working';
 import { useSettledProblem } from '@/editor/use-settled-problem';
-import { filmClipKind, filmDocLoc, filmSrcIsPage, filmSrcKind, filmTrackBadges, parseFilmDocLoc, type FilmBox, type FilmDoc, type FilmOverride } from '@/lib/film';
+import { filmClipKind, filmDocLoc, filmSrcIsPage, filmSrcIsStill, filmSrcKind, filmTrackBadges, parseFilmDocLoc, type FilmBox, type FilmDoc, type FilmOverride } from '@/lib/film';
 import { exactRate, footageFps, setTimecodeFps, snapToFrame, stepFrames } from '@/lib/timecode';
 import { JUMP_FRAMES, loopBack, playStart, shuttleRate } from '@/lib/timeline-keys';
 import { comboOf, parseCombo } from '@/lib/keymap';
@@ -88,6 +88,8 @@ import type { LibraryVoice, VoiceAccess, VoiceSpeech } from '@/lib/library-voice
 import { ladderStepMs, THUMB_CELL_PX, thumbAnchorTimes } from '@/lib/thumb-cache';
 import { clipThumbId, overridesToken } from '@/lib/thumb-frame';
 import { useLoadedThumbs } from '@/lib/use-loaded-thumbs';
+import { stillHasSmallCopy, useStillThumbs } from '@/lib/still-thumbs';
+import { stripCell, stripHas, stripShots, useThumbStrips } from '@/lib/thumb-strips';
 import { droppedOverrides, overrideTarget, undoneFields, type DroppedEdits, type PersonEdit } from '@/lib/dropped-overrides';
 import { filmFrameBox, type FilmFrameId } from '@/lib/film-frame';
 import { canvasFor, firstPictureSize, fitToCanvas } from '@/lib/canvas-fit';
@@ -4392,6 +4394,32 @@ export function ProjectView({ projectId, onProject }: {
     }
     return out;
   }, [film.film]);
+  /* each video's strip (lib/thumb-strips): every clip of the file draws its pictures from it at once */
+  const stripWanted = React.useMemo(() => {
+    const out = new Map<string, number>();
+    for (const track of timelineTracks) {
+      for (const b of track.blocks) {
+        if (b.kind === 'video' && b.src && !filmSrcIsStill(b.src) && !out.has(b.src)) out.set(b.src, mtimeOf.get(b.src) ?? 0);
+      }
+    }
+    return out;
+  }, [timelineTracks, mtimeOf]);
+  const strips = useThumbStrips(projectId, stripWanted);
+  /* each picture clip in or near view: its file's small copy (lib/still-thumbs), which its cells are drawn from */
+  const stillWanted = React.useMemo(() => {
+    const out = new Map<string, number>();
+    if (!thumbView) return out;
+    const span = thumbView.toMs - thumbView.fromMs;
+    const fromMs = Math.max(0, thumbView.fromMs - span);
+    const toMs = thumbView.toMs + span;
+    for (const b of blocksRef.current) {
+      if (b.kind === 'video' && b.src && b.endMs > fromMs && b.startMs < toMs && stillHasSmallCopy(b.src) && !out.has(b.src)) out.set(b.src, mtimeOf.get(b.src) ?? 0);
+    }
+    return out;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [thumbView, timelineTracks, mtimeOf]);
+  const fileAddress = React.useCallback((path: string) => `${folder}${path.split('/').map(encodeURIComponent).join('/')}`, [folder]);
+  const stills = useStillThumbs(projectId, stillWanted, fileAddress);
   const thumbs = React.useMemo(() => {
     const out = new Map<string, string>();
     if (!thumbView || !(thumbView.pxPerMs > 0)) return out;
@@ -4413,7 +4441,12 @@ export function ProjectView({ projectId, onProject }: {
       const still = /\.(png|jpe?g|webp|avif|gif|bmp|svg)$/i.test(b.src!);
       const token = b.clipId ? tweakTokens.get(b.clipId) ?? '' : '';
       const key = (into: number) => `${mtimeOf.get(b.src!) ?? 0}${token ? `.${token}` : ''}:${clipThumbId(b)}@${into}#v`;
-      if (still) { out.set(key(0), `${folder}${b.src!.split('/').map(encodeURIComponent).join('/')}`); continue; }
+      if (still) {
+        /* a picture: its file's small copy once it is in (lib/still-thumbs); the file itself where none is made */
+        const from = stillHasSmallCopy(b.src!) ? stills.get(b.src!) : fileAddress(b.src!);
+        if (from) out.set(key(0), from);
+        continue;
+      }
       const speed = b.speed && b.speed > 0 ? b.speed : 1;
       const trimMs = (b.anchor?.trimFrom ?? 0) * 1000;
       /* shot on the source's own grid (from its start, a step a cell in source ms), as BlockThumbs draws them: a trim
@@ -4432,7 +4465,11 @@ export function ProjectView({ projectId, onProject }: {
       const grid: number[] = [];
       for (let into = Math.floor(lo / stepMs) * stepMs; into < hi; into += stepMs) grid.push(Math.round(into));
       const own = { startMs: trimMs, endMs: trimMs + (b.endMs - b.startMs) * speed };
+      /* a moment its file's strip has a picture of (within half of what a cell stands for) is not asked for: the
+         cell shows as much of it from the strip, there already */
+      const strip = b.kind === 'video' ? strips.get(b.src!) : undefined;
       for (const at of [...grid, ...thumbAnchorTimes({ times: grid, spans: [own] })]) {
+        if (strip && stripHas(strip.times, at, stepMs / 2)) continue;
         const drawn = b.kind === 'mg' ? Math.round(Math.max(at, Math.min(at + stepMs / 2, lastMs))) : at;
         if (at >= own.startMs - stepMs && at <= own.endMs) out.set(key(at), media(b.src!, drawn, b.clipId));
         else margins.push([key(at), media(b.src!, drawn, b.clipId)]);
@@ -4441,9 +4478,31 @@ export function ProjectView({ projectId, onProject }: {
     for (const [k, u] of margins) if (!out.has(k)) out.set(k, u);
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [thumbView, timelineTracks, projectId, mtimeOf, folder, filesTick, tweakTokens]);
+  }, [thumbView, timelineTracks, projectId, mtimeOf, folder, filesTick, tweakTokens, strips, stills, fileAddress]);
   /* drawn once loaded: a zoom keeps the pictures it has until the new shots arrive */
-  const shownThumbs = useLoadedThumbs(thumbs);
+  const loadedThumbs = useLoadedThumbs(thumbs);
+  /* each video clip's pictures from its file's strip, as shots of its own (the same keys): there from the start, and
+     through any zoom, trim, split or move; a frame asked for by itself stands over the strip's at its moment */
+  const shownThumbs = React.useMemo(() => {
+    if (!strips.size || !thumbView) return loadedThumbs;
+    const out = new Map<string, string>();
+    const span = thumbView.toMs - thumbView.fromMs;
+    const fromMs = Math.max(0, thumbView.fromMs - span);
+    const toMs = thumbView.toMs + span;
+    for (const b of blocksRef.current) {
+      if (b.kind !== 'video' || !b.src || !(b.endMs > fromMs && b.startMs < toMs)) continue;
+      const strip = strips.get(b.src);
+      if (!strip) continue;
+      const speed = b.speed && b.speed > 0 ? b.speed : 1;
+      const trimMs = (b.anchor?.trimFrom ?? 0) * 1000;
+      const version = mtimeOf.get(b.src) ?? 0;
+      for (const i of stripShots(strip.times, trimMs, trimMs + (b.endMs - b.startMs) * speed)) out.set(`${version}:${clipThumbId(b)}@${strip.times[i]}#v`, stripCell(strip, i));
+    }
+    if (!out.size) return loadedThumbs;
+    for (const [key, url] of loadedThumbs) out.set(key, url);
+    return out;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loadedThumbs, strips, thumbView, timelineTracks, mtimeOf]);
   const posters = React.useMemo(() => {
     const out: Record<string, string> = {};
     for (const b of blocksRef.current) {

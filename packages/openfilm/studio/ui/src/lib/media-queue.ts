@@ -4,18 +4,25 @@
  *
  * A browser keeps six connections to Studio. Opening a project used to ask for every file's facts and every picture at
  * once, and those requests held all six for half a minute: an edit made meanwhile (a sound dropped at the film's end)
- * waited for a free one, and the person saw it not land. So they go in two lines: a web page's facts and pictures are
+ * waited for a free one, and the person saw it not land. So they go in lines: a web page's facts and pictures are
  * found by drawing it in the headless browser, one at a time on the server, so one at a time here (more would only
  * wait there, each holding a connection); a media file's come from ffmpeg, MEDIA_IN_FLIGHT at a time. The editor's own
  * requests always find a connection. A media file's facts go before its pictures (a video's length decides which
- * frames are asked for); a page's pictures go before its facts (they are what the person waits to see, and a page
- * clip's length is in film.html already). Visible cards go first. A scan of the whole project waits behind the
- * work for the parts the person is looking at.
+ * frames are asked for). Visible cards go first. A scan of the whole project waits behind the work for the parts the
+ * person is looking at.
+ *
+ * A page's pictures have a line of their own, apart from its facts (the server draws them apart too, pageframes.mjs):
+ * they are what the person waits to see, and most are kept already and answered at once. In one line, a page that
+ * could not say its facts (a draft in the folder whose file is missing: the server waits a quarter of a minute before
+ * it gives it up) held every page's thumbnail and poster behind it, each time the project was opened. The server
+ * draws a few pages' pictures at once (pageframes.mjs PICTURE_LANES), so two are asked for at a time: with the two
+ * of the files and the one of the facts, one connection of the six is still the editor's own.
  */
 import * as React from 'react';
 
 export const MEDIA_IN_FLIGHT = 2;
 export const PAGES_IN_FLIGHT = 1;
+export const PAGE_PICTURES_IN_FLIGHT = 2;
 
 /** `first`: what waits there goes before `then` */
 type Priority = 'visible' | 'normal' | 'background';
@@ -25,9 +32,10 @@ type Line = {
 };
 const files: Line = { running: 0, most: MEDIA_IN_FLIGHT, picturesFirst: false, visible: [], first: [], then: [], background: [] };
 const pages: Line = { running: 0, most: PAGES_IN_FLIGHT, picturesFirst: true, visible: [], first: [], then: [], background: [] };
+const pagePictures: Line = { running: 0, most: PAGE_PICTURES_IN_FLIGHT, picturesFirst: true, visible: [], first: [], then: [], background: [] };
 
-/** A request about a web page (its `path`) is drawn in the headless browser. */
-const lineOf = (url: string): Line => (/\.html?$/i.test(new URL(url, 'http://studio').searchParams.get('path') ?? '') ? pages : files);
+/** A request about a web page (its `path`) is drawn in the headless browser: its pictures in a line, its facts in another. */
+const lineOf = (url: string, picture = false): Line => (/\.html?$/i.test(new URL(url, 'http://studio').searchParams.get('path') ?? '') ? (picture ? pagePictures : pages) : files);
 
 /** Wait for a turn, run, give the turn on. `still`: asked when the turn comes; false skips it (not wanted any more). */
 async function inTurn<T>(run: () => Promise<T>, line: Line, picture: boolean, priority: Priority, still?: () => boolean): Promise<T | undefined> {
@@ -73,7 +81,7 @@ export async function mediaImage(url: string, still?: () => boolean, priority: P
     img.onload = () => loaded(true);
     img.onerror = () => loaded(false);
     img.src = url;
-  }), lineOf(url), true, priority, () => stills.some((s) => s())).then((ok) => {
+  }), lineOf(url, true), true, priority, () => stills.some((s) => s())).then((ok) => {
     WAITING.delete(url);
     if (ok) {
       LOADED.add(url);

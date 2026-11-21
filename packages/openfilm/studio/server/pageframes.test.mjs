@@ -1,8 +1,9 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { createServer } from 'node:http';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { availableParallelism, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { startStudio } from './server.mjs';
 import { filmHtml } from '../../src/film-doc.mjs';
@@ -213,6 +214,103 @@ test('a page\'s facts: its own size, or none (reflows: shown alone at 1920 × 10
   const facts = async (path) => (await api(`/api/projects/${project.id}/media?what=probe&path=${path}`)).json();
   assert.deepEqual(await facts('chart.html'), { width: 480, height: 320 });
   assert.deepEqual(await facts('cards.html'), { duration: 5, width: 1920, height: 1080, reflows: true });
+});
+
+test('a page\'s facts are kept while its files are as they were, and one that cannot say them is not opened again each time', async () => {
+  const { project } = await (await api('/api/projects', { method: 'POST', body: { path: join(scratch, 'Kept facts') } })).json();
+  writeFileSync(join(project.path, 'long.js'), 'window.film = { duration: 5, frame() {} };');
+  writeFileSync(join(project.path, 'cards.html'), '<!doctype html><script src="long.js"></script>');
+  /* a draft whose film never comes ready: one of its files is not there */
+  writeFileSync(join(project.path, 'draft.html'), '<!doctype html><script>window.film = { duration: 2, ready: Promise.reject(new Error("no data.json")), frame() {} };</script>');
+  const ask = (path) => api(`/api/projects/${project.id}/media?what=probe&path=${path}`);
+  assert.deepEqual(await (await ask('cards.html')).json(), { duration: 5, width: 1920, height: 1080, reflows: true });
+  const kept = join(project.path, '.film', 'cache', 'pagefacts');
+  assert.equal(readdirSync(kept).length, 1, 'kept with the files the page loaded');
+  assert.ok(JSON.parse(readFileSync(join(kept, readdirSync(kept)[0]), 'utf8')).files.includes('long.js'));
+  const t0 = Date.now();
+  assert.deepEqual(await (await ask('cards.html')).json(), { duration: 5, width: 1920, height: 1080, reflows: true });
+  assert.ok(Date.now() - t0 < 500, 'answered from what was kept, the page not opened');
+  /* a file the page loads changed: its facts are read again */
+  writeFileSync(join(project.path, 'long.js'), 'window.film = { duration: 8.5, frame() {} };');
+  assert.equal((await (await ask('cards.html')).json()).duration, 8.5);
+  /* the draft: said once it cannot be read, then said again at once, as long as its file is as it was */
+  const failed = await ask('draft.html');
+  assert.equal(failed.status, 422);
+  const why = (await failed.json()).error;
+  assert.match(why, /no data\.json/);
+  const t1 = Date.now();
+  const again = await ask('draft.html');
+  assert.equal(again.status, 422);
+  assert.equal((await again.json()).error, why);
+  assert.ok(Date.now() - t1 < 500);
+  /* written again, it is read again */
+  writeFileSync(join(project.path, 'draft.html'), '<!doctype html><script>window.film = { duration: 2, frame() {} };</script>');
+  assert.equal((await (await ask('draft.html')).json()).duration, 2);
+});
+
+test('a page is opened once for its poster, its thumbnails and its facts, each picture at its own width', async () => {
+  const { project } = await (await api('/api/projects', { method: 'POST', body: { path: join(scratch, 'Opened once') } })).json();
+  /* each time the page is opened it says so, to a server of the test's */
+  const opened = [];
+  const counter = createServer((req, res) => { opened.push(req.url); res.writeHead(204); res.end(); });
+  await new Promise((done) => counter.listen(0, '127.0.0.1', () => done(undefined)));
+  try {
+    writeFileSync(join(project.path, 'p.html'), `<!doctype html><body style="margin:0;background:#06c"><script>
+      new Image().src = 'http://127.0.0.1:${counter.address().port}/opened';
+      window.film = { duration: 4, frame() {} };
+    </script></body>`);
+    const media = async (q) => {
+      const res = await api(`/api/projects/${project.id}/media?path=p.html&${q}`);
+      assert.equal(res.status, 200);
+      return Buffer.from(await res.arrayBuffer());
+    };
+    /* a JPEG's size: in its frame header (SOF0 or SOF2) */
+    const sizeOf = (jpeg) => {
+      for (let i = 2; i < jpeg.length - 8; i += 2 + jpeg.readUInt16BE(i + 2)) {
+        if (jpeg[i] === 0xff && (jpeg[i + 1] === 0xc0 || jpeg[i + 1] === 0xc2)) return { w: jpeg.readUInt16BE(i + 7), h: jpeg.readUInt16BE(i + 5) };
+      }
+      return null;
+    };
+    await media('what=poster');
+    assert.deepEqual(sizeOf(await media('what=frame&ms=1000&w=160')), { w: 160, h: 90 }, 'a thumbnail is its own width, taken of the page open at the poster\'s');
+    assert.deepEqual(sizeOf(await media('what=frame&ms=3000&w=160')), { w: 160, h: 90 });
+    assert.deepEqual(sizeOf(await media('what=frame&ms=3000&w=480')), { w: 480, h: 270 });
+    const t0 = Date.now();
+    assert.deepEqual(await (await api(`/api/projects/${project.id}/media?what=probe&path=p.html`)).json(), { duration: 4, width: 1920, height: 1080, reflows: true });
+    assert.ok(Date.now() - t0 < 500, 'its facts were learnt as its pictures were drawn');
+    assert.deepEqual(opened, ['/opened'], 'opened once for all of them');
+  } finally {
+    counter.close();
+  }
+});
+
+test('pages\' pictures are drawn a few at once where the machine has the cores: one slow to get ready does not hold the next', { skip: availableParallelism() < 6 && 'one at a time on a small machine' }, async () => {
+  const { project } = await (await api('/api/projects', { method: 'POST', body: { path: join(scratch, 'At once') } })).json();
+  writeFileSync(join(project.path, 'slow.html'), '<!doctype html><body style="background:#a00"><script>window.film = { duration: 2, ready: new Promise((r) => setTimeout(r, 3000)), frame() {} };</script></body>');
+  writeFileSync(join(project.path, 'quick.html'), '<!doctype html><body style="background:#0a0"><script>window.film = { duration: 2, frame() {} };</script></body>');
+  const frame = (path) => api(`/api/projects/${project.id}/media?what=frame&path=${path}&ms=500&w=160`);
+  const t0 = Date.now();
+  const slow = frame('slow.html');
+  await new Promise((r) => setTimeout(r, 200));
+  assert.equal((await frame('quick.html')).status, 200);
+  assert.ok(Date.now() - t0 < 2500, `drawn beside the slow one: ${Date.now() - t0} ms`);
+  assert.equal((await slow).status, 200);
+  assert.ok(Date.now() - t0 >= 3000);
+});
+
+test('a page that is long in failing to say its facts holds no other page\'s picture behind it', { timeout: 60_000 }, async () => {
+  const { project } = await (await api('/api/projects', { method: 'POST', body: { path: join(scratch, 'Apart') } })).json();
+  /* its film never comes ready: the browser waits for it until it gives it up, a quarter of a minute */
+  writeFileSync(join(project.path, 'never.html'), '<!doctype html><script>window.film = { duration: 2, ready: new Promise(() => {}), frame() {} };</script>');
+  writeFileSync(join(project.path, 'p.html'), '<!doctype html><body style="background:#0a0"><script>window.film = { duration: 2, frame() {} };</script></body>');
+  const t0 = Date.now();
+  const facts = api(`/api/projects/${project.id}/media?what=probe&path=never.html`);
+  await new Promise((r) => setTimeout(r, 300));
+  const frame = await api(`/api/projects/${project.id}/media?what=frame&path=p.html&ms=500&w=160`);
+  assert.equal(frame.status, 200);
+  assert.ok(Date.now() - t0 < 10_000, `the picture came while the facts were still waited for: ${Date.now() - t0} ms`);
+  assert.equal((await facts).status, 422);
+  assert.ok(Date.now() - t0 >= 10_000, 'which took as long as the browser waits');
 });
 
 const hasFfmpeg = (() => { try { execFileSync('ffmpeg', ['-version'], { stdio: 'ignore' }); return true; } catch { return false; } })();

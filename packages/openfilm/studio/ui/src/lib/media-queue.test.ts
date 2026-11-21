@@ -61,33 +61,41 @@ test('a picture that does not load says so, and is asked for again next time', a
   assert.deepEqual(asked, ['broken-1', 'broken-1']);
 });
 
-test('web pages, drawn one at a time by the server, go one at a time; a media file\'s go beside them', async () => {
+test('web pages\' pictures, drawn a few at a time by the server, go two at a time; a media file\'s go beside them', async () => {
   asked.length = 0;
   const page = (n: number) => `/media?what=frame&path=scene-${n}.html`;
-  const got = [mediaImage(page(1)), mediaImage(page(2)), mediaFetch('/media?what=wave&path=assets/song.mp3')];
+  const got = [mediaImage(page(1)), mediaImage(page(2)), mediaImage(page(3)), mediaFetch('/media?what=wave&path=assets/song.mp3')];
   await tick();
-  assert.deepEqual(asked, [page(1), '/media?what=wave&path=assets/song.mp3'], 'the sound is not behind the pages');
+  assert.deepEqual(asked, [page(1), page(2), '/media?what=wave&path=assets/song.mp3'], 'two pages, and the sound is not behind them');
   await answer(page(1));
-  assert.deepEqual(asked, [page(1), '/media?what=wave&path=assets/song.mp3', page(2)]);
+  assert.deepEqual(asked, [page(1), page(2), '/media?what=wave&path=assets/song.mp3', page(3)]);
   await answer('/media?what=wave&path=assets/song.mp3');
   await answer(page(2));
+  await answer(page(3));
   await Promise.all(got);
 });
 
-test('a page\'s pictures go before its facts', async () => {
+test('a page\'s pictures do not wait behind a page\'s facts: one that is long in saying them holds no thumbnail', async () => {
   asked.length = 0;
   const p = (what: string, n: number) => `/media?what=${what}&path=scene-${n}.html`;
-  const got = [mediaImage(p('poster', 1)), mediaFetch(p('probe', 2)), mediaImage(p('poster', 3))];
+  /* the facts of a page that will not answer for a long while, asked first; then pictures, and other facts */
+  const got = [mediaFetch(p('probe', 1)), mediaImage(p('poster', 2)), mediaFetch(p('probe', 3)), mediaImage(p('frame', 4)), mediaImage(p('frame', 5))];
   await tick();
-  await answer(p('poster', 1));
-  assert.deepEqual(asked, [p('poster', 1), p('poster', 3)]);
-  await answer(p('poster', 3));
-  await answer(p('probe', 2));
+  assert.deepEqual(asked, [p('probe', 1), p('poster', 2), p('frame', 4)], 'pictures are asked for beside the facts');
+  await answer(p('poster', 2));
+  assert.deepEqual(asked, [p('probe', 1), p('poster', 2), p('frame', 4), p('frame', 5)], 'the pictures go on, two at a time, while the facts are still out');
+  await answer(p('frame', 4));
+  await answer(p('frame', 5));
+  assert.deepEqual(asked, [p('probe', 1), p('poster', 2), p('frame', 4), p('frame', 5)], 'the other facts wait for the first');
+  await answer(p('probe', 1));
+  await answer(p('probe', 3));
   await Promise.all(got);
 });
 
 test('visible cards go before timeline thumbnails and background scans', async () => {
   asked.length = 0;
+  /* this line's own count: the pages before it went beside the files, in lines of their own */
+  most = 0;
   const got = [
     mediaFetch('scan-running-1', undefined, 'background'),
     mediaFetch('scan-running-2', undefined, 'background'),

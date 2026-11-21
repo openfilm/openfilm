@@ -1,10 +1,10 @@
 import { test, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readdirSync, statSync, utimesSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, statSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { MediaError, frame, loudness, loudnessOf, mixLoudness, peakCounter, poster, probe, soundOf, waveform } from './derived.mjs';
+import { MediaError, frame, loudness, loudnessOf, mixLoudness, peakCounter, poster, probe, soundOf, strip, stripPicture, waveform } from './derived.mjs';
 
 let root;
 const hasFfmpeg = (() => { try { execFileSync('ffmpeg', ['-version'], { stdio: 'ignore' }); return true; } catch { return false; } })();
@@ -51,11 +51,128 @@ test('poster and frames are JPEG, cached until the file changes', { skip: !hasFf
   assert.equal(readdirSync(join(root, '.film', 'cache', 'frames')).length, 2, 'a changed file is worked out again');
 });
 
+test('a frame is cut from a lighter copy of the file when there is one, and from the file itself when that cannot be read', { skip: !hasFfmpeg && 'no ffmpeg' }, async () => {
+  /* a copy with the same frames at the same times, half the size, as the preview's proxy is */
+  execFileSync('ffmpeg', ['-v', 'error', '-i', join(root, 'assets', 'clip.mp4'), '-vf', 'scale=160:90,drawbox=0:0:160:90:red:fill', '-an', '-pix_fmt', 'yuv420p', join(root, 'copy.mp4')]);
+  const size = (jpeg) => { const at = jpeg.indexOf(Buffer.from([0xff, 0xc0])); return [jpeg.readUInt16BE(at + 7), jpeg.readUInt16BE(at + 5)]; };
+  const fromCopy = await frame(root, 'assets/clip.mp4', 700, 160, join(root, 'copy.mp4'));
+  assert.deepEqual(size(fromCopy), [160, 90]);
+  /* red all over: the copy's picture, not the file's test pattern */
+  const own = await frame(root, 'assets/clip.mp4', 900, 160);
+  assert.notDeepEqual(fromCopy, own);
+  const fallen = await frame(root, 'assets/clip.mp4', 1100, 160, join(root, 'gone.mp4'));
+  assert.deepEqual([...fallen.subarray(0, 2)], [0xff, 0xd8], 'a copy that is not there: the file itself');
+  assert.deepEqual(size(fallen), [160, 90]);
+});
+
+test('a video\'s strip: pictures from all along it in one image, from its key frames at once where they are close enough', { skip: !hasFfmpeg && 'no ffmpeg' }, async () => {
+  /* six seconds, a key frame every 0.4 s: as close as the pictures wanted (one every half second) */
+  execFileSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'testsrc=size=320x180:rate=25:duration=6', '-pix_fmt', 'yuv420p', '-g', '10', '-keyint_min', '10', '-sc_threshold', '0', join(root, 'assets', 'keys.mp4')]);
+  const made = await strip(root, 'assets/keys.mp4');
+  assert.equal(made.part, 'all');
+  assert.equal(made.closer, false, 'all it will ever be');
+  const { cols, rows, w, h, times } = made.index;
+  assert.deepEqual([cols, w, h], [12, 160, 90]);
+  /* its key frames no closer than the half second asked: every other one of them, each at its own moment (the file's
+     list of them: read apart from the frames between, a decoder says them a few frames off) */
+  assert.deepEqual(times, [0, 800, 1600, 2400, 3200, 4000, 4800, 5600]);
+  assert.ok(times.at(-1) < 6000);
+  assert.equal(rows, Math.ceil(times.length / 12));
+  const jpeg = readFileSync(made.picture);
+  assert.deepEqual([...jpeg.subarray(0, 2)], [0xff, 0xd8]);
+  assert.equal(await stripPicture(root, 'assets/keys.mp4', 'all'), made.picture);
+  /* kept: asked again, nothing is made, and the answer is the same */
+  const before = statSync(made.picture).mtimeMs;
+  assert.deepEqual((await strip(root, 'assets/keys.mp4')).index, made.index);
+  assert.equal(statSync(made.picture).mtimeMs, before);
+});
+
+test('a video whose key frames are far apart has a first strip of those at once, and a closer one made behind it', { skip: !hasFfmpeg && 'no ffmpeg', timeout: 60_000 }, async () => {
+  /* six seconds with a single key frame (a generated clip) */
+  execFileSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'testsrc=size=320x180:rate=25:duration=6', '-pix_fmt', 'yuv420p', '-g', '250', '-sc_threshold', '0', join(root, 'assets', 'one-key.mp4')]);
+  const first = await strip(root, 'assets/one-key.mp4');
+  assert.equal(first.part, 'keys');
+  assert.equal(first.closer, true, 'a closer one is being made');
+  assert.deepEqual(first.index.times, [0], 'its one key frame');
+  assert.equal(await stripPicture(root, 'assets/one-key.mp4', 'keys'), first.picture);
+  /* asked again as an editor does: the closer one takes its place once made */
+  let made = first;
+  for (let i = 0; i < 100 && made.part !== 'all'; i += 1) { await new Promise((r) => setTimeout(r, 100)); made = await strip(root, 'assets/one-key.mp4'); }
+  assert.equal(made.part, 'all');
+  assert.equal(made.closer, false);
+  assert.ok(made.index.times.length >= 10, `a picture every half second: ${made.index.times}`);
+  /* decoded without the frames nothing is built on: still one about every half second, none further than a second */
+  assert.ok(made.index.times.every((t, i) => i === 0 || (t - made.index.times[i - 1] >= 400 && t - made.index.times[i - 1] <= 1000)), `half a second apart: ${made.index.times}`);
+  assert.notEqual(made.picture, first.picture);
+});
+
+/* an HEVC encoder to make the footage with: x265, or the Mac's own */
+const hevcEncoder = (() => {
+  if (!hasFfmpeg) return null;
+  try {
+    const list = execFileSync('ffmpeg', ['-hide_banner', '-encoders'], { stdio: ['ignore', 'pipe', 'ignore'] }).toString();
+    return /\blibx265\b/.test(list) ? 'libx265' : /\bhevc_videotoolbox\b/.test(list) ? 'hevc_videotoolbox' : null;
+  } catch { return null; }
+})();
+
+test('an HEVC video has its strips and frames, decoded on the graphics chip where one decodes it and by the processor where none does', { skip: !hevcEncoder && 'no HEVC encoder', timeout: 120_000 }, async () => {
+  /* eight seconds, a key frame every ten: its key frames are no strip to stay on, so every frame is decoded too */
+  execFileSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'testsrc2=size=640x360:rate=25:duration=8',
+    '-c:v', hevcEncoder, ...(hevcEncoder === 'libx265' ? ['-x265-params', 'log-level=error:keyint=250:min-keyint=250:scenecut=0'] : ['-g', '250']),
+    '-tag:v', 'hvc1', '-pix_fmt', 'yuv420p', join(root, 'assets', 'hevc.mp4')]);
+  assert.equal((await probe(root, 'assets/hevc.mp4')).codec, 'hevc');
+  const first = await strip(root, 'assets/hevc.mp4');
+  assert.equal(first.part, 'keys');
+  assert.deepEqual(first.index.times, [0]);
+  let made = first;
+  for (let i = 0; i < 300 && made.part !== 'all'; i += 1) { await new Promise((r) => setTimeout(r, 100)); made = await strip(root, 'assets/hevc.mp4'); }
+  assert.equal(made.part, 'all');
+  assert.ok(made.index.times.length >= 14, `a picture every half second: ${made.index.times}`);
+  assert.ok(made.index.times.every((t, i) => i === 0 || (t - made.index.times[i - 1] >= 400 && t - made.index.times[i - 1] <= 1000)), `half a second apart: ${made.index.times}`);
+  const jpeg = await frame(root, 'assets/hevc.mp4', 5300, 160);
+  assert.deepEqual([...jpeg.subarray(0, 2)], [0xff, 0xd8]);
+});
+
+test('what has no moving picture has no strip', { skip: !hasFfmpeg && 'no ffmpeg' }, async () => {
+  await assert.rejects(strip(root, 'assets/tone.wav'), (e) => e instanceof MediaError && e.status === 422);
+  await assert.rejects(strip(root, 'assets/nope.mp4'), (e) => e instanceof MediaError && e.status === 404);
+});
+
 test('a poster of a picture or video with an alpha is a PNG with it, so what it leaves clear stays clear', { skip: !hasFfmpeg && 'no ffmpeg' }, async () => {
   execFileSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'color=c=red@0.0:size=200x100,format=rgba', '-frames:v', '1', join(root, 'assets', 'clear.png')]);
   const png = await poster(root, 'assets/clear.png');
   assert.equal(png.subarray(1, 4).toString('latin1'), 'PNG');
   assert.equal(png[25], 6, 'its color type keeps the alpha (RGBA)');
+});
+
+test('a picture file\'s poster is the picture itself, small: a JPEG\'s too, turned as its Exif says', { skip: !hasFfmpeg && 'no ffmpeg' }, async () => {
+  /* a JPEG's size: in its frame header (SOF0 or SOF2) */
+  const sizeOf = (jpeg) => {
+    for (let i = 2; i < jpeg.length - 8; i += 2 + jpeg.readUInt16BE(i + 2)) {
+      if (jpeg[i] === 0xff && (jpeg[i + 1] === 0xc0 || jpeg[i + 1] === 0xc2)) return [jpeg.readUInt16BE(i + 7), jpeg.readUInt16BE(i + 5)];
+    }
+    return null;
+  };
+  execFileSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'testsrc=size=640x400', '-frames:v', '1', '-update', '1', join(root, 'assets', 'photo.jpg')]);
+  /* sought, a JPEG gives no frame (ffmpeg 8): its poster was an empty file, kept */
+  const small = await poster(root, 'assets/photo.jpg');
+  assert.deepEqual(sizeOf(small), [480, 300]);
+  /* the same photograph as a phone held upright writes it: its pixels on their side, and an Exif that says so (6) */
+  const plain = readFileSync(join(root, 'assets', 'photo.jpg'));
+  const exif = Buffer.concat([Buffer.from('Exif\0\0MM\0*', 'latin1'), Buffer.from([0, 0, 0, 8, 0, 1, 0x01, 0x12, 0, 3, 0, 0, 0, 1, 0, 6, 0, 0, 0, 0, 0, 0])]);
+  const head = Buffer.alloc(4);
+  head.writeUInt16BE(0xffe1, 0);
+  head.writeUInt16BE(exif.length + 2, 2);
+  writeFileSync(join(root, 'assets', 'upright.jpg'), Buffer.concat([plain.subarray(0, 2), head, exif, plain.subarray(2)]));
+  assert.deepEqual(sizeOf(await poster(root, 'assets/upright.jpg')), [480, 768], 'turned upright, as a browser shows it');
+  /* and its size is said as it is shown */
+  const [plainFacts, uprightFacts] = [await probe(root, 'assets/photo.jpg'), await probe(root, 'assets/upright.jpg')];
+  assert.deepEqual([plainFacts.width, plainFacts.height, plainFacts.duration], [640, 400, undefined]);
+  assert.deepEqual([uprightFacts.width, uprightFacts.height], [400, 640]);
+  /* a file that is no picture has no poster, and none is kept for it */
+  writeFileSync(join(root, 'assets', 'broken.jpg'), 'not a picture');
+  await assert.rejects(poster(root, 'assets/broken.jpg'));
+  assert.ok(readdirSync(join(root, '.film', 'cache', 'posters')).every((name) => statSync(join(root, '.film', 'cache', 'posters', name)).size > 0));
 });
 
 test('waveform: loud where the tone is, silent after', { skip: !hasFfmpeg && 'no ffmpeg' }, async () => {

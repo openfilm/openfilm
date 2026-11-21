@@ -10,10 +10,12 @@
 import { execFile, spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { createReadStream, existsSync } from 'node:fs';
-import { mkdir, mkdtemp, readFile, rename, rm, stat } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { mkdir, mkdtemp, open, readFile, rename, rm, stat } from 'node:fs/promises';
+import { availableParallelism, setPriority, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { audioClips, fileOf, knowAudioChannels, mix } from '../../src/shared.mjs';
+import { hardwareDecoding } from '../../src/encoders.mjs';
+import { clipKind } from '../../src/film-doc.mjs';
 import { hasAlpha, keyFrameGap } from '../../src/seekable.mjs';
 import { readable } from './files.mjs';
 import { TOOL_DIR } from './projects.mjs';
@@ -28,23 +30,31 @@ export class MediaError extends Error {
 }
 
 /** @typedef {{ size: number, busy: number, waiting: (() => void)[] }} Slots */
-/** @type {Slots} */
-const SLOTS = { size: 3, busy: 0, waiting: [] };
+/**
+ * How many ffmpeg and ffprobe run at once for what the editor is waiting on (a file's facts, a poster, a frame, a
+ * strip of key frames): three, and on a machine of more cores half of them, up to six. A film's strips are begun
+ * together when it is opened (server.mjs filmStripsSoon); with five at once on ten cores its thumbnails were all in
+ * a seventh sooner than with three.
+ * @type {Slots}
+ */
+const SLOTS = { size: Math.max(3, Math.min(6, Math.floor(availableParallelism() / 2))), busy: 0, waiting: [] };
 /** @type {Slots} */
 const SOUND_SLOTS = { size: 2, busy: 0, waiting: [] };
 /** Run `tool` with `args` when one of `slots` is free; resolves with its stdout (`stderr`: its stderr) as a Buffer. */
-async function tool(/** @type {'ffmpeg' | 'ffprobe'} */ name, /** @type {string[]} */ args, slots = SLOTS, stderrOut = false) {
+async function tool(/** @type {'ffmpeg' | 'ffprobe'} */ name, /** @type {string[]} */ args, slots = SLOTS, stderrOut = false, low = false) {
   if (slots.busy >= slots.size) await new Promise((r) => slots.waiting.push(() => r(undefined)));
   slots.busy++;
   try {
     return await new Promise((resolve, reject) => {
-      execFile(name, args, { encoding: 'buffer', maxBuffer: 64 << 20, windowsHide: true }, (error, stdout, stderr) => {
+      const child = execFile(name, args, { encoding: 'buffer', maxBuffer: 64 << 20, windowsHide: true }, (error, stdout, stderr) => {
         if (!error) return resolve(stderrOut ? stderr : stdout);
         if (/** @type {NodeJS.ErrnoException} */ (error).code === 'ENOENT') {
           return reject(new MediaError(`${name} is not installed (macOS: brew install ffmpeg · Debian/Ubuntu: sudo apt install ffmpeg · Windows: winget install ffmpeg)`, 501));
         }
         reject(new MediaError(stderr.toString().trim().split('\n').pop() || error.message));
       });
+      /* `low`: work nobody is waiting on (a closer strip) gives way to the editor and the person's other apps */
+      if (low) try { if (child.pid) setPriority(child.pid, 10); } catch { /* left as it is */ }
     });
   } finally {
     slots.busy--;
@@ -81,7 +91,10 @@ async function cached(/** @type {string} */ root, /** @type {string} */ kind, /*
  */
 export async function probe(root, rel) {
   const { abs, key } = await source(root, rel);
-  const bytes = await cached(root, 'probe', `${key}.5.json`, async () => {
+  /* a photograph a phone took upright has its pixels on their side and an Exif that says so, which ffprobe does not
+     say: its size is as it is shown, like a turned video's (kept under a name of its own: one read before was not) */
+  const photo = /\.jpe?g$/i.test(rel);
+  const bytes = await cached(root, 'probe', `${key}.${photo ? 6 : 5}.json`, async () => {
     const out = JSON.parse((await tool('ffprobe', ['-v', 'error', '-print_format', 'json', '-show_format', '-show_streams', abs])).toString());
     const video = out.streams?.find((/** @type {{ codec_type: string, disposition?: { attached_pic?: number } }} */ s) =>
       s.codec_type === 'video' && !s.disposition?.attached_pic);
@@ -89,7 +102,7 @@ export async function probe(root, rel) {
     const [n, d] = String(video?.avg_frame_rate ?? '0/1').split('/').map(Number);
     const duration = Number(out.format?.duration);
     const turn = Number(video?.side_data_list?.find((/** @type {{ rotation?: number }} */ s) => s.rotation != null)?.rotation ?? video?.tags?.rotate ?? 0);
-    const quarter = Math.abs(Math.round(turn / 90)) % 2 === 1;
+    const quarter = photo ? await jpegOrientation(abs) >= 5 : Math.abs(Math.round(turn / 90)) % 2 === 1;
     return Buffer.from(JSON.stringify({
       ...(Number.isFinite(duration) && duration > 0 && !/image|png|mjpeg/.test(String(out.format?.format_name)) ? { duration } : {}),
       ...(video ? (quarter ? { width: video.height, height: video.width } : { width: video.width, height: video.height }) : {}),
@@ -117,27 +130,239 @@ export async function keyGap(root, rel) {
 
 /**
  * A video's or a picture's poster: one frame a second in (or its first), 480 px wide, as JPEG; as PNG when it has an
- * alpha in its pixels (a ProRes 4444, a PNG), so what it leaves clear stays clear.
+ * alpha in its pixels (a ProRes 4444, a PNG), so what it leaves clear stays clear. A picture file's is the picture
+ * itself, small (the timeline draws a picture clip's cells from it: the file itself, a photograph of twelve million
+ * pixels, was read and decoded whole by the editor for a cell a few dozen pixels wide, each time the project opened).
  */
 export async function poster(/** @type {string} */ root, /** @type {string} */ rel) {
   const { abs, key } = await source(root, rel);
   const clear = hasAlpha({ pix_fmt: (await probe(root, rel).catch(() => null))?.pixfmt });
   const as = clear ? ['-pix_fmt', 'rgba', '-vcodec', 'png'] : ['-vcodec', 'mjpeg', '-q:v', '4'];
-  return cached(root, 'posters', `${key}.${clear ? 'png' : 'jpg'}`, async () => {
-    const grab = (/** @type {string} */ at) => tool('ffmpeg', ['-v', 'error', '-ss', at, '-i', abs, '-frames:v', '1', '-vf', 'scale=480:-2', '-f', 'image2pipe', ...as, '-']);
-    const frame = await grab('1').catch(() => Buffer.alloc(0));
-    return frame.length ? frame : grab('0');
+  const still = clipKind(rel) === 'still';
+  /* a picture's is kept under a name of its own: one kept before could be empty (below) */
+  return cached(root, 'posters', `${key}${still ? '.p' : ''}.${clear ? 'png' : 'jpg'}`, async () => {
+    const grab = (/** @type {string[]} */ reading, turned = '') => tool('ffmpeg', ['-v', 'error', ...reading, '-i', abs, '-frames:v', '1', '-vf', `${turned}scale=480:-2`, '-f', 'image2pipe', ...as, '-']);
+    if (still) {
+      /* a picture has one frame, at no moment: sought (even to 0), a JPEG gives none (ffmpeg 8), and the poster kept
+         was an empty file. A photograph is turned as its Exif says, as a browser shows it: said here, since an ffmpeg
+         before 7 does not turn it by itself, and the thumbnail lay on its side */
+      const turned = /\.jpe?g$/i.test(rel) ? TURNED[await jpegOrientation(abs)] ?? '' : null;
+      const made = await grab(turned == null ? [] : ['-noautorotate'], turned ?? '');
+      if (!made.length) throw new MediaError(`no picture could be read from ${rel}`);
+      return made;
+    }
+    const frame = await grab(['-ss', '1']).catch(() => Buffer.alloc(0));
+    return frame.length ? frame : grab(['-ss', '0']);
   });
 }
 
+/** What turns a JPEG upright, by the orientation its Exif says (2 to 8), as ffmpeg filters before the next. */
+const TURNED = /** @type {Record<number, string>} */ ({ 2: 'hflip,', 3: 'hflip,vflip,', 4: 'vflip,', 5: 'transpose=0,', 6: 'transpose=1,', 7: 'transpose=3,', 8: 'transpose=2,' });
+
+/** A JPEG's orientation as its Exif says (1 to 8); 1, as stored, when it says none or cannot be read. */
+async function jpegOrientation(/** @type {string} */ abs) {
+  const file = await open(abs, 'r').catch(() => null);
+  if (!file) return 1;
+  try {
+    /* the Exif is in a segment before the picture's data, at most 64 KB, after at most a few others */
+    const { buffer, bytesRead } = await file.read(Buffer.alloc(262144), 0, 262144, 0);
+    const b = buffer.subarray(0, bytesRead);
+    if (b.readUInt16BE(0) !== 0xffd8) return 1;
+    for (let i = 2; b[i] === 0xff && b[i + 1] !== 0xda && b[i + 1] !== 0xd9; i += 2 + b.readUInt16BE(i + 2)) {
+      if (b[i + 1] !== 0xe1 || b.toString('latin1', i + 4, i + 10) !== 'Exif\0\0') continue;
+      const tiff = i + 10;
+      const little = b.toString('latin1', tiff, tiff + 2) === 'II';
+      const u16 = (/** @type {number} */ at) => (little ? b.readUInt16LE(at) : b.readUInt16BE(at));
+      const ifd = tiff + (little ? b.readUInt32LE(tiff + 4) : b.readUInt32BE(tiff + 4));
+      for (let n = u16(ifd), entry = ifd + 2; n > 0; n -= 1, entry += 12) {
+        if (u16(entry) === 0x0112) return u16(entry + 8) >= 1 && u16(entry + 8) <= 8 ? u16(entry + 8) : 1;
+      }
+      return 1;
+    }
+  } catch { /* cut short, or not as a JPEG is written: as stored */ } finally {
+    await file.close().catch(() => {});
+  }
+  return 1;
+}
+
+/**
+ * The input options that decode a video's picture on the graphics chip, where that is the faster way to its
+ * thumbnails; none where the processor is. Measured on Apple silicon, 4K: an HEVC file's key frames come 1.4 times
+ * sooner from the chip, a frame deep in a long group of pictures twice, the whole file three times; H.264 is the other
+ * way round (the processor decodes it on every core, the chip at a few times the speed it plays), so it and every
+ * other codec stay on the processor. What the chip cannot take, ffmpeg decodes on the processor by itself.
+ * @param {string} root @param {string} rel @returns {Promise<string[]>}
+ */
+async function chipDecoding(root, rel) {
+  const codec = (await probe(root, rel).catch(() => null))?.codec;
+  return codec === 'hevc' ? hardwareDecoding().catch(() => []) : [];
+}
+
 /** The frame of a video at `ms`, `width` px wide (the timeline's thumbnails). */
-export async function frame(/** @type {string} */ root, /** @type {string} */ rel, /** @type {number} */ ms, /** @type {number} */ width) {
+export async function frame(/** @type {string} */ root, /** @type {string} */ rel, /** @type {number} */ ms, /** @type {number} */ width, /** @type {string | null} */ lighter = null) {
   if (!(Number.isFinite(ms) && ms >= 0)) throw new MediaError('which moment?', 400);
   const w = Math.max(32, Math.min(640, Math.round(width / 2) * 2 || 160));
   const { abs, key } = await source(root, rel);
-  return cached(root, 'frames', `${key}-${Math.round(ms)}-${w}.jpg`, () => tool('ffmpeg', [
-    '-v', 'error', '-ss', String(ms / 1000), '-i', abs, '-frames:v', '1', '-vf', `scale=${w}:-2`, '-f', 'image2pipe', '-vcodec', 'mjpeg', '-q:v', '5', '-',
-  ]));
+  const cut = (/** @type {string} */ from, /** @type {string[]} */ decoding = []) => tool('ffmpeg', [
+    '-v', 'error', ...decoding, '-ss', String(ms / 1000), '-i', from, '-frames:v', '1', '-vf', `scale=${w}:-2`, '-f', 'image2pipe', '-vcodec', 'mjpeg', '-q:v', '5', '-',
+  ]);
+  /* from the file itself, on the graphics chip where that is the faster way (chipDecoding), else by the processor */
+  const own = async () => {
+    const chip = await chipDecoding(root, rel);
+    return chip.length ? cut(abs, chip).catch(() => cut(abs)) : cut(abs);
+  };
+  /* `lighter`: a copy of the file with the same frames at the same times, smaller and with key frames close together
+     (the preview's proxy): a frame is cut from it several times sooner (a seek decodes from the key frame before it),
+     and is the same picture at a thumbnail's size; from the file itself when that fails */
+  return cached(root, 'frames', `${key}-${Math.round(ms)}-${w}.jpg`, () => (lighter ? cut(lighter).catch(own) : own()));
+}
+
+/*
+ * A video's strip: pictures from all along it, in one image, made by one run of ffmpeg and kept. The timeline draws a
+ * clip's thumbnails from its file's strip at once (as an editor does, from the pictures it keeps of each recording),
+ * at any zoom and through any trim, split or move, where each cell was a frame of its own to ask for and to cut: a
+ * file opened, sought and decoded for every one, two at a time, and a row stood empty or borrowed until they came.
+ * The frames asked for one by one (frame) still come after, where a cell stands between two of the strip's pictures.
+ *
+ * A file's key frames are read without decoding anything between them, in a fraction of a second however long it is:
+ * where they are as close as the pictures wanted, they are the strip. Where they are further apart (a generated clip
+ * with a single one, a screen recording), they are its first strip, there at once, and a closer one is made behind
+ * it by decoding the whole file, one such file at a time at low priority; whoever asked is told a closer one is coming.
+ */
+/** A strip's pictures: at most STRIP_MOST, no closer than STRIP_STEP (s), each inside a STRIP_SIDE box (two device
+    pixels to a timeline cell's px), STRIP_COLS to a row. */
+const STRIP_MOST = 120, STRIP_STEP = 0.5, STRIP_SIDE = 160, STRIP_COLS = 12;
+/** How much decoding a closer strip may cost, in 1080p frames (ten minutes of 1080p at 30 a second): past that a
+    file keeps its key frames' strip, and the frames asked for one by one fill in. */
+const STRIP_DECODE_MOST = 20_000;
+/** Closer strips are made one at a time, apart from everything else ffmpeg is asked: each decodes a whole file. */
+/** @type {Slots} */
+const STRIP_SLOTS = { size: 1, busy: 0, waiting: [] };
+/** @typedef {{ cols: number, rows: number, w: number, h: number, times: number[] }} StripIndex its grid, each picture's size, and each one's moment in the file (ms), in the grid's order */
+/** @typedef {{ index: StripIndex, picture: string, part: 'keys' | 'all', closer: boolean }} Strip `part`: of its key frames alone, or all it will ever be; `closer`: a closer one is being made */
+/** @type {Map<string, Promise<{ index: StripIndex, picture: string }>>} strips being made, by their picture's file */
+const stripping = new Map();
+/** @type {Set<string>} closer strips that could not be made (by their picture's file): not tried again this launch */
+const stripFailed = new Set();
+
+/** A strip kept at `picture` with its index at `list`; null when it is not (the index is written last). */
+const keptStrip = async (/** @type {string} */ picture, /** @type {string} */ list) => {
+  const index = await readFile(list, 'utf8').then((t) => /** @type {StripIndex} */ (JSON.parse(t)), () => null);
+  return index && existsSync(picture) ? { index, picture } : null;
+};
+
+/**
+ * Make one strip of `abs` into `picture` and `list`: `keys`, of its key frames alone (no closer than `step` s);
+ * else of every frame decoded, at low priority in a line of its own.
+ * @param {string} abs @param {string} rel @param {string} picture @param {string} list
+ * @param {{ step: number, w: number, h: number, rows: number }} plan @param {boolean} keys
+ * @param {string[]} [chip] the input options that decode it on the graphics chip, where that is the faster way
+ */
+function makeStrip(abs, rel, picture, list, plan, keys, chip = []) {
+  let making = stripping.get(picture);
+  if (making) return making;
+  making = (async () => {
+    await mkdir(join(picture, '..'), { recursive: true });
+    const part = `${picture}.${process.pid}.part.jpg`;
+    const most = STRIP_COLS * plan.rows;
+    const drawn = `scale=${plan.w}:${plan.h},tile=${STRIP_COLS}x${plan.rows}`;
+    const run = (/** @type {string[]} */ reading, /** @type {string} */ select, slots = SLOTS, low = false) => tool('ffmpeg', ['-hide_banner', '-nostdin', '-y', '-v', 'info', ...reading, '-i', abs, '-an', '-sn', '-dn',
+      '-vf', `select='${select}',showinfo,${drawn}`, '-frames:v', '1', '-fps_mode', 'passthrough', '-q:v', '5', '-update', '1', part], slots, true, low);
+    /* the first picture, then each one at least a step (less a tenth: frames are not on the step) after the last */
+    const apart = `isnan(prev_selected_t)+gte(t-prev_selected_t\\,${(plan.step * 0.9).toFixed(4)})`;
+    /* each picture's moment as the filter says it passed (showinfo), in the grid's order */
+    const said = (/** @type {Buffer} */ log) => [...log.toString().matchAll(/Parsed_showinfo[^\n]*pts_time:\s*(-?[\d.]+)/g)]
+      .map((m) => Math.max(0, Math.round(Number(m[1]) * 1000))).slice(0, most);
+    try {
+      /** @type {number[]} */
+      let times = [];
+      if (keys) {
+        /* its key frames alone, left unread by the file's reader (`-discard`): read so, the decoder says a key frame's
+           moment wrong (up to a few frames off), so the moments are the file's own list of them, and the ones drawn
+           are picked from that list by their place in it */
+        const at = await keyTimes(abs).catch(() => /** @type {number[]} */ ([]));
+        /** @type {number[]} */
+        const picked = [];
+        let last = -Infinity;
+        at.forEach((t, i) => { if (picked.length < most && t - last >= plan.step * 0.9) { picked.push(i); last = t; } });
+        const unread = ['-discard:v', 'nokey', '-skip_frame', 'nokey'];
+        const these = picked.map((i) => `eq(n\\,${i})`).join('+');
+        const ran = picked.length
+          ? await (chip.length ? run([...chip, ...unread], these).catch(() => run(unread, these)) : run(unread, these)).then(() => true, () => false)
+          : false;
+        if (ran) times = picked.map((i) => Math.max(0, Math.round(at[i] * 1000)));
+        /* a file whose key frames cannot be listed or read apart: decoded as they come, the others skipped, each at
+           the moment the decoder says (right, read so) */
+        else times = said(await run(['-skip_frame', 'nokey'], apart));
+      } else {
+        /* every frame: on the chip where that is faster; else without what a small picture does not show (the loop
+           filter), nor the frames nothing is built on */
+        const light = () => run(['-skip_loop_filter', 'all', '-skip_frame', 'noref'], apart, STRIP_SLOTS, true).catch(() => run([], apart, STRIP_SLOTS, true));
+        times = said(await (chip.length ? run(chip, apart, STRIP_SLOTS, true).catch(light) : light()));
+      }
+      if (!times.length || !existsSync(part)) throw new MediaError(`${rel}: no picture could be read from it`, 422);
+      await rename(part, picture);
+      /** @type {StripIndex} */
+      const index = { cols: STRIP_COLS, rows: Math.ceil(times.length / STRIP_COLS), w: plan.w, h: plan.h, times };
+      await writeAtomic(list, Buffer.from(JSON.stringify(index)));
+      return { index, picture };
+    } finally {
+      await rm(part, { force: true }).catch(() => {});
+    }
+  })().finally(() => stripping.delete(picture));
+  stripping.set(picture, making);
+  return making;
+}
+
+/** When each key frame of a video's picture is (s), in order: the file's own list, read without decoding anything. */
+async function keyTimes(/** @type {string} */ abs) {
+  const listed = await tool('ffprobe', ['-v', 'error', '-select_streams', 'v:0', '-show_entries', 'packet=pts_time,flags', '-of', 'csv=p=0', abs]);
+  /** @type {number[]} */
+  const out = [];
+  for (const line of listed.toString().split('\n')) {
+    const [pts, flags] = line.split(',');
+    const t = Number(pts);
+    if (flags?.startsWith('K') && Number.isFinite(t)) out.push(t);
+  }
+  return out.sort((a, b) => a - b);
+}
+
+/**
+ * The strip of video `rel` as it is now: the one of all it will ever be when that is made (or its key frames are it),
+ * else the one of its key frames, made at once, a closer one begun behind it.
+ * @param {string} root @param {string} rel @returns {Promise<Strip>}
+ */
+export async function strip(root, rel) {
+  const { abs, key } = await source(root, rel);
+  const dir = join(root, TOOL_DIR, 'cache', 'strips');
+  const all = { picture: join(dir, `${key}.2.jpg`), list: join(dir, `${key}.2.json`) };
+  const whole = await keptStrip(all.picture, all.list);
+  if (whole) return { ...whole, part: 'all', closer: false };
+  const facts = await probe(root, rel);
+  const seconds = Number(facts.duration), width = Number(facts.width), height = Number(facts.height);
+  if (!(seconds > 0 && width > 0 && height > 0)) throw new MediaError(`${rel} has no moving picture`, 422);
+  const most = Math.max(1, Math.min(STRIP_MOST, Math.round(seconds / STRIP_STEP)));
+  const even = (/** @type {number} */ n) => Math.max(2, Math.round(n / 2) * 2);
+  const k = STRIP_SIDE / Math.max(width, height);
+  const plan = { step: seconds / most, w: even(width * k), h: even(height * k), rows: Math.ceil((most + 1) / STRIP_COLS) };
+  const gap = await keyGap(root, rel).catch(() => null);
+  const chip = await chipDecoding(root, rel);
+  /* its key frames are as close as the pictures wanted: they are all its strip will ever be */
+  if (gap != null && gap <= plan.step * 2) return { ...await makeStrip(abs, rel, all.picture, all.list, plan, true, chip), part: 'all', closer: false };
+  const keys = { picture: join(dir, `${key}.2k.jpg`), list: join(dir, `${key}.2k.json`) };
+  const first = await keptStrip(keys.picture, keys.list) ?? await makeStrip(abs, rel, keys.picture, keys.list, plan, true, chip);
+  /* a closer one, of every frame, where decoding the whole file is not too much; made behind, and kept for next time */
+  const decoding = seconds * (Number(facts.fps) > 0 ? Number(facts.fps) : 30) * ((width * height) / (1920 * 1080));
+  const closer = decoding <= STRIP_DECODE_MOST && !stripFailed.has(all.picture);
+  if (closer) void makeStrip(abs, rel, all.picture, all.list, plan, false, chip).catch(() => { stripFailed.add(all.picture); });
+  return { ...first, part: 'keys', closer };
+}
+
+/** Where a strip's picture is kept: of its key frames (`keys`), or all it will ever be; null when not made. */
+export async function stripPicture(/** @type {string} */ root, /** @type {string} */ rel, /** @type {'keys' | 'all'} */ part) {
+  const { key } = await source(root, rel);
+  const picture = join(root, TOOL_DIR, 'cache', 'strips', `${key}.${part === 'keys' ? '2k' : '2'}.jpg`);
+  return existsSync(picture) ? picture : null;
 }
 
 /** Peaks per second of waveform: enough to see a word, few enough to send for an hour of sound. */

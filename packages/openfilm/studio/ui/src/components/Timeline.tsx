@@ -255,6 +255,17 @@ const SCRUB_STATE_MS = 100;
  * a still has no sound at all: its picture takes the whole clip.
  */
 const AUDIO_BAND_H = INFO_H;
+/**
+ * A clip this narrow (px) is drawn as one element: its color, a video's audio band as a shade of it, its edges to
+ * trim it by. Nothing else of a clip shows at that width (its name has no room inside its padding, its pictures and
+ * waveform start past it), yet each one was still half a dozen elements, most of them a layer of their own: a film of
+ * a thousand clips zoomed to fit was ten thousand elements, and every move of the pointer, anywhere in the editor,
+ * looked through them all to find what is under it. A clip in hand, selected or marked is drawn whole, whatever its
+ * width.
+ */
+const COMPACT_W = 8;
+/** A clip no wider than this (px) has no room for its name: the info strip's padding alone is as wide. */
+const NAMELESS_W = 12;
 /** The gap between rows: two rows read as two, not as one area. */
 const GAP = 2;
 /** Space above and below a clip within its track. */
@@ -3565,6 +3576,9 @@ export const Timeline = React.memo(function Timeline({
             /* the labels of a drag go over the picture on a video, and down over the waveform on a sound */
             const tipUp = soundTop > clipHeight / 2;
             const fadeTipUp = fadeY > clipHeight / 2;
+            /* too narrow to show more than its color (COMPACT_W), and nothing on it to mark: one element */
+            const compact = width <= COMPACT_W && !picked && !lifting && !live && !chatLit && !trouble && !chatNumbers.length
+              && !captionMark && !block.keysMs?.length;
             const node = (
               <div
                 key={block.id}
@@ -3577,16 +3591,19 @@ export const Timeline = React.memo(function Timeline({
                 data-can-resize={able.resize ? '1' : '0'}
                 data-media-trouble={trouble}
                 data-chat-lit={chatLit ? '' : undefined}
+                data-block-compact={compact ? '' : undefined}
                 /* overflow is clipped on the inner box so the selection and trim handles can extend past it */
                 className={`group/block absolute ${
                   lifting ? 'z-[12]' : picked || chatLit ? 'z-10' : live ? 'z-10' : ''
-                }`}
+                }${compact ? 'rounded-[4px]' : ''}`}
                 style={{
                   left,
                   top: CLIP_INSET_Y,
                   width,
                   height: clipHeight,
                   opacity: gone ? 0.25 : block.off ? 0.4 : 1,
+                  /* drawn as one element: its own color, and under a video the shade of its audio band */
+                  ...(compact ? { background: soundBand ? `linear-gradient(to top, rgba(0,0,0,0.22) ${audioBandH}px, transparent ${audioBandH}px), ${color}` : color } : null),
                   /* follows the pointer up and down: a lifted clip really leaves its row */
                   transform: floating
                     ? `translateY(${drag.preview?.offsetY ?? 0}px)`
@@ -3662,6 +3679,7 @@ export const Timeline = React.memo(function Timeline({
                 onPointerMove={() => setPointedBlock(block.id)}
                 onPointerLeave={() => { hoverBlockRef.current?.(null); setPointedBlock((id) => (id === block.id ? null : id)); }}
               >
+                {compact ? null : (
                 <div
                   className="absolute inset-0 overflow-hidden rounded-[4px]"
                   style={{
@@ -3685,7 +3703,9 @@ export const Timeline = React.memo(function Timeline({
                     ))}
                   </div>
                 ) : null}
-                {/* info strip: name and length side by side (one statement), not at opposite ends of a wide clip */}
+                {/* info strip: name and length side by side (one statement), not at opposite ends of a wide clip; none on
+                    a clip too narrow to show any of it (NAMELESS_W) */}
+                {width > NAMELESS_W ? (
                 <div
                   className="pointer-events-none absolute inset-x-0 top-0 flex items-center overflow-hidden px-1.5"
                   style={{ height: textRow || sticker || laid ? '100%' : INFO_H }}
@@ -3727,6 +3747,7 @@ export const Timeline = React.memo(function Timeline({
                     ) : null}
                   </span>
                 </div>
+                ) : null}
                 {/* the file is not in the project any more: say so where the picture would be (an editor's "media offline") */}
                 {trouble === 'missing' ? (
                   <span aria-hidden className="pointer-events-none absolute inset-x-0 bottom-0 z-[2] flex items-center justify-center overflow-hidden bg-[#4a0d0d]" style={{ top: INFO_H }}>
@@ -3833,6 +3854,7 @@ export const Timeline = React.memo(function Timeline({
                   />
                 ) : null}
                 </div>
+                )}
                 {picked ? <SelectFrame width={width} speed={speeding} /> : null}
                 {chatNumbers.length ? <ChatNumbers numbers={chatNumbers} /> : null}
                 {/* handles on clips down to 6 px wide (short sounds zoomed out are often a dozen pixels), each never more

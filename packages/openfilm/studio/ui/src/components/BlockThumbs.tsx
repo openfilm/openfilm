@@ -3,6 +3,7 @@ import * as React from 'react';
 import { THUMB_CELL_PX } from '@/lib/thumb-cache';
 import { thumbCellStyle } from '@/lib/thumb-cell';
 import { pickShot } from '@/lib/thumb-pick';
+import { parseStripCell, stripCellStyle } from '@/lib/thumb-strips';
 import { retryImage } from '@/lib/retry-image';
 
 /** Shares the gesture scale with the thumbnail strips without rendering the whole timeline. */
@@ -36,6 +37,8 @@ const restingZoom = createThumbZoom();
  * waiting for exact shots would blank the row on every zoom. So each cell takes the nearest shot (lib/thumb-pick:
  * the cell straddling the clip's start stands for that start, and a shot from inside the clip comes first), with no
  * distance limit — a far picture beats a half-empty clip that looks broken; exact shots replace it as they arrive.
+ * A shot may be a picture of its file's strip (lib/thumb-strips), which is there from the start: drawn from the
+ * strip's image, cropped to the cell as a picture of its own is.
  */
 export function BlockThumbs({
   thumbs, startMs, endMs, pxPerMs, height, topOffset = 0, thumbWidthPx = THUMB_CELL_PX, visiblePx, zoom = restingZoom,
@@ -96,7 +99,17 @@ export function BlockThumbs({
       {/* Cells are laid out at the live density. Counter the timeline's transform inside the clip boundary. */}
       <div className="absolute inset-0 origin-top-left" style={scale === 1 ? undefined : { transform: `scaleX(${1 / scale})` }}>
         {/* Key by index so zoom can reuse the images when their positions change. */}
-        {cells.map((cell, i) => (
+        {cells.map((cell, i) => {
+          const inStrip = parseStripCell(cell.url);
+          return inStrip ? (
+            <span
+              key={i}
+              aria-hidden
+              data-thumb-cell=""
+              className="absolute top-0"
+              style={{ ...thumbCellStyle(cell.left, thumbWidthPx, height), ...stripCellStyle(inStrip, thumbWidthPx, height) }}
+            />
+          ) : (
           <img
             key={i}
             src={cell.url}
@@ -109,7 +122,8 @@ export function BlockThumbs({
             onError={(e) => { e.currentTarget.style.visibility = 'hidden'; retryImage(e.currentTarget); }}
             onLoad={(e) => { e.currentTarget.style.visibility = ''; }}
           />
-        ))}
+          );
+        })}
       </div>
     </div>
   );

@@ -1,0 +1,7 @@
+---
+"openfilm": patch
+---
+
+The timeline's thumbnails are there as a film opens, and stay through a zoom, a trim, a split or a move. Each cell of each clip was a frame of its own to ask for: a file opened, sought and decoded for every one, two at a time, so a row stood empty, or on a picture borrowed from far away, until its frames came. A video now has a strip, pictures from all along it in one image, made once by a single read of its key frames (a fraction of a second, however long the file) and kept: every clip of the file draws from it at once, and a frame is asked for only where a cell stands between two of its pictures. A file whose key frames are far apart (a generated clip with a single one) shows that first strip at once and gets a closer one behind it.
+
+A page's thumbnails no longer wait behind a page that cannot be read. The editor asks every page in the project's folder what it is each time the project opens, one at a time, and a draft whose film never comes ready (a file it needs is missing) was waited for a quarter of a minute, with every page's thumbnail and poster held behind it; in a project with one such page the timeline's pages stood without pictures for some seventeen seconds at every opening, even when every picture was already kept. A page's pictures and its facts now go apart, in the editor and in the browser that draws them, and what a page says of itself is kept, a page that cannot say it included, until its files change.

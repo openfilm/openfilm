@@ -32,7 +32,7 @@ import { readPage, writePage } from './page-text.mjs';
 import { FileError, bringIn, collect, extractAudio, freezeFrame, importFile, inside, listFiles, makeFolder, moveCheck, moveFile, readable, relink, trashFile } from './files.mjs';
 import { mediaReferences } from '../../src/media-links.mjs';
 import { ExportError, createExports, draftApps, exportCapabilities, exportsRoot, projectSizes, renderDefaults } from './exports.mjs';
-import { MediaError, frame, loudness, mixLoudness, mixedWaveform, poster, probe, waveform } from './derived.mjs';
+import { MediaError, frame, loudness, mixLoudness, mixedWaveform, poster, probe, strip, stripPicture, waveform } from './derived.mjs';
 import { HistoryError, checkoutVersion, copyVersion, deleteVersions, discardChanges, keepAside, log, recoverVersions, restoreFilm, saveVersion, status as historyStatus, versionFilesChanged } from './history.mjs';
 import * as personEdits from './person-edits.mjs';
 import { createAutoVersions } from './auto-versions.mjs';
@@ -147,6 +147,33 @@ export function personsSay(parts, method) {
   if (head === 'plugins') return parts.length === 2;
   if (head === 'skills') return !(parts.length === 2 && parts[1] === 'catalog');
   return false;
+}
+
+/** @type {Map<string, number>} each project whose film's strips were begun, by its film.html as it was then (its change time) */
+const stripsBegun = new Map();
+/** How many of a film's videos have their strips begun ahead of being asked for: the ones its clips play most. */
+const STRIPS_AHEAD = 16;
+/**
+ * Begin the strips (derived.mjs) of the videos a project's film plays, most played first, once for each version of its
+ * film.html. Nothing is waited for: each is kept as it is made, and whoever asks for one being made waits for that one.
+ * @param {string} root
+ */
+async function filmStripsSoon(root) {
+  try {
+    const version = statSync(join(root, FILM_FILE)).mtimeMs;
+    if (stripsBegun.get(root) === version) return;
+    stripsBegun.set(root, version);
+    if (stripsBegun.size > 200) stripsBegun.delete(stripsBegun.keys().next().value ?? '');
+    const uses = new Map();
+    for (const track of /** @type {{ clips: { src: string }[] }[]} */ ((await readProjectFilm(root).catch(() => null))?.doc?.tracks ?? [])) {
+      for (const clip of track.clips) {
+        let path = String(clip.src).split(/[?#]/)[0].replace(/^(?:\.\/)+/, '');
+        try { path = decodeURIComponent(path); } catch { /* as written */ }
+        if (clipKind(path) === 'video' && servable(root, path)) uses.set(path, (uses.get(path) ?? 0) + 1);
+      }
+    }
+    for (const path of [...uses.keys()].sort((a, b) => uses.get(b) - uses.get(a)).slice(0, STRIPS_AHEAD)) void strip(root, path).catch(() => {});
+  } catch { /* no film there: nothing to begin */ }
 }
 
 /**
@@ -1640,6 +1667,25 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
         return json(res, 200, await mixedWaveform(root, local, duration));
       }
       if (what === 'wave') return json(res, 200, await waveform(project.path, at));
+      /* a video's strip (derived.mjs): its index, and its picture. The address names the file's version (the page adds
+         its mtime), so the browser keeps both */
+      if (what === 'strip' || what === 'strip-picture') {
+        /* the first one asked for of a film begins the others' too: the editor asks a couple at a time, and each
+           takes a moment the first time; begun together, they are there as the editor comes to them */
+        if (what === 'strip') void filmStripsSoon(project.path);
+        if (what === 'strip') {
+          /* `part`: which picture it is of (asked for by that name); `closer`: a closer one is being made, ask again */
+          const made = await strip(project.path, at);
+          const body = Buffer.from(JSON.stringify({ ...made.index, part: made.part, closer: made.closer }));
+          res.writeHead(200, { 'content-type': 'application/json', 'cache-control': made.closer ? 'no-store' : 'private, max-age=86400', 'content-length': body.length });
+          return res.end(body);
+        }
+        const picture = await stripPicture(project.path, at, url.searchParams.get('part') === 'keys' ? 'keys' : 'all');
+        if (!picture) throw new HttpError(404, 'no such strip');
+        const body = await readFile(picture);
+        res.writeHead(200, { 'content-type': 'image/jpeg', 'cache-control': 'private, max-age=86400', 'content-length': body.length });
+        return res.end(body);
+      }
       /* the loudness of a part of its sound (`from`, `to`: its own seconds): what "Normalize loudness" sets volumes by */
       if (what === 'loudness') {
         const to = url.searchParams.get('to');
@@ -1657,7 +1703,9 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
         : null;
       const jpeg = page ? await page()
         : what === 'poster' ? await poster(project.path, at)
-        : what === 'frame' ? await frame(project.path, at, Number(url.searchParams.get('ms')), Number(url.searchParams.get('w')))
+        /* a video's frame is cut from its proxy when it has one (an H.264 one: one with an alpha is not a JPEG's to read) */
+        : what === 'frame' ? await frame(project.path, at, Number(url.searchParams.get('ms')), Number(url.searchParams.get('w')),
+          clipKind(at) === 'video' ? [readyProxy(project.path, at, readPrefs().proxies.height)].find((copy) => copy?.endsWith('.mp4')) ?? null : null)
         : null;
       if (!jpeg) throw new HttpError(400, 'what: probe, poster, frame, wave or loudness');
       /* a media file's frame: the address names the file's version (the page adds its mtime), so the browser keeps
