@@ -21,6 +21,7 @@ import { chmod, copyFile, mkdir, rm, stat, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { debuglog, promisify } from 'node:util';
 import { replaceFile, tempPath, writeAtomic } from './atomic.mjs';
+import { cloneFile } from './clone.mjs';
 import { isMediaFile } from './closure.mjs';
 import { TOOL_DIR } from './projects.mjs';
 import { referenceSource } from '../../src/media-links.mjs';
@@ -350,18 +351,8 @@ export async function entryNow(repo, rel, was) {
   return { oid: await repo.hashes.blob(rel, st), mode, size };
 }
 
-/**
- * Copy `from` to `to` as a clone where the disk can (no space taken, and a later change to either never reaches the
- * other), else as a plain copy. On macOS through `cp -c` (clonefile): Node's own clone flag copies there.
- */
-export async function cloneFile(/** @type {string} */ from, /** @type {string} */ to) {
-  if (process.platform === 'darwin') {
-    const ok = await run('/bin/cp', ['-c', from, to], { windowsHide: true }).then(() => true, () => false);
-    if (ok) return;
-    await rm(to, { force: true });
-  }
-  await copyFile(from, to, constants.COPYFILE_FICLONE);
-}
+/* A clone where the disk can, else a plain copy (clone.mjs): kept under this name for what imports it from here. */
+export { cloneFile };
 
 /** A media file of the folder put in the store, unless it is there: a clone where the disk can, else a copy. */
 export async function keepMedia(/** @type {Repo} */ repo, /** @type {string} */ rel, /** @type {{ sha256: string, size: number }} */ media) {

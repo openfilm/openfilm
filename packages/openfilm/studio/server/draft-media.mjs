@@ -3,13 +3,14 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { createHash, randomBytes } from 'node:crypto';
-import { createReadStream, constants } from 'node:fs';
-import { copyFile, mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { createReadStream } from 'node:fs';
+import { mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { join, relative, isAbsolute, sep } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { homedir, release } from 'node:os';
 import { exactRate, ffmpegRate } from '../../src/rate.mjs';
 import { signature } from '../../src/render-resume.mjs';
+import { cloneFile } from './clone.mjs';
 const exec = promisify(execFile);
 /** Only a target-editor build actually checked for RGB decode is allowed to use this profile.
  * @param {string | null} app @param {NodeJS.Platform} [platform] @param {string} [arch] */
@@ -280,7 +281,7 @@ export function draftCache(root, version) {
         for (const media of value.media) {
           const to = draftPartPath(destination, media.suffix);
           copied.push(to);
-          await copyFile(media.artifact, to, constants.COPYFILE_FICLONE);
+          await cloneFile(media.artifact, to);
           if (await digest(to) !== media.hash) return null;
         }
         restored = true;

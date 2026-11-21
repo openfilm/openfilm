@@ -1,6 +1,6 @@
 import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -96,6 +96,12 @@ test('duplicate creates an independent edit in the same project group with a uni
     mkdirSync(join(path, '..'), { recursive: true });
     writeFileSync(path, value);
   }
+  /* footage, large enough to be cloned where the disk makes clones (clone.mjs): copied like the rest, and left out like
+     the rest where it is not the project's work */
+  const footage = Buffer.alloc(3 * 2 ** 20, 0x5a);
+  writeFileSync(join(source.path, 'assets/footage.mov'), footage);
+  writeFileSync(join(source.path, '.film/cache/seek-copy.mp4'), footage);
+  writeFileSync(join(source.path, '.git/pack.bin'), footage);
 
   const [a, b] = await Promise.all([duplicateProject(source.id, 'Launch 副本'), duplicateProject(source.id, 'Launch 副本')]);
   assert.deepEqual([a.name, b.name].sort(), ['Launch 副本 2', 'Launch 副本 3']);
@@ -108,9 +114,15 @@ test('duplicate creates an independent edit in the same project group with a uni
     assert.equal(readFileSync(join(copy.path, 'film.html'), 'utf8'), film);
     for (const [name, value] of Object.entries(contents)) assert.equal(readFileSync(join(copy.path, name), 'utf8'), value);
     for (const name of excluded) assert.equal(existsSync(join(copy.path, name)), false, name);
+    assert.ok(readFileSync(join(copy.path, 'assets/footage.mov')).equals(footage), 'its footage, whole');
+    for (const name of ['.film/cache/seek-copy.mp4', '.git/pack.bin']) assert.equal(existsSync(join(copy.path, name)), false, name);
   }
   writeFileSync(join(a.path, 'film.html'), 'edited copy');
   writeFileSync(join(a.path, 'assets/take.wav'), 'edited media');
+  /* a clone is a file of its own: the copy's footage changed, the original's and the other copy's are as they were */
+  writeFileSync(join(a.path, 'assets/footage.mov'), 'edited footage');
+  assert.ok(readFileSync(join(source.path, 'assets/footage.mov')).equals(footage));
+  assert.ok(readFileSync(join(b.path, 'assets/footage.mov')).equals(footage));
   assert.equal(readFileSync(join(source.path, 'film.html'), 'utf8'), film);
   assert.equal(readFileSync(join(source.path, 'assets/take.wav'), 'utf8'), contents['assets/take.wav']);
   assert.equal((await listProjects()).length, 4);
@@ -129,6 +141,24 @@ test('a copy rebases internal links and keeps external linked media', { skip: pr
   const copy = await duplicateProject(source.id);
   assert.equal(realpathSync(join(copy.path, 'assets/alias.wav')), join(copy.path, 'assets/take.wav'));
   assert.equal(realpathSync(join(copy.path, 'assets/library/sound.wav')), realpathSync(join(shared, 'sound.wav')));
+});
+
+test('a copy takes the footage in a folder that may not be written to, and leaves the folder so', { skip: process.platform === 'win32' }, async () => {
+  const source = await openProject(join(scratch, 'kept-footage'));
+  const raw = join(source.path, 'assets', 'raw');
+  mkdirSync(raw, { recursive: true });
+  /* past the size cloned on a Mac (clone.mjs), where its folder has its mode back before the file comes into it */
+  const footage = Buffer.alloc((1 << 20) + 4096, 5);
+  writeFileSync(join(raw, 'take.mov'), footage);
+  chmodSync(raw, 0o555);
+  try {
+    const copy = await duplicateProject(source.id);
+    assert.ok(readFileSync(join(copy.path, 'assets', 'raw', 'take.mov')).equals(footage));
+    assert.equal(statSync(join(copy.path, 'assets', 'raw')).mode & 0o222, 0, 'its folder is as the original\'s: not written to');
+    chmodSync(join(copy.path, 'assets', 'raw'), 0o755);
+  } finally {
+    chmodSync(raw, 0o755);
+  }
 });
 
 test('a failed duplicate leaves the library and source untouched', { skip: process.platform === 'win32' }, async () => {

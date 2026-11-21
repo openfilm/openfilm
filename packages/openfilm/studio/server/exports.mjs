@@ -73,7 +73,7 @@ import { execFile, fork, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
 import { randomBytes } from 'node:crypto';
 import { constants as fsConstants, existsSync, readFileSync, statSync } from 'node:fs';
-import { copyFile, mkdir, mkdtemp, readdir, readFile, realpath, rename, rm, rmdir, stat, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, mkdtemp, readdir, readFile, realpath, rename, rm, rmdir, stat, utimes, writeFile } from 'node:fs/promises';
 import { availableParallelism, homedir, setPriority, tmpdir } from 'node:os';
 import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -99,6 +99,7 @@ import { burned, even, frameBox, frameRatio, stageOf } from '../../src/burn.mjs'
 export { frameBox, frameRatio };
 import { filmSubtitleCuesInRange, filmSubtitleCuesInRanges, filmSubtitleShown, filmSubtitleSrt, filmSubtitleTranscript, filmSubtitleVtt } from './film-subtitle.mjs';
 import { zipFiles } from './zip.mjs';
+import { cloneFile, eachLimited } from './clone.mjs';
 import { inProject } from './files.mjs';
 import { clipFile, filmClosure, folderView } from './closure.mjs';
 import { compoundFolder, srcOutOf } from './compound.mjs';
@@ -823,6 +824,8 @@ function targetEncoding(codec, bits, peak, have) {
       throw new ExportError(`bitrate: for ${TARGET_CODECS.join(', ')}`);
   }
 }
+/** How many of a project's files are copied at once when it is exported as a folder. */
+const COPIES_AT_ONCE = 4;
 /** The seconds of each part render encodes at a bitrate asked, at least (targetEncoding). */
 const PART_SECONDS = 5;
 
@@ -1912,9 +1915,9 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
           const make = file.job;
           const to = staged(file);
           phase(job, make.kind === 'copy' || make.kind === 'stem' ? 'copying' : 'encoding');
-          /* a clone on APFS: instant, and no more room taken */
-          if (make.kind === 'copy') await copyFile(make.from, to, fsConstants.COPYFILE_FICLONE);
-          else if (make.kind === 'stem') await copyFile(/** @type {string} */ (stems.get(make.role)), to);
+          /* a clone where the disk makes one (clone.mjs): at once, and no more room taken */
+          if (make.kind === 'copy') await cloneFile(make.from, to);
+          else if (make.kind === 'stem') await cloneFile(/** @type {string} */ (stems.get(make.role)), to);
           else if (make.kind === 'raster') {
             browser ??= await launch();
             await rasterize(browser, make.from, make.w, make.h, to);
@@ -2006,13 +2009,15 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
     const staging = join(dir, `.${basename(final)}.partial-${process.pid}-${job.id}`);
     try {
       let bytes = 0;
-      for (const f of files) {
+      /* its footage as clones where the disk makes them (clone.mjs: at once, no more room taken), a few files at a
+         time: a project of web pages is thousands of small files, and each waits on the disk, not the processor */
+      await eachLimited(files, COPIES_AT_ONCE, async (f) => {
         if (signal.aborted) throw new Error('cancelled');
         const to = join(staging, ...f.name.split('/'));
         await mkdir(dirname(to), { recursive: true });
-        await copyFile(f.file, to, fsConstants.COPYFILE_FICLONE);
+        await cloneFile(f.file, to, { size: f.size });
         copied(bytes += f.size);
-      }
+      });
       await mkdir(staging, { recursive: true });
       await save(job, staging, final);
       update(job, { out: final, outputs: [final] });
@@ -2038,7 +2043,10 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
       const to = file === main ? out : `${out.slice(0, out.length - ext.length)}${file.slice(stem.length)}`;
       outputs.push(to);
       update(job, { out, outputs: [...outputs] });
-      await copyFile(file, to, fsConstants.COPYFILE_FICLONE);
+      await cloneFile(file, to);
+      /* a clone keeps the dates of the file it was made from: this export is made now */
+      const now = new Date();
+      await utimes(to, now, now).catch(() => {});
     }
     update(job, { encoder: made.encoder, alpha: made.alpha });
   }
