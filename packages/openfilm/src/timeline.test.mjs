@@ -1499,6 +1499,49 @@ window.film = {
   }
 });
 
+test('an exact frame of a page that moved its own video and did not wait is drawn once that frame is on screen: no second lost on one presented before `seeked`, or there already', { skip: !hasFfmpeg && 'no ffmpeg', timeout: 120_000 }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'of-own-moved-'));
+  execFileSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'testsrc=size=320x180:rate=30:duration=3', '-pix_fmt', 'yuv420p', '-g', '15', join(dir, 'rec.mp4')]);
+  /* a page that sets its video's time and leaves the seek to the host: a frame on each time for a second, then held
+     on one (a seek to where the video already is presents nothing) */
+  writeFileSync(join(dir, 'page.html'), `<!doctype html><body style="margin:0"><video id="v" src="rec.mp4" muted playsinline preload="auto" style="width:320px;height:180px"></video>
+<script>
+const v = document.getElementById('v');
+window.film = {
+  duration: 3, width: 320, height: 180,
+  ready: new Promise((r) => (v.readyState >= 2 ? r() : v.addEventListener('loadeddata', r, { once: true }))),
+  frame(t) { v.currentTime = Math.min(t, 1); },
+};
+</script></body>`);
+  writeFileSync(join(dir, 'film.html'), filmHtml({ stage: { w: 320, h: 180 }, tracks: [{ clips: [{ id: 'page', src: 'page.html' }] }] }));
+  const s = await open(dir);
+  try {
+    /* the first seek after the file loaded may never be presented (Chromium): not counted */
+    await s.film.seek(0.4);
+    const took = [];
+    const pictures = [];
+    for (let f = 15; f < 45; f++) {
+      const t0 = performance.now();
+      await s.film.seek(f / 30);
+      took.push(performance.now() - t0);
+      pictures.push(await s.film.capture());
+      /* now and then, the same moment once every wait would have run out: the picture taken was the settled one */
+      if (f % 7 === 0) {
+        await new Promise((r) => setTimeout(r, 1500));
+        assert.ok(pictures.at(-1).equals(await s.film.capture()), `frame ${f}: the picture taken is the one that stays`);
+      }
+    }
+    /* the wait's limit is a second: before, most moving frames and every held one ran it out */
+    const slow = took.filter((ms) => ms >= 900);
+    assert.ok(slow.length <= 2, `${slow.length} of ${took.length} frames waited a second: ${took.map(Math.round)}`);
+    /* each moving frame is its own picture, and the held ones the last of them */
+    for (let i = 1; i <= 15; i++) assert.ok(!pictures[i].equals(pictures[i - 1]), `frame ${15 + i} is not frame ${14 + i}'s picture`);
+    for (let i = 16; i < 30; i++) assert.ok(pictures[i].equals(pictures[15]), `frame ${15 + i}, held, is frame 30's picture`);
+  } finally {
+    await s.close();
+  }
+});
+
 test('playing through a stretch rendered for the preview, its render shows, the clips under it drawn only now and then; stopped, they are', { skip: !hasFfmpeg && 'no ffmpeg', timeout: 120_000 }, async () => {
   const dir = mkdtempSync(join(tmpdir(), 'of-render-'));
   execFileSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'color=c=red:size=320x180:rate=30:duration=2', '-pix_fmt', 'yuv420p', join(dir, 'render.mp4')]);
