@@ -1121,15 +1121,36 @@ const PAGES_MOST = 24;                      // and how many at most, however lig
 /**
  * What keeping page `c` open costs, from 1 (a document of words and pictures) up: read while it is open, and kept for
  * when it is closed. Its WebGL contexts are counted by a host that says them (`filmHost.gl`, host.mjs GL_COUNT);
- * where none does, a page with a canvas is taken to draw in 3D. Its own videos each hold a decoder, a film inside it
- * its own pages.
+ * where none does, a page with a canvas is taken to draw in 3D. Its own videos each hold a decoder. A scene made of
+ * pages of its own is weighed by what those hold, counted with it: sixty cards of words in a scene are not sixty
+ * pages in 3D (counted so, a film of ten such scenes kept eight open and opened the others again, two seconds each,
+ * at every drag onto them). Read again at most every PAGE_WEIGH_MS: a scene's pages are many to look into.
  */
+const PAGE_WEIGH_MS = 2000;
+const PAGE_INNER_MOST = 256; // pages looked into inside one page
 function pageWeight(c) {
   const page = c.child ? c.win?.document : null;
   if (!page) return c.weight ?? PAGE_HEAVY;
-  const canvases = page.getElementsByTagName('canvas').length;
-  const gl = c.win.filmHost?.gl ?? (canvases ? 1 : 0);
-  const weight = 1 + (PAGE_HEAVY - 1) * gl + Math.min(2, Math.max(0, canvases - gl)) + 2 * page.getElementsByTagName('video').length + PAGE_HEAVY * page.getElementsByTagName('iframe').length;
+  const now = realNow();
+  if (c.weighed === c.child && now - c.weighedAt < PAGE_WEIGH_MS) return c.weight;
+  let gl = 0, canvases = 0, videos = 0, inner = 0;
+  const count = (doc, win) => {
+    const own = doc.getElementsByTagName('canvas').length;
+    canvases += own;
+    gl += win?.filmHost?.gl ?? (own ? 1 : 0);
+    videos += doc.getElementsByTagName('video').length;
+    for (const frame of doc.getElementsByTagName('iframe')) {
+      if (++inner > PAGE_INNER_MOST) return;
+      let within = null;
+      try { within = frame.contentDocument; } catch { /* another site's */ }
+      /* another site's page: nothing is known of it */
+      if (within) count(within, frame.contentWindow); else gl += 1;
+    }
+  };
+  count(page, c.win);
+  const weight = 1 + (PAGE_HEAVY - 1) * gl + Math.min(2, Math.max(0, canvases - gl)) + Math.min(PAGE_HEAVY, videos) + Math.min(2, inner / 32);
+  c.weighed = c.child;
+  c.weighedAt = now;
   return c.weight = Math.min(2 * PAGE_HEAVY, weight);
 }
 /** Whether `n` pages of `weight` in all are more than may stay open: PAGES_AWAKE always may, more only while light. */
@@ -1266,41 +1287,97 @@ function near(t, { only = false, exact = false, playing = false, scrub = false }
 }
 
 /*
- * A drag along the timeline (a scrub) passes over pages faster than they open: opening each one it crosses would load
- * a document for every moment passed, and close the pages the film had open to make room. So a drag's frame is drawn
- * with what is there (its videos, its stills, its captions, the pages already open) and a page not open is left out of
- * it. Only one the drag stays on for SCRUB_DWELL_MS is opened, and drawn in as soon as it is ready; a host opens the
- * rest when the drag rests or ends (prepareSeekPages).
+ * A drag along the timeline (a scrub) passes over pages faster than they open. Its frame is drawn at once with what is
+ * there (its videos, its stills, its captions, the pages already open); a page not open is left out of that frame,
+ * and begins to open then, one at a time: opening every page a fast drag crosses would load them all at once and
+ * hold the frames of the ones that are open. It is drawn in as soon as it is ready, if the drag is still on it. A
+ * host opens the pages where the drag rests or ends (prepareSeekPages), and the film opens the rest while it stands
+ * (warm): a drag seldom meets a page not open.
  */
-const SCRUB_DWELL_MS = 150;
-const SCRUB_SLOW = 8; // film s a second: a drag faster than this is passing over, not looking; it opens no page
-/** the pages not open that the drag is on now, each with when it came onto it */
-let dwelt = new Map();
-/** the drag's last moment, and when it was drawn */
-let dragged = null;
 /** this page's real clock: a host holds performance.now() at a frame's t while it draws (host.mjs FILM_CLOCK) */
 const realNow = () => (window.filmHost?.now ?? performance.now.bind(performance))();
 function dwell(t) {
-  const now = realNow();
-  const fast = dragged != null && now - dragged.at < 500 && Math.abs(t - dragged.t) * 1000 > SCRUB_SLOW * Math.max(1, now - dragged.at);
-  dragged = { t, at: now };
-  const on = new Map();
-  let due = false;
-  for (const c of clips) {
-    if (c.kind !== 'page' || c.child || !activeAt(c, t)) continue;
-    const since = fast ? now : dwelt.get(c) ?? now;
-    on.set(c, since);
-    if (now - since >= SCRUB_DWELL_MS && !c.awake) due = true;
-  }
-  dwelt = on;
-  if (!due) return;
+  let opening = 0;
+  for (const c of pagesAwake) if (!c.child && !c.wakeFailed) opening++;
+  if (opening) return;
+  const cold = clips.filter((c) => c.kind === 'page' && !c.child && !c.awake && !c.hidden && !c.disabled && !c.missing && activeAt(c, t));
+  if (!cold.length) return;
   nearOf('page', PAGES_AWAKE, t, true, false);
   /* drawn in once it is open, if the drag is still on it */
-  for (const c of on.keys()) {
-    const opening = c.awake;
-    void opening?.then(() => { if (c.awake === opening && c.child && shownT != null && activeAt(c, shownT)) window.__filmEditor.redraw?.(); }, () => {});
+  for (const c of cold) {
+    const opened = c.awake;
+    void opened?.then(() => { if (c.awake === opened && c.child && shownT != null && activeAt(c, shownT)) window.__filmEditor.redraw?.(); }, () => {});
   }
 }
+
+/*
+ * The pages a film may keep open are opened before they are needed, while a person watches and the film stands: the
+ * nearest to the playhead first, one after another, each once nothing has been drawn for WARM_IDLE_MS (a drag or the
+ * film playing is not held by a page loading behind it). A scene takes seconds to open (its own pages, its pictures,
+ * its fonts), and opened only as the playhead came to it, every jump and every drag to another scene showed nothing
+ * for that long. An export opens a page when a frame needs it, as before.
+ */
+const WARM_IDLE_MS = 350;
+let warmTimer = 0;
+let warmBusy = false;
+/** when a frame was last drawn for a person watching (real clock) */
+let watchedAt = 0;
+function warmSoon() {
+  if (warmTimer) return;
+  warmTimer = setTimeout(() => { warmTimer = 0; void warm(); }, WARM_IDLE_MS);
+}
+async function warm() {
+  if (warmBusy || shownT == null) return;
+  /* a frame was drawn a moment ago (the film plays, or is dragged): looked at again once it stands */
+  if (realNow() - watchedAt < WARM_IDLE_MS) { warmSoon(); return; }
+  warmBusy = true;
+  let more = false;
+  try {
+    /* one after another for as long as the film stands: a frame drawn meanwhile ends the round, and the next
+       begins once it stands again */
+    for (;;) {
+      const t = shownT;
+      const off = (c) => (t < c.at ? c.at - t : t >= c.end ? t - c.end : 0);
+      /* one open and never drawn (opened here, or ahead of the playhead) is drawn once first */
+      let undrawn = null;
+      let weight = 0, n = 0;
+      for (const c of pagesAwake) {
+        weight += pageWeight(c); n++;
+        if (c.child && !c.drawn && !c.shown && c.primed !== c.child && (!undrawn || off(c) < off(undrawn))) undrawn = c;
+      }
+      const next = undrawn ? null : clips
+        .filter((c) => c.kind === 'page' && !c.awake && !c.hidden && !c.disabled && !c.missing && !c.warmFailed)
+        .sort((a, b) => off(a) - off(b))[0];
+      /* weighed as light until it is open and known: one that is not makes room by the farthest closing (near) */
+      if (!undrawn && (!next || pagesTooMany(n + 1, weight + 1))) break;
+      if (realNow() - watchedAt < WARM_IDLE_MS) { more = true; break; }
+      if (undrawn) await prime(undrawn, t);
+      else await wake(next).catch(() => { next.warmFailed = true; });
+      /* what waited behind it (a frame asked for, a pointer moved) has its turn */
+      await new Promise((r) => setTimeout(r, 0));
+    }
+  } finally { warmBusy = false; }
+  if (more) warmSoon();
+}
+/**
+ * Draw a page once, out of sight, at the moment it would show first from t: a page never drawn runs its own
+ * animations by the clock (a host holds them only as a frame is drawn: ten scenes open and waiting kept the film's
+ * thread a tenth busy while it stood), and its first frame is its slowest (laid out, its fonts and pictures in).
+ */
+async function prime(c, t) {
+  const { child, win } = c;
+  c.primed = child;
+  const local = sourceAt(c.span, Math.min(Math.max(0, t - c.at), c.span.length), c.row, c.native);
+  try {
+    win.filmHost?.time?.(local);
+    if (child.frameReadsOverrides) override(c, c.preview ?? c.overrides);
+    await child.frame(local);
+    if (c.child !== child || c.shown) return;
+    override(c, c.preview ?? c.overrides, filmKeyframes);
+    held(c, local);
+  } catch { /* its error is said when a frame of it is drawn for someone */ }
+}
+
 function nearOf(kind, max, t, only, exact, ahead = WAKE_AHEAD) {
   const off = (c) => (t < c.at ? c.at - t : t >= c.end ? t - c.end : 0);
   const all = clips.filter((c) => c.kind === kind);
@@ -1871,7 +1948,7 @@ async function draw(t, live, play = null, how = null) {
   const playing = live && play != null;
   /* a drag passing over this moment: drawn with what is there, the pages not open left out (see dwell) */
   const scrub = live && !playing && Boolean(how?.scrub);
-  if (!scrub) { if (dwelt.size) dwelt = new Map(); dragged = null; }
+  if (live) { watchedAt = realNow(); warmSoon(); }
   if (!playing) stopRolling();
   clearTimeout(settleNear);
   if (live && !playing) { near(t, { only: true, scrub }); settleNear = setTimeout(() => near(t), 250); } else near(t, { exact: !live, playing });
@@ -1912,7 +1989,11 @@ async function draw(t, live, play = null, how = null) {
     if (!live) hideRenders();
     for (const c of coming) if (c.coming === turn) c.coming = 0;
     if (live && turn === watched) {
-      if (complete) for (const c of going) if (!c.shown) show(c, false);
+      /* a drag's frame that left a page out and has no other picture in it would be black: the page that was there
+         stays until the one coming is open (a moment of the scene before, not of nothing); over a video or a still,
+         which are drawn, an old page would be the wrong title on the right picture, and goes as always */
+      const held = partial && !clips.some((c) => c.shown && c.kind !== 'sound' && (c.kind !== 'page' || c.child));
+      if (complete) for (const c of going) if (!c.shown && !(held && c.kind === 'page')) show(c, false);
       let appeared = false;
       for (const c of coming) if (c.shown && c.drawn) { show(c, true); appeared = true; }
       /* Retain a cached still through an unfinished draw. Only the current live frame can replace it: a drag's frame

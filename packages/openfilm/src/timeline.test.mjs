@@ -944,7 +944,7 @@ test('a clip\'s animation without a fill plays again when the playhead goes back
   }
 });
 
-test('a drag\'s moment is drawn at once with what is there: a page not open is left out, and opened only where the drag stays or rests', { timeout: 60_000 }, async () => {
+test('a drag\'s moment is drawn at once with what is there: a page not open is left out of that frame, begins to open then, and is drawn in once it is', { timeout: 60_000 }, async () => {
   const dir = mkdtempSync(join(tmpdir(), 'of-drag-'));
   const clips = [];
   for (let i = 0; i < 12; i++) {
@@ -960,50 +960,107 @@ test('a drag\'s moment is drawn at once with what is there: a page not open is l
     seen: [...document.querySelectorAll('iframe, img')].filter((el) => el.style.visibility === 'visible').map((el) => el.id),
   }));
   try {
-    /* shown at its start: the page there is open, and of twelve no more than eight */
+    /* shown at its start: the page there is open, and of twelve that each draw on a canvas no more than eight, even
+       once the film has stood long enough to open the ones it may keep (see the next test) */
     await s.film.page.evaluate(() => window.__filmEditor.watch(0.5));
+    await new Promise((r) => setTimeout(r, 2500));
     const shut = (await state()).open.flatMap((text, i) => (text == null ? [i] : []));
-    assert.ok(shut.length >= 4, `at least four are not open: ${shut}`);
-    const [fast1, fast2, stay, pass] = shut;
-    /* a drag passes over a page not open: drawn at once, without it; what is under it shows, the page before it goes */
+    assert.equal(shut.length, 4, `eight are open, four are not: ${shut}`);
+    const [pass] = shut;
+    /* a drag passes over a page not open: drawn at once, without it; what is under it shows, and with that picture
+       in the frame the page before it goes */
     const passed = await s.film.page.evaluate(async (t) => {
       const whole = window.__filmEditor.canScrub(t);
+      const t0 = performance.now();
       const drawn = await window.__filmEditor.watch(t, null, { scrub: true });
-      return { whole, drawn };
+      return { whole, drawn, quick: performance.now() - t0 < 100 };
     }, pass + 0.5);
     /* drawn, and said to be without a page: whoever asked may have the whole picture of the moment to show */
-    assert.deepEqual(passed, { whole: false, drawn: 'partial' });
+    assert.deepEqual(passed, { whole: false, drawn: 'partial', quick: true });
     let now = await state();
-    assert.equal(now.open[pass], null, 'the page passed over is not opened');
     assert.deepEqual(now.seen, ['under'], 'the rest of the picture is drawn, and the page left behind is gone');
-    /* fast over other moments: still none of them opened */
-    await s.film.page.evaluate(async (list) => { for (const t of list) await window.__filmEditor.watch(t, null, { scrub: true }); }, [fast1 + 0.5, fast2 + 0.5, pass + 0.5, fast1 + 0.5]);
-    now = await state();
-    assert.deepEqual([now.open[fast1], now.open[fast2], now.open[pass]], [null, null, null]);
-    /* the drag stays on one: it is opened there, the film says to draw again, and the next frame has it */
-    const stayed = await s.film.page.evaluate(async (at) => {
+    /* the page begins to open at that frame, with no wait for the drag to slow: the film says to draw again once it
+       is open, and the next frame has it */
+    const opened = await s.film.page.evaluate(async (at) => {
       let again = 0;
       window.__filmEditor.redraw = () => { again += 1; };
       const clock = window.filmHost?.now ?? performance.now.bind(performance);
       const t0 = clock();
-      while (!again && clock() - t0 < 5000) {
-        await window.__filmEditor.watch(at + 0.5 + ((clock() - t0) % 100) / 1000, null, { scrub: true });
-        await new Promise((r) => setTimeout(r, 30));
-      }
+      while (!again && clock() - t0 < 5000) await new Promise((r) => setTimeout(r, 20));
       await window.__filmEditor.watch(at + 0.5, null, { scrub: true });
       return again;
-    }, stay);
-    assert.ok(stayed >= 1, 'the film asks for the moment to be drawn again once the page is open');
+    }, pass);
+    assert.ok(opened >= 1, 'the film asks for the moment to be drawn again once the page is open');
     now = await state();
-    assert.equal(now.open[stay], `p${stay} 0.50`);
-    assert.deepEqual(now.seen.sort(), [`p${stay}`, 'under']);
+    assert.equal(now.open[pass], `p${pass} 0.50`);
+    assert.deepEqual(now.seen.sort(), [`p${pass}`, 'under']);
+    /* a drag across the others opens one at a time, and never more than may stay open */
+    const others = shut.slice(1);
+    await s.film.page.evaluate(async (list) => { for (const t of list) await window.__filmEditor.watch(t, null, { scrub: true }); }, others.map((i) => i + 0.5));
+    const opening = await s.film.page.evaluate(() => [...document.querySelectorAll('iframe')].filter((f) => f.getAttribute('src') && f.getAttribute('src') !== 'about:blank' && !f.contentWindow?.film).length);
+    assert.ok(opening <= 1, `one page opening at a time while the drag moves: ${opening}`);
     /* the drag rests (or ends) on a page not open: a host has it opened (prepareSeekPages), then the moment is whole */
-    assert.equal(now.open[fast1], null);
-    await s.film.page.evaluate(async (t) => { await window.__filmEditor.watch(t, null, { scrub: true }); await window.__filmEditor.prepareSeekPages(t); await window.__filmEditor.watch(t); }, fast1 + 0.5);
+    const rest = others.at(-1);
+    await s.film.page.evaluate(async (t) => { await window.__filmEditor.watch(t, null, { scrub: true }); await window.__filmEditor.prepareSeekPages(t); await window.__filmEditor.watch(t); }, rest + 0.5);
     now = await state();
-    assert.equal(now.open[fast1], `p${fast1} 0.50`);
-    assert.deepEqual(now.seen.sort(), [`p${fast1}`, 'under']);
+    assert.equal(now.open[rest], `p${rest} 0.50`);
+    assert.deepEqual(now.seen.sort(), [`p${rest}`, 'under']);
     assert.ok(now.open.filter((text) => text != null).length <= 8, `no more than 8 open: ${now.open}`);
+  } finally {
+    await s.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a film that stands opens the pages it may keep before they are needed; a drag onto one still opening keeps the picture that was there', { timeout: 60_000 }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'of-warm-'));
+  const clips = [];
+  /* twelve pages of words, each a scene with two pages of its own: light together, all of them may stay open. The
+     last one takes a while to come ready, as a scene with many pictures does */
+  writeFileSync(join(dir, 'card.html'), '<!doctype html><body style="margin:0"><p>card</p><script>window.film={duration:1,frame(){}}</script></body>');
+  for (let i = 0; i < 12; i++) {
+    writeFileSync(join(dir, `p${i}.html`), `<!doctype html><body style="margin:0;background:#${i % 2 ? '246' : '642'}"><iframe src="card.html"></iframe><iframe src="card.html"></iframe><p id="w"></p>
+<script>window.film={duration:1,${i === 11 ? 'ready:new Promise((r)=>setTimeout(r,1800)),' : ''}frame(t){document.getElementById('w').textContent='p${i} '+t.toFixed(2)}}</script></body>`);
+    /* its length is said, so the film need not open it to know */
+    clips.push({ id: `p${i}`, src: `p${i}.html`, at: i, time: [0, 1] });
+  }
+  writeFileSync(join(dir, 'film.html'), filmHtml({ stage: { w: 320, h: 180 }, tracks: [{ clips }] }));
+  /* as an editor's preview loads it (film-missing=skip): up without opening the pages whose length is said */
+  const site = await serve(dir);
+  const browser = await launch();
+  const film = await browser.newPage();
+  const s = { film: { page: film }, close: async () => { await browser.close(); await site.close(); } };
+  const state = () => s.film.page.evaluate(() => ({
+    open: [...document.querySelectorAll('iframe')].map((f) => (f.contentWindow?.film ? f.contentDocument.getElementById('w').textContent : null)),
+    seen: [...document.querySelectorAll('iframe, img')].filter((el) => el.style.visibility === 'visible').map((el) => el.id),
+  }));
+  try {
+    await film.goto(`${site.url}/film.html?film-missing=skip`);
+    await film.waitForFunction(() => Boolean(window.film));
+    await film.evaluate(() => window.film.ready);
+    await s.film.page.evaluate(() => window.__filmEditor.watch(0.5));
+    let now = await state();
+    assert.equal(now.open[11], null, 'the last page is not open as the first frame is drawn');
+    /* a drag onto the page still opening, with no other picture in the film there: the frame is said to be without
+       it, and the page that was in sight stays (a moment of the scene before, not a black picture) */
+    const dragged = await s.film.page.evaluate(() => window.__filmEditor.watch(11.5, null, { scrub: true }));
+    assert.equal(dragged, 'partial');
+    now = await state();
+    assert.deepEqual(now.seen, ['p0'], 'the picture that was there stays until the page is open');
+    /* nothing more asked of it: standing, the film opens the rest, nearest first, the slow one too */
+    for (let i = 0; i < 100 && (await state()).open.some((text) => text == null); i++) await new Promise((r) => setTimeout(r, 100));
+    now = await state();
+    assert.deepEqual(now.open.map((text) => text != null), Array(12).fill(true), `every page is open: ${now.open}`);
+    /* the slow one is ready a moment after its document is there */
+    await s.film.page.waitForFunction(() => window.__filmEditor.canScrub(11.5), null, { timeout: 10_000 });
+    /* and a drag anywhere is whole at once */
+    const whole = await s.film.page.evaluate(async () => {
+      const said = [];
+      for (const t of [11.5, 3.5, 8.5, 0.5]) { const t0 = performance.now(); said.push([await window.__filmEditor.watch(t, null, { scrub: true }), performance.now() - t0 < 100]); }
+      return said;
+    });
+    assert.deepEqual(whole, Array(4).fill([true, true]));
+    assert.deepEqual((await state()).seen, ['p0']);
   } finally {
     await s.close();
     rmSync(dir, { recursive: true, force: true });
