@@ -1736,6 +1736,43 @@ test('a project\'s export takes the files of a linked folder the film uses, as f
   assert.ok(!existsSync(join(copied, 'assets', 'linked', 'unused.mp4')) && !existsSync(join(copied, 'assets', 'linked', 'day2', 'unused.wav')));
 });
 
+test('a project export reports offline audio sources before producing a ZIP or folder', async () => {
+  const dir = fullProject();
+  const library = join(dir, '..', 'Recordings');
+  const link = 'assets/linked';
+  const voice = `${link}/主持人.mov`;
+  const interview = `${link}/interview.wav`;
+  const part = 'parts/interview/film.html';
+  const film = filmHtml({ tracks: [{ clips: [{ src: voice, id: 'voice', sound: true, time: [0, 1] }] },
+    { clips: [{ src: part, id: 'interview' }, { src: 'assets/audio/vo/line.mp3', id: 'music' }] }] });
+  writeFileSync(join(dir, 'film.html'), film);
+  mkdirSync(dirname(join(dir, part)), { recursive: true });
+  writeFileSync(join(dir, part), filmHtml({ tracks: [{ clips: [{ src: `../../${interview}`, id: 'speaker' }] }] }));
+  mkdirSync(library);
+  writeFileSync(join(library, '主持人.mov'), 'original video with sound');
+  writeFileSync(join(library, 'interview.wav'), 'original interview');
+  symlinkSync(library, join(dir, link), 'junction');
+
+  const offline = `${library}-offline`;
+  renameSync(library, offline);
+  const exports = createExports();
+  for (const as of ['zip', 'folder']) {
+    const job = await ended(exports, exports.start(project('Interview', dir), { kind: 'project', as }));
+    assert.equal(job.status, 'failed');
+    assert.match(job.error, /Restore or relink/);
+    assert.ok(job.error.includes(voice) && job.error.includes(interview));
+    assert.deepEqual(job.outputs, []);
+  }
+  assert.equal(readFileSync(join(dir, 'film.html'), 'utf8'), film);
+  assert.equal(readFileSync(join(offline, '主持人.mov'), 'utf8'), 'original video with sound');
+
+  renameSync(offline, library);
+  const zipped = await exported({ kind: 'project' }, 'Interview', dir);
+  const entries = zipEntries(zipped.out);
+  assert.equal(entries.get(`Interview/${voice}`).toString(), 'original video with sound');
+  assert.equal(entries.get(`Interview/${interview}`).toString(), 'original interview');
+});
+
 test('a project export named where it is asked for: the zip and the folder in it take that name', async () => {
   const dir = fullProject();
   const zipped = await exported({ kind: 'project', name: 'Hand-off' }, 'My Film', dir);

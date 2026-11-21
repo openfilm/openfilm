@@ -73,7 +73,7 @@ import { execFile, fork, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
 import { randomBytes } from 'node:crypto';
 import { constants as fsConstants, existsSync, readFileSync, statSync } from 'node:fs';
-import { copyFile, mkdir, mkdtemp, readdir, readFile, rename, rm, rmdir, stat, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, mkdtemp, readdir, readFile, realpath, rename, rm, rmdir, stat, writeFile } from 'node:fs/promises';
 import { availableParallelism, homedir, setPriority, tmpdir } from 'node:os';
 import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -100,7 +100,8 @@ export { frameBox, frameRatio };
 import { filmSubtitleCuesInRange, filmSubtitleCuesInRanges, filmSubtitleShown, filmSubtitleSrt, filmSubtitleTranscript, filmSubtitleVtt } from './film-subtitle.mjs';
 import { zipFiles } from './zip.mjs';
 import { inProject } from './files.mjs';
-import { filmClosure, folderView } from './closure.mjs';
+import { clipFile, filmClosure, folderView } from './closure.mjs';
+import { compoundFolder, srcOutOf } from './compound.mjs';
 import { mediaReferences, referenceSource } from '../../src/media-links.mjs';
 import { PROJECT_PARTS, TOOL_DIR } from './projects.mjs';
 import { exportsRoot } from '../../src/locations.mjs';
@@ -525,6 +526,53 @@ export async function projectFiles(root, parts, skip) {
   if (existsSync(canvas)) files.push({ name: `${TOOL_DIR}/canvas.json`, file: canvas, size: statSync(canvas).size });
   for (const part of parts) await walk(join(root, TOOL_DIR, part), `${TOOL_DIR}/${part}`);
   return files;
+}
+
+/**
+ * Check what will actually be copied. An offline link is skipped by the folder walk, but the film still needs
+ * its media. The same applies to a sound cut out of a video and media used inside a compound clip.
+ * @param {string} root @param {{ name: string, file: string }[]} files
+ */
+async function checkProjectMedia(root, files) {
+  const byName = new Map(files.map(({ name, file }) => [name, file]));
+  const foldedNames = new Map(files.map(({ name, file }) => [name.toLowerCase(), file]));
+  const missing = new Set();
+  const seen = new Set();
+  /** @type {string[]} */
+  const films = [FILM_FILE];
+  for (const film of films) {
+    const file = byName.get(film);
+    if (!file || seen.has(film)) continue;
+    seen.add(film);
+    const folder = film === FILM_FILE ? '' : film.slice(0, -FILM_FILE.length - 1);
+    const { value } = readFilmFile(await readFile(file, 'utf8'));
+    for (const track of value?.tracks ?? []) {
+      for (const clip of track.clips ?? []) {
+        if (typeof clip.src !== 'string') continue;
+        const path = clipFile(folder ? srcOutOf(clip.src, folder) : clip.src);
+        if (!path) continue;
+        const part = compoundFolder(path);
+        const nested = part && path === `${part}/${FILM_FILE}`;
+        const kind = kindOf(clip);
+        if (!nested && kind !== 'sound' && kind !== 'video') continue;
+        /* A case-insensitive volume can open a spelling different from the directory entry. Only accept that
+           spelling if it also resolves on the exporting machine, and is going to be copied. */
+        const copied = foldedNames.get(path.toLowerCase());
+        if (!byName.has(path) && copied) {
+          const local = inProject(root, path);
+          const actual = local && await realpath(local).catch(() => null);
+          if (actual && actual === await realpath(copied).catch(() => null)) {
+            byName.set(path, copied);
+          }
+        }
+        if (!byName.has(path)) missing.add(path);
+        else if (nested) films.push(path);
+      }
+    }
+  }
+  if (missing.size) {
+    throw new ExportError(`Could not include these timeline files in the project export. Restore or relink them and try again.\n${[...missing].join('\n')}`, 422, 'project-media-missing');
+  }
 }
 
 /**
@@ -1933,6 +1981,7 @@ export function createExports({ onChange = () => {}, captions = subtitlesForExpo
     const ask = /** @type {ProjectAsk} */ (job.ask);
     const title = baseName(job.name, ask);
     const files = await projectFiles(root, ask.parts ?? [], resolve(dir));
+    await checkProjectMedia(root, files);
     const total = Math.max(1, files.reduce((n, f) => n + f.size, 0));
     phase(job, (ask.as ?? 'zip') === 'zip' ? 'packaging' : 'copying');
     let told = 0;

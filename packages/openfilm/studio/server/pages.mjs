@@ -25,14 +25,16 @@ import { mkdir, rename } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { Worker } from 'node:worker_threads';
 import { basename, dirname, isAbsolute, join, normalize, relative, resolve, sep } from 'node:path';
-import { HOST_FLAG, folderFiles } from '../../src/host.mjs';
+import { GL_COUNT, HOST_FLAG, folderFiles } from '../../src/host.mjs';
 import { readableLink, referenceSource } from '../../src/media-links.mjs';
 import { clipKind } from '../../src/film-doc.mjs';
+import { recordProblem } from '../../src/problems.mjs';
 import { readPrefs } from './prefs.mjs';
 import { onUndecoded, readyProxy, undecodable, undecodedNow } from './proxies.mjs';
 import { gradedCopy, gradeSoon, madeCopy } from '../../src/seekable.mjs';
 import { isPreviewKey, previewDir } from './preview-cache.mjs';
-import { probe, soundOf } from './derived.mjs';
+import { MediaError, probe, soundOf } from './derived.mjs';
+import { FileError } from './files.mjs';
 import { compoundOuter } from './parts.mjs';
 
 const BRIDGE = readFileSync(new URL('./bridge.js', import.meta.url), 'utf8');
@@ -136,7 +138,7 @@ export function filmServer({ editorOrigin, rootOf }) {
   /* the timeline page (the preview) gets the bridge and the stage; a web page gets the bridge too, so the editor can
      play one on its own (the media pane's viewer) — inside the timeline it stays quiet: its parent is not the editor */
   const filesOf = (/** @type {string} */ root) => folderFiles(root, {
-    inject: `<script>${HOST_FLAG}${PAGE_SCALE}</script>${scripts(BRIDGE)}`,
+    inject: `<script>${HOST_FLAG}${GL_COUNT}${PAGE_SCALE}</script>${scripts(BRIDGE)}`,
     timelineInject: `<script>${HOST_FLAG}</script>${scripts(BRIDGE, STAGE)}`,
     staleRevisionPage: `<!doctype html>${scripts("parent.postMessage({ source: 'openfilm-film', type: 'revision-stale' }, __EDITOR__);")}`,
     headers: policy(),
@@ -185,11 +187,22 @@ export function filmServer({ editorOrigin, rootOf }) {
     if (!servable(entry.root, plain)) { res.writeHead(404, headers).end('not found'); return; }
     if (url.searchParams.has('film-sound')) {
       /* waited for while it is made (a few seconds for a long recording): the mixer plays the film without it meanwhile */
-      const file = await soundOf(entry.root, plain.replace(/^\/+/, '')).catch((/** @type {any} */ e) => (e?.status === 404 ? undefined : null));
-      if (file === undefined) { res.writeHead(404, headers).end('not found'); return; }
+      const source = plain.replace(/^\/+/, '');
+      let file;
+      try {
+        file = await soundOf(entry.root, source);
+      } catch (e) {
+        const status = e instanceof MediaError || e instanceof FileError ? e.status : 500;
+        if (status >= 422) {
+          recordProblem({ area: 'studio', step: 'preview sound', project: entry.root,
+            what: `${source}: ${e instanceof Error ? e.message : e}`, code: String(status) });
+        }
+        res.writeHead(status, { ...headers, 'cache-control': 'no-store' }).end(status === 404 ? 'not found' : 'could not read sound');
+        return;
+      }
       if (!file) { res.writeHead(204, headers).end(); return; }
       /* its length (s), known from the file's probe: a long one is played as it streams, never decoded whole */
-      const length = (await probe(entry.root, plain.replace(/^\/+/, '')).catch(() => null))?.duration;
+      const length = (await probe(entry.root, source).catch(() => null))?.duration;
       /** @type {Record<string, string>} */
       const told = Number.isFinite(length) ? { [SOUND_LENGTH]: String(length), 'access-control-expose-headers': SOUND_LENGTH } : {};
       if (!folderFiles(dirname(file), { headers: { ...policy(), ...told } })(req, res, `/${basename(file)}`, url.searchParams)) res.writeHead(403, headers).end();

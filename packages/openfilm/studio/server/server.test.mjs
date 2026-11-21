@@ -1029,6 +1029,13 @@ test('the preview\'s mixer gets a file\'s sound alone (?film-sound), never the w
   assert.equal((await fetch(`${folder}assets/mute.mp4?film-sound=1`)).status, 204);
   assert.equal((await fetch(`${folder}assets/gone.mp4?film-sound=1`)).status, 404);
   assert.equal((await fetch(`${folder}.film/cache/audio/x.m4a?film-sound=1`)).status, 404, 'still nothing hidden');
+
+  writeFileSync(join(project.path, 'assets', 'unreadable.mov'), 'a damaged recording');
+  const unreadable = await fetch(`${folder}assets/unreadable.mov?film-sound=1`);
+  assert.equal(unreadable.status, 422);
+  assert.equal(unreadable.headers.get('cache-control'), 'no-store');
+  assert.match(readFileSync(join(scratch, 'home', 'logs', 'problems.jsonl'), 'utf8'), /"step":"preview sound".*unreadable\.mov/);
+  assert.equal((await api(`/api/projects/${project.id}/media?what=wave&path=assets%2Funreadable.mov`)).status, 422);
 });
 
 test('a sound asked for and given up while its copy is made (a media element that seeked on) leaves Studio running', async () => {
