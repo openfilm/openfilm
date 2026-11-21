@@ -25,8 +25,20 @@ export const SEEK_INSIDE_FRAME = `(()=>{const d=Object.getOwnPropertyDescriptor(
 // was drawn before. The host calls `filmHost.time(t)` before `film.frame(t)` and `filmHost.settle(t)` after it;
 // `filmHost.now()` is the real clock, for the host's own waiting.
 export const FILM_CLOCK = `(()=>{const H=window.filmHost;if(!H||H.time)return;const P=performance,now=P.now.bind(P),D=Date,raf=window.requestAnimationFrame.bind(window),EPOCH=D.UTC(2026,0,1);let v=null,seed=0x2545f491;H.now=now;P.now=()=>v==null?now():v;function FilmDate(...a){const d=a.length||v==null?new D(...a):new D(EPOCH+v);return new.target?d:d.toString()}FilmDate.prototype=D.prototype;FilmDate.now=()=>v==null?D.now():EPOCH+v;FilmDate.parse=D.parse;FilmDate.UTC=D.UTC;window.Date=FilmDate;window.requestAnimationFrame=(cb)=>raf((ts)=>cb(v==null?ts:v));Math.random=()=>{seed=seed+0x6d2b79f5|0;let x=Math.imul(seed^seed>>>15,1|seed);x=x+Math.imul(x^x>>>7,61|x)^x;return((x^x>>>14)>>>0)/4294967296};const mine=new WeakSet();H.time=(t)=>{v=t*1000;seed=(Math.round(t*1e6)^0x2545f491)|0};H.settle=(t)=>{for(const a of document.getAnimations?.()??[]){if(typeof CSSTransition!=='undefined'&&a instanceof CSSTransition){a.finish();continue}if(!mine.has(a)){if(a.playState==='paused'||a.playState==='idle')continue;mine.add(a)}a.pause();a.currentTime=t*1000}}})();`;
-// Before any page script: the host flag, the seek fix and the clock above.
-export const HOST_FLAG = `window.filmHost={version:'0.1',name:'film'};${SEEK_INSIDE_FRAME}${FILM_CLOCK}`;
+// Canvas text at sizes that never share a font. Chromium sets text at the font size floored to 0.01 px and finds the
+// font for it by `unsigned(size * 100)`, which is the same for some neighbouring steps (9.72 and 9.73 px: 9.73f * 100
+// is 972.99994). The size used first then decides how both are laid out and measured, until the cached font is let
+// go: a line of small text whose size follows a camera came out wider or narrower depending on the frames drawn
+// before it (thousands of pixels of the picture, by tens of levels). A px size given to a 2D context's `font` is
+// rounded to 1/32 px, a grid on which no two sizes share a key (its steps floor to 0.03 or 0.04 px apart; swept
+// from 1 to 600 px, growing and shrinking); `ctx.font` reads back the size the text is set in. A size in another
+// unit passes as it is, and so does anything that is not a font, and a size under 1 px: a context scaled up to draw
+// in a world's own units sets its text in hundredths of a pixel (`0.02px` under `ctx.scale(1000, 1000)`), which the
+// grid would round to half as much again, or to nothing.
+// Not reached from here: a 2D context in a worker, and DOM text, whose `font-size` takes the same road.
+export const FONT_GRID = `(()=>{const SIZE=/^((?:[^"'(),\\/]*?\\s)?)\\+?((?:\\d+\\.?\\d*|\\.\\d+)(?:e[+-]?\\d+)?)px(?=[\\s\\/"'])/i;for(const C of[self.CanvasRenderingContext2D,self.OffscreenCanvasRenderingContext2D]){const d=C&&Object.getOwnPropertyDescriptor(C.prototype,'font');if(!d||!d.set||d.set.__film)continue;const set=function(v){const s=String(v),m=SIZE.exec(s);d.set.call(this,m&&m[2]>=1?m[1]+Math.round(m[2]*32)/32+'px'+s.slice(m[0].length):s)};set.__film=true;Object.defineProperty(C.prototype,'font',{configurable:true,enumerable:true,get:d.get,set})}})();`;
+// Before any page script: the host flag, the seek fix, the clock and the font sizes above.
+export const HOST_FLAG = `window.filmHost={version:'0.1',name:'film'};${SEEK_INSIDE_FRAME}${FILM_CLOCK}${FONT_GRID}`;
 // For a host that keeps a film's pages open while a person watches (Studio's preview), after HOST_FLAG: how many WebGL
 // contexts the page has made, as `filmHost.gl`. A browser gives one process only so many (16), and takes the oldest
 // away past that, so the timeline keeps few of the pages that draw in 3D open at once, and many more of those that made
@@ -383,7 +395,15 @@ export function injectFirst(html, tag) {
 export async function launch({ headed = false, channel = headed ? 'chromium' : null, args: extra = [], env } = {}) {
   /* CanvasDrawElement: HTML-in-Canvas (drawElementImage, texElementImage2D), so a page can draw its own DOM into 2D or WebGL.
      No Skia Graphite: with it, a 2D canvas drawing hundreds of strokes each through `ctx.filter = 'blur(…)'` had the
-     GPU process take 7 to 9 GB for one frame (two such browsers froze a 16 GB Mac); without it, 400 MB, as fast */
+     GPU process take 7 to 9 GB for one frame (two such browsers froze a 16 GB Mac); without it, 400 MB, as fast.
+     2D canvases stay on the GPU. Drawn there, the same draw calls can give edges a few levels apart from one run to
+     the next (Skia's caches in the GPU process are shared by every canvas and emptied by the clock), and
+     `--disable-accelerated-2d-canvas` ends that for every film. It was measured and left out (Chromium 149, Apple M5,
+     1080p): of the library's 46 effects drawn on a 2D canvas, 14 are drawn 17 to 57% slower with it and the two that
+     blur through `ctx.filter` every frame about 90% slower (a page of 300 blurred strokes: 2.4 s a frame instead of
+     0.2), the one-prompt example takes 1.4 times as long to export, with one browser or five, and every frame of
+     every such page changes once. A canvas that must repeat exactly asks for the CPU itself:
+     `getContext('2d', { willReadFrequently: true })`, the same pixels as the switch gives */
   const args = ['--ignore-gpu-blocklist', '--enable-gpu-rasterization', '--disable-skia-graphite', '--autoplay-policy=no-user-gesture-required', '--hide-scrollbars', '--enable-blink-features=CanvasDrawElement', ...extra];
   const open = async (/** @type {string[]} */ angle) => {
     /* a switch of no meaning to Chromium, so its process (and every one it starts) is found to be watched */

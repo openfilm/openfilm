@@ -239,6 +239,12 @@ In practice:
   then, which depends on the order frames were drawn. Give every tween explicit start and end values (`fromTo`).
 - Any library that runs its own clock is driven by `t` instead: `timeline.seek(t)`, `animation.currentTime = t * 1000`,
   `p5.redraw()`, `renderer.render(scene, camera)`, `video.currentTime = …` (awaiting `seeked`).
+- Text that follows a camera keeps one font size and is scaled by a transform (`ctx.scale`, CSS `transform`). A
+  size that changes a little every frame (`font-size: ${10 * zoom}px`) is set at a hundredth of a pixel, and
+  Chromium keeps one font for some neighbouring hundredths (9.72 and 9.73 px): whichever was used first decides how
+  wide both are set, so a line of small text comes out a fraction of a pixel wider or narrower depending on the
+  frames drawn before it. Where the size itself has to move, step it by 1/32 px or more. The reference host does
+  that for a px size given to a 2D canvas's `font` (§4); nothing does it for DOM text.
 
 Notes for authors:
 
@@ -250,6 +256,15 @@ Notes for authors:
   `innerWidth × devicePixelRatio` pixels.
 - Repeating a frame is not always bit-identical in a browser (layers are re-rasterized as they change). Hosts compare
   repeated frames with a tolerance, not byte for byte.
+- A 2D canvas is drawn by the graphics chip, and its pixels are not only its draw calls: the browser keeps the chip's
+  caches for all canvases together and empties them by the clock, so the edges of large text and of curves can come
+  out a few levels apart from one run to the next, in a few pixels to a few hundred. Nobody sees it, and a host's
+  tolerance covers it. A canvas that has to repeat pixel for pixel (a picture compared with a reference, a layer a
+  shader magnifies) is made with `getContext('2d', { willReadFrequently: true })`: the browser then draws it on the
+  CPU, the same every time, its edges slightly other than the chip's. That is slower where a large canvas is redrawn
+  every frame, and about ten times slower through `ctx.filter` (a blur), so ask for it where it matters. A canvas
+  the page reads back with `getImageData` wants the option said either way (`true`, or `false` to stay on the chip):
+  left unsaid, Chromium moves the canvas to the CPU at its second read, and what it draws changes there.
 
 ## 4. Hosts
 
@@ -281,6 +296,10 @@ CSS and Web Animations the page left running stand at `t` (a CSS transition, who
 finished), and `Math.random` restarts from a seed of `t` (while loading it runs from a fixed seed). Before the first
 frame (`ready`, loading) the page runs on real time. The reference host's prelude is `FILM_CLOCK` in
 `src/host.mjs`: `filmHost.time(t)` before `frame(t)`, `filmHost.settle(t)` after it.
+
+The reference host also sets canvas text at font sizes no two of which share a font (§3): a px size of 1 px or more
+given to a 2D context's `font` is rounded to 1/32 px, and `ctx.font` reads back the rounded size (`FONT_GRID` in
+`src/host.mjs`).
 
 A page may play footage with native `<video>` elements, silent, and set `currentTime` from `t`. The host makes
 that exact: a media seek lands inside the frame it names, and the host waits until each video's new frame is on

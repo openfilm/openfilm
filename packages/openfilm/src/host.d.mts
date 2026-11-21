@@ -4,6 +4,8 @@ export declare const SEEK_INSIDE_FRAME: string;
 export declare const FILM_CLOCK: string;
 /** After HOST_FLAG, for a host that keeps a film's pages open: counts the page's WebGL contexts as `filmHost.gl`. */
 export declare const GL_COUNT: string;
+/** Injected with the clock: a px size given to a 2D canvas context's `font` is rounded to 1/32 px, so no two sizes share a cached font. */
+export declare const FONT_GRID: string;
 export declare function injectFirst(html: string, tag: string): string;
 export declare function serve(root: string, opts?: { port?: number; timeline?: string; renderRanges?: [number, number][] }): Promise<{ url: string; close(): Promise<void> }>;
 /** Listen on 127.0.0.1 at `port`; for port 0, never at a port browsers refuse to open. The port it listens on. */
