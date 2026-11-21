@@ -386,7 +386,15 @@ export function injectFirst(html, tag) {
 export async function launch({ headed = false, channel = headed ? 'chromium' : null, args: extra = [], env } = {}) {
   /* CanvasDrawElement: HTML-in-Canvas (drawElementImage, texElementImage2D), so a page can draw its own DOM into 2D or WebGL.
      No Skia Graphite: with it, a 2D canvas drawing hundreds of strokes each through `ctx.filter = 'blur(…)'` had the
-     GPU process take 7 to 9 GB for one frame (two such browsers froze a 16 GB Mac); without it, 400 MB, as fast */
+     GPU process take 7 to 9 GB for one frame (two such browsers froze a 16 GB Mac); without it, 400 MB, as fast.
+     2D canvases stay on the GPU. Drawn there, the same draw calls can give edges a few levels apart from one run to
+     the next (Skia's caches in the GPU process are shared by every canvas and emptied by the clock), and
+     `--disable-accelerated-2d-canvas` ends that for every film. It was measured and left out (Chromium 149, Apple M5,
+     1080p): of the library's 46 effects drawn on a 2D canvas, 14 are drawn 17 to 57% slower with it and the two that
+     blur through `ctx.filter` every frame about 90% slower (a page of 300 blurred strokes: 2.4 s a frame instead of
+     0.2), the one-prompt example takes 1.4 times as long to export, with one browser or five, and every frame of
+     every such page changes once. A canvas that must repeat exactly asks for the CPU itself:
+     `getContext('2d', { willReadFrequently: true })`, the same pixels as the switch gives */
   const args = ['--ignore-gpu-blocklist', '--enable-gpu-rasterization', '--disable-skia-graphite', '--autoplay-policy=no-user-gesture-required', '--hide-scrollbars', '--enable-blink-features=CanvasDrawElement', ...extra];
   const open = async (/** @type {string[]} */ angle) => {
     /* a switch of no meaning to Chromium, so its process (and every one it starts) is found to be watched */
