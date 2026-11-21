@@ -390,18 +390,123 @@ async function showVideoAt(v, t, frame = null) {
 /** Exact frames of video clips seen on screen, and ones never seen (a host tells a browser that shows no video by it). */
 const videoSeen = { shown: 0, unshown: 0 };
 
+/** Two frame times (µs) that are one frame's: the frame callback says seconds, a frame read says whole microseconds. */
+const sameFrame = (a, b) => Math.abs(a - b) < 1.5;
+
+/** The time (µs) of the frame a video holds, null when it cannot be read (no frame yet, a file of another site). */
+function frameHeld(v) {
+  try {
+    const frame = new (v.ownerDocument.defaultView.VideoFrame)(v);
+    const at = frame.timestamp;
+    frame.close();
+    return at;
+  } catch { return null; }
+}
+
+/** Whether an element is in the picture as its page is laid out now: displayed, visible, not clear through, in view. */
+function inPicture(el) {
+  if (typeof el.checkVisibility !== 'function' || !el.checkVisibility({ visibilityProperty: true, opacityProperty: true, contentVisibilityAuto: true })) return false;
+  const box = el.getBoundingClientRect(), view = el.ownerDocument.defaultView;
+  return box.width > 0 && box.height > 0 && box.right > 0 && box.bottom > 0 && box.left < view.innerWidth && box.top < view.innerHeight;
+}
+
+/** Follow the frames a page's video presents: `seen.at`, the time (µs) of the last one. Not one playing by itself. */
+function followShown(v, seen) {
+  if (seen.on) return;
+  seen.on = true;
+  const mine = ++seen.chain;
+  const note = (_now, meta) => {
+    if (!seen.on || seen.chain !== mine) return;
+    if (!v.paused) { seen.on = false; seen.at = null; return; }
+    seen.at = meta.mediaTime * 1e6;
+    seen.handle = v.requestVideoFrameCallback(note);
+  };
+  seen.handle = v.requestVideoFrameCallback(note);
+}
+function unfollowShown(v, seen) {
+  if (seen.on) { seen.on = false; v.cancelVideoFrameCallback?.(seen.handle); }
+  seen.at = null;
+}
+
 /**
- * Every video a page moved in its frame, until its new frame is on screen (SPEC §4: a host waits for pending seeks):
- * decoded (`seeked`), then presented (the frame callback), each with a time limit so a stalled video cannot hold the
- * film. A page's own footage is as exact as a video clip's.
+ * A video a page moved, until its new frame is on screen: decoded (`seeked`), then presented (the frame callback), each
+ * with a time limit so a stalled video cannot hold the film. The frame callback comes only for a frame presented after
+ * it was asked for, and Chromium often presents the sought frame a moment before it says `seeked`; a seek to where the
+ * video already is presents nothing at all. Asked for once the seek was done, the callback then never came, and the
+ * wait ran its whole second, every frame.
+ *
+ * So a video in the picture is followed from one exact frame to the next (`v.__filmShown`, kept by mediaShown), and
+ * its seek done, the frame it holds is the one to see, told by its time (`steady`: it was in the picture as the last
+ * frame was drawn, and nothing was drawn since): seen last already, there is nothing to wait for; else a frame
+ * presented from then on counts when it is that one. Another frame is never taken for it.
+ *
+ * A video that was not in the picture (hidden, clear, out of view, its page off) is waited for as before, the callback
+ * asked for once the seek is done: out of the picture a frame is said presented though none is drawn, and as the video
+ * comes on the picture can keep the frame it had for a second or so (Chromium, see showVideoAt), so what was said
+ * before proves nothing. Nor is such a video followed: the browser is left to present its frames as it did. Where the
+ * frame held cannot be read, the first frame presented once the seek is done counts, as it always did.
  */
-function mediaShown(page) {
-  return Promise.all([...page.querySelectorAll('video')].map((v) => (v.seeking || v.readyState < 2 ? new Promise((done) => {
-    const shown = () => (typeof v.requestVideoFrameCallback === 'function' ? (v.requestVideoFrameCallback(() => done()), setTimeout(done, 1000)) : done());
-    v.addEventListener('seeked', shown, { once: true });
-    v.addEventListener('loadeddata', shown, { once: true });
-    setTimeout(done, 10000);
-  }) : null)));
+function videoShown(v, limit, steady) {
+  return new Promise((resolve) => {
+    const callback = typeof v.requestVideoFrameCallback === 'function';
+    let seen = v.__filmShown;
+    if (callback && !seen) {
+      seen = v.__filmShown = { at: null, steady: false, on: false, chain: 0, handle: 0 };
+      /* another file in the element: what was seen says nothing of it */
+      v.addEventListener('emptied', () => { seen.at = null; });
+    }
+    steady = Boolean(steady && seen?.steady);
+    const timers = [];
+    let over = false;
+    const done = () => {
+      if (over) return;
+      over = true;
+      for (const timer of timers) clearTimeout(timer);
+      v.removeEventListener('seeked', sought);
+      v.removeEventListener('loadeddata', sought);
+      resolve();
+    };
+    function sought() {
+      if (!callback) { done(); return; }
+      /* still seeking (the file's first data came before its seek landed), or playing by itself: there is no one
+         frame it ends on */
+      const want = v.paused && !v.seeking && v.readyState >= 2 ? frameHeld(v) : null;
+      if (steady && want != null && seen.at != null && sameFrame(seen.at, want)) { done(); return; }
+      const next = () => v.requestVideoFrameCallback((_now, meta) => {
+        if (over) return;
+        if (want == null || sameFrame(meta.mediaTime * 1e6, want)) done(); else next();
+      });
+      next();
+      timers.push(setTimeout(done, 1000));
+    }
+    v.addEventListener('seeked', sought, { once: true });
+    v.addEventListener('loadeddata', sought, { once: true });
+    timers.push(setTimeout(done, limit));
+  });
+}
+
+/**
+ * Every video a page moved in its frame, until its new frame is on screen (SPEC §4: a host waits for pending seeks).
+ * A page's own footage is as exact as a video clip's. `steady`: the page was in the picture as the last frame was
+ * drawn (see videoShown). Whether any of its videos is followed.
+ */
+async function mediaShown(page, steady) {
+  const videos = [...page.querySelectorAll('video')];
+  const waited = videos.filter((v) => v.seeking || v.readyState < 2);
+  await Promise.all(waited.map((v) => videoShown(v, 10000, steady)));
+  /* the frame is drawn: a video in the picture now is followed until the next frame, and shows the frame it was waited
+     for; one out of the picture is not followed */
+  let followed = false;
+  for (const v of videos) {
+    const seen = v.__filmShown;
+    if (!seen) continue;
+    followed = true;
+    seen.steady = v.paused && inPicture(v);
+    if (!seen.steady) { unfollowShown(v, seen); continue; }
+    if (waited.includes(v) && !v.seeking && v.readyState >= 2) seen.at = frameHeld(v);
+    followShown(v, seen);
+  }
+  return followed;
 }
 
 /*
@@ -1540,6 +1645,8 @@ loading.catch(() => {});
 
 /** the latest frame drawn for a person watching: an earlier one that finishes after it does not change what shows */
 let watched = 0;
+/** how many frames were drawn, watched or exact: a page drawn exactly in the frame before this one was not moved since */
+let draws = 0;
 
 /**
  * Draw the film at t. `live`: a person is watching (an editor, or the film opened as a page), so a scrub's frame does
@@ -1549,6 +1656,7 @@ let watched = 0;
  */
 async function draw(t, live, play = null) {
   shownT = t;
+  draws++;
   const playing = live && play != null;
   if (!playing) stopRolling();
   clearTimeout(settleNear);
@@ -1597,6 +1705,10 @@ async function draw(t, live, play = null) {
 async function drawClip(c, t, live, play, turn, coming, going) {
   if (c.kind === 'sound') return;
   const on = activeAt(c, t);
+  const serial = draws;
+  /* a page whose own videos are followed (see videoShown): in the picture as the last frame was drawn, an exact one,
+     read before this frame shows, hides or fades it */
+  const steady = !live && on && c.follows && c.exactAt === serial - 1 && c.el.style.visibility === 'visible' && inPicture(c.el);
   c.shown = on;
   const appears = on && c.el.style.visibility !== 'visible';
   if (live && appears && c.kind === 'page') { c.coming = turn; coming.push(c); }
@@ -1677,7 +1789,7 @@ async function drawClip(c, t, live, play, turn, coming, going) {
   catch (e) { if (stale()) return false; throw new Error(`clip "${c.id}" (${c.src}) at its ${Number(local.toFixed(3))}s: ${e?.message ?? e}`); }
   if (stale()) return false;
   win.filmHost?.settle?.(local);
-  if (!live) await mediaShown(win.document);
+  if (!live) { c.follows = await mediaShown(win.document, steady); c.exactAt = serial; }
   c.drawn = true;
   override(c, c.preview ?? c.overrides, filmKeyframes);
   held(c, local);

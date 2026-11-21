@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { EventEmitter, once } from 'node:events';
 import fs from 'node:fs';
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
@@ -332,6 +333,106 @@ test('a browser shows a paused video\'s frame once sought; one that never presen
     assert.equal(await presentsVideo(/** @type {any} */ (wrong)), false);
   } finally {
     await browser.close();
+  }
+});
+
+const hasFfmpeg = (() => { try { execFileSync('ffmpeg', ['-version'], { stdio: 'ignore' }); return true; } catch { return false; } })();
+
+test('a page\'s own video, moved and not waited for, is drawn once its frame is on screen: no second lost on one presented before `seeked` or there already, no other frame taken for it, and one coming on waited for as before', { skip: !hasFfmpeg && 'no ffmpeg', timeout: 120_000 }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'of-own-video-'));
+  execFileSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'testsrc=size=320x180:rate=30:duration=3', '-pix_fmt', 'yuv420p', '-g', '15', join(dir, 'rec.mp4')]);
+  /* a page that sets its video's time and does not wait for the seek (the host does): a frame on each time for a
+     second, then held on one (a seek to where the video already is presents nothing) */
+  writeFileSync(join(dir, 'page.html'), `<!doctype html><body style="margin:0"><video id="v" src="rec.mp4" muted playsinline preload="auto" style="width:320px;height:180px"></video>
+<script>
+const v = document.getElementById('v');
+window.film = {
+  duration: 3, width: 320, height: 180,
+  ready: new Promise((r) => (v.readyState >= 2 ? r() : v.addEventListener('loadeddata', r, { once: true }))),
+  frame(t) { v.style.visibility = window.hidden ? 'hidden' : 'visible'; v.currentTime = Math.min(t, 1); },
+};
+</script></body>`);
+  const site = await serve(dir);
+  const browser = await launch();
+  try {
+    const film = await FilmPage.open(browser, site.url, 'page.html');
+    /* the first seek after the file loaded may never be presented (Chromium): not counted */
+    await film.seek(0.4);
+    const took = [];
+    const pictures = [];
+    for (let f = 15; f < 45; f++) {
+      const t0 = performance.now();
+      await film.seek(f / 30);
+      took.push(performance.now() - t0);
+      pictures.push(await film.capture());
+      /* now and then, the same moment once every wait would have run out: the picture taken was the settled one */
+      if (f % 7 === 0) {
+        await new Promise((r) => setTimeout(r, 1500));
+        assert.ok(pictures.at(-1).equals(await film.capture()), `frame ${f}: the picture taken is the one that stays`);
+      }
+    }
+    /* the wait's limit is a second: before, most moving frames and every held one ran it out */
+    const slow = took.filter((ms) => ms >= 900);
+    assert.ok(slow.length <= 2, `${slow.length} of ${took.length} frames waited a second: ${took.map(Math.round)}`);
+    /* each moving frame is its own picture, and the held ones the last of them */
+    for (let i = 1; i <= 15; i++) assert.ok(!pictures[i].equals(pictures[i - 1]), `frame ${15 + i} is not frame ${14 + i}'s picture`);
+    for (let i = 16; i < 30; i++) assert.ok(pictures[i].equals(pictures[15]), `frame ${15 + i}, held, is frame 30's picture`);
+    await film.close();
+    /* a browser whose frames presented are never the one the video holds (told by its time): none is taken for it,
+       and the wait runs to its limit rather than draw another frame's picture */
+    const other = await FilmPage.open(browser, site.url, 'page.html');
+    await other.page.evaluate(() => {
+      HTMLVideoElement.prototype.requestVideoFrameCallback = function (callback) {
+        setTimeout(() => callback(0, /** @type {any} */ ({ mediaTime: this.currentTime + 1 })), 5);
+        return 0;
+      };
+    });
+    const t0 = performance.now();
+    await other.seek(0.5);
+    const waited = performance.now() - t0;
+    assert.ok(waited >= 900 && waited < 2900, `${Math.round(waited)} ms`);
+    await other.close();
+    /* a video coming on (hidden as the last frame was drawn) is waited for as before: what was said presented while
+       it was out of the picture proves nothing, the picture can keep the frame it had (Chromium). Here every seek's
+       frame is said presented as the seek starts, before `seeked`, and never again */
+    const coming = await FilmPage.open(browser, site.url, 'page.html');
+    await coming.page.evaluate(() => {
+      const asked = new WeakMap();
+      HTMLVideoElement.prototype.requestVideoFrameCallback = function (callback) {
+        if (!asked.has(this)) {
+          asked.set(this, []);
+          this.addEventListener('seeking', () => {
+            const mediaTime = Math.round(Math.floor(this.currentTime * 30 + 1e-6) * 1e6 / 30) / 1e6;
+            for (const said of asked.get(this).splice(0)) said(0, /** @type {any} */ ({ mediaTime }));
+          });
+        }
+        asked.get(this).push(callback);
+        return 1;
+      };
+      HTMLVideoElement.prototype.cancelVideoFrameCallback = function () { asked.get(this)?.splice(0); };
+    });
+    const timed = async (/** @type {number} */ t, hidden = false) => {
+      await coming.page.evaluate((hidden) => { /** @type {any} */ (window).hidden = hidden; }, hidden);
+      const t0 = performance.now();
+      await coming.seek(t);
+      return performance.now() - t0;
+    };
+    const first = await timed(15 / 30);
+    const steady = await timed(16 / 30);
+    const out = await timed(17 / 30, true);
+    const on = await timed(18 / 30);
+    const after = await timed(19 / 30);
+    const all = `${[first, steady, out, on, after].map(Math.round)} ms`;
+    assert.ok(first >= 900, `not followed yet, it is waited for as before: ${all}`);
+    assert.ok(steady < 500, `in the picture since the last frame, its frame said presented before \`seeked\` counts: ${all}`);
+    assert.ok(out < 500, `hidden, it is not waited for: ${all}`);
+    assert.ok(on >= 900 && on < 2900, `coming on, it is waited for as before: ${all}`);
+    assert.ok(after < 500, `in the picture again: ${all}`);
+    await coming.close();
+  } finally {
+    await browser.close();
+    await site.close();
+    rmSync(dir, { recursive: true, force: true });
   }
 });
 

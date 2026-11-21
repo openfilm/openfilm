@@ -757,15 +757,87 @@ export class FilmPage {
       // media the page moved but did not wait for: until the new frame is decoded, then until it is on screen
       // (`seeked` comes before the compositor shows the frame; captured then, it is still the previous one). One not
       // in the picture (hidden, or holding no file: a film's video away from t) is not waited for.
+      // The frame callback comes only for a frame presented after it was asked for, and the sought frame is often
+      // presented a moment before `seeked` (and none at all by a seek to where the video already is): asked for once
+      // the seek was done, it never came, and the wait ran its whole second, every frame. So a video in the picture
+      // is followed from one frame to the next, and its seek done, the frame it holds is the one to see, told by its
+      // time: seen last already, or presented from then on. One that was not in the picture as the last frame was
+      // drawn is waited for as before. The same as videoShown in timeline.mjs (a page inside a film), which says why.
+      const sameFrame = (a, b) => Math.abs(a - b) < 1.5; // µs
+      const frameHeld = (v) => {
+        try { const frame = new VideoFrame(v); const at = frame.timestamp; frame.close(); return at; } catch { return null; }
+      };
+      const inPicture = (v) => {
+        if (typeof v.checkVisibility !== 'function' || !v.checkVisibility({ visibilityProperty: true, opacityProperty: true, contentVisibilityAuto: true })) return false;
+        const box = v.getBoundingClientRect();
+        return box.width > 0 && box.height > 0 && box.right > 0 && box.bottom > 0 && box.left < innerWidth && box.top < innerHeight;
+      };
+      const follow = (v, seen) => {
+        if (seen.on) return;
+        seen.on = true;
+        const mine = ++seen.chain;
+        const note = (_now, meta) => {
+          if (!seen.on || seen.chain !== mine) return;
+          if (!v.paused) { seen.on = false; seen.at = null; return; }
+          seen.at = meta.mediaTime * 1e6;
+          seen.handle = v.requestVideoFrameCallback(note);
+        };
+        seen.handle = v.requestVideoFrameCallback(note);
+      };
+      const unfollow = (v, seen) => {
+        if (seen.on) { seen.on = false; v.cancelVideoFrameCallback?.(seen.handle); }
+        seen.at = null;
+      };
+      const waited = new Set();
+      const videoShown = (v, limit) => new Promise((resolve) => {
+        const callback = typeof v.requestVideoFrameCallback === 'function';
+        let seen = v.__filmShown;
+        if (callback && !seen) {
+          seen = v.__filmShown = { at: null, steady: false, on: false, chain: 0, handle: 0 };
+          v.addEventListener('emptied', () => { seen.at = null; });
+        }
+        if (callback) waited.add(v);
+        const steady = callback && seen.steady;
+        const timers = [];
+        let over = false;
+        const done = () => {
+          if (over) return;
+          over = true;
+          for (const timer of timers) clearTimeout(timer);
+          v.removeEventListener('seeked', sought); v.removeEventListener('loadeddata', sought);
+          resolve();
+        };
+        function sought() {
+          if (!callback) { done(); return; }
+          // still seeking, or playing by itself: there is no one frame it ends on, and the first presented counts
+          const want = v.paused && !v.seeking && v.readyState >= 2 ? frameHeld(v) : null;
+          if (steady && want != null && seen.at != null && sameFrame(seen.at, want)) { done(); return; }
+          const next = () => v.requestVideoFrameCallback((_now, meta) => {
+            if (over) return;
+            if (want == null || sameFrame(meta.mediaTime * 1e6, want)) done(); else next();
+          });
+          next();
+          timers.push(setTimeout(done, 1000));
+        }
+        v.addEventListener('seeked', sought, { once: true }); v.addEventListener('loadeddata', sought, { once: true });
+        timers.push(setTimeout(done, limit));
+      });
       await Promise.all([...document.querySelectorAll('video')].map((v) => (v.seeking || v.readyState < 2)
         && v.networkState !== v.NETWORK_EMPTY && v.checkVisibility?.({ visibilityProperty: true }) !== false
-        ? new Promise((r) => {
-          const shown = () => (typeof v.requestVideoFrameCallback === 'function' ? (v.requestVideoFrameCallback(() => r()), setTimeout(r, 1000)) : r());
-          v.addEventListener('seeked', shown, { once: true }); v.addEventListener('loadeddata', shown, { once: true }); setTimeout(r, 3000);
-        })
+        ? videoShown(v, 3000)
         : null));
       // two frames: the first commits style and layout, the second lets layers (filters, 3D) finish rasterizing
       await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())));
+      // the frame is drawn: a video in the picture now is followed until the next frame, and shows the frame it was
+      // waited for; one out of the picture is not followed (its frames are said presented, yet none is drawn)
+      for (const v of document.querySelectorAll('video')) {
+        const seen = v.__filmShown;
+        if (!seen) continue;
+        seen.steady = v.paused && inPicture(v);
+        if (!seen.steady) { unfollow(v, seen); continue; }
+        if (waited.has(v) && !v.seeking && v.readyState >= 2) seen.at = frameHeld(v);
+        follow(v, seen);
+      }
       return window.__filmVideos?.() ?? null;
     }, t).catch((e) => {
       const why = String(e.message).replace(/^page\.evaluate: /, '').split('\n')[0].replace(/^Error: /, '');
