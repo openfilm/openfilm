@@ -12,12 +12,16 @@
 // only, a second either side (gradeRange): a change to its grade never makes a long recording again, and clips that
 // play the same part share it. Its picture starts at that part's first second (`from`), which the player adds back. A browser shows only 8 bits of any video, so the grade is made here, before the picture is cut to 8 bits:
 // a gradient keeps the steps it would have graded at 10 bits. The preview and the export play the same copy.
+//
+// A copy is kept for as long as it is used: each says when it was last used and what it is a copy of, and the ones no
+// one used for a month, or whose file or LUTs changed since, are swept away (sweepSeek, cache-sweep.mjs).
 import { execFile } from 'node:child_process';
 import { createHash, randomBytes } from 'node:crypto';
 import { existsSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, extname, join, relative, sep } from 'node:path';
 import { colorTagsOf, encoders, h264ColorTags, hardwareEncoder, hardwareOptions, onTheChip } from './encoders.mjs';
 import { clipOutsideRanges, kindOf, lutsOf, readFilmFile, srcHref } from './film-doc.mjs';
+import { markUsed, sweepCopies } from './cache-sweep.mjs';
 import { ffmpeg, fileOf, hash, kill, outDir } from './shared.mjs';
 
 /** A key frame further apart than this is slow to seek to frame by frame. */
@@ -140,12 +144,16 @@ export async function copyNeed(file, { plays, slow = true } = {}) {
 const copyBase = (/** @type {string} */ file, /** @type {string} */ root, /** @type {import('node:fs').Stats} */ stat) =>
   join(root, '.film', 'cache', 'seek', hash(Buffer.from(`${VERSION}\0${file}\0${stat.size}\0${stat.mtimeMs}`)));
 
+/** What a copy of `file` says it is a copy of (cache-sweep.mjs): the file as its name was made from it (copyBase). */
+const sourceNote = (/** @type {string} */ file, /** @type {import('node:fs').Stats} */ stat) => ({ v: VERSION, file, size: stat.size, mtimeMs: stat.mtimeMs });
+
 /** @type {Map<string, { copy: string | null, at: number }>} what madeCopy found, by file and version */
 const found = new Map();
 /**
  * The copy of `file` already made in `root`'s cache (seekableCopies), or null; nothing is made. Asked on every request
  * a playing video makes, so a copy found is remembered, and one not found is looked for again a moment later; at once
  * with `recheck` (asked from another thread than the one that makes copies, which would hear of a new one too late).
+ * One found is said to be used (cache-sweep.mjs).
  * @param {string} file @param {string} root @param {{ recheck?: boolean }} [options]
  */
 export function madeCopy(file, root, { recheck = false } = {}) {
@@ -153,10 +161,14 @@ export function madeCopy(file, root, { recheck = false } = {}) {
   try { stat = statSync(file); } catch { return null; }
   const key = `${root}\0${file}\0${stat.size}\0${stat.mtimeMs}`;
   const hit = found.get(key);
-  if (hit && (hit.copy ? existsSync(hit.copy) : !recheck && Date.now() - hit.at < 2000)) return hit.copy;
+  if (hit && (hit.copy ? existsSync(hit.copy) : !recheck && Date.now() - hit.at < 2000)) {
+    if (hit.copy) markUsed(hit.copy, sourceNote(file, stat));
+    return hit.copy;
+  }
   const base = copyBase(file, root, stat);
   const copy = [`${base}.mp4`, `${base}.webm`].find((f) => existsSync(f)) ?? null;
   found.set(key, { copy, at: Date.now() });
+  if (copy) markUsed(copy, sourceNote(file, stat));
   return copy;
 }
 
@@ -245,8 +257,12 @@ export async function seekableCopies(files, root, { signal, plays, slow = true, 
       let stat;
       try { stat = statSync(file); } catch { continue; }
       const base = copyBase(file, root, stat);
-      /* madeCopy finds it from now on, without waiting out a miss it remembers */
-      const known = (/** @type {string} */ copy) => { copies.set(file, copy); if (!copy.endsWith(FINE)) found.set(`${root}\0${file}\0${stat.size}\0${stat.mtimeMs}`, { copy, at: Date.now() }); };
+      /* madeCopy finds it from now on, without waiting out a miss it remembers; it is used now, whichever it is */
+      const known = (/** @type {string} */ copy) => {
+        copies.set(file, copy);
+        markUsed(copy, sourceNote(file, stat));
+        if (!copy.endsWith(FINE)) found.set(`${root}\0${file}\0${stat.size}\0${stat.mtimeMs}`, { copy, at: Date.now() });
+      };
       const made = [fine ? `${base}${FINE}` : `${base}.mp4`, `${base}.webm`].find((f) => existsSync(f));
       if (made) { known(made); continue; }
       const need = await copyNeed(file, { plays, slow });
@@ -309,6 +325,8 @@ async function makeCopy(file, out, need, signal, fine = false) {
     const chip = Boolean(encoder) || decoding.length > 0;
     /* a chip that hung is not tried again for this copy: straight to the processor */
     if (chip && stalled) throw new Error('the graphics chip hung');
+    /* cancelled while the chip was asked what it can do, before any encoder: none is started */
+    if (signal?.aborted) throw new Error('cancelled');
     /* graded: the LUTs read from the copy's folder by names with nothing to escape (gradeLuts) */
     const graded = need.luts?.length ? gradeFilter(need, need.alpha ? 'yuva420p' : encoder ? 'nv12' : 'yuv420p') : null;
     /* the same frames at the same times (passthrough: no frame is added or dropped), the picture only */
@@ -324,6 +342,9 @@ async function makeCopy(file, out, need, signal, fine = false) {
     /* its whole tree: an ffmpeg that is a shim (Windows' package managers) runs the real one as its child */
     const stop = () => kill(run.proc);
     signal?.addEventListener('abort', stop, { once: true });
+    /* cancelled while the source's color tags were read, a moment before the encoder started: an abort that has
+       happened is never heard, and the copy would be made to its end for a render that is gone */
+    if (signal?.aborted) stop();
     /* on the chip, the part must keep growing: one that does not for STALL_MS is stopped */
     let watch;
     const hung = new Promise((_, fail) => {
@@ -445,11 +466,34 @@ export function gradeKey(file, luts, fine = false, range = null) {
   return hash(Buffer.from(`${VERSION}\0${file}\0${stat.size}\0${stat.mtimeMs}\0graded${fine ? ' fine' : ''}${range ? ` ${range.from}-${range.to}` : ''}\0${contents.join('\0')}`));
 }
 
-/** The graded copy named `key` (gradeKey) made in `root`'s cache, or null. @param {string} root @param {string} key */
-export function gradedCopy(root, key) {
+/** The graded copy named `key` (gradeKey) in `root`'s cache, or null; nothing is said of its use. @param {string} root @param {string} key */
+function gradedFile(root, key) {
   if (!/^[0-9a-f]{12}$/.test(key)) return null;
   const base = join(root, '.film', 'cache', 'seek', key);
   return [`${base}.mp4`, `${base}.webm`].find((f) => existsSync(f)) ?? null;
+}
+
+/**
+ * The graded copy named `key` (gradeKey) made in `root`'s cache, or null. One found is said to be used
+ * (cache-sweep.mjs). @param {string} root @param {string} key
+ */
+export function gradedCopy(root, key) {
+  const copy = gradedFile(root, key);
+  if (copy) markUsed(copy);
+  return copy;
+}
+
+/**
+ * What a graded copy says it is a copy of (cache-sweep.mjs): its file, as sourceNote, and each LUT file as it is. Null
+ * when one of them can't be read.
+ * @param {{ file: string, luts: string[] }} grade
+ */
+function gradeNote({ file, luts }) {
+  try {
+    return { ...sourceNote(file, statSync(file)), luts: luts.map((lut) => { const stat = statSync(lut); return { file: lut, size: stat.size, mtimeMs: stat.mtimeMs }; }) };
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -518,7 +562,7 @@ async function bakedGrade(luts, dir) {
   const contents = luts.map((lut) => lutOf(lut)?.content);
   if (contents.some((c) => !c)) return null;
   const name = `grade-${createHash('sha1').update(`${BAKED_SIZE}\0${contents.join('\0')}`).digest('hex').slice(0, 16)}.cube`;
-  if (existsSync(join(dir, name))) return name;
+  if (existsSync(join(dir, name))) { markUsed(join(dir, name)); return name; }
   try {
     const { parseColorTransform } = await import('./color/ctf.mjs');
     const { bake, cubeText } = await import('./color/ops.mjs');
@@ -526,6 +570,7 @@ async function bakedGrade(luts, dir) {
     const part = join(dir, `${name}.part-${process.pid}-${randomBytes(4).toString('hex')}`);
     writeFileSync(part, cubeText(bake(ops, { size: BAKED_SIZE })));
     renameSync(part, join(dir, name));
+    markUsed(join(dir, name));
     return name;
   } catch {
     return null;
@@ -564,6 +609,7 @@ function makeGraded(grade, root, key, fine, signal) {
           const part = join(dir, `${name}.part-${process.pid}-${randomBytes(4).toString('hex')}`);
           try { writeFileSync(part, body); renameSync(part, join(dir, name)); } catch { rmSync(part, { force: true }); if (!existsSync(join(dir, name))) return /** @type {const} */ ('failed'); }
         }
+        markUsed(join(dir, name));
         luts.push({ name, oneD: facts.oneD });
       }
       /* a LUT changed while it was read: this key's copy would be of other contents */
@@ -592,12 +638,14 @@ export async function gradedCopies(grades, root, { signal, fine = false, failed 
       if (signal?.aborted) return;
       const key = gradeKey(grade.file, grade.luts, fine, grade.range ?? null);
       if (!key) { failed?.(grade); continue; }
-      const made = gradedCopy(root, key);
-      if (made) { copies.set(key, made); continue; }
+      /* found or made, it is used now, and says the file and the LUTs it was graded from */
+      const use = (/** @type {string} */ copy) => { markUsed(copy, () => gradeNote(grade)); copies.set(key, copy); };
+      const made = gradedFile(root, key);
+      if (made) { use(made); continue; }
       let result = await makeGraded(grade, root, key, fine, signal);
       if (result === 'cancelled' && !signal?.aborted) result = await makeGraded(grade, root, key, fine, signal);
-      const copy = result === 'made' ? gradedCopy(root, key) : null;
-      if (copy) copies.set(key, copy);
+      const copy = result === 'made' ? gradedFile(root, key) : null;
+      if (copy) use(copy);
       else if (result !== 'cancelled') failed?.(grade);
     }
   };
@@ -618,8 +666,52 @@ export function gradeSoon(file, luts, root, time = null) {
   const range = gradeRange(time);
   const key = gradeKey(file, luts, false, range);
   if (!key) return null;
-  if (gradedCopy(root, key)) return { key, from: range?.from ?? 0 };
+  const made = gradedFile(root, key);
+  if (made) { markUsed(made, () => gradeNote({ file, luts })); return { key, from: range?.from ?? 0 }; }
   if (gradeFailed.has(`${root}\0${key}`)) return null;
   void gradedCopies([{ file, luts, range }], root, { failed: () => gradeFailed.add(`${root}\0${key}`) });
   return { making: true };
+}
+
+/* ── copies no longer used ────────────────────────────────────────────────── */
+
+/** A copy's name in the seek folder: a file's or a graded one (`-fine`: a master export's), or a LUT a grade read. */
+const COPY_NAME = '(?:[0-9a-f]{12}(?:-fine)?\\.(?:mp4|webm)|(?:lut|grade)-[0-9a-f]{16}\\.cube)';
+const KEPT = {
+  copy: new RegExp(`^${COPY_NAME}$`),
+  /* a copy or a LUT while it is written (makeCopy, makeGraded, bakedGrade) */
+  part: new RegExp(`^${COPY_NAME}\\.part-\\d+-[0-9a-f]{8}(?:\\.(?:mp4|webm))?$`),
+  stale: staleCopy,
+};
+
+/** Whether the file a note names is there and no longer as the note says it (gone, it may only be on a disk that is
+    not plugged in: not told from a file removed). @param {unknown} noted */
+function changed(noted) {
+  const { file, size, mtimeMs } = /** @type {{ file?: unknown, size?: unknown, mtimeMs?: unknown }} */ (noted ?? {});
+  if (typeof file !== 'string') return false;
+  try {
+    const stat = statSync(file);
+    return stat.size !== size || stat.mtimeMs !== mtimeMs;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Whether a copy can't be used again, by its note (sourceNote, gradeNote): made by an older way of making copies, or
+ * from a file or a LUT that has changed since, so nothing is named as it is any more. A LUT is told by its size and
+ * time, not read: one saved again unchanged counts as changed, and its copy is made again if it was not used that day.
+ * @param {Record<string, unknown>} note
+ */
+function staleCopy(note) {
+  return Number(note.v) < VERSION || changed(note) || (Array.isArray(note.luts) && note.luts.some(changed));
+}
+
+/**
+ * Sweep `root`'s copies (cache-sweep.mjs sweepCopies): those no one used for a month, and after a day those of a file
+ * or a LUT changed since. Asked once what a render or a look needs is found or made, so that is said to be used first.
+ * @param {string} root @param {{ now?: number, force?: boolean }} [options]
+ */
+export function sweepSeek(root, options) {
+  return sweepCopies(join(root, '.film', 'cache', 'seek'), KEPT, options);
 }

@@ -7,7 +7,8 @@ import { dirname, join, relative, sep } from 'node:path';
 import { filmHtml } from './film-doc.mjs';
 import { launch, serve } from './host.mjs';
 import { render } from './render.mjs';
-import { copyNeed, firstFrame, gradedCopies, gradeKey, gradeRange, hasAlpha, madeCopy, seekableCopies, slowSeeking } from './seekable.mjs';
+import { signature } from './render-resume.mjs';
+import { copyNeed, firstFrame, gradedCopies, gradedCopy, gradeKey, gradeRange, hasAlpha, madeCopy, seekableCopies, slowSeeking, sweepSeek } from './seekable.mjs';
 import { hash } from './shared.mjs';
 import { look } from './look.mjs';
 
@@ -30,6 +31,8 @@ const clip = (file, gop) => execFileSync('ffmpeg', ['-v', 'error', '-y', '-f', '
   '-c:v', 'libx264', '-preset', 'ultrafast', '-g', String(gop), '-keyint_min', String(gop), '-sc_threshold', '0', '-pix_fmt', 'yuv420p', file]);
 /** The codecs of a file's sound streams, as ffprobe names them: '' when it has none. */
 const soundStreams = (file) => execFileSync('ffprobe', ['-v', 'error', '-select_streams', 'a', '-show_entries', 'stream=codec_type', '-of', 'csv=p=0', file]).toString().trim();
+/** What a seek folder holds but the notes of its copies' use and of its last sweep (cache-sweep.mjs). */
+const kept = (seek) => readdirSync(seek).filter((f) => !f.endsWith('.used') && f !== '.swept');
 /** A video's frame times, as its packets give them. */
 const times = (file) => execFileSync('ffprobe', ['-v', 'error', '-select_streams', 'v:0', '-show_entries', 'packet=pts_time', '-of', 'csv=p=0', file]).toString().trim().split('\n').map(Number).sort((a, b) => a - b);
 
@@ -267,12 +270,30 @@ test('renders asking for the same copy at once share one, whole; one cancelled l
     const copy = /** @type {string} */ (b.get(file));
     assert.ok(copy);
     assert.equal(times(copy).length, 240, 'every frame');
-    assert.deepEqual(readdirSync(seek), [copy.split(/[\\/]/).pop()], 'the copy alone: no part left');
+    assert.deepEqual(kept(seek), [copy.split(/[\\/]/).pop()], 'the copy alone: no part left');
     rmSync(seek, { recursive: true, force: true });
     const both = await Promise.all([seekableCopies([file], dir, ask), seekableCopies([file], dir, ask)]);
     assert.equal(both[0].get(file), both[1].get(file));
     assert.equal(times(/** @type {string} */ (both[0].get(file))).length, 240);
-    assert.equal(readdirSync(seek).length, 1);
+    assert.equal(kept(seek).length, 1);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a copy cancelled before its encoder has started is not made, and leaves nothing; asked for again, it is made', ffmpeg, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'of-seekable-cancelled-early-'));
+  try {
+    const file = join(dir, 'prores.mov');
+    execFileSync('ffmpeg', ['-v', 'error', '-y', '-f', 'lavfi', '-i', 'testsrc2=size=640x360:rate=30', '-t', '3', '-c:v', 'prores_ks', '-profile:v', '3', file]);
+    const quit = new AbortController();
+    /* cancelled just as the copy is begun: once the browser was asked whether it plays the file, while the chip is
+       still asked what it can do and no encoder runs yet */
+    const cancelled = await seekableCopies([file], dir, { signal: quit.signal, slow: false, plays: async () => { setImmediate(() => quit.abort()); return false; } });
+    assert.equal(cancelled.size, 0, 'the cancelled one has none');
+    assert.deepEqual(kept(join(dir, '.film', 'cache', 'seek')), [], 'no copy, and no part of one');
+    const again = await seekableCopies([file], dir, { plays: async () => false, slow: false });
+    assert.equal(times(/** @type {string} */ (again.get(file))).length, 90, 'whole');
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -291,7 +312,7 @@ console.log(copies.get(${JSON.stringify(file)}) ?? '');`;
     assert.ok(a);
     assert.equal(a, b);
     assert.equal(times(a).length, 90, 'whole');
-    assert.equal(readdirSync(join(dir, '.film', 'cache', 'seek')).length, 1, 'no part left');
+    assert.equal(kept(join(dir, '.film', 'cache', 'seek')).length, 1, 'no part left');
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -327,7 +348,7 @@ console.log(copies.get(${JSON.stringify(file)}) ?? '');`;
     assert.ok(existsSync(pidFile), 'the chip was tried');
     assert.ok(copy, 'made all the same');
     assert.equal(times(copy).length, 30, 'whole');
-    assert.equal(readdirSync(join(dir, '.film', 'cache', 'seek')).length, 1, 'no part left');
+    assert.equal(kept(join(dir, '.film', 'cache', 'seek')).length, 1, 'no part left');
     const pid = Number(readFileSync(pidFile, 'utf8'));
     assert.throws(() => process.kill(pid, 0), { code: 'ESRCH' }, 'the hung ffmpeg was stopped');
   } finally {
@@ -545,8 +566,83 @@ test('a video clip without --of-lut gets the same copy as ever, named as ever, a
     await render([dir], { out: join(dir, 'out.mp4'), workers: 1, silent: true, onProgress() {} });
     const stat = statSync(file);
     const named = `${hash(Buffer.from(`3\0${file}\0${stat.size}\0${stat.mtimeMs}`))}.mp4`;
-    assert.deepEqual(readdirSync(join(dir, '.film/cache/seek')).filter((f) => !f.includes('.part')), [named]);
+    assert.deepEqual(kept(join(dir, '.film/cache/seek')).filter((f) => !f.includes('.part')), [named]);
     assert.equal(madeCopy(file, dir), join(dir, '.film/cache/seek', named));
+    /* the render said the copy it played is used, and of what; then it swept the folder, where nothing was old */
+    assert.deepEqual(JSON.parse(readFileSync(join(dir, '.film/cache/seek', `${named}.used`), 'utf8')), { v: 3, file, size: stat.size, mtimeMs: stat.mtimeMs });
+    assert.equal(existsSync(join(dir, '.film/cache/seek/.swept')), true);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+const DAY = 864e5;
+
+test('a copy says what it is a copy of; the one of a file changed since is swept a day on, the one in use a month after its last use', ffmpeg, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'of-seekable-swept-'));
+  try {
+    const file = join(dir, 'slow.mp4');
+    clip(file, 120);
+    const was = statSync(file);
+    const first = /** @type {string} */ ((await seekableCopies([file], dir)).get(file));
+    assert.deepEqual(JSON.parse(readFileSync(`${first}.used`, 'utf8')), { v: 3, file, size: was.size, mtimeMs: was.mtimeMs });
+    const known = signature(first);
+    assert.equal(madeCopy(file, dir), first);
+    assert.equal(signature(first), known, 'said to be used, the copy is as a resumed render knows it');
+
+    /* the file is made again: its copy is another, and the one before can't be used again */
+    clip(file, 90);
+    assert.notEqual(statSync(file).mtimeMs, was.mtimeMs);
+    const second = /** @type {string} */ ((await seekableCopies([file], dir)).get(file));
+    assert.notEqual(second, first);
+    const bytes = statSync(first).size;
+    /* that day both stay: a render that began with the first may still play it */
+    assert.deepEqual(await sweepSeek(dir, { force: true }), { files: 0, bytes: 0 });
+    assert.deepEqual(await sweepSeek(dir, { force: true, now: Date.now() + 2 * DAY }), { files: 1, bytes });
+    assert.deepEqual(kept(join(dir, '.film/cache/seek')), [second.split(/[\\/]/).pop()]);
+    assert.equal(existsSync(`${first}.used`), false);
+    assert.equal(madeCopy(file, dir), second);
+
+    /* its file gone (a disk not plugged in, for all a sweep knows), it is kept for its month, no longer */
+    rmSync(file);
+    assert.deepEqual(await sweepSeek(dir, { force: true, now: Date.now() + 20 * DAY }), { files: 0, bytes: 0 });
+    assert.equal((await sweepSeek(dir, { force: true, now: Date.now() + 32 * DAY })).files, 1);
+    assert.deepEqual(kept(join(dir, '.film/cache/seek')), []);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a graded copy says its file and its LUTs: the one of a LUT changed in place is swept a day on, and the LUTs a grade read once no grade read them for a month', { ...ffmpeg, timeout: 120_000 }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'of-seekable-graded-swept-'));
+  try {
+    const file = join(dir, 'a.mp4');
+    clip(file, 5);
+    const lut = cube(join(dir, 'a.cube'), 2, (r, g, b) => [b, g, r]);
+    const seek = join(dir, '.film/cache/seek');
+    const before = /** @type {string} */ (gradeKey(file, [lut]));
+    const first = /** @type {string} */ ((await gradedCopies([{ file, luts: [lut] }], dir)).get(before));
+    const source = statSync(file), look = statSync(lut);
+    assert.deepEqual(JSON.parse(readFileSync(`${first}.used`, 'utf8')),
+      { v: 3, file, size: source.size, mtimeMs: source.mtimeMs, luts: [{ file: lut, size: look.size, mtimeMs: look.mtimeMs }] });
+    /* the preview asks for it by its key alone: used, and what it is a copy of stays written */
+    assert.equal(gradedCopy(dir, before), first);
+    assert.equal(JSON.parse(readFileSync(`${first}.used`, 'utf8')).file, file);
+
+    /* the LUT changed in place: another copy, and the one before can't be used again */
+    cube(lut, 3, (r, g, b) => [g, b, r]);
+    const after = /** @type {string} */ (gradeKey(file, [lut]));
+    const second = /** @type {string} */ ((await gradedCopies([{ file, luts: [lut] }], dir)).get(after));
+    assert.notEqual(second, first);
+    assert.equal(kept(seek).filter((f) => /^lut-[0-9a-f]{16}\.cube$/.test(f)).length, 2, 'each LUT as the grade read it');
+    assert.equal((await sweepSeek(dir, { force: true })).files, 0);
+    assert.equal((await sweepSeek(dir, { force: true, now: Date.now() + 2 * DAY })).files, 1);
+    assert.equal(existsSync(first), false);
+    assert.equal(gradedCopy(dir, after), second);
+    assert.equal(kept(seek).length, 3, 'the copy in use, and the LUTs');
+    /* a month after anything here was last used, all of it goes */
+    assert.equal((await sweepSeek(dir, { force: true, now: Date.now() + 32 * DAY })).files, 3);
+    assert.deepEqual(kept(seek), []);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

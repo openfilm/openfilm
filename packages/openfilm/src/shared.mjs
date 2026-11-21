@@ -110,7 +110,7 @@ export async function open(target, opts = {}) {
   catch (e) { await site.close(); throw e; }
   if (opts.playable) {
     try {
-      const { browserCopies, filmGrades, filmVideos, gradedCopies, gradeKey, gradeRange } = await import('./seekable.mjs');
+      const { browserCopies, filmGrades, filmVideos, gradedCopies, gradeKey, gradeRange, sweepSeek } = await import('./seekable.mjs');
       keyOf = { key: gradeKey, range: gradeRange };
       const files = Array.isArray(opts.playable) ? opts.playable : loc.isFilm ? filmVideos(loc.root, loc.entry, { timeline, renderRanges: loc.entry === FILM_FILE ? opts.renderRanges : undefined }) : [];
       for (const [file, copy] of await browserCopies(browser, site.url, loc.root, files, { signal: opts.signal })) copies.set(file, copy);
@@ -119,6 +119,8 @@ export async function open(target, opts = {}) {
       const film = loc.isFilm ? loc.entry : opts.root ? FILM_FILE : null;
       const options = film === FILM_FILE ? { timeline: opts.timeline, renderRanges: opts.renderRanges } : undefined;
       if (film) for (const [key, copy] of await gradedCopies(filmGrades(loc.root, film, options), loc.root, { signal: opts.signal })) graded.set(key, copy);
+      /* the copies shown here are said to be used: the ones no one used for a month go (once a day) */
+      await sweepSeek(loc.root);
     } catch { /* the footage as it is */ }
   }
   /** @type {FilmPage} */

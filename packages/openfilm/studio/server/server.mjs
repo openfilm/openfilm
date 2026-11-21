@@ -68,7 +68,7 @@ import { createMediaIndexer, mediaSummary } from './media-index.mjs';
 import { carryMade, madeView } from './media-made.mjs';
 import { pluginOfSkill, pluginStates, pluginsDir, removePlugin, setPluginOn, setWorkbenchOrder, workbenchOrder } from '../../src/plugins.mjs';
 import { createReconnector, missingMedia, reconnect } from './media-reconnect.mjs';
-import { clearProjectCache, storage } from './storage.mjs';
+import { clearProjectCache, storage, sweepProjectCopies } from './storage.mjs';
 import { chooseStorage } from './saved-location.mjs';
 import { moveToTrash } from './trash.mjs';
 import { SavedError, TEXT_COMPONENT, TEXT_OWN_FONTS, bundlePoster, copyFromLibrary, libraryPath, savePack, libraryRel, libraryRoot as savedLibrary, bringClip, saveClip, saveFile, saveGroup, takeSaved } from './saved.mjs';
@@ -217,6 +217,16 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
   });
   const sweepMedia = indexMedia ? setTimeout(() => { void mediaIndex.sweep().catch(() => {}); }, 20_000) : null;
   sweepMedia?.unref();
+  /* the copies of footage no one used for a month, and those of footage changed since (storage.mjs
+     sweepProjectCopies): every listed project's, a few minutes after Studio is up and a few times a day after that,
+     each folder swept once a day; the Studio the person runs only, as the media index */
+  /** @type {NodeJS.Timeout | null} */
+  let sweepCopies = null;
+  const sweepCopiesIn = (/** @type {number} */ ms) => {
+    sweepCopies = setTimeout(() => { void sweepProjectCopies().catch(() => {}).finally(() => { if (sweepCopies) sweepCopiesIn(6 * 3600_000); }); }, ms);
+    sweepCopies.unref();
+  };
+  if (indexMedia) sweepCopiesIn(5 * 60_000);
   /* the routes OpenFilm's own plugins bring (plugin-servers.mjs), each told to the pages of a project as it says */
   const pluginServers = createPluginServers({ emit: (root, event) => watchers.emit(root, event) });
   /** questions about spending for the person, in the pages showing a project (see get.mjs) */
@@ -1948,6 +1958,8 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     fetches.stopAll();
     autoVersions.stop();
     if (sweepMedia) clearTimeout(sweepMedia);
+    if (sweepCopies) clearTimeout(sweepCopies);
+    sweepCopies = null;
     mediaIndex.close();
     await closePageFrames();
     watchers.closeAll();

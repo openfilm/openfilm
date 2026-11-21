@@ -10,13 +10,18 @@
  * touched: not the work, not the versions, not what a conversation keeps to undo a turn (`turn-files`, in the cache
  * folder too).
  *
+ * The largest of it goes by itself: the copies of footage a render seeks in and the preview plays are kept for as long
+ * as they are used, and swept away once no one used them for a month, or their footage changed (sweepProjectCopies).
+ *
  * Media kept elsewhere and linked (src/media-links.mjs) takes no room in the project: a link is not followed.
  */
 import { lstat, readdir, rm, stat } from 'node:fs/promises';
 import { basename, join, relative, isAbsolute } from 'node:path';
 import { exportsRoot, libraryRoot, savedRoot, sharedHome, studioHomeDir } from '../../src/locations.mjs';
+import { sweepSeek } from '../../src/seekable.mjs';
 import { mySkillsDir } from '../../src/skills.mjs';
 import { TOOL_DIR, listProjects } from './projects.mjs';
+import { sweepProxies } from './proxies.mjs';
 
 /** The cache's folders that hold only what can be made again. */
 const CLEARABLE = new Set(['audio', 'frames', 'look', 'pageframes', 'posters', 'preview', 'probe', 'render', 'seek', 'waves', 'proxies', 'playable', 'commits', 'export']);
@@ -84,6 +89,21 @@ export async function clearProjectCache(root, { busy = false, now = Date.now() }
     await rm(join(cache, name), { recursive: true, force: true }).catch(() => {});
   }
   return Math.max(0, before - (await projectUsage(root)).clearable);
+}
+
+/**
+ * Sweep the copies of footage of every listed project that is there (src/cache-sweep.mjs): the copies a render seeks
+ * in (src/seekable.mjs sweepSeek) and the preview's proxies (proxies.mjs sweepProxies) that no one used for a month,
+ * and after a day those of footage changed since. A project is swept whether it is open or not: one not opened for
+ * months would keep its copies for good otherwise. Each folder once a day (`force`: now). Returns the bytes given back.
+ * @param {{ now?: number, force?: boolean }} [options]
+ */
+export async function sweepProjectCopies(options) {
+  let bytes = 0;
+  for (const p of (await listProjects()).filter((p) => !p.missing)) {
+    bytes += (await sweepSeek(p.path, options)).bytes + (await sweepProxies(p.path, options)).bytes;
+  }
+  return bytes;
 }
 
 /** The bytes a folder takes, links not followed (0: not there). @param {string} dir */
