@@ -862,7 +862,8 @@ test('a film of many pages keeps only a few open: one far from the playhead is c
   const dir = mkdtempSync(join(tmpdir(), 'of-pages-'));
   const clips = [];
   for (let i = 0; i < 12; i++) {
-    writeFileSync(join(dir, `p${i}.html`), `<!doctype html><body style="margin:0"><p id="w"></p><p id="o">own</p>
+    /* each with a canvas: a page that may draw in 3D, of which a browser keeps few (one of words alone is light: below) */
+    writeFileSync(join(dir, `p${i}.html`), `<!doctype html><body style="margin:0"><canvas width="4" height="4"></canvas><p id="w"></p><p id="o">own</p>
 <script>window.film={duration:1,frame(t){document.getElementById('w').textContent='p${i} '+t.toFixed(2)}}</script></body>`);
     clips.push({ id: `p${i}`, src: `p${i}.html`, at: i, ...(i === 11 ? { overrides: [{ at: '#o', text: 'tweaked' }] } : {}) });
   }
@@ -887,6 +888,164 @@ test('a film of many pages keeps only a few open: one far from the playhead is c
     assert.equal((await now())[11], 'p11 0.75|tweaked', 'closed and opened again: the same page');
   } finally {
     await s.close();
+  }
+});
+
+test('pages of words and pictures alone are light: many more of them stay open, so a jump back to one draws at once', { timeout: 60_000 }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'of-light-pages-'));
+  const clips = [];
+  for (let i = 0; i < 30; i++) {
+    writeFileSync(join(dir, `p${i}.html`), `<!doctype html><body style="margin:0"><p id="w"></p>
+<script>window.opened=(window.opened??0)+1;window.film={duration:1,frame(t){document.getElementById('w').textContent='p${i} '+t.toFixed(2)}}</script></body>`);
+    clips.push({ id: `p${i}`, src: `p${i}.html`, at: i });
+  }
+  writeFileSync(join(dir, 'film.html'), filmHtml({ stage: { w: 320, h: 180 }, tracks: [{ clips }] }));
+  const s = await open(dir);
+  const open_ = () => s.film.page.evaluate(() => [...document.querySelectorAll('iframe')].map((f) => (f.contentWindow?.film ? `open ${f.contentDocument.getElementById('w').textContent}` : null)));
+  try {
+    const loaded = (await open_()).filter(Boolean).length;
+    assert.ok(loaded > 8 && loaded <= 24, `more than the few a film in 3D keeps, never more than 24: ${loaded}`);
+    await s.film.seek(2.5);
+    await s.film.seek(20.5);
+    /* back to one shown before: still open, the same document (not loaded again), drawn at its moment */
+    const mark = await s.film.page.evaluate(() => { const w = document.querySelectorAll('iframe')[2].contentWindow; w.kept = true; return Boolean(w.film); });
+    assert.equal(mark, true, 'the page shown before stayed open');
+    await s.film.seek(2.25);
+    assert.deepEqual(await s.film.page.evaluate(() => { const w = document.querySelectorAll('iframe')[2].contentWindow; return [w.kept, w.opened, w.document.getElementById('w').textContent]; }), [true, 1, 'p2 0.25']);
+    assert.ok((await open_()).filter(Boolean).length <= 24);
+  } finally {
+    await s.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a clip\'s animation without a fill plays again when the playhead goes back before its end: the same t, the same picture', { timeout: 60_000 }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'of-anim-again-'));
+  writeFileSync(join(dir, 'card.html'), page('card', 6));
+  writeFileSync(join(dir, 'film.html'), filmHtml({ stage: { w: 320, h: 180 }, keyframes: { slide: 'from { translate: 0 0 } to { translate: 100px 0 }' }, tracks: [
+    { clips: [{ id: 'a', src: 'card.html', time: [0, 6], style: 'animation: slide 1s linear' }] },
+    { clips: [{ id: 'b', src: 'card.html', at: 6, time: [0, 2], style: 'animation: slide 1s linear both' }] },
+  ] }));
+  const s = await open(dir);
+  const at = async (t, id = 'a') => { await s.film.seek(t); return s.film.page.evaluate((id) => getComputedStyle(document.getElementById(id)).translate, id); };
+  try {
+    assert.equal(await at(0.5), '50px');
+    /* past its end it is neither running nor in effect: its element is where it was without it */
+    assert.equal(await at(3), 'none');
+    assert.equal(await at(0.5), '50px', 'held again once the playhead is back inside it');
+    assert.equal(await at(0.25), '25px');
+    /* a clip that is off is not held frame after frame, yet is at its own time as soon as it comes on */
+    assert.equal(await at(6.5, 'b'), '50px');
+    assert.equal(await at(0.75), '75px');
+    assert.equal(await at(7.5, 'b'), '100px');
+  } finally {
+    await s.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a drag\'s moment is drawn at once with what is there: a page not open is left out, and opened only where the drag stays or rests', { timeout: 60_000 }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'of-drag-'));
+  const clips = [];
+  for (let i = 0; i < 12; i++) {
+    writeFileSync(join(dir, `p${i}.html`), `<!doctype html><body style="margin:0"><canvas width="4" height="4"></canvas><p id="w"></p>
+<script>window.film={duration:1,frame(t){document.getElementById('w').textContent='p${i} '+t.toFixed(2)}}</script></body>`);
+    clips.push({ id: `p${i}`, src: `p${i}.html`, at: i });
+  }
+  writeFileSync(join(dir, 'under.svg'), '<svg xmlns="http://www.w3.org/2000/svg" width="320" height="180"><rect width="320" height="180" fill="#0a0"/></svg>');
+  writeFileSync(join(dir, 'film.html'), filmHtml({ stage: { w: 320, h: 180 }, tracks: [{ clips }, { clips: [{ id: 'under', src: 'under.svg', time: [0, 12] }] }] }));
+  const s = await open(dir);
+  const state = () => s.film.page.evaluate(() => ({
+    open: [...document.querySelectorAll('iframe')].map((f) => (f.contentWindow?.film ? f.contentDocument.getElementById('w').textContent : null)),
+    seen: [...document.querySelectorAll('iframe, img')].filter((el) => el.style.visibility === 'visible').map((el) => el.id),
+  }));
+  try {
+    /* shown at its start: the page there is open, and of twelve no more than eight */
+    await s.film.page.evaluate(() => window.__filmEditor.watch(0.5));
+    const shut = (await state()).open.flatMap((text, i) => (text == null ? [i] : []));
+    assert.ok(shut.length >= 4, `at least four are not open: ${shut}`);
+    const [fast1, fast2, stay, pass] = shut;
+    /* a drag passes over a page not open: drawn at once, without it; what is under it shows, the page before it goes */
+    const passed = await s.film.page.evaluate(async (t) => {
+      const whole = window.__filmEditor.canScrub(t);
+      const drawn = await window.__filmEditor.watch(t, null, { scrub: true });
+      return { whole, drawn };
+    }, pass + 0.5);
+    assert.deepEqual(passed, { whole: false, drawn: true });
+    let now = await state();
+    assert.equal(now.open[pass], null, 'the page passed over is not opened');
+    assert.deepEqual(now.seen, ['under'], 'the rest of the picture is drawn, and the page left behind is gone');
+    /* fast over other moments: still none of them opened */
+    await s.film.page.evaluate(async (list) => { for (const t of list) await window.__filmEditor.watch(t, null, { scrub: true }); }, [fast1 + 0.5, fast2 + 0.5, pass + 0.5, fast1 + 0.5]);
+    now = await state();
+    assert.deepEqual([now.open[fast1], now.open[fast2], now.open[pass]], [null, null, null]);
+    /* the drag stays on one: it is opened there, the film says to draw again, and the next frame has it */
+    const stayed = await s.film.page.evaluate(async (at) => {
+      let again = 0;
+      window.__filmEditor.redraw = () => { again += 1; };
+      const clock = window.filmHost?.now ?? performance.now.bind(performance);
+      const t0 = clock();
+      while (!again && clock() - t0 < 5000) {
+        await window.__filmEditor.watch(at + 0.5 + ((clock() - t0) % 100) / 1000, null, { scrub: true });
+        await new Promise((r) => setTimeout(r, 30));
+      }
+      await window.__filmEditor.watch(at + 0.5, null, { scrub: true });
+      return again;
+    }, stay);
+    assert.ok(stayed >= 1, 'the film asks for the moment to be drawn again once the page is open');
+    now = await state();
+    assert.equal(now.open[stay], `p${stay} 0.50`);
+    assert.deepEqual(now.seen.sort(), [`p${stay}`, 'under']);
+    /* the drag rests (or ends) on a page not open: a host has it opened (prepareSeekPages), then the moment is whole */
+    assert.equal(now.open[fast1], null);
+    await s.film.page.evaluate(async (t) => { await window.__filmEditor.watch(t, null, { scrub: true }); await window.__filmEditor.prepareSeekPages(t); await window.__filmEditor.watch(t); }, fast1 + 0.5);
+    now = await state();
+    assert.equal(now.open[fast1], `p${fast1} 0.50`);
+    assert.deepEqual(now.seen.sort(), [`p${fast1}`, 'under']);
+    assert.ok(now.open.filter((text) => text != null).length <= 8, `no more than 8 open: ${now.open}`);
+  } finally {
+    await s.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('watched, a video is given its file at the frame it is wanted at, and a file still loading for a moment left behind is let go', { skip: !hasFfmpeg && 'no ffmpeg', timeout: 60_000 }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'of-wake-at-'));
+  execFileSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'testsrc=size=320x180:rate=30:duration=12', '-pix_fmt', 'yuv420p', '-g', '15', join(dir, 'clip.mp4')]);
+  writeFileSync(join(dir, 'film.html'), filmHtml({ stage: { w: 320, h: 180 }, tracks: [{ clips: [
+    { id: 'a', src: 'clip.mp4', time: [1, 3] }, { id: 'b', src: 'clip.mp4', at: 2, time: [6, 8] }, { id: 'c', src: 'clip.mp4', at: 4, time: [9, 11] },
+  ] }] }));
+  const s = await open(dir);
+  try {
+    const seen = await s.film.page.evaluate(async () => {
+      const el = (id) => document.getElementById(id);
+      const seeks = { a: 0, b: 0, c: 0 };
+      for (const id of ['a', 'b', 'c']) el(id).addEventListener('seeking', () => { seeks[id] += 1; });
+      /* the first one shown: how long this file's frames last is asked of the host with it */
+      await window.__filmEditor.watch(0.5);
+      await new Promise((r) => setTimeout(r, 600));
+      seeks.b = 0;
+      /* another clip of the file, cold: loaded at its frame, which is not sought a second time */
+      const presented = new Promise((done) => { el('b').requestVideoFrameCallback((now, meta) => done(meta.mediaTime)); setTimeout(() => done(null), 3000); });
+      const drawn = await window.__filmEditor.watch(3, null, { scrub: true });
+      const b = { drawn, at: el('b').currentTime, seeks: seeks.b, frame: await presented, ready: el('b').readyState };
+      /* a moment asked for and left at once: its file, still loading, is let go for the one wanted now */
+      void window.__filmEditor.watch(5, null, { scrub: true });
+      const loadingC = el('c').hasAttribute('src');
+      const back = await window.__filmEditor.watch(3.5, null, { scrub: true });
+      return { b, loadingC, back, cLetGo: !el('c').hasAttribute('src'), bAt: el('b').currentTime };
+    });
+    assert.equal(seen.b.drawn, true);
+    assert.ok(Math.abs(seen.b.at - 7.001) < 2e-3, `the clip's frame at 3 s is its file's 7 s: ${seen.b.at}`);
+    assert.equal(seen.b.seeks, 1, 'sought once, as its file loaded');
+    assert.ok(seen.b.frame != null && Math.abs(seen.b.frame - 7) < 0.04, `and that frame is the one on screen: ${seen.b.frame}`);
+    assert.equal(seen.loadingC, true);
+    assert.equal(seen.back, true);
+    assert.equal(seen.cLetGo, true, 'the file for the moment left behind is not left to load');
+    assert.ok(Math.abs(seen.bAt - 7.501) < 2e-3);
+  } finally {
+    await s.close();
+    rmSync(dir, { recursive: true, force: true });
   }
 });
 

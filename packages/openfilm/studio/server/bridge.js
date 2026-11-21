@@ -2,8 +2,9 @@
  * Studio's bridge into the film's timeline page (src/timeline.mjs), injected after the host flag and before the
  * page's own script. The editor, on another origin, drives the film through it:
  *
- *   editor → { source: 'openfilm-studio', type: 'seek', t, seq, behind }   draw the film at t, still (`behind`: this
- *                                         load is not shown yet, another one is: its first picture is waited for whole)
+ *   editor → { source: 'openfilm-studio', type: 'seek', t, seq, behind, scrub }   draw the film at t, still (`behind`:
+ *                                         this load is not shown yet, another one is: its first picture is waited for
+ *                                         whole; `scrub`: a drag is passing over t, drawn at once with what is there)
  *            { type: 'play', t, at, rate, fps }   play: film second t at `at` (ms on this page's clock), `rate` film
  *                                         seconds a second; the frames are drawn here, on the film's frame grid
  *            { type: 'clock', ping }      what this page's clock says now (to put the editor's moments on it)
@@ -108,6 +109,7 @@
   let next = null;
   let currentSeek = null;
   let yieldLiveDraw = null;
+  let yieldScrubDraw = null;
   let preparing = null;
   let prepareTimer;
   let refreshStill = false;
@@ -153,7 +155,9 @@
          for as long as they took. A frame that does not come within a moment is let go: one stuck page or video must
          not stop the picture. */
       const watch = editor()?.watch;
-      const drawingFrame = Promise.resolve(watch && !behind ? watch(t) : drawn(f, t));
+      /* a drag still moving: its frame is what is there now, the pages it passes over left out (see seekTo) */
+      const passing = (seek ?? currentSeek)?.scrub && !(seek ?? currentSeek).rested;
+      const drawingFrame = Promise.resolve(!watch || behind ? drawn(f, t) : passing ? watch(t, null, { scrub: true }) : watch(t));
       let timer;
       let cacheTimer;
       let completed;
@@ -165,11 +169,14 @@
         ];
         if (watch && seek && !behind) {
           cacheTimer = setTimeout(() => { tryCachedSeek(seek); }, SCRUB_DRAW_MS);
+          /* a drag's frame is let finish when the drag moves on (given up for each next moment, none would ever be
+             drawn), but not when the position is chosen: that seek is drawn at once */
           if (!seek.scrub) waiting.push(new Promise((done) => { yieldLiveDraw = () => done(supersededFrame); }));
+          else waiting.push(new Promise((done) => { yieldScrubDraw = () => done(supersededFrame); }));
         }
         completed = await Promise.race(waiting);
         if (completed !== true && seek?.publish) throw new Error('The new film did not draw its first frame in time.');
-      } finally { clearTimeout(timer); clearTimeout(cacheTimer); yieldLiveDraw = null; }
+      } finally { clearTimeout(timer); clearTimeout(cacheTimer); yieldLiveDraw = null; yieldScrubDraw = null; }
       if (seek) {
         if (completed === true) {
           seek.liveDrawn = true;
@@ -211,20 +218,31 @@
       draw();
     });
   };
-  /** Keep the most recent scrub. Cold chapters load when the pointer settles or the seek is committed. */
+  /**
+   * Keep the most recent seek. A drag's moment (`scrub`) is drawn at once with what is there: its videos, its stills,
+   * the pages already open. The pages it passes over that are not open (cold chapters) are left out of that frame,
+   * and opened only once the pointer rests there (or the seek is committed, a seek without `scrub`): opening one for
+   * every moment passed would hold the picture, and close the pages the film had open.
+   */
   const seekTo = (message) => {
     stop();
     clearPreparation();
     const seek = currentSeek = next = { ...message, seekSeq: message.seq };
     asked = seek.t;
     yieldLiveDraw?.();
-    if (!seek.scrub || !up || editor()?.canScrub?.(seek.t) !== false) { prepareSeek(seek); return; }
-    preparing = seek;
-    tryCachedSeek(seek);
-    prepareTimer = setTimeout(() => {
-      clearPreparation();
-      prepareSeek(seek);
-    }, SCRUB_SETTLE_MS);
+    if (!seek.scrub) yieldScrubDraw?.();
+    if (!seek.scrub || !up) { prepareSeek(seek); return; }
+    if (editor()?.canScrub?.(seek.t) === false) {
+      /* a render of this stretch has the whole picture: shown while the pages are not open */
+      tryCachedSeek(seek);
+      prepareTimer = setTimeout(() => {
+        if (currentSeek !== seek || line) return;
+        seek.rested = true;
+        next ??= seek;
+        prepareSeek(seek);
+      }, SCRUB_SETTLE_MS);
+    }
+    draw();
   };
 
   /*

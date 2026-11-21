@@ -248,23 +248,61 @@ async function animate(c, t, exact) {
   if (exact) await c.el.decode().catch(() => {});
 }
 
+/*
+ * The animations of the film's own elements, read once for everything a turn asks (a frame's clips, an edit's), by
+ * the element each moves. Asked of each element in its turn (`el.getAnimations()`), every answer first brings the
+ * page's styles up to date (the time set on the element before has just changed them) and then looks through every
+ * animation of the page: with a few hundred moving clips that was most of a frame's time, and the film played at a
+ * few frames a second. Read again after anything that may have made other ones (a clip's look changed, see forget).
+ */
+let animationsNow = null;
+const NO_ANIMATIONS = [];
+function animationsOf(el) {
+  if (!animationsNow) {
+    const all = animationsNow = new Map();
+    for (const a of document.getAnimations?.() ?? []) {
+      const target = a.effect?.target;
+      /* its own, as el.getAnimations() says them: not those of its ::before or ::marker */
+      if (!target || a.effect.pseudoElement) continue;
+      const list = all.get(target);
+      if (list) list.push(a); else all.set(target, [a]);
+    }
+    /* for this turn only: what runs next reads them anew */
+    queueMicrotask(() => { if (animationsNow === all) animationsNow = null; });
+  }
+  return animationsNow.get(el) ?? NO_ANIMATIONS;
+}
+/** What was read of the page's animations is let go: something changed that may have made others. */
+function forget() { animationsNow = null; }
+
 /**
  * A clip's animations (SPEC §1) held at its own time, `t − at`: paused here first, so the clock that holds the rest
- * of the document's at the film's t (FILM_CLOCK's settle) leaves them be. `c.moves`: it has any.
+ * of the document's at the film's t (FILM_CLOCK's settle) leaves them be. `c.moves`: it has any. Held while the clip
+ * is on (see drawClip) and once when its look is read (moving): a clip that is off shows nothing of them.
+ *
+ * `c.anims`: the ones held so far, kept. One that has reached its end (without a fill it is then neither running nor
+ * in effect) is no longer said to be the element's, yet is its still: let go of there, a clip's way in played once,
+ * and never again when the playhead went back before its end (the same t drew two pictures, SPEC §3). They are read
+ * `anew` when the clip's look is (moving) and as it comes on; frame after frame, the ones it has are held.
  */
-function hold(c, t) {
+function hold(c, t, anew = false) {
   if (!c.moves) return;
-  const list = c.el.getAnimations();
-  c.moves = list.length > 0;
-  for (const a of list) {
+  const kept = c.anims ??= new Set();
+  if (anew || !kept.size) for (const a of animationsOf(c.el)) kept.add(a);
+  const at = (t - c.at) * 1000;
+  for (const a of kept) {
+    /* no longer the element's: its look names another animation now, and this one was cancelled */
+    if (a.playState === 'idle' || a.effect?.target !== c.el) { kept.delete(a); continue; }
     if (a.playState !== 'paused') a.pause();
-    a.currentTime = (t - c.at) * 1000;
+    /* set only when it changes: each time set is styles to work out again */
+    if (a.currentTime !== at) a.currentTime = at;
   }
+  c.moves = kept.size > 0;
 }
 /** Whether a clip's look has it move, read again whenever its look changes, and its animations held at once. */
 function moving(c) {
-  c.moves = Boolean(c.el.getAnimations?.().length);
-  if (c.moves) hold(c, shownT ?? c.at);
+  c.moves = animationsOf(c.el).length > 0 || Boolean(c.anims?.size);
+  if (c.moves) hold(c, shownT ?? c.at, true);
 }
 
 /**
@@ -281,23 +319,39 @@ function wear(c, css) {
   for (const prop of before.keys()) if (!after.has(prop)) c.el.style.removeProperty(prop);
   for (const [prop, value] of after) if (before.get(prop) !== value) c.el.style.setProperty(prop, value.replace(/\s*!important\s*$/i, ''));
   c.css = css;
+  /* a look that says its own visibility wrote over the one set here: set again when next asked (show) */
+  if (before.has('visibility') || after.has('visibility')) c.seen = undefined;
+  forget();
   refade(c);
+}
+
+/**
+ * A clip's element in sight or not. `c.seen`: what was last set, which every frame reads (see draw) where it would
+ * otherwise read the element's style; nothing else sets a clip's visibility.
+ */
+function show(c, on) {
+  if (c.seen === on) return;
+  c.seen = on;
+  c.el.style.visibility = on ? 'visible' : 'hidden';
 }
 
 /** A clip's look, as the file says it (its class and its own CSS), then its place and whether it shows. */
 function dress(c, row) {
   if (!c.el) return;
-  if ((c.el.getAttribute('class') ?? '') !== (row.class ?? '')) { unfade(c); c.base = undefined; c.el.setAttribute('class', row.class ?? ''); refade(c); }
+  if ((c.el.getAttribute('class') ?? '') !== (row.class ?? '')) { unfade(c); c.base = undefined; c.el.setAttribute('class', row.class ?? ''); forget(); refade(c); }
   wear(c, row.style ?? '');
   /* how long it is on the film, for an animation timed from its end */
-  if (c.span) c.el.style.setProperty('--clip-length', `${Math.round(c.span.length * 1000) / 1000}s`);
+  if (c.span) {
+    const length = `${Math.round(c.span.length * 1000) / 1000}s`;
+    if (c.el.style.getPropertyValue('--clip-length') !== length) { c.el.style.setProperty('--clip-length', length); forget(); }
+  }
   moving(c);
   if (c.kind === 'page' && !c.el.style.border) c.el.style.border = '0';
   /* its grade's filter, before its own CSS filter (which wear has just put back) */
   if (c.gradeEl) showPictureGrade(c);
   c.el.style.zIndex = String(doc.tracks.length - c.ti); // track 0 on top
   /* a page coming on shows once it is drawn (see draw) */
-  c.el.style.visibility = c.shown && !c.coming ? 'visible' : 'hidden';
+  show(c, Boolean(c.shown && !c.coming));
   place(c, row.box);
 }
 
@@ -332,6 +386,7 @@ const frames = (n) => new Promise((done) => { const next = () => (--n > 0 ? requ
 
 const SAME_TIME = 1e-4; // s: a video's currentTime is kept to the microsecond, so a time set is read back a hair off
 const PRESENT_MS = 1000; // how long a sought frame may take to be on screen before the seek is made again
+const LOADED_PRESENT_MS = 120; // and a frame a file was loaded at (see glanceOnce): not sought yet, it is sooner
 const SEEK_TRIES = 3;
 
 /**
@@ -458,7 +513,21 @@ function step(c, want) {
  * run out). The editor asks for the next moment once this one is drawn, so a scrub goes as fast as the decoder; the
  * frame on screen is then made sure of while the person stays there (onScreen).
  */
-async function glance(c, want) {
+function glance(c, want) {
+  /* asked again for the moment it is being sought to (a seek's pages still opening while its videos are sought, see
+     prepareSeekPages; the same moment drawn again): the one seek answers both */
+  if (c.glancing?.want === want) return c.glancing.done;
+  const done = glanceOnce(c, want);
+  const mine = c.glancing = { want, done };
+  const clear = () => { if (c.glancing === mine) c.glancing = null; };
+  void done.then(clear, clear);
+  return done;
+}
+/** How far into the frame it names a host's seek goes (host.mjs SEEK_INSIDE_FRAME): a video sought to t reads t + this. */
+const SEEK_IN = 0.001;
+/** Whether a video is where a seek to `want` puts it, as its currentTime reads once sought. */
+const landed = (v, want) => { const d = v.currentTime - want; return Math.abs(d) < SAME_TIME || Math.abs(d - SEEK_IN) < SAME_TIME; };
+async function glanceOnce(c, want) {
   const v = c.el;
   if (!v.paused) v.pause();
   c.lastWant = want;
@@ -476,7 +545,15 @@ async function glance(c, want) {
   }
   follow(c);
   if (v.error) return true;
-  if (!justLoaded && Math.abs(v.currentTime - want) < SAME_TIME) {
+  /* loaded at this very frame (see wake): it came with the file, and is not sought again. Its being on screen is made
+     sure of sooner than a sought frame's (a first frame loaded while its page was hidden or transparent, as Studio's
+     preview loading behind the picture, may not be painted by itself: sought then, it is); which takes knowing how
+     long its frames last (onScreen), so a video the host has not said that of yet is sought as before */
+  if (justLoaded && c.wokeAt === want && want > 0 && landed(v, want) && !v.seeking && frameKnown.get(url(c.row.src).pathname) > 0) {
+    if (!videoEffectsOn(c)) void onScreen(c, want, LOADED_PRESENT_MS);
+    return true;
+  }
+  if (!justLoaded && landed(v, want)) {
     if (!v.seeking && v.readyState >= 2) return true;
   } else v.currentTime = want;
   const decoded = await sought(v, undefined, signal);
@@ -526,7 +603,7 @@ function follow(c) {
  * Not on screen in a moment, it is sought again, half a millisecond on (the same frame), a few times. A scrub that
  * asks for another moment, or the film playing, leaves it; so does a video whose frames' length the host cannot say.
  */
-async function onScreen(c, want) {
+async function onScreen(c, want, first = PRESENT_MS) {
   const v = c.el;
   const frame = await frameOf(c);
   if (!frame || !c.following) return;
@@ -536,7 +613,7 @@ async function onScreen(c, want) {
   for (let tries = 1; ; tries++) {
     if (right() || !still()) return;
     const shown = await new Promise((done) => {
-      const timer = setTimeout(() => done(false), PRESENT_MS);
+      const timer = setTimeout(() => done(false), tries === 1 ? first : PRESENT_MS);
       c.onPresented = () => { if (right()) { clearTimeout(timer); done(true); } };
     });
     c.onPresented = undefined;
@@ -550,16 +627,19 @@ async function onScreen(c, want) {
  * its first frame), started a moment before that point comes (play() takes a moment to get going), then kept in step
  * until its cut.
  */
+/** Where a video coming up is sought ahead of its cut: PREROLL before its first frame. */
+const cueOf = (c) => Math.max(0, sourceAt(c.span, 0, c.row) - PREROLL * (c.span.speed ?? 1));
 function getReady(c, lead, rate) {
   const v = c.el;
   const speed = c.span.speed ?? 1;
   const first = sourceAt(c.span, 0, c.row);
-  const cue = Math.max(0, first - PREROLL * speed);
+  const cue = cueOf(c);
   const rolling = (first - cue) / speed; // the lead at which the video is at `cue`
   if (lead < rolling) { roll(c, first - lead * speed, rate); return; }
   if (c.cued !== cue || c.lastWant !== cue) {
     if (!v.paused) v.pause();
-    v.currentTime = cue;
+    /* woken there already (see nearOf): its file loads at that frame, and is not sought to it again */
+    if (!(c.wokeAt === cue && (v.readyState < 2 || landed(v, cue)))) v.currentTime = cue;
     c.cued = c.lastWant = cue;
   }
   if (mediaPlays(speed * rate) && lead < rolling + START_LAG * rate && v.paused && !v.seeking && !c.held) {
@@ -824,7 +904,8 @@ const AWAKE_MAX = 12;   // videos holding their files at once, besides those on 
 const LOAD_MS = 30_000; // how long an export's frame waits for a video's file before that is an error
 
 /**
- * Give a video its file; for an exact frame, to start at its source second `from`. Resolves once its first frame is
+ * Give a video its file, to start at its source second `from` (the frame it is wanted at): a file loaded at its start
+ * and sought after decodes two frames for one picture, and takes half as long again. Resolves once its first frame is
  * there (or it failed: a frame of it then shows nothing). A page is opened (see wakePage).
  */
 function wake(c, from = null) {
@@ -832,6 +913,10 @@ function wake(c, from = null) {
   if (c.kind === 'page') return wakePage(c);
   const v = c.el;
   v.preload = 'auto';
+  /* the frames it puts on screen are followed from its first, and how long they last asked for (see glanceOnce, onScreen) */
+  follow(c);
+  void frameOf(c);
+  c.wokeAt = from > 0 ? from : 0;
   const { signal } = c.wakeAbort = new AbortController();
   const pending = Promise.withResolvers();
   c.awake = pending.promise;
@@ -849,8 +934,8 @@ function wake(c, from = null) {
   const loadSource = (href) => {
     v.addEventListener('loadeddata', finish);
     v.addEventListener('error', failed);
-    /* No fragment: the film controls the clip's end. For an exact frame Chromium loads at the requested time,
-       since a seek immediately after loading can leave its first frame visible. */
+    /* No fragment: the film controls the clip's end. Chromium loads at the requested time: for an exact frame, a seek
+       immediately after loading can leave its first frame visible. */
     v.src = href;
     if (from > 0) v.currentTime = from;
   };
@@ -897,17 +982,49 @@ function rest(c) {
   if (!v.paused) v.pause();
   v.preload = 'none';
   if (v.hasAttribute('src')) { v.removeAttribute('src'); v.load(); }
-  c.lastWant = c.cued = undefined;
+  c.lastWant = c.cued = c.presented = undefined;
   c.held = false;
 }
 
 /*
- * A page is open only near the playhead too, once a film has more of them than PAGES_AWAKE: each open page keeps its
- * document, its libraries and its canvases, and a browser keeps only 16 WebGL contexts at once (more, and the oldest
- * page's 3D goes blank). A film of fewer pages keeps them all open, as loaded. A page opened again is the same page:
- * a frame is a function of t (SPEC §3), so it draws what it drew before.
+ * A page is open only near the playhead too, once a film has more of them than it may keep open: each open page keeps
+ * its document, its libraries and its canvases, and a browser keeps only 16 WebGL contexts at once (more, and the
+ * oldest page's 3D goes blank). A film of fewer pages keeps them all open, as loaded. A page opened again is the same
+ * page: a frame is a function of t (SPEC §3), so it draws what it drew before.
+ *
+ * PAGES_AWAKE may stay open whatever they are, as always. More than that only while they are light together, by what
+ * each one holds (pageWeight): a page that draws in 3D, one with its own footage and one not opened yet (nothing is
+ * known of it) count in full, one made of words, shapes and pictures alone a quarter, up to PAGES_MOST of those. A
+ * film of thirty title cards keeps most of them open once it has shown them: a jump or a drag to one draws at once,
+ * where it opened the page again each time.
  */
 const PAGES_AWAKE = 8;
+const PAGE_HEAVY = 4;                       // what a page in 3D weighs, and one not opened yet
+const PAGES_ROOM = PAGES_AWAKE * PAGE_HEAVY; // the weight of the pages kept open at once
+const PAGES_MOST = 24;                      // and how many at most, however light
+
+/**
+ * What keeping page `c` open costs, from 1 (a document of words and pictures) up: read while it is open, and kept for
+ * when it is closed. Its WebGL contexts are counted by a host that says them (`filmHost.gl`, host.mjs GL_COUNT);
+ * where none does, a page with a canvas is taken to draw in 3D. Its own videos each hold a decoder, a film inside it
+ * its own pages.
+ */
+function pageWeight(c) {
+  const page = c.child ? c.win?.document : null;
+  if (!page) return c.weight ?? PAGE_HEAVY;
+  const canvases = page.getElementsByTagName('canvas').length;
+  const gl = c.win.filmHost?.gl ?? (canvases ? 1 : 0);
+  const weight = 1 + (PAGE_HEAVY - 1) * gl + Math.min(2, Math.max(0, canvases - gl)) + 2 * page.getElementsByTagName('video').length + PAGE_HEAVY * page.getElementsByTagName('iframe').length;
+  return c.weight = Math.min(2 * PAGE_HEAVY, weight);
+}
+/** Whether `n` pages of `weight` in all are more than may stay open: PAGES_AWAKE always may, more only while light. */
+const pagesTooMany = (n, weight) => n > PAGES_AWAKE && (weight > PAGES_ROOM || n > PAGES_MOST);
+/** Whether more pages are open than may stay. */
+function pagesOver() {
+  let weight = 0, n = 0;
+  for (const c of pagesAwake) if (c.child) { weight += pageWeight(c); n++; }
+  return pagesTooMany(n, weight);
+}
 /* pages opening at once: with PAGES_AWAKE open, no more WebGL contexts than a browser keeps */
 const pageLimited = gate(4);
 /** the pages open now (or opening) */
@@ -1027,9 +1144,47 @@ function pageLoaded(c) {
  * at t, and let none rest unless far too many are awake (a scrub: the rest is done once it stops, see draw). `exact`:
  * for an exact frame (an export's), each video woken at the frame it is wanted at.
  */
-function near(t, { only = false, exact = false, playing = false } = {}) {
+function near(t, { only = false, exact = false, playing = false, scrub = false } = {}) {
   nearOf('video', AWAKE_MAX, t, only, exact);
-  nearOf('page', PAGES_AWAKE, t, only, exact, playing ? PAGE_WAKE_AHEAD : WAKE_AHEAD);
+  if (scrub) dwell(t);
+  else nearOf('page', PAGES_AWAKE, t, only, exact, playing ? PAGE_WAKE_AHEAD : WAKE_AHEAD);
+}
+
+/*
+ * A drag along the timeline (a scrub) passes over pages faster than they open: opening each one it crosses would load
+ * a document for every moment passed, and close the pages the film had open to make room. So a drag's frame is drawn
+ * with what is there (its videos, its stills, its captions, the pages already open) and a page not open is left out of
+ * it. Only one the drag stays on for SCRUB_DWELL_MS is opened, and drawn in as soon as it is ready; a host opens the
+ * rest when the drag rests or ends (prepareSeekPages).
+ */
+const SCRUB_DWELL_MS = 150;
+const SCRUB_SLOW = 8; // film s a second: a drag faster than this is passing over, not looking; it opens no page
+/** the pages not open that the drag is on now, each with when it came onto it */
+let dwelt = new Map();
+/** the drag's last moment, and when it was drawn */
+let dragged = null;
+/** this page's real clock: a host holds performance.now() at a frame's t while it draws (host.mjs FILM_CLOCK) */
+const realNow = () => (window.filmHost?.now ?? performance.now.bind(performance))();
+function dwell(t) {
+  const now = realNow();
+  const fast = dragged != null && now - dragged.at < 500 && Math.abs(t - dragged.t) * 1000 > SCRUB_SLOW * Math.max(1, now - dragged.at);
+  dragged = { t, at: now };
+  const on = new Map();
+  let due = false;
+  for (const c of clips) {
+    if (c.kind !== 'page' || c.child || !activeAt(c, t)) continue;
+    const since = fast ? now : dwelt.get(c) ?? now;
+    on.set(c, since);
+    if (now - since >= SCRUB_DWELL_MS && !c.awake) due = true;
+  }
+  dwelt = on;
+  if (!due) return;
+  nearOf('page', PAGES_AWAKE, t, true, false);
+  /* drawn in once it is open, if the drag is still on it */
+  for (const c of on.keys()) {
+    const opening = c.awake;
+    void opening?.then(() => { if (c.awake === opening && c.child && shownT != null && activeAt(c, shownT)) window.__filmEditor.redraw?.(); }, () => {});
+  }
 }
 function nearOf(kind, max, t, only, exact, ahead = WAKE_AHEAD) {
   const off = (c) => (t < c.at ? c.at - t : t >= c.end ? t - c.end : 0);
@@ -1040,17 +1195,45 @@ function nearOf(kind, max, t, only, exact, ahead = WAKE_AHEAD) {
   const on = wanted.filter((c) => off(c) === 0).length;
   /* Outside the normal loading window, prepare only the nearest page. */
   const early = ahead > WAKE_AHEAD ? wanted.findIndex((c) => c.at - t > WAKE_AHEAD) : -1;
-  const keep = new Set(wanted.slice(0, Math.min(Math.max(on, max), early < 0 ? wanted.length : early + 1)));
-  for (const c of keep) wake(c, exact && kind === 'video' ? sourceAt(c.span, Math.min(Math.max(0, t - c.at), c.span.length), c.row) : null);
+  const pages = kind === 'page';
+  /* videos by their number; pages by their weight (pageWeight), those on at t whatever they weigh */
+  let most = Math.min(Math.max(on, max), early < 0 ? wanted.length : early + 1);
+  if (pages) {
+    let weight = 0;
+    const within = early < 0 ? wanted.length : early + 1;
+    for (most = 0; most < within; most++) {
+      weight += pageWeight(wanted[most]);
+      if (most >= on && pagesTooMany(most + 1, weight)) break;
+    }
+  }
+  const keep = new Set(wanted.slice(0, most));
+  /* a video on at t is woken at the frame it shows there; one coming up, where it is sought ahead of its cut (getReady) */
+  for (const c of keep) wake(c, kind !== 'video' ? null : t >= c.at ? sourceAt(c.span, Math.min(Math.max(0, t - c.at), c.span.length), c.row) : cueOf(c));
+  /* a still moment asked for while the files of another were still loading (a drag that moved on, a seek that took
+     another's place, the neighbors woken once the last one rested): those are let go at once. Left to load, each still
+     opens its file and decodes a frame nobody sees, and the frame wanted now waits behind them: a drag across many
+     clips showed nothing until it stopped */
+  if (only && kind === 'video') for (const c of all) if (c.awake && !keep.has(c) && !cueing.has(c) && c.el.readyState < 2 && !c.el.error) rest(c);
   /* the rest: videos far off rest, and the farthest while too many are awake (pages: only then, and never more than
-     max, a scrub's included) */
-  const most = only && kind === 'video' ? 2 * max : max;
+     may stay open, a scrub's included) */
   const awake = all.filter((c) => c.awake && !keep.has(c)).sort((a, b) => off(b) - off(a));
-  let over = keep.size + awake.length - most;
+  if (pages) {
+    let weight = 0, n = keep.size + awake.length;
+    for (const c of keep) weight += pageWeight(c);
+    for (const c of awake) weight += pageWeight(c);
+    for (const c of awake) {
+      if (!pagesTooMany(n, weight)) break;
+      /* one an edit is putting on screen (see cue) stays awake, wherever it is now */
+      if (cueing.has(c)) continue;
+      weight -= pageWeight(c); n--;
+      rest(c);
+    }
+    return;
+  }
+  let over = keep.size + awake.length - (only ? 2 * max : max);
   for (const c of awake) {
-    /* one an edit is putting on screen (see cue) stays awake, wherever it is now */
     if (cueing.has(c)) continue;
-    if ((kind === 'video' && !only && (c.hidden || c.disabled || off(c) > KEEP)) || over > 0) { rest(c); over--; }
+    if ((!only && (c.hidden || c.disabled || off(c) > KEEP)) || over > 0) { rest(c); over--; }
   }
 }
 
@@ -1066,6 +1249,10 @@ function prepareSeekPages(t) {
   const cold = clips.filter((c) => c.kind === 'page' && !c.child && activeAt(c, t));
   if (!cold.length) return null;
   for (const c of cold) if (c.wakeFailed) restPage(c, true);
+  /* the videos on there are given their files and sought meanwhile, not once the pages are open: the frame drawn then
+     finds them on their frame already */
+  nearOf('video', AWAKE_MAX, t, true, false);
+  for (const c of clips) if (c.kind === 'video' && activeAt(c, t)) void glance(c, sourceAt(c.span, t - c.at, c.row)).catch(() => {});
   nearOf('page', PAGES_AWAKE, t, true, false);
   const opening = Promise.allSettled(cold.map((c) => { c.seekLoading = true; return wake(c); }));
   // Keep warming in the background when a document takes longer than an interactive seek can wait.
@@ -1323,18 +1510,24 @@ const CUE_MS = 5000;
 
 /** @type {Map<string, Promise<number | null>>} */
 const frameLengths = new Map();
+/** @type {Map<string, number | null>} the ones the host has said, by the same name */
+const frameKnown = new Map();
 /**
  * How long a video clip's frames last, as the host that serves the film says (host.mjs, from ffprobe); null from a
  * server that cannot tell, or that does not answer within 10 s (the request or its body). Asked once a file: a null
  * stays, so a stalled lookup cannot hold this frame or the next one of the same file. The frame is drawn without it.
+ * The file is named from the film's folder, as the host's other questions name one (hostFacts): a film served under
+ * a folder of its site (Studio's, under its project's token) was asked by its address there, which that host looked
+ * for in the film's folder and never found.
  */
 function frameOf(c) {
   const src = url(c.row.src);
   /* a video from another site: not the host's to say */
   if (src.origin !== location.origin) return Promise.resolve(null);
   if (!frameLengths.has(src.pathname)) {
-    frameLengths.set(src.pathname, fetch(new URL(`__film/frame-duration?of=${encodeURIComponent(src.pathname)}`, location.href), { signal: AbortSignal.timeout(10_000) })
-      .then((r) => (r.ok ? r.json() : null)).then((said) => (said?.seconds > 0 ? said.seconds : null)).catch(() => null));
+    frameLengths.set(src.pathname, fetch(new URL(`__film/frame-duration?of=${encodeURIComponent(fromFilm(src))}`, location.href), { signal: AbortSignal.timeout(10_000) })
+      .then((r) => (r.ok ? r.json() : null)).then((said) => (said?.seconds > 0 ? said.seconds : null)).catch(() => null)
+      .then((seconds) => { frameKnown.set(src.pathname, seconds); return seconds; }));
   }
   return frameLengths.get(src.pathname);
 }
@@ -1374,6 +1567,7 @@ function settle(c, row, track, ti) {
   c.volume = track.muted || c.hidden || c.disabled || c.missing ? 0 : (row.volume ?? 1);
   c.span = clipSpan(row, c.native, where);
   c.end = c.at + c.span.length;
+  lengthNow = null;
   c.fade = fittedFade(clipFade(row), c.span.length);
   /* a video whose LUTs changed lets its file go, and is given it graded as it is now when drawn next (see wake) */
   if (c.kind === 'video' && c.awake && gradeAsk(row) !== c.graded) { rest(c); window.__filmEditor.redraw?.(); }
@@ -1492,7 +1686,7 @@ async function load(row, track, ti, el) {
     const length = c.child.duration;
     c.native = Number.isFinite(length) && length > 0 ? length : undefined;
     c.inner = (c.win.__filmSounds?.() ?? []).map((s) => ({ ...s }));
-    if ([...pagesAwake].filter((p) => p.child).length > PAGES_AWAKE) restPage(c);
+    if (pagesOver()) restPage(c);
   } else if ((SKIP_MISSING || renderRanges) && row.time?.length === 2) {
     /* A page whose #t= is its length opens when a frame needs it (see near), its own
        length and size learned then (see wakePage); the film is up without waiting for every page of a long film */
@@ -1506,7 +1700,7 @@ async function load(row, track, ti, el) {
     const length = c.child.duration;
     c.native = Number.isFinite(length) && length > 0 ? length : undefined;
     /* more pages than are kept open: the ones read later close again until the playhead comes near (see near) */
-    if ([...pagesAwake].filter((p) => p.child).length > PAGES_AWAKE) restPage(c);
+    if (pagesOver()) restPage(c);
   }
   settle(c, row, track, ti);
   progress++;
@@ -1524,12 +1718,17 @@ async function loadAll(list) {
   return settled.map((s) => s.value);
 }
 
+/** the film's length as its clips have it now; null: worked out again when asked (a clip's timing changed, see settle).
+ * Declared before the loading below: a clip whose length is known at once is placed in that very turn. */
+let lengthNow = null;
+
 /* window.film is there at once and `ready` is the loading: a film of many pages (each with its own libraries and
    fonts from the network) takes longer to load than a host waits for the object to appear. Ready is every clip's
    length and place known and every page ready; a video's picture loads when a frame needs it. */
 const loading = (async () => {
   const captionsRead = syncCaptions(doc);
   clips.push(...await loadAll(doc.tracks.flatMap((track, ti) => track.clips.map((row, ci) => ({ row, track, ti, el: elements[ti][ci] })))));
+  lengthNow = null;
   await captionsRead;
   hear();
   camera();
@@ -1547,12 +1746,15 @@ let watched = 0;
  * playing, `rate` film seconds a second, and is at film second `now` this moment (t is the frame on its way to the
  * screen, a moment later): videos play by themselves, kept on that clock; without it, every video stops.
  */
-async function draw(t, live, play = null) {
+async function draw(t, live, play = null, how = null) {
   shownT = t;
   const playing = live && play != null;
+  /* a drag passing over this moment: drawn with what is there, the pages not open left out (see dwell) */
+  const scrub = live && !playing && Boolean(how?.scrub);
+  if (!scrub) { if (dwelt.size) dwelt = new Map(); dragged = null; }
   if (!playing) stopRolling();
   clearTimeout(settleNear);
-  if (live && !playing) { near(t, { only: true }); settleNear = setTimeout(() => near(t), 250); } else near(t, { exact: !live, playing });
+  if (live && !playing) { near(t, { only: true, scrub }); settleNear = setTimeout(() => near(t), 250); } else near(t, { exact: !live, playing });
   /* watched, a page coming on shows once its frame is drawn, and the pictures going off stay until then: shown first,
      it showed what it held before (its own first state, or the frame it drew the last time it was on) for as long as
      its frame took, a flash at the cut. An exact frame is taken when all of it is drawn, so it shows each at once. */
@@ -1567,25 +1769,37 @@ async function draw(t, live, play = null) {
   footageFrame = live ? ++footageFrames : 0;
   footagePlay = playing ? { rate: play.rate, now: play.now, t } : null;
   let complete = false;
+  /* whether a page not open was left out of this frame (a drag's): what is drawn is not the whole picture */
+  let partial = false;
   try {
     drawCaptions(t);
-    const drawn = await Promise.all(clips.map((c) => drawClip(c, t, live, playing ? play : null, turn, coming, going)));
+    /* the clips with a part in this frame: those on at t, those in sight (going off) or said to be shown, and the
+       videos that hold a file (coming up, or to be stopped). One that is off, out of sight and holds nothing has none,
+       and in a film of a thousand clips that is all but a few: each still cost its own turn of the frame */
+    const parts = [];
+    for (const c of clips) {
+      if (c.kind === 'sound' || !(c.seen || c.shown || (c.kind === 'video' && c.awake) || activeAt(c, t))) continue;
+      parts.push(drawClip(c, t, live, playing ? play : null, turn, coming, going, scrub));
+    }
+    const drawn = await Promise.all(parts);
     complete = live && turn === watched && drawn.every((ready) => ready !== false);
+    partial = drawn.includes(LEFT_OUT);
     if (playing && turn === watched) idleFootage(t);
     if (live && !playing) return complete;
   } finally {
     if (!live) hideRenders();
     for (const c of coming) if (c.coming === turn) c.coming = 0;
     if (live && turn === watched) {
-      if (complete) for (const c of going) if (!c.shown) c.el.style.visibility = 'hidden';
+      if (complete) for (const c of going) if (!c.shown) show(c, false);
       let appeared = false;
-      for (const c of coming) if (c.shown && c.drawn) { c.el.style.visibility = 'visible'; appeared = true; }
-      /* Retain a cached still through an unfinished draw. Only the current live frame can replace it. */
-      if (complete) {
+      for (const c of coming) if (c.shown && c.drawn) { show(c, true); appeared = true; }
+      /* Retain a cached still through an unfinished draw. Only the current live frame can replace it: a drag's frame
+         with a page left out is not the whole picture, and replaces only a still of a stretch it has left. */
+      if (complete && !partial) {
         liveDraws++;
         liveDrawnAt = t;
         if (cachedSeekOn && (cachedSeekOn.t === t || turn > cachedSeekOn.turn)) cachedSeekOn = null;
-      }
+      } else if (complete && cachedSeekOn && !(t >= cachedSeekOn.render.at && t < cachedSeekOn.render.end)) cachedSeekOn = null;
       hideRenders((playing ? renderOn : null) ?? cachedSeekOn?.render);
       /* a page that came on shows now: an editor that reads the picture (Studio's Layers panel) looks again */
       if (appeared) window.__filmEditor.appeared?.();
@@ -1593,17 +1807,20 @@ async function draw(t, live, play = null) {
   }
 }
 
+/** What drawClip says of a page not open that a drag's frame leaves out (see dwell). */
+const LEFT_OUT = 'left out';
+
 /** One clip's part of a frame (see draw): a page coming on while watched is put in `coming`, a picture going off in `going`. */
-async function drawClip(c, t, live, play, turn, coming, going) {
+async function drawClip(c, t, live, play, turn, coming, going, scrub = false) {
   if (c.kind === 'sound') return;
   const on = activeAt(c, t);
   c.shown = on;
-  const appears = on && c.el.style.visibility !== 'visible';
+  const appears = on && !c.seen;
   if (live && appears && c.kind === 'page') { c.coming = turn; coming.push(c); }
-  else if (live && !on && c.el.style.visibility === 'visible') going.push(c);
-  else c.el.style.visibility = on ? 'visible' : 'hidden';
-  hold(c, t);
-  if (on) fadeAt(c, t);
+  else if (live && !on && c.seen) going.push(c);
+  else show(c, on);
+  /* its animations at its own time, its fade: while it is on (off, nothing of them shows; see hold) */
+  if (on) { hold(c, t, appears); fadeAt(c, t); }
   /* a frame drawn exactly shows a page's or a still's grade: its filter made first */
   if (on && !live && c.gradePending) await c.gradePending;
   if (!on) {
@@ -1662,6 +1879,7 @@ async function drawClip(c, t, live, play, turn, coming, going) {
      film's error in an exact frame, and shows nothing to a person watching */
   if (!c.child) {
     if (play) return false;
+    if (scrub) return LEFT_OUT;
     try { await wake(c); } catch (e) { if (live) return false; throw new Error(`clip "${c.id}" (${c.src}): ${e?.message ?? e}`); }
     if (!c.child || !c.shown || (live && turn !== watched)) return false;
   }
@@ -1831,6 +2049,8 @@ function cueElement(layer, cue) {
   return box;
 }
 
+/** @type {WeakMap<Element, { words: { el: Element, at: number, past: boolean | null, future: boolean | null }[], anims: Map<Animation, number>, read: boolean }>} */
+const cuesKept = new WeakMap();
 /** The caption tracks at film second t: the cues on now shown, their words past and future, their animations at their own time. */
 function drawCaptions(t) {
   for (const layer of captionLayers) {
@@ -1838,19 +2058,38 @@ function drawCaptions(t) {
     const now = new Set(layer.hidden ? [] : layer.cues.filter((c) => c.start <= t && t < c.end));
     for (const [cue, el] of layer.on) if (!now.has(cue)) { el.remove(); layer.on.delete(cue); }
     for (const cue of now) {
-      const el = layer.on.get(cue) ?? cueElement(layer, cue);
-      layer.on.set(cue, el);
-      for (const w of el.querySelectorAll('[data-t]')) {
-        const at = Number(w.dataset.t);
-        w.classList.toggle('past', at < t);
-        w.classList.toggle('future', at > t);
+      let el = layer.on.get(cue);
+      /* what is kept of a cue while it is on: its timed words, and the animations held so far */
+      let kept = el ? cuesKept.get(el) : null;
+      if (!el || !kept) {
+        el ??= cueElement(layer, cue);
+        kept = { words: [...el.querySelectorAll('[data-t]')].map((w) => ({ el: w, at: Number(w.dataset.t), past: null, future: null })), anims: new Map(), read: false };
+        cuesKept.set(el, kept);
       }
-      /* each animation on the cue's own time, from its start or from the timestamp before the element */
-      for (const a of el.getAnimations({ subtree: true })) {
-        const target = a.effect?.target;
-        const from = target?.closest?.('[data-t]')?.dataset.t;
+      layer.on.set(cue, el);
+      /* a word turned (said now, or not yet again): its look may animate it from there */
+      let turned = !kept.read;
+      kept.read = true;
+      for (const w of kept.words) {
+        const past = w.at < t, future = w.at > t;
+        if (w.past !== past) { w.past = past; w.el.classList.toggle('past', past); turned = true; }
+        if (w.future !== future) { w.future = future; w.el.classList.toggle('future', future); turned = true; }
+      }
+      /* each animation on the cue's own time, from its start or from the timestamp before the element. They are read
+         when the cue comes on and when a word turns, not every frame (each reading looks through every animation of
+         the page), and kept: one past its end is no longer said, yet shows again when the playhead goes back */
+      if (turned) {
+        for (const a of el.getAnimations({ subtree: true })) {
+          if (kept.anims.has(a)) continue;
+          const from = a.effect?.target?.closest?.('[data-t]')?.dataset.t;
+          kept.anims.set(a, from != null ? Number(from) : cue.start);
+        }
+      }
+      for (const [a, from] of kept.anims) {
+        if (a.playState === 'idle' || !el.contains(a.effect?.target ?? null)) { kept.anims.delete(a); continue; }
         if (a.playState !== 'paused') a.pause();
-        a.currentTime = Math.max(0, t - (from != null ? Number(from) : cue.start)) * 1000;
+        const at = Math.max(0, t - from) * 1000;
+        if (a.currentTime !== at) a.currentTime = at;
       }
     }
     for (const box of layer.el.querySelectorAll(':scope > .cue-auto, :scope > .cue-region')) if (!box.childElementCount) box.remove();
@@ -1860,7 +2099,11 @@ function drawCaptions(t) {
 window.__filmVideos = () => ({ ...videoSeen });
 
 window.film = {
-  get duration() { return Math.max(0.001, ...clips.filter((c) => !c.hidden).map((c) => c.end)); },
+  /* asked every frame while the film plays (a host stops at its end) */
+  get duration() {
+    if (lengthNow == null) { let end = 0.001; for (const c of clips) if (!c.hidden && c.end > end) end = c.end; lengthNow = end; }
+    return lengthNow;
+  },
   width: stage.w, height: stage.h,
   ready: loading,
   frame(t) { return draw(t, false); },
@@ -1912,6 +2155,7 @@ function element(row) {
   if (el.localName === 'iframe') el.removeAttribute('src');
   /* out of sight until it is placed and drawn: a page loading would show at its own size in the corner */
   el.style.visibility = 'hidden';
+  forget();
   return el;
 }
 
@@ -1925,7 +2169,7 @@ function keyframesNow(keyframes) {
   filmKeyframes = keyframes;
   keyframesStyle ??= document.head.appendChild(document.createElement('style'));
   const text = Object.entries(keyframes).map(([name, body]) => `@keyframes ${name} { ${body} }`).join('\n');
-  if (keyframesStyle.textContent !== text) keyframesStyle.textContent = text;
+  if (keyframesStyle.textContent !== text) { keyframesStyle.textContent = text; forget(); }
 }
 
 /** Track `ti`'s section; one more is made after the last for a track the film did not have when it loaded. */
@@ -1986,7 +2230,7 @@ async function change(value, look) {
     for (const c of records) {
       const on = c.el && !c.hidden && !c.disabled && !c.missing && shownT >= c.at && shownT < c.end;
       const ready = c.kind === 'still' || (c.kind === 'video' && c.el.readyState >= 2) || (c.kind === 'page' && made.has(c.id) && c.drawn);
-      if (on && !c.shown && ready) { c.shown = true; c.el.style.visibility = 'visible'; fadeAt(c, shownT); }
+      if (on && !c.shown && ready) { c.shown = true; show(c, true); fadeAt(c, shownT); }
     }
   }
   const now = new Set(records);
@@ -1996,6 +2240,7 @@ async function change(value, look) {
     c.node.remove();
   }
   clips.splice(0, clips.length, ...records);
+  lengthNow = null;
   hear();
   camera();
   window.__filmEditor.stage.updated?.();
@@ -2118,8 +2363,11 @@ window.__filmEditor = {
   canScrub,
   showCachedSeek,
   prepareSeekPages,
-  /** Draw the film at t for a person watching it (see draw); `play` while it plays: `{ rate, now }`. */
-  watch: (t, play = null) => draw(t, true, play),
+  /**
+   * Draw the film at t for a person watching it (see draw); `play` while it plays: `{ rate, now }`. `how.scrub`: a drag
+   * is passing over t, which is drawn at once with what is there, a page not open left out (see dwell).
+   */
+  watch: (t, play = null, how = null) => draw(t, true, play, how),
   /**
    * For Studio's stage (studio/server/stage.js): the clips as loaded, a clip placed by a box not kept yet (null: by
    * its own again), `updated`, which the stage sets to hear of each update made in place, and `woke`, to hear of a page
@@ -2141,6 +2389,8 @@ window.__filmEditor = {
       const c = clips.find((x) => x.id === id);
       if (!c?.el) return;
       wear(c, css ?? c.row.style ?? '');
+      /* an animation this look names is held at once, on screen or not (see hold) */
+      moving(c);
       place(c, c.row.box);
       if (c.kind === 'video' && c.shown) void drawVideoEffects(c, c.lastWant ?? c.el.currentTime);
     },
@@ -2280,7 +2530,7 @@ window.__filmEditor = {
   },
   /** What is on top under the stage point (x, y) now: an element of a page, or a clip. */
   pick(x, y) {
-    const shown = clips.filter((c) => c.el && c.el.style.visibility === 'visible').sort((a, b) => a.ti - b.ti);
+    const shown = clips.filter((c) => c.el && c.seen).sort((a, b) => a.ti - b.ti);
     for (const c of shown) {
       const local = matrixOf(c).inverse().transformPoint(new DOMPoint(x, y));
       if (local.x < 0 || local.y < 0 || local.x > c.w || local.y > c.h) continue;

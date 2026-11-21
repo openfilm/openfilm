@@ -19,12 +19,13 @@ function filmPage({ alone = false, duration = 10, unplayed = [] } = {}) {
   let now = 5000;
   let frames = new Map();
   let ids = 0;
-  /* each draw waits until the test lets it go; `exact`: the film's own frame (an export's), not the editor's watch */
-  const held = (t, play = null, exact = false) => new Promise((done) => drawn.push({ t, play, done, exact }));
+  /* each draw waits until the test lets it go; `exact`: the film's own frame (an export's), not the editor's watch;
+     `scrub`: asked as a drag's moment (the pages not open left out) */
+  const held = (t, play = null, exact = false, how = undefined) => new Promise((done) => drawn.push({ t, play, done, exact, scrub: Boolean(how?.scrub) }));
   const window = {
     addEventListener: (type, fn) => listeners.set(type, fn),
     film: { ...(duration == null ? {} : { duration }), width: 320, height: 180, ready: Promise.resolve(), frame: (t) => held(t, null, true) },
-    ...(alone ? {} : { __filmEditor: { watch: held, update: async () => true, unplayed: () => unplayed } }),
+    ...(alone ? {} : { __filmEditor: { watch: (t, play = null, how = undefined) => held(t, play, false, how), update: async () => true, unplayed: () => unplayed } }),
   };
   const parent = { postMessage: (m) => said.push(m) };
   const performance = { now: () => now, timeOrigin: 1_700_000_000_000 };
@@ -51,7 +52,7 @@ test('a video the timeline could not play is told to the editor, those from befo
   assert.deepEqual(page.said.filter((m) => m.type === 'undecoded').map((m) => m.src), ['media/a.mov', 'media/b.mp4']);
 });
 
-test('scrubbing through cold pages does not load them before the final position is chosen', async () => {
+test('scrubbing through cold pages draws each moment at once without loading them, until the final position is chosen', async () => {
   const page = filmPage();
   await page.settle();
   const prepared = [];
@@ -59,13 +60,47 @@ test('scrubbing through cold pages does not load them before the final position 
   page.window.__filmEditor.prepareSeekPages = (t) => { prepared.push(t); return null; };
   page.send({ type: 'seek', t: 6, seq: 1, scrub: true });
   page.send({ type: 'seek', t: 7, seq: 2, scrub: true });
+  await page.settle();
+  /* the drag's first moment is drawn as a drag's (what is there, its pages not opened); the one after waits for it */
+  assert.deepEqual(prepared, []);
+  assert.deepEqual(page.drawn.map((d) => [d.t, d.scrub]), [[6, true]]);
+  page.drawn[0].done();
+  await page.settle();
+  assert.deepEqual(page.drawn.map((d) => [d.t, d.scrub]), [[6, true], [7, true]]);
+  /* the position chosen: its pages are opened, and it is drawn whole without waiting for the drag's frame */
   page.send({ type: 'seek', t: 2, seq: 3 });
   await page.settle();
   assert.deepEqual(prepared, [2]);
-  assert.deepEqual(page.drawn.map((d) => d.t), [2]);
-  page.drawn[0].done();
+  assert.deepEqual(page.drawn.map((d) => [d.t, d.scrub]), [[6, true], [7, true], [2, false]]);
+  page.drawn[2].done();
   await page.settle();
   assert.deepEqual(page.said.filter((m) => m.type === 'seeked').map((m) => m.seq), [3]);
+});
+
+test('a drag that rests on a cold page has it opened there, and the moment drawn whole', async () => {
+  const page = filmPage();
+  await page.settle();
+  const prepared = [];
+  page.window.__filmEditor.canScrub = () => false;
+  page.window.__filmEditor.prepareSeekPages = (t) => { prepared.push(t); return null; };
+  page.send({ type: 'seek', t: 6, seq: 1, scrub: true });
+  await page.settle();
+  page.drawn[0].done();
+  await page.settle();
+  assert.deepEqual(prepared, [], 'not while the drag may still be moving');
+  await new Promise((r) => setTimeout(r, 160));
+  assert.deepEqual(prepared, [6]);
+  assert.deepEqual(page.drawn.map((d) => [d.t, d.scrub]), [[6, true], [6, false]]);
+  page.drawn[1].done();
+  await page.settle();
+  /* a drag that moved on before it rested opens nothing there */
+  page.send({ type: 'seek', t: 7, seq: 2, scrub: true });
+  await page.settle();
+  page.send({ type: 'seek', t: 8, seq: 3, scrub: true });
+  page.drawn[2].done();
+  await page.settle();
+  await new Promise((r) => setTimeout(r, 60));
+  assert.deepEqual(prepared, [6]);
 });
 
 test('a drag can draw its own frame while a superseded playback frame is still pending', async () => {

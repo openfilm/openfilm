@@ -27,6 +27,11 @@ export const SEEK_INSIDE_FRAME = `(()=>{const d=Object.getOwnPropertyDescriptor(
 export const FILM_CLOCK = `(()=>{const H=window.filmHost;if(!H||H.time)return;const P=performance,now=P.now.bind(P),D=Date,raf=window.requestAnimationFrame.bind(window),EPOCH=D.UTC(2026,0,1);let v=null,seed=0x2545f491;H.now=now;P.now=()=>v==null?now():v;function FilmDate(...a){const d=a.length||v==null?new D(...a):new D(EPOCH+v);return new.target?d:d.toString()}FilmDate.prototype=D.prototype;FilmDate.now=()=>v==null?D.now():EPOCH+v;FilmDate.parse=D.parse;FilmDate.UTC=D.UTC;window.Date=FilmDate;window.requestAnimationFrame=(cb)=>raf((ts)=>cb(v==null?ts:v));Math.random=()=>{seed=seed+0x6d2b79f5|0;let x=Math.imul(seed^seed>>>15,1|seed);x=x+Math.imul(x^x>>>7,61|x)^x;return((x^x>>>14)>>>0)/4294967296};const mine=new WeakSet();H.time=(t)=>{v=t*1000;seed=(Math.round(t*1e6)^0x2545f491)|0};H.settle=(t)=>{for(const a of document.getAnimations?.()??[]){if(typeof CSSTransition!=='undefined'&&a instanceof CSSTransition){a.finish();continue}if(!mine.has(a)){if(a.playState==='paused'||a.playState==='idle')continue;mine.add(a)}a.pause();a.currentTime=t*1000}}})();`;
 // Before any page script: the host flag, the seek fix and the clock above.
 export const HOST_FLAG = `window.filmHost={version:'0.1',name:'film'};${SEEK_INSIDE_FRAME}${FILM_CLOCK}`;
+// For a host that keeps a film's pages open while a person watches (Studio's preview), after HOST_FLAG: how many WebGL
+// contexts the page has made, as `filmHost.gl`. A browser gives one process only so many (16), and takes the oldest
+// away past that, so the timeline keeps few of the pages that draw in 3D open at once, and many more of those that made
+// none (timeline.mjs pageWeight); not told, it takes every page with a canvas for one in 3D.
+export const GL_COUNT = `(()=>{const H=window.filmHost;if(!H||H.gl!=null)return;H.gl=0;const seen=new WeakSet();for(const C of[window.HTMLCanvasElement,window.OffscreenCanvas]){const P=C&&C.prototype;if(!P||!P.getContext)continue;const get=P.getContext;P.getContext=function getContext(type,...rest){const made=get.call(this,type,...rest);if(made&&/webgl/i.test(String(type))&&!seen.has(this)){seen.add(this);H.gl+=1}return made}}})();`;
 
 const TIMELINE = readFileSync(fileURLToPath(new URL('./timeline.mjs', import.meta.url)), 'utf8');
 /* what film.html says, as Studio reads it too: the timeline imports it from here */
@@ -133,8 +138,10 @@ export function folderFiles(root, { inject = `<script>${HOST_FLAG}</script>`, ti
       return true;
     }
     if (path.endsWith('/__film/frame-duration')) {
-      /* how long a video's frames last, for the timeline's exact frames (`?of=` the video's address) */
-      const file = fileInRoot(root, query?.get('of') ?? '');
+      /* how long a video's frames last, for the timeline's exact frames: `?of=` the video, from the film's folder
+         (as media-facts takes a file); an address from the folder's root, as it was asked before, is still one */
+      const of = query?.get('of') ?? '';
+      const file = fileInRoot(root, of.startsWith('/') ? of : `${path.slice(0, -'/__film/frame-duration'.length)}/${of}`);
       const answer = (seconds) => res.writeHead(200, { ...extraHeaders, 'content-type': 'application/json', 'cache-control': 'no-store' }).end(JSON.stringify({ seconds }));
       if (!file) answer(null);
       else void frameDuration(file).then(answer);
@@ -791,10 +798,13 @@ export class FilmPage {
     }
   }
 
-  /** PNG (or JPEG, or WebP) of the viewport as composited. */
-  async capture({ format = 'png', quality } = {}) {
+  /**
+   * PNG (or JPEG, or WebP) of the viewport as composited. `width`: that many pixels wide instead of the page's own
+   * (a smaller picture of a page kept open at a larger scale, without opening it again at that one).
+   */
+  async capture({ format = 'png', quality, width } = {}) {
     // Without a clip, headless Chromium returns CSS pixels; a clip at the device pixel ratio returns real pixels.
-    const clip = { x: 0, y: 0, width: this.meta.width, height: this.meta.height, scale: this.scale };
+    const clip = { x: 0, y: 0, width: this.meta.width, height: this.meta.height, scale: width > 0 ? width / this.meta.width : this.scale };
     // Fast compression, for a PNG too: the same pixels in a larger file, two to four times sooner (a 4K frame of
     // footage: 240 ms instead of a second).
     for (let tries = 1; ; tries++) {

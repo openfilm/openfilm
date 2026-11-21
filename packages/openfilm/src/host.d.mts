@@ -2,6 +2,8 @@ import type { Browser, Page } from 'playwright-core';
 export declare const HOST_FLAG: string;
 export declare const SEEK_INSIDE_FRAME: string;
 export declare const FILM_CLOCK: string;
+/** After HOST_FLAG, for a host that keeps a film's pages open: counts the page's WebGL contexts as `filmHost.gl`. */
+export declare const GL_COUNT: string;
 export declare function injectFirst(html: string, tag: string): string;
 export declare function serve(root: string, opts?: { port?: number; timeline?: string; renderRanges?: [number, number][] }): Promise<{ url: string; close(): Promise<void> }>;
 /** Listen on 127.0.0.1 at `port`; for port 0, never at a port browsers refuse to open. The port it listens on. */
@@ -34,7 +36,7 @@ export declare class FilmPage {
   meta: FilmMeta;
   problems: Array<{ kind: string; message: string }>;
   seek(t: number, opts?: { timeoutMs?: number }): Promise<void>;
-  capture(opts?: { format?: 'png' | 'jpeg' | 'webp'; quality?: number }): Promise<Buffer>;
+  capture(opts?: { format?: 'png' | 'jpeg' | 'webp'; quality?: number; width?: number }): Promise<Buffer>;
   /** What the page leaves unpainted from now on: clear (a capture keeps it transparent), else black. */
   ground(clear: boolean): Promise<void>;
   close(): Promise<void>;
