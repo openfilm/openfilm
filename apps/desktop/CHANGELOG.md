@@ -1,5 +1,36 @@
 # @openfilm/desktop
 
+## 0.4.1
+
+### Patch Changes
+
+- [`25c0ac7`](https://github.com/openfilm/openfilm/commit/25c0ac70c1f71c60293d0e3ba277064609a873d1) Thanks [@riverisbuilding](https://github.com/riverisbuilding)! - Stop and continue an interrupted task from the same conversation. Continue uses the model and effort selected in the composer. Another agent can pick up the original request and saved progress, with the switch marked in the conversation. For OpenFilm and own-key agents, interrupted model requests can retry from the latest completed tool result. Connection details show the failed stage, duration, retry count and any error code or request ID available.
+
+  Keep the chat steady as processing, tool commands and replies appear. The status clock stays aligned, the completed reply stays in place, and the conversation title opens history and new-chat actions without a status badge. Improve attachment menu spacing, message colors and keyboard focus when switching conversations.
+
+- [`25c0ac7`](https://github.com/openfilm/openfilm/commit/25c0ac70c1f71c60293d0e3ba277064609a873d1) Thanks [@riverisbuilding](https://github.com/riverisbuilding)! - Export the timeline shown when you click Export, even if you keep editing while the job queues or runs. The export dialog loads its settings and progress without scanning the project folder. A trimmed clip outside a selected range can stay offline. Video exports mix audio while drawing the picture, prepare pages as needed, and fall back sooner when a hardware encoder stalls. On Apple silicon, Auto can use more drawing workers when enough memory is available. PNG stills use the browser's image directly when it already has the requested dimensions, and editing-project exports probe media in parallel. Closing the window on Windows minimizes it while an export is running.
+
+  The export queue shows each stage and its elapsed time, including audio mixing, loudness adjustment, muxing and saving. Percentages appear when work in that stage can be measured.
+
+- [`25c0ac7`](https://github.com/openfilm/openfilm/commit/25c0ac70c1f71c60293d0e3ba277064609a873d1) Thanks [@riverisbuilding](https://github.com/riverisbuilding)! - Export the range marked on the timeline. Use I and O or the Time Range menu to mark it, then open Export with Command+M or Ctrl+M.
+
+- [`25c0ac7`](https://github.com/openfilm/openfilm/commit/25c0ac70c1f71c60293d0e3ba277064609a873d1) Thanks [@riverisbuilding](https://github.com/riverisbuilding)! - Set music or sound effects to None to turn off generation while keeping other services connected. Disconnecting the selected service keeps that kind of generation off. If a request's outcome is uncertain, OpenFilm preserves the original request and avoids submitting the same paid take again.
+
+- [`25c0ac7`](https://github.com/openfilm/openfilm/commit/25c0ac70c1f71c60293d0e3ba277064609a873d1) Thanks [@riverisbuilding](https://github.com/riverisbuilding)! - Stop polling finished media failures, send small Seedream reference images directly, retry explicit voice service overloads once, and give clearer model timeout and voice selection errors.
+
+- [`25c0ac7`](https://github.com/openfilm/openfilm/commit/25c0ac70c1f71c60293d0e3ba277064609a873d1) Thanks [@riverisbuilding](https://github.com/riverisbuilding)! - Restore the viewer when switching workspaces and retry when the film changes while its first frame is loading.
+
+- [`25c0ac7`](https://github.com/openfilm/openfilm/commit/25c0ac70c1f71c60293d0e3ba277064609a873d1) Thanks [@riverisbuilding](https://github.com/riverisbuilding)! - Protect existing projects and personal media during Windows updates and uninstalls by checking installation folders before removing app files. Keep new projects outside the app's installation directory and recover the project list from a local backup if its index is damaged.
+
+- [`25c0ac7`](https://github.com/openfilm/openfilm/commit/25c0ac70c1f71c60293d0e3ba277064609a873d1) Thanks [@riverisbuilding](https://github.com/riverisbuilding)! - Storage settings now move the personal asset library with the projects folder, including across drives. If you already changed the projects folder, use Move asset library in Storage to bring your existing assets with it.
+
+- [`25c0ac7`](https://github.com/openfilm/openfilm/commit/25c0ac70c1f71c60293d0e3ba277064609a873d1) Thanks [@riverisbuilding](https://github.com/riverisbuilding)! - Keep retrying after a failed Studio restart and let users copy local diagnostics while Studio is disconnected.
+
+- [`25c0ac7`](https://github.com/openfilm/openfilm/commit/25c0ac70c1f71c60293d0e3ba277064609a873d1) Thanks [@riverisbuilding](https://github.com/riverisbuilding)! - On Windows, closing the window during an agent turn, export, or media generation minimizes the app so the work can finish.
+
+- Updated dependencies [[`25c0ac7`](https://github.com/openfilm/openfilm/commit/25c0ac70c1f71c60293d0e3ba277064609a873d1), [`25c0ac7`](https://github.com/openfilm/openfilm/commit/25c0ac70c1f71c60293d0e3ba277064609a873d1), [`25c0ac7`](https://github.com/openfilm/openfilm/commit/25c0ac70c1f71c60293d0e3ba277064609a873d1), [`25c0ac7`](https://github.com/openfilm/openfilm/commit/25c0ac70c1f71c60293d0e3ba277064609a873d1), [`25c0ac7`](https://github.com/openfilm/openfilm/commit/25c0ac70c1f71c60293d0e3ba277064609a873d1), [`25c0ac7`](https://github.com/openfilm/openfilm/commit/25c0ac70c1f71c60293d0e3ba277064609a873d1), [`25c0ac7`](https://github.com/openfilm/openfilm/commit/25c0ac70c1f71c60293d0e3ba277064609a873d1), [`25c0ac7`](https://github.com/openfilm/openfilm/commit/25c0ac70c1f71c60293d0e3ba277064609a873d1), [`25c0ac7`](https://github.com/openfilm/openfilm/commit/25c0ac70c1f71c60293d0e3ba277064609a873d1), [`25c0ac7`](https://github.com/openfilm/openfilm/commit/25c0ac70c1f71c60293d0e3ba277064609a873d1), [`25c0ac7`](https://github.com/openfilm/openfilm/commit/25c0ac70c1f71c60293d0e3ba277064609a873d1), [`25c0ac7`](https://github.com/openfilm/openfilm/commit/25c0ac70c1f71c60293d0e3ba277064609a873d1), [`25c0ac7`](https://github.com/openfilm/openfilm/commit/25c0ac70c1f71c60293d0e3ba277064609a873d1), [`25c0ac7`](https://github.com/openfilm/openfilm/commit/25c0ac70c1f71c60293d0e3ba277064609a873d1), [`25c0ac7`](https://github.com/openfilm/openfilm/commit/25c0ac70c1f71c60293d0e3ba277064609a873d1), [`25c0ac7`](https://github.com/openfilm/openfilm/commit/25c0ac70c1f71c60293d0e3ba277064609a873d1), [`25c0ac7`](https://github.com/openfilm/openfilm/commit/25c0ac70c1f71c60293d0e3ba277064609a873d1), [`25c0ac7`](https://github.com/openfilm/openfilm/commit/25c0ac70c1f71c60293d0e3ba277064609a873d1), [`25c0ac7`](https://github.com/openfilm/openfilm/commit/25c0ac70c1f71c60293d0e3ba277064609a873d1), [`25c0ac7`](https://github.com/openfilm/openfilm/commit/25c0ac70c1f71c60293d0e3ba277064609a873d1)]:
+  - openfilm@0.4.1
+
 ## 0.4.0
 
 ### Minor Changes
