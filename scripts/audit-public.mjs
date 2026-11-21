@@ -56,7 +56,6 @@ const ALLOWED = [
   { file: 'packages/openfilm/src/render.mjs', check: 'private', match: "C:\\\\Users\\\\O'Brien", why: 'a made-up Windows path with a quote in it' },
   { file: /^apps\/desktop\/(src|bench)\/agent-updates\.test\.mjs$/, check: 'private', match: /\/Users\/test\/|\/Users\/Zoë's tools\/|C:\\\\Users\\\\O'?'Neil/, why: "made-up install paths, with quotes and spaces, that an update command must quote" },
   { file: 'apps/desktop/src/main.mjs', check: 'cjk', match: /^\s*('zh-CN'|ja|ko): \{ message: /, why: "the agent's permission question in each language: the main process has no dictionary" },
-  { file: 'apps/desktop/build/installer.nsh', check: 'cjk', match: /^\s*StrCpy \$1 "(为保护你的工程和素材|OpenFilm 无法确认下方目录)/, why: 'the Simplified Chinese installer protection messages run before the app starts' },
   { file: 'packages/openfilm/studio/ui/src/components/library/CloneVoiceDialog.tsx', check: 'cjk', match: /^\s*(zh|ja|ko): '/, why: 'the sentence a person reads aloud to clone their voice, in their language' },
   { file: 'packages/openfilm/studio/ui/src/components/library/DocSections.tsx', check: 'cjk', match: /^const (HOW|OFF|COST) = \/\^\(/, why: "a guide's section headings as they are written in each language" },
   { file: /^packages\/openfilm\/library\/covers\/[\w-]+\/look\.html$/, check: 'cjk', match: /class="t1"/, why: "a cover's sample words: the template's own example in its language" },

@@ -139,7 +139,10 @@ function diskPath(path) {
   catch { return parent === path ? path : join(diskPath(parent), relative(parent, path)); }
 }
 
-/** A packaged app can replace everything in its installation directory during an update. */
+/**
+ * Refuses a folder inside the installation OPENFILM_INSTALL_DIR names: the Mac app, which an update replaces whole.
+ * The Windows app names none: its installer and uninstaller remove the program's own files only.
+ */
 export function requireOutsideInstallation(/** @type {string} */ path) {
   const installed = process.env.OPENFILM_INSTALL_DIR;
   if (!installed) return;
