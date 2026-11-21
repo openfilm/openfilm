@@ -1,0 +1,36 @@
+{
+  "name": "openfilm",
+  "version": "0.4.1",
+  "description": "The open source AI video agent: films as web pages, skills that teach your coding agent to make them, and connectors for Adobe, Canva, Dropbox, Frame.io, Notion and Vimeo.",
+  "author": {
+    "name": "OpenFilm",
+    "url": "https://github.com/openfilm"
+  },
+  "homepage": "https://openfilm.dev",
+  "repository": "https://github.com/openfilm/openfilm",
+  "license": "MIT",
+  "keywords": [
+    "video",
+    "motion-graphics",
+    "agents",
+    "mcp",
+    "animation"
+  ],
+  "skills": [
+    "./skills/",
+    "./packages/openfilm/manual/",
+    "./packages/openfilm/plugins/canvas/skills/",
+    "./packages/openfilm/plugins/color/skills/"
+  ],
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "OpenFilm",
+    "shortDescription": "Open source AI video agent for coding agents.",
+    "category": "Coding",
+    "developerName": "OpenFilm",
+    "websiteUrl": "https://openfilm.dev",
+    "privacyPolicyUrl": "https://openfilm.dev/privacy/",
+    "termsOfServiceUrl": "https://openfilm.dev/terms/",
+    "logo": "./.claude-plugin/icon.png"
+  }
+}
