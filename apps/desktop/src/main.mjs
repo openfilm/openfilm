@@ -48,6 +48,7 @@ import { createTabs, projectGone } from './tabs.mjs';
 import { turnNotice } from './turn-notices.mjs';
 import { studioRestarts } from './studio-restart.mjs';
 import { PROTOCOL, createLinks, linkFromArgv } from './deep-links.mjs';
+import { createBrowser } from './browser.mjs';
 
 const here = (path) => fileURLToPath(new URL(path, import.meta.url));
 const mac = process.platform === 'darwin';
@@ -170,6 +171,20 @@ let localAgents = null;
 let roster = null;
 let agentCatalogs = null;
 let agentUpdates = null;
+/** the web, in tabs of its own beside a project's chat (browser.mjs) */
+/** @type {ReturnType<typeof createBrowser> | null} */
+let browser = null;
+/** where each tab's page shows its project's browser, as the page last said (none: nowhere) */
+/** @type {Map<string, { x: number, y: number, width: number, height: number }>} */
+const browserBounds = new Map();
+/** the doors on this computer the app opened for its agents (connectors.mjs): never reached from the browser */
+const agentDoors = new Set();
+/** The browser of the page in front, where that page says; `raise`: above the page just brought to the front. */
+function placeBrowser(raise = false) {
+  const id = pagePresentation?.currentId() ?? null;
+  const projectId = id && id !== HOME ? tabs?.get(id)?.projectId ?? null : null;
+  browser?.place(projectId, projectId && id ? browserBounds.get(id) ?? null : null, { raise });
+}
 
 /** the board Studio's panes sit on (its --bg-app), so the window never flashes another color */
 const BACKGROUND = { light: '#e4e4e8', dark: '#141414' };
@@ -301,6 +316,8 @@ function presentation() {
       tellTabs();
       /* the pages now behind it are told: one waiting to be covered (its projects window opening another tab) is done */
       for (const page of views.values()) if (page !== v && !page.webContents.isDestroyed()) page.webContents.send('desktop:tabs:covered');
+      /* the page raised lies over everything: its project's browser goes back above it, the others' out of sight */
+      placeBrowser(true);
     },
     discard: destroyView,
     onError: reportPageFailure,
@@ -367,6 +384,8 @@ function destroyView(id) {
   const v = views.get(id);
   if (!v) return;
   views.delete(id);
+  /* a page gone says nothing of where its browser goes: said again when it is back */
+  browserBounds.delete(id);
   win?.contentView.removeChildView(v);
   if (!v.webContents.isDestroyed()) v.webContents.close();
 }
@@ -387,6 +406,7 @@ async function closeTab(id) {
   }
   const next = tabs.close(id);
   presentation().retire(id);
+  browser?.closeProject(tab.projectId);
   if (next) showTab(next.id);
   else { showPage(HOME); tellTabs(); }
 }
@@ -410,6 +430,7 @@ function closeGoneTabs() {
   const { closed, front } = tabs.closeProjects(ids);
   if (!closed.length) return;
   for (const id of closed) presentation().retire(id);
+  for (const projectId of ids) browser?.closeProject(projectId);
   if (front) showTab(front.id);
   else { showPage(HOME); tellTabs(); }
 }
@@ -759,7 +780,27 @@ async function start() {
     mac, isQuitting: () => quitting, save: saveState,
     ...(windows ? { shouldMinimize: async () => Boolean(localAgents?.isBusy()) || await studioBusy() } : {}),
   });
-  win.on('closed', () => { win = null; views.clear(); pagePresentation = null; app.quit(); });
+  win.on('closed', () => { win = null; views.clear(); browserBounds.clear(); pagePresentation = null; app.quit(); });
+
+  browser = createBrowser({
+    window: () => win,
+    dataDir: DATA,
+    productName: PRODUCT_NAME,
+    /* Studio and the agents' doors are the app's own: no page of the web reaches them */
+    ownOrigins: () => [...(studio ? [studio.origin] : []), ...agentDoors],
+    language: () => appLanguage(state.language, app.getPreferredSystemLanguages()),
+    tell: (projectId, shown) => {
+      const page = views.get(tabs?.byProject(projectId)?.id ?? '')?.webContents;
+      if (page && !page.isDestroyed()) page.send('desktop:browser', shown);
+    },
+    focusAddress: (projectId) => {
+      const page = views.get(tabs?.byProject(projectId)?.id ?? '')?.webContents;
+      if (!page || page.isDestroyed()) return;
+      page.focus();
+      page.send('desktop:browser:focus-address');
+    },
+    log,
+  });
 
   ipcMain.on('desktop:theme', (event, next) => { if (fromPage(event)) setTheme(next); });
   /* the page's language, kept for what the app shows before a page is up (the update installed at launch), and
@@ -882,6 +923,31 @@ async function start() {
   });
   /* Studio's "open this project", heard by each page: settled once here */
   tabHandle('desktop:tabs:open', (_self, { to }) => { openInTabs(to); return { ok: true }; });
+  /* the browser (browser.mjs), asked for by a project's page (its Browser workbench): that project's tabs only */
+  const browserHandle = (channel, fn) => tabHandle(channel, (self, opts) => {
+    const projectId = self ? tabs?.get(self)?.projectId : null;
+    if (!browser || !self || !projectId) throw new Error('no project here');
+    return fn(projectId, opts, self);
+  });
+  const tabId = (opts) => (typeof opts.id === 'string' ? opts.id : null);
+  browserHandle('desktop:browser:state', (projectId) => browser.state(projectId));
+  browserHandle('desktop:browser:open', (projectId, { text }) => browser.open(projectId, typeof text === 'string' ? text.slice(0, 4000) : null));
+  browserHandle('desktop:browser:go', (projectId, opts) => browser.go(projectId, tabId(opts), String(opts.text ?? '').slice(0, 4000)));
+  browserHandle('desktop:browser:close', (projectId, opts) => { const id = tabId(opts); if (id) browser.close(projectId, id); return { ok: true }; });
+  browserHandle('desktop:browser:select', (projectId, opts) => { const id = tabId(opts); if (id) browser.select(projectId, id); return { ok: true }; });
+  browserHandle('desktop:browser:back', (projectId, opts) => { browser.back(projectId, tabId(opts)); return { ok: true }; });
+  browserHandle('desktop:browser:forward', (projectId, opts) => { browser.forward(projectId, tabId(opts)); return { ok: true }; });
+  browserHandle('desktop:browser:reload', (projectId, opts) => { browser.reload(projectId, tabId(opts)); return { ok: true }; });
+  browserHandle('desktop:browser:stop', (projectId, opts) => { browser.stop(projectId, tabId(opts)); return { ok: true }; });
+  browserHandle('desktop:browser:focus', (projectId) => { browser.focus(projectId); return { ok: true }; });
+  /* where this page shows it, in the window (null: nowhere): taken up at once when this page is the one in front */
+  browserHandle('desktop:browser:place', (_projectId, { bounds }, self) => {
+    const b = bounds && typeof bounds === 'object' ? { x: Number(bounds.x), y: Number(bounds.y), width: Number(bounds.width), height: Number(bounds.height) } : null;
+    if (b && Object.values(b).every((n) => Number.isFinite(n))) browserBounds.set(self, b);
+    else browserBounds.delete(self);
+    if (pagePresentation?.currentId() === self) placeBrowser();
+    return { ok: true };
+  });
   /* a tab left behind long enough lets its page go; it comes back when shown */
   setInterval(() => { for (const id of tabs?.idle(IDLE_PAGE_MS) ?? []) dropView(id); }, 60_000).unref?.();
 
@@ -942,7 +1008,11 @@ async function start() {
     /* Developer mode: an agent whose own record lacks what its model got logs it here (agent-logs.mjs) */
     logDir: () => (readPreferences(DATA).developer ? join(DATA, 'agent-logs') : null),
     /* each session's skills: its maker's, OpenFilm's, and of the person's own those let in (agent-skills.mjs) */
-    skills: { dataDir: DATA, mine: mySkills, prefsHome, connectorsFor: (servers) => connectors.forSession(servers) },
+    skills: { dataDir: DATA, mine: mySkills, prefsHome, connectorsFor: async (servers) => {
+      const doors = await connectors.forSession(servers);
+      for (const door of doors) { try { agentDoors.add(new URL(door.url).origin); } catch { /* no address */ } }
+      return doors;
+    } },
   });
   /* the connectors: signed in here once, reached by every agent at their doors (connectors.mjs) */
   registerConnectorsIpc(ipcMain, connectors, { trusted: fromPage, log });
