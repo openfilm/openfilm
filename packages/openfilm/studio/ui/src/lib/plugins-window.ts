@@ -9,15 +9,16 @@ import * as React from 'react';
 import type { FeatureKind } from '@/components/feature-kinds';
 
 /**
- * A place in the window: Mine (the person's plugins and skills); the Community's plugins, its skills, its things for
- * the library (`assets`, or one kind of them, `kind:<kind>`); its examples (whole projects, made to start from);
- * Publish; the Community's sources; an author.
+ * A place in the window: Mine (the person's plugins and skills); Featured (the Community's first page: the shelves a
+ * maintainer picked, then some of each kind); the Community's plugins, its skills, its things for the library
+ * (`assets`, or one kind of them, `kind:<kind>`); its examples (whole projects, made to start from); Publish; the
+ * Community's sources; an author.
  */
-export type PluginsLine = 'mine' | 'plugins' | 'skills' | 'assets' | 'examples' | `kind:${FeatureKind}` | 'publish' | 'sources' | `author:${string}`;
+export type PluginsLine = 'mine' | 'featured' | 'plugins' | 'skills' | 'assets' | 'examples' | `kind:${FeatureKind}` | 'publish' | 'sources' | `author:${string}`;
 export interface PluginsWindowState { open: boolean; line: PluginsLine; page: string | null }
 
-/** Where it opens: the Community's plugins. */
-export const FIRST_LINE: PluginsLine = 'plugins';
+/** Where it opens: what the Community puts forward. */
+export const FIRST_LINE: PluginsLine = 'featured';
 /**
  * A place by a name it had before (a link kept from then): what the person has is Mine; workbenches and connectors
  * are plugins; the starred are gone (what one keeps is added).

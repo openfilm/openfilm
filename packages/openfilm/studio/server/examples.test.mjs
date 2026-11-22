@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { existsSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { exampleSeconds, listExamples, listNews, readExamples, readNews } from './examples.mjs';
+import { exampleSeconds, listExamples, listFeatured, listNews, readExamples, readFeatured, readNews } from './examples.mjs';
 
 test('an index\'s examples: each with the address that fetches its folder, its poster from the repository', () => {
   const examples = readExamples({
@@ -82,6 +82,55 @@ test('the index read once gives both the examples and the news', async () => {
   writeFileSync(file, JSON.stringify({ examples: [{ folder: 'one', title: 'One' }], news: [{ id: 'n', title: { en: 'N' }, from: '2026-01-01' }] }));
   assert.equal((await listExamples({ source: file }))[0].id, 'one');
   assert.deepEqual((await listNews({ source: file, today: '2026-11-17' })).map((n) => n.id), ['n']);
+});
+
+test('featured: the shelves a maintainer picked, each thing by its kind and the id OpenFilm knows it by', () => {
+  const sha = 'a'.repeat(64);
+  const featured = readFeatured({
+    examples: [
+      { name: 'one-prompt', owner: 'openfilm', repo: 'https://github.com/openfilm/examples', path: 'one-prompt', commit: 'b'.repeat(40), title: 'One Prompt' },
+      { name: 'rain-night', owner: 'mira', via: 'openfilm', title: 'Rain', hosted: { manifest: sha } },
+    ],
+    featured: {
+      shelves: [
+        { id: 'start-here', title: { en: 'Start here', 'zh-CN': '从这里开始', 'not a language': 'no' }, text: { en: 'Films to open as your own.' },
+          items: ['example:openfilm/one-prompt', 'example:mira/rain-night', 'skill:openfilm/replicate', 'pack:mira/dot-loops', 'asset:media/dot-sunset',
+            'skill:openfilm/replicate', 'plugin:openfilm/canvas', 'skill:../x', 7] },
+        { id: 'no-title', title: { 'zh-CN': '没有英文' }, items: ['skill:openfilm/replicate'] },
+        { id: 'Bad Id', title: { en: 'Bad' }, items: ['skill:openfilm/replicate'] },
+        { id: 'nothing', title: { en: 'Nothing' }, items: ['nope'] },
+        { id: 'start-here', title: { en: 'Twice' }, items: ['skill:openfilm/replicate'] },
+        { id: 'plain', title: { en: 'Plain' }, items: ['skill:someone/board'] },
+      ],
+      makers: ['mira', 'Mira', 'mira', '../x', 'some-one', 4],
+    },
+  });
+  assert.deepEqual(featured, {
+    shelves: [
+      { id: 'start-here', title: { en: 'Start here', 'zh-CN': '从这里开始' }, text: { en: 'Films to open as your own.' }, items: [
+        /* an example by its id here: its name, or its account and its name when it was shared from OpenFilm */
+        { kind: 'example', id: 'one-prompt' }, { kind: 'example', id: 'mira.rain-night' }, { kind: 'skill', id: 'openfilm/replicate' },
+        { kind: 'pack', id: 'mira/dot-loops' }, { kind: 'asset', id: 'media/dot-sunset' },
+      ] },
+      { id: 'plain', title: { en: 'Plain' }, text: {}, items: [{ kind: 'skill', id: 'someone/board' }] },
+    ],
+    makers: ['mira', 'some-one'],
+  });
+  /* an index without shelves (one from before them, the copy OpenFilm came with), or none at all: no shelves */
+  assert.deepEqual(readFeatured({ examples: [] }), { shelves: [], makers: [] });
+  assert.deepEqual(readFeatured({ featured: { shelves: 'all' } }), { shelves: [], makers: [] });
+  assert.deepEqual(readFeatured(null), { shelves: [], makers: [] });
+  /* more than a page holds is cut: 8 shelves, 12 things each */
+  const many = readFeatured({ featured: { shelves: Array.from({ length: 10 }, (_, i) => ({ id: `s${i}`, title: { en: 'S' }, items: Array.from({ length: 14 }, (_, n) => `skill:a/b${n}`) })) } });
+  assert.deepEqual([many.shelves.length, many.shelves[0].items.length], [8, 12]);
+});
+
+test('the index read once gives the shelves too; one that cannot be read gives none', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'of-featured-'));
+  const file = join(dir, 'index.json');
+  writeFileSync(file, JSON.stringify({ examples: [{ folder: 'one', title: 'One' }], featured: { shelves: [{ id: 'picks', title: { en: 'Picks' }, items: ['example:openfilm/one'] }], makers: ['openfilm'] } }));
+  assert.deepEqual(await listFeatured({ source: file }), { shelves: [{ id: 'picks', title: { en: 'Picks' }, text: {}, items: [{ kind: 'example', id: 'one' }] }], makers: ['openfilm'] });
+  assert.deepEqual(await listFeatured({ source: join(dir, 'missing.json') }), { shelves: [], makers: [] });
 });
 
 test('a duration is seconds or m:ss', () => {

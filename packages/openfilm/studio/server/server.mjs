@@ -50,7 +50,7 @@ import { sealKeysWith, sealPlainKeys } from './keys.mjs';
 /* the app's Studio seals the person's keys with it (startStudio `sealer`) */
 export { vaultSealer } from './keys.mjs';
 import { BrowseError, browseFolder, browsePlaces } from './browse.mjs';
-import { exampleFile, exampleFolder, listExamples, listNews } from './examples.mjs';
+import { exampleFile, exampleFolder, listExamples, listFeatured, listNews } from './examples.mjs';
 import { pickFiles, pickFolder } from './folder-picker.mjs';
 import { PROXY_HEIGHTS, readPrefs, writePrefs } from './prefs.mjs';
 import { ensurePlayback, ensureProxies, playChecks, readyProxy } from './proxies.mjs';
@@ -84,6 +84,8 @@ import { startPluginPrograms } from './plugin-programs.mjs';
 import { createPluginServers } from './plugin-servers.mjs';
 import { communityStats, countInstall } from './community-stats.mjs';
 import { verifyPublished } from './community-publish.mjs';
+import { communityProfile, filmShareable, mySubmissions, publicProfile, saveCommunityProfile, shareJob, shareables, startFilmShare, startShare, withdrawSubmission } from './community-share.mjs';
+import { fetchHostedFilm, parseHosted } from './fetch-hosted.mjs';
 import { publishCheck } from '../../src/publish-cli.mjs';
 import { communitySources, entrySources, setCommunitySources, catalogSkills, installSkill, installedStanding, readCatalog, readDiscover, seedCatalog, uninstallSkill } from './skill-catalog.mjs';
 import { freshProviders, providersRoute } from './providers/index.mjs';
@@ -135,8 +137,8 @@ export function desktopInstaller(os, arch, base = DESKTOP_FILES) {
 
 /**
  * Whether a request changes what is the person's own to say, which an agent may not: who makes the media and with
- * which keys (Settings → Services, the models run here), Studio's preferences, and which plugins and skills are on,
- * installed or let write. Reading them is anyone's.
+ * which keys (Settings → Services, the models run here), Studio's preferences, which plugins and skills are on,
+ * installed or let write, and what is published under their name in the Community. Reading them is anyone's.
  * @param {string[]} parts the path after /api/ @param {string} method
  */
 export function personsSay(parts, method) {
@@ -146,6 +148,9 @@ export function personsSay(parts, method) {
   if (head === 'locations') return method === 'PUT';
   if (head === 'plugins') return parts.length === 2;
   if (head === 'skills') return !(parts.length === 2 && parts[1] === 'catalog');
+  if (head === 'community') return parts[1] === 'profile' || parts[1] === 'share' || parts[1] === 'submissions';
+  /* a project shared as a film (projects/<id>/community/…) */
+  if (head === 'projects' && parts[2] === 'community') return true;
   return false;
 }
 
@@ -813,6 +818,8 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     if (parts[0] === 'examples' && parts.length === 1 && req.method === 'GET') return json(res, 200, { examples: await listExamples() });
     /* the Community's news that is now (examples.mjs listNews): the projects window's card */
     if (parts[0] === 'news' && parts.length === 1 && req.method === 'GET') return json(res, 200, { news: await listNews() });
+    /* the shelves the Community opens on and the makers it puts forward (examples.mjs listFeatured): its first page */
+    if (parts[0] === 'community' && parts[1] === 'featured' && parts.length === 2 && req.method === 'GET') return json(res, 200, { featured: await listFeatured() });
     /* a poster or preview beside an index read from this computer (examples.mjs exampleFile) */
     if (parts[0] === 'examples' && parts[1] === 'file' && parts.length > 2 && req.method === 'GET') {
       return sendMedia(req, res, exampleFile(parts.slice(2).map(decodeURIComponent).join('/')), { keep: true });
@@ -1016,6 +1023,37 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     /* how many use each community item (community-stats.mjs): { stats: { uid: { installs } } }, none when unknown */
     if (parts[0] === 'community' && parts[1] === 'stats' && parts.length === 2 && req.method === 'GET') {
       return json(res, 200, { stats: await communityStats() });
+    }
+    /* sharing with the Community under the person's OpenFilm account (community-share.mjs): their name and page there
+       (GET, PUT `profile`), anyone's page (GET `profiles/<name>`), a library file as it would be shared (POST
+       `share/check` { paths }), sharing itself in the background (POST `share` → { job }; GET `share/<job>` says how
+       far it is), and what they shared with how each review went (GET `submissions`) */
+    if (parts[0] === 'community' && parts[1] === 'profile' && parts.length === 2 && (req.method === 'GET' || req.method === 'PUT')) {
+      return json(res, 200, req.method === 'PUT' ? await saveCommunityProfile(await readJson(req)) : await communityProfile());
+    }
+    if (parts[0] === 'community' && parts[1] === 'profiles' && parts.length === 3 && req.method === 'GET') {
+      return json(res, 200, { profile: await publicProfile(parts[2]) });
+    }
+    if (parts[0] === 'community' && parts[1] === 'share' && parts.length === 3 && parts[2] === 'check' && req.method === 'POST') {
+      const paths = (await readJson(req))?.paths;
+      if (!Array.isArray(paths) || !paths.length || paths.length > 200 || paths.some((path) => typeof path !== 'string')) throw new HttpError(400, 'paths: the library files to share');
+      const lib = await savedLibrary();
+      return json(res, 200, await savedCall(() => shareables(lib, paths)));
+    }
+    if (parts[0] === 'community' && parts[1] === 'share' && parts.length === 2 && req.method === 'POST') {
+      return json(res, 200, await startShare(await savedLibrary(), await readJson(req)));
+    }
+    if (parts[0] === 'community' && parts[1] === 'share' && parts.length === 3 && req.method === 'GET') {
+      const job = shareJob(parts[2]);
+      if (!job) throw new HttpError(404, 'no such share');
+      return json(res, 200, job);
+    }
+    if (parts[0] === 'community' && parts[1] === 'submissions' && parts.length === 2 && req.method === 'GET') {
+      return json(res, 200, await mySubmissions());
+    }
+    /* taking back one of them (POST `submissions/<id>/withdraw`): in review, it is closed; listed, its removal is proposed */
+    if (parts[0] === 'community' && parts[1] === 'submissions' && parts.length === 4 && parts[3] === 'withdraw' && req.method === 'POST') {
+      return json(res, 200, await withdrawSubmission(parts[2]));
     }
     /* the other community indexes the person added (GET: { sources }; PUT { sources }): read after OpenFilm's own, the
        next time Discover is read (skill-catalog.mjs communitySources) */
@@ -1819,6 +1857,28 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
       res.writeHead(200, { 'content-type': 'image/jpeg', 'cache-control': 'private, max-age=60', 'content-length': jpeg.length });
       return res.end(jpeg);
     }
+    /* the project as a film to share with the Community (community-share.mjs): what each part of it holds and what
+       stands in the way (GET `community`), and sharing it in the background (POST `community/share` → { job }, asked
+       after as any share is: GET /api/community/share/<job>). Its poster is the cover the person chose, else the
+       film's own; drawing that is also how its length is learnt */
+    if (rest === 'community' && req.method === 'GET') {
+      return json(res, 200, { ...(await filmShareable(project.path)), title: project.name, ...(project.duration != null ? { duration: project.duration } : {}) });
+    }
+    if (rest === 'community/share' && req.method === 'POST') {
+      const poster = async () => {
+        const cover = await readCover(project.path);
+        if (cover) return { file: cover.path };
+        for (let tries = 0; tries < 20; tries += 1) {
+          const jpeg = await filmPoster(project.path, pages.folderUrl(project)).catch(() => undefined);
+          if (jpeg === undefined) return null;
+          if (jpeg) return { bytes: jpeg };
+          await new Promise((r) => setTimeout(r, 3000));
+        }
+        return null;
+      };
+      const duration = async () => { const seconds = (await projectById(project.id)).duration; return seconds != null ? seconds * 1000 : null; };
+      return json(res, 200, await startFilmShare(project.path, await readJson(req), { poster, duration }));
+    }
     /* a file or folder of the project, shown where it is on the person's computer */
     if (rest === 'reveal' && req.method === 'POST') {
       const { path: rel, original } = /** @type {{ path?: string, original?: boolean }} */ (await readJson(req));
@@ -2154,7 +2214,11 @@ function systemBrowser(/** @type {string} */ url) {
  */
 async function exampleFolderHere(id) {
   try {
-    return await exampleFolder(id, { home: studioHome(), fetchFolder: (address, into) => fetchFilm(parseRepoUrl(address), { library: into }) });
+    return await exampleFolder(id, { home: studioHome(), fetchFolder: (address, into) => {
+      /* a film shared from OpenFilm is fetched from OpenFilm's service; any other from its repository */
+      const hosted = parseHosted(address);
+      return hosted ? fetchHostedFilm(hosted, { library: into }) : fetchFilm(parseRepoUrl(address), { library: into });
+    } });
   } catch (e) {
     throw new HttpError(e instanceof FetchError ? e.status : 404, e instanceof Error ? e.message : String(e));
   }

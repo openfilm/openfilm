@@ -10,7 +10,7 @@
  * projects' beside the window's sidebar, so switching between them moves nothing.
  */
 import React from 'react';
-import { ArrowLeft, BadgeCheck, Clapperboard, ExternalLink, MessageCircleQuestion, Play, Workflow, X } from 'lucide-react';
+import { ArrowLeft, BadgeCheck, Clapperboard, ExternalLink, Flag, MessageCircleQuestion, Play, Workflow, X } from 'lucide-react';
 import { useT } from '@/i18n';
 import { seenExamples, sourcesApi, type Example } from '@/lib/project-sources';
 import { readCanvasDoc, type CanvasDoc } from '@/lib/canvas';
@@ -347,7 +347,10 @@ function ExampleDetail({ example, onStart, onReference, onUseCanvas, onExplain, 
           </div>
           <p className="mt-3 text-[12px] leading-[17px] text-[var(--text-faint)]">{t('gallery.startHow')}</p>
           {refer ? <p className="mt-1.5 text-[12px] leading-[17px] text-[var(--text-faint)]">{t('gallery.referenceHow')}</p> : null}
-          <a href={example.url} target="_blank" rel="noreferrer" className="mt-auto flex items-center gap-1.5 pt-6 text-[12px] text-[var(--text-muted)] hover:text-[var(--text)]"><ExternalLink size={13} />{t('gallery.viewSource')}</a>
+          {/* a film someone shared from OpenFilm is in no repository to look at: its quiet end is reporting it, a letter to OpenFilm that names it */}
+          {example.shared
+            ? <a href={`mailto:support@openfilm.dev?subject=${encodeURIComponent(`Report: the film ${example.owner}/${example.id.split('.').pop()}`)}`} className="mt-auto flex items-center gap-1.5 pt-6 text-[12px] text-[var(--text-muted)] hover:text-[var(--text)]"><Flag size={13} />{t('gallery.report')}</a>
+            : <a href={example.url} target="_blank" rel="noreferrer" className="mt-auto flex items-center gap-1.5 pt-6 text-[12px] text-[var(--text-muted)] hover:text-[var(--text)]"><ExternalLink size={13} />{t('gallery.viewSource')}</a>}
         </div>
       </div>
     </div>

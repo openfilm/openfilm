@@ -20,7 +20,8 @@ import { HOST_PANEL_WIDTH, studioHost, type HostPanel } from '@/lib/host';
 import { BUILT_IN, fromLibrary, useLibraryIndex } from '@/lib/library';
 import type { Plugin } from '@/lib/plugins';
 import { importIntoSaved, refreshSaved, savedActions, savedSources, starSaved, useSavedListing, useStarredSaved } from '@/lib/saved';
-import { Star } from 'lucide-react';
+import { Star, Upload } from 'lucide-react';
+import { askShare } from '@/lib/community-share';
 import { relOf, useLibraryPlaces } from '@/lib/library-places';
 import { fileRef, stillUrl } from '@/lib/studio-refs';
 import type { MediaListing, MediaSources, WorkspaceResource } from '@/lib/workspace-resources';
@@ -188,8 +189,12 @@ export function LibraryPlace({ frame }: { frame: ReturnType<typeof useProjectFra
   const starred = useStarredSaved();
   const starMenu = (files: WorkspaceResource[]) => {
     const all = files.length > 0 && files.every((f) => starred.has(f.path));
+    /* plain media of the person's own is theirs to share with the Community (several: as a pack); a saved clip or a page is not media */
+    const media = files.filter((f) => f.kind === 'video' || f.kind === 'image' || f.kind === 'audio');
     return files.length ? [{ id: 'star', label: t(all ? 'assetDrawer.unstar' : 'assetDrawer.star'), icon: <Star size={14} />,
-      onSelect: () => { for (const f of files) void starSaved(f.path, !all); } }, { id: 'star-sep', separator: true } as const] : [];
+      onSelect: () => { for (const f of files) void starSaved(f.path, !all); } },
+    ...(media.length && media.length === files.length ? [{ id: 'share', label: t('assetDrawer.shareToCommunity'), icon: <Upload size={14} />, onSelect: () => askShare(media.map((f) => f.path)) }] : []),
+    { id: 'star-sep', separator: true } as const] : [];
   };
   /* where the drawer writes the way out of a try when no workbench has a place for it */
   const noDismiss = React.useRef<() => boolean>(() => false);
