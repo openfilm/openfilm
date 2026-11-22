@@ -88,15 +88,24 @@ const limited = gate(6);
  * Asked as `?film-facts`: a host that plays a lighter copy in a file's place (a proxy) answers this with the file.
  */
 const factsBySrc = new Map();
-function factsOf(src) {
+function factsOf(src, needPicture = false) {
   const href = url(src).href;
-  if (!factsBySrc.has(href)) {
-    factsBySrc.set(href, limited(() => new Promise((ok) => {
+  const key = needPicture ? `video\0${href}` : href;
+  if (!factsBySrc.has(key)) {
+    factsBySrc.set(key, limited(() => new Promise((ok) => {
       /* a video element reads a sound's length too; its file is let go once read */
       const m = document.createElement('video');
       m.preload = 'metadata'; m.muted = true;
       const done = (facts) => { m.removeAttribute('src'); m.load(); ok(facts); };
-      m.onloadedmetadata = () => done({ duration: m.duration, w: m.videoWidth, h: m.videoHeight });
+      m.onloadedmetadata = async () => {
+        const facts = { duration: m.duration, w: m.videoWidth, h: m.videoHeight };
+        /* A playable audio stream can fire loadedmetadata even when the video codec is unsupported. */
+        if (needPicture && !(facts.w && facts.h)) {
+          const source = await hostFacts(href);
+          if (source?.w && source.h) { facts.w = source.w; facts.h = source.h; }
+        }
+        done(facts);
+      };
       /* a file the browser cannot read (ProRes footage, a codec it has no decoder for): what the host says it is */
       m.onerror = () => { void hostFacts(href).then(done); };
       const facts = new URL(href);
@@ -104,7 +113,7 @@ function factsOf(src) {
       m.src = facts.href;
     })));
   }
-  return factsBySrc.get(href);
+  return factsBySrc.get(key);
 }
 
 /**
@@ -1864,7 +1873,7 @@ async function load(row, track, ti, el) {
   } else if (kind === 'video') {
     el.muted = true; el.playsInline = true;
     rest(c);
-    const facts = await factsOf(row.src);
+    const facts = await factsOf(row.src, true);
     if (!facts && !(await mustBeThere(row.src))) c.missing = true;
     c.native = facts?.duration ?? NaN;
     c.nw = facts?.w || stage.w; c.nh = facts?.h || stage.h;

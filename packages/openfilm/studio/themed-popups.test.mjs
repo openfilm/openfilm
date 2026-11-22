@@ -138,8 +138,7 @@ test('Studio popups use the same themed controls on Windows and Mac browser prof
     });
 
     const hasFfmpeg = spawnSync('ffmpeg', ['-version'], { stdio: 'ignore' }).status === 0;
-    /* on CI's Linux and Windows the chroma key controls do not appear yet (#498) */
-    const chromaSkip = !hasFfmpeg ? 'no ffmpeg' : process.env.CI && process.platform !== 'darwin' ? "the chroma key controls do not appear on CI's Linux and Windows (#498)" : false;
+    const chromaSkip = !hasFfmpeg ? 'no ffmpeg' : false;
     await t.test('chroma key opens the themed RGB picker, commits a hex and can undo it', { skip: chromaSkip }, async () => {
       const videoRoot = join(process.env.OPENFILM_LIBRARY, 'Key color');
       await mkdir(videoRoot);
@@ -165,11 +164,22 @@ test('Studio popups use the same themed controls on Windows and Mac browser prof
         if (process.env.OPENFILM_TEST_ARTIFACTS) await page.screenshot({ path: join(process.env.OPENFILM_TEST_ARTIFACTS, 'color-picker-windows.png') });
         await page.keyboard.press('Escape');
         await picker.waitFor({ state: 'detached' });
+        await page.locator('[data-mg-handle]').first().waitFor();
+        /* A popover can consume Escape and unmount before the stage's listener runs (#498). The event still
+           belongs to the popover even though its DOM is gone; it must not clear the clip and its controls. */
+        await page.evaluate(() => {
+          const event = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+          event.preventDefault();
+          document.body.dispatchEvent(event);
+        });
         if (process.env.OPENFILM_TEST_ARTIFACTS) await page.screenshot({ path: join(process.env.OPENFILM_TEST_ARTIFACTS, 'color-picker-closed.png') });
         await swatch.click();
         await page.keyboard.press('Escape');
         await page.keyboard.press('Control+z');
         await page.waitForFunction(async id => /00ff00/i.test(await (await fetch(`/api/projects/${id}`)).text()), videoProject.id);
+        /* An Escape nobody consumed still deselects the clip. */
+        await page.keyboard.press('Escape');
+        await swatch.waitFor({ state: 'hidden' });
       } finally { await page.close(); }
     });
     assert.deepEqual(errors, []);
