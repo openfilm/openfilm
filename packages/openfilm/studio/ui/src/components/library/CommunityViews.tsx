@@ -47,7 +47,7 @@ export function AddButton({ label, text, onClick, busy = false, disabled = false
 
 /** In already, as a list's row says it: the word, quiet (Added, On). */
 export const InMark = ({ label }: { label: string }) => (
-  <span title={label} className="inline-flex h-7 min-w-[64px] items-center justify-center gap-1 rounded-full bg-[var(--bg-field)] px-3 text-[12.5px] font-medium text-[var(--text-muted)]"><Check size={13} aria-hidden />{label}</span>
+  <span title={label} data-state-mark="" className="inline-flex h-7 min-w-[64px] items-center justify-center gap-1 rounded-full bg-[var(--bg-field)] px-3 text-[12.5px] font-medium text-[var(--text-muted)]"><Check size={13} aria-hidden />{label}</span>
 );
 
 /** One of the person's workbenches, as Mine's tile shows it. */

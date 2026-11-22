@@ -1,0 +1,77 @@
+/* One thing's page in the Community's desktop page (library/Store DetailShell): a hero in its icon's own colours,
+   then its facts, its sections and its side as cards. */
+.page { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding-top: 18px; padding-bottom: 72px; }
+
+.hero {
+  position: relative;
+  overflow: hidden;
+  padding: 34px 34px 30px;
+  border: 1px solid color-mix(in srgb, var(--text) 9%, transparent);
+  border-radius: 24px;
+  background: color-mix(in srgb, var(--text) 4%, var(--bg-panel));
+  isolation: isolate;
+}
+/* its icon, huge and blurred, is the hero's colour */
+.backdrop { position: absolute; z-index: -1; right: -8%; top: -70%; width: 58%; aspect-ratio: 1; filter: blur(90px) saturate(1.4); opacity: .34; pointer-events: none; }
+.backdrop > * { width: 100% !important; height: 100% !important; border-radius: 30% !important; }
+.hero::after {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--bg-panel) 55%, transparent) 0%, color-mix(in srgb, var(--bg-panel) 20%, transparent) 55%, transparent 100%);
+  pointer-events: none;
+}
+.heroInner { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 22px 26px; }
+.icon { flex: none; filter: drop-shadow(0 14px 26px rgba(0, 0, 0, .35)); }
+.icon > * { width: 96px !important; height: 96px !important; }
+.heroText { display: flex; flex: 1 1 320px; flex-direction: column; gap: 8px; min-width: 0; }
+.titleRow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; }
+.titleRow h2 { margin: 0; color: var(--text); font-size: 30px; font-weight: 700; line-height: 1.15; letter-spacing: -.025em; }
+.byline { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; color: var(--text); opacity: .78; font-size: 13px; }
+.summary { max-width: 640px; margin: 2px 0 0; color: var(--text); opacity: .86; font-size: 15px; line-height: 1.6; }
+.actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; }
+.actions :global([data-get-button]), .actions button:first-child { height: 36px; padding: 0 18px; border-radius: 10px; font-size: 13.5px; }
+
+.preview { margin-top: 18px; overflow: hidden; border-radius: 20px; }
+
+.body { display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; margin-top: 18px; }
+.body[data-aside] { grid-template-columns: minmax(0, 1fr) 280px; }
+@media (max-width: 1100px) { .body[data-aside] { grid-template-columns: minmax(0, 1fr); } }
+.main { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.aside { display: flex; flex-direction: column; gap: 18px; align-self: start; padding: 22px; border: 1px solid color-mix(in srgb, var(--text) 9%, transparent); border-radius: 20px; background: color-mix(in srgb, var(--text) 3%, var(--bg-panel)); }
+
+/* its facts: each a card of its own, tinted in turn */
+.main :global([data-info-bar]) { gap: 12px; padding: 0; border: 0; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)) !important; }
+.main :global([data-info-bar]) > * {
+  align-items: flex-start !important;
+  padding: 16px 18px !important;
+  border: 1px solid color-mix(in srgb, var(--text) 9%, transparent) !important;
+  border-radius: 16px;
+  background: radial-gradient(120% 100% at 100% 0%, color-mix(in srgb, var(--tint) 18%, transparent), transparent 70%), color-mix(in srgb, var(--text) 3%, var(--bg-panel));
+  text-align: start !important;
+}
+.main :global([data-info-bar]) > *:nth-child(4n + 1) { --tint: #3987e5; }
+.main :global([data-info-bar]) > *:nth-child(4n + 2) { --tint: #f0c04f; }
+.main :global([data-info-bar]) > *:nth-child(4n + 3) { --tint: #9b85ff; }
+.main :global([data-info-bar]) > *:nth-child(4n + 4) { --tint: #22c3b0; }
+.main :global([data-info-bar]) > * > span:nth-child(2) { font-size: 18px !important; }
+
+/* its sections: cards with room inside */
+.main :global([data-doc-section]) {
+  margin: 0 !important;
+  padding: 24px 26px !important;
+  border: 1px solid color-mix(in srgb, var(--text) 9%, transparent) !important;
+  border-radius: 20px;
+  background: color-mix(in srgb, var(--text) 3%, var(--bg-panel));
+}
+.main :global([data-doc-section]) > h3 { font-size: 16px !important; }
+/* what it does: each point on a tile, its mark in a coloured square */
+.main :global([data-doc-highlights]) { gap: 12px !important; }
+.main :global([data-doc-highlights]) > div { padding: 16px; border-radius: 14px; background: color-mix(in srgb, var(--text) 4%, transparent); }
+.main :global([data-doc-highlights]) > div > svg { box-sizing: content-box; padding: 7px; border-radius: 9px; color: var(--hl) !important; background: color-mix(in srgb, var(--hl) 18%, transparent); }
+.main :global([data-doc-highlights]) > div:nth-child(4n + 1) { --hl: #3987e5; }
+.main :global([data-doc-highlights]) > div:nth-child(4n + 2) { --hl: #f0a94f; }
+.main :global([data-doc-highlights]) > div:nth-child(4n + 3) { --hl: #9b85ff; }
+.main :global([data-doc-highlights]) > div:nth-child(4n + 4) { --hl: #22c3b0; }
+.main :global([data-doc-agent]) { border-radius: 14px !important; }

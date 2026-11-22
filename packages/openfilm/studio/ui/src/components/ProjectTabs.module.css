@@ -92,8 +92,9 @@
 .chatNew:focus-visible { outline: 1px solid var(--accent); outline-offset: -1px; }
 /* a sidebar page (the projects, the Community) in place of the chat and the editor: the bar keeps only its corner */
 .header[data-side-page] :is(.chatHeader, .editorHeader) { display: none; }
-/* and no bar of its own: the page runs to the window's top, the strip over it still drags the window */
-.header[data-side-page] { background: transparent; border-bottom-color: transparent; }
+/* and no bar of its own: the page runs to the window's top and drags the window itself (components/SidePage), so the
+   header keeps to its corner (the docked sidebar's width, set where it is drawn) and is not over the page's own bar */
+.header[data-side-page] { right: auto; width: var(--corner-width); background: transparent; border-bottom-color: transparent; }
 .sidebar {
   position: fixed;
   inset: 0 auto 0 0;

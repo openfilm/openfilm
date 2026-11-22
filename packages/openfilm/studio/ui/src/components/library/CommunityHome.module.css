@@ -1,0 +1,177 @@
+/* The Community's pages in the desktop sidebar (CommunityHome, ModelBenchmark): one column, the window's lines and
+   the text's own shades; the pictures carry the colour. */
+.page { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.column { width: 100%; max-width: 1240px; margin: 0 auto; padding: 4px 32px 72px; }
+.ellipsis { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* a shelf: its name (the way to all of it), then its things */
+.shelf { margin-top: 38px; }
+.shelf > header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; margin-bottom: 14px; }
+.shelf h2 { margin: 0; font-size: 14px; font-weight: 600; color: var(--text); }
+.shelf h2 button { display: inline-flex; align-items: center; gap: 3px; margin: 0 -4px; padding: 2px 4px; border-radius: 6px; color: inherit; font: inherit; }
+.shelf h2 button svg { color: var(--text-faint); transition: transform .15s ease; }
+.shelf h2 button:hover svg { transform: translateX(2px); color: var(--text-muted); }
+.shelf h2 button:focus-visible { outline: 1px solid var(--accent); }
+.shelf > header p { margin: 0; color: var(--text-faint); font-size: 12px; }
+
+.gridTutorials { display: grid; grid-template-columns: repeat(auto-fill, minmax(208px, 1fr)); gap: 18px 14px; }
+.gridTutorialsWide { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 28px 20px; }
+.gridTutorialsWide .coverTile { width: 76px; height: 76px; border-radius: 22px; }
+.gridTutorialsWide .coverRings { width: 140px; height: 140px; }
+.gridFilms { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 20px 16px; }
+.gridCards { display: grid; grid-template-columns: repeat(auto-fill, minmax(236px, 1fr)); gap: 16px; }
+.gridRows { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 420px), 1fr)); gap: 2px 32px; }
+.gridCreators { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 14px; }
+
+/* the banner */
+.hero {
+  --tile: 156px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 28px 40px;
+  margin-top: 18px;
+  padding: 30px 0 30px 36px;
+  overflow: hidden;
+  border-radius: 20px;
+  background: color-mix(in srgb, var(--text) 5%, var(--bg-panel));
+}
+.heroText { flex: 1 1 340px; max-width: 440px; display: flex; flex-direction: column; gap: 10px; padding-right: 8px; }
+.eyebrow { color: var(--accent); font-size: 12px; font-weight: 500; }
+.heroText h1 { margin: 0; color: var(--text); font-size: 25px; font-weight: 600; line-height: 1.32; letter-spacing: -.02em; text-wrap: pretty; word-break: keep-all; }
+.heroText p { margin: 0; color: var(--text-muted); font-size: 13.5px; line-height: 1.6; }
+.heroSteps { display: flex; gap: 8px; margin-top: 12px; }
+.heroSteps button { display: grid; place-items: center; width: 30px; height: 30px; border: 1px solid var(--frame-line); border-radius: 50%; color: var(--text-muted); }
+.heroSteps button:hover { color: var(--text); border-color: color-mix(in srgb, var(--text) 30%, transparent); }
+.heroSteps button:focus-visible { outline: 1px solid var(--accent); outline-offset: 1px; }
+.heroStrip {
+  flex: 1 1 520px;
+  min-width: 0;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(90deg, #000 82%, transparent);
+  mask-image: linear-gradient(90deg, #000 82%, transparent);
+}
+.heroTrack { display: flex; gap: 14px; transition: transform .6s cubic-bezier(.2, .7, .2, 1); }
+.heroTile { position: relative; flex: none; width: var(--tile); height: var(--tile); overflow: hidden; border-radius: 16px; background: var(--bg-field); }
+.heroTile:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.fill { position: absolute; inset: 0; transition: transform .4s ease; }
+.fill img, .fill video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.heroTile:hover .fill { transform: scale(1.04); }
+@media (prefers-reduced-motion: reduce) { .heroTrack { transition: none; } }
+
+/* a picture that grows a little while pointed at */
+.art { position: absolute; inset: 0; display: block; transition: transform .4s ease; }
+.art img, .art video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+
+/* a film */
+.film, .tutorial { display: flex; flex-direction: column; gap: 10px; min-width: 0; text-align: start; color: inherit; text-decoration: none; }
+.film:hover, .tutorial:hover { color: inherit; }
+.filmFrame, .tutorialFrame { position: relative; display: block; overflow: hidden; border: 1px solid var(--frame-line); border-radius: 14px; background: var(--bg-field); transition: border-color .15s ease; }
+.filmFrame { aspect-ratio: 4 / 3; }
+.tutorialFrame { aspect-ratio: 16 / 9; border-radius: 12px; background: color-mix(in srgb, var(--text) 4%, #121215); }
+.film:hover .filmFrame, .tutorial:hover .tutorialFrame { border-color: color-mix(in srgb, var(--text) 28%, transparent); }
+.film:hover .art, .tutorial:hover .art { transform: scale(1.035); }
+.film:focus-visible .filmFrame, .tutorial:focus-visible .tutorialFrame { outline: 2px solid var(--accent); outline-offset: 2px; }
+.length { position: absolute; right: 10px; bottom: 10px; padding: 2px 6px; border-radius: 5px; background: rgba(0, 0, 0, .62); color: #fff; font-size: 11px; font-variant-numeric: tabular-nums; }
+.caption { display: flex; flex-direction: column; gap: 4px; min-width: 0; padding: 0 2px; }
+.title { overflow: hidden; color: var(--text); font-size: 13.5px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.meta { display: flex; align-items: center; gap: 6px; min-width: 0; color: var(--text-faint); font-size: 12px; white-space: nowrap; }
+.byline { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+.maker { display: inline-grid; flex: none; place-items: center; border-radius: 50%; font-weight: 700; line-height: 1; }
+.tick { flex: none; color: var(--accent); }
+.level { padding: 0 6px; border-radius: 4px; background: var(--bg-field); color: var(--text-muted); font-size: 11px; line-height: 18px; }
+
+/* a tutorial's picture: its mark on a stage of its colour, rings round it, its number in the corner */
+.cover {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background:
+    radial-gradient(70% 80% at 50% 115%, color-mix(in srgb, var(--accent) 42%, transparent), transparent 72%),
+    linear-gradient(180deg, color-mix(in srgb, var(--accent) 8%, #131315), color-mix(in srgb, var(--accent) 20%, #131315));
+}
+.cover::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(rgba(255, 255, 255, .13) 1px, transparent 1.2px);
+  background-size: 14px 14px;
+  -webkit-mask-image: radial-gradient(55% 75% at 50% 50%, #000, transparent);
+  mask-image: radial-gradient(55% 75% at 50% 50%, #000, transparent);
+}
+.coverRings {
+  position: absolute;
+  width: 112px;
+  height: 112px;
+  border: 1px solid color-mix(in srgb, var(--accent) 34%, transparent);
+  border-radius: 50%;
+  box-shadow: 0 0 0 26px color-mix(in srgb, var(--accent) 5%, transparent), 0 0 0 27px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+.coverTile {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 62px;
+  height: 62px;
+  border-radius: 18px;
+  background: linear-gradient(160deg, color-mix(in srgb, var(--accent) 72%, #fff), var(--accent) 58%);
+  color: #101012;
+  box-shadow: 0 14px 34px -8px color-mix(in srgb, var(--accent) 75%, transparent), inset 0 1px 0 rgba(255, 255, 255, .45);
+  transition: transform .3s cubic-bezier(.2, .8, .2, 1);
+}
+.tutorial:hover .coverTile { transform: translateY(-3px) scale(1.04); }
+.coverNum { position: absolute; left: 13px; top: 11px; color: rgba(255, 255, 255, .5); font: 600 11px/1 ui-monospace, 'SF Mono', Menlo, monospace; letter-spacing: .08em; }
+
+/* the three large panels */
+.panels { display: flex; flex-wrap: wrap; gap: 16px; }
+.panel { position: relative; display: flex; flex-direction: column; min-width: 0; height: 236px; padding: 22px 24px; overflow: hidden; border-radius: 16px; text-align: start; transition: filter .2s ease; }
+.panel:hover { filter: brightness(1.08); }
+.panel:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.panelAssets { flex: 2 1 460px; background: #2f3a55; }
+.panelMusic { flex: 1 1 280px; background: #4a2a1c; }
+.panelPlugins { flex: 1 1 280px; background: #1f3f3a; }
+.panelTitle { color: #f4f6ff; font-size: 14px; font-weight: 600; }
+.panelNote { margin-top: 6px; color: rgba(255, 255, 255, .72); font-size: 12.5px; }
+.stickers { position: absolute; left: 34%; right: -20px; bottom: 22px; display: flex; flex-direction: column; gap: 10px; }
+.stickers > span { display: flex; gap: 10px; }
+.stickers > span + span { margin-left: -30px; }
+.sticker { position: relative; flex: none; width: 54px; height: 54px; overflow: hidden; border-radius: 13px; background: rgba(255, 255, 255, .1); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .08); }
+.trackBack { position: absolute; left: 50%; bottom: 46px; width: 240px; height: 76px; border-radius: 14px; background: #e3cbb8; opacity: .55; transform: translateX(-46%) rotate(-5deg); }
+.track { position: absolute; left: 50%; bottom: 30px; display: flex; flex-direction: column; gap: 10px; width: 252px; padding: 14px; border-radius: 14px; background: #f6ebe2; box-shadow: 0 12px 30px rgba(0, 0, 0, .35); transform: translateX(-50%); }
+.trackHead { display: flex; align-items: center; gap: 10px; }
+.trackHead b { display: block; max-width: 170px; overflow: hidden; color: #2a140b; font-size: 13px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.trackHead small { display: block; color: #6b4a3a; font-size: 11px; }
+.trackPlay { display: grid; flex: none; place-items: center; width: 34px; height: 34px; border-radius: 50%; background: #2a140b; color: #f6ebe2; }
+.wave { display: flex; align-items: center; gap: 3px; height: 26px; }
+.wave i { flex: 1; border-radius: 2px; background: #c9a995; }
+.wave i[data-played] { background: #2a140b; }
+.pills { position: absolute; left: 24px; right: -60px; bottom: 26px; display: flex; flex-direction: column; gap: 10px; }
+.pills > span { display: flex; gap: 10px; }
+.pills > span + span { margin-left: -50px; }
+.pill { display: flex; flex: none; align-items: center; gap: 9px; height: 42px; padding: 0 14px 0 9px; border-radius: 11px; background: #fff; color: #111; font-size: 13px; font-weight: 500; white-space: nowrap; }
+
+/* a maker */
+.creator { position: relative; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 0 16px 16px; overflow: hidden; border: 1px solid var(--frame-line); border-radius: 16px; background: color-mix(in srgb, var(--text) 2.5%, transparent); text-align: center; transition: border-color .15s ease, transform .15s ease; }
+.creator:hover { border-color: color-mix(in srgb, var(--text) 26%, transparent); transform: translateY(-1px); }
+/* a band in their colour, their mark over its edge */
+.creatorBanner { align-self: stretch; height: 54px; margin: 0 -16px; background: linear-gradient(120deg, oklch(0.55 0.13 var(--hue)), oklch(0.42 0.12 calc(var(--hue) + 40))); }
+.creatorMark { margin-top: -26px; padding: 3px; border-radius: 50%; background: var(--bg-panel); }
+.creatorName { display: inline-flex; align-items: center; gap: 4px; max-width: 100%; margin-top: 6px; color: var(--text); font-size: 13.5px; font-weight: 600; }
+.creatorCount { color: var(--text-faint); font-size: 12px; }
+.creator .ghost { width: 100%; margin-top: 10px; }
+
+/* buttons of these pages */
+.ghost { height: 30px; padding: 0 12px; border: 1px solid var(--frame-line); border-radius: 7px; color: var(--text); font-size: 12.5px; white-space: nowrap; }
+.ghost:hover { background: var(--bg-hover); border-color: color-mix(in srgb, var(--text) 26%, transparent); }
+.primary { height: 36px; padding: 0 16px; border-radius: 9px; background: var(--text); color: var(--bg-panel); font-size: 13px; font-weight: 600; }
+.primary:hover { opacity: .9; }
+.ghost:focus-visible, .primary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* the way to publish */
+.publish { display: flex; flex-wrap: wrap; align-items: center; gap: 16px 20px; margin-top: 44px; padding: 22px 24px; border-radius: 16px; background: color-mix(in srgb, var(--text) 5%, var(--bg-panel)); }
+.publishMark { display: grid; flex: none; place-items: center; width: 44px; height: 44px; border-radius: 12px; background: var(--bg-field); color: var(--text-muted); }
+.publishText { display: flex; flex: 1 1 320px; flex-direction: column; gap: 3px; }
+.publishText b { color: var(--text); font-size: 14px; font-weight: 600; }
+.publishText small { color: var(--text-muted); font-size: 12.5px; }

@@ -4,8 +4,8 @@
  *
  * The person picks a name for themselves in the Community once (their profile). Then a file of their library, or
  * several as a pack, is shared in one go: this checks each file against what the Community takes, draws a video's
- * poster, and hands the lot to OpenFilm's service, which keeps the files private and proposes them to the Community
- * under the person's name. A maintainer there reviews it; `submissions` says how that went.
+ * poster, and hands the lot to OpenFilm's service, which keeps the files private until the Community's reviewers have
+ * looked at them, under the person's name; `submissions` says how that went.
  *
  *   communityProfile / saveCommunityProfile   the person's name and page in the Community (their account's)
  *   publicProfile(name)                       anyone's page, for the author's page in the Community window
@@ -62,7 +62,7 @@ const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const api = () => serviceUrl('API', 'https://openfilm.dev');
 
 /** @typedef {{ fetch?: typeof fetch }} Options */
-/** @typedef {{ name: string, displayName: string, bio: string, avatar: string | null, since: string }} Profile */
+/** @typedef {{ id?: number, name: string, displayName: string, bio: string, avatar: string | null, since: string }} Profile `id`: the account's UID */
 /** @typedef {{ id: string, state: 'uploading' | 'reviewing' | 'approved' | 'declined' | 'failed' | 'withdrawing' | 'withdrawn', title: string, items: { id: string, title: string, version: number }[], pack?: { id: string, title: string }, film?: { id: string, title: string, version: number }, review?: string, note?: string, createdAt: string, updatedAt: string }} Submission */
 /**
  * @typedef {{ path: string, media: 'video' | 'image' | 'audio' | null, ext: string, bytes: number, durationMs: number, name: string, title: string,
@@ -101,15 +101,16 @@ async function ask(method, path, { key, body, fetch: get = fetch, timeoutMs = 30
 }
 
 /**
- * The person's name and page in the Community. Not signed in: `{ signedIn: false, profile: null }`. Signed in with no
- * name yet: `profile` null, and `suggested`, a free name they could take.
- * @param {Options} [o] @returns {Promise<{ signedIn: boolean, profile: Profile | null, suggested?: string }>}
+ * The person's name and page in the Community. Not signed in: `{ signedIn: false, profile: null }`. Signed in: `id`,
+ * their account's UID (it has one before any name); with no name yet, `profile` null and `suggested`, a free name they
+ * could take.
+ * @param {Options} [o] @returns {Promise<{ signedIn: boolean, profile: Profile | null, id?: number, suggested?: string }>}
  */
 export async function communityProfile({ fetch: get } = {}) {
   const key = await accountKey();
   if (!key) return { signedIn: false, profile: null };
-  const { profile, suggested } = await ask('GET', '/v1/community/profile', { key, fetch: get });
-  return { signedIn: true, profile: profile ?? null, ...(typeof suggested === 'string' ? { suggested } : {}) };
+  const { profile, id, suggested } = await ask('GET', '/v1/community/profile', { key, fetch: get });
+  return { signedIn: true, profile: profile ?? null, ...(Number.isSafeInteger(id) ? { id } : {}), ...(typeof suggested === 'string' ? { suggested } : {}) };
 }
 
 /** Takes the name (the first time) and writes the page's words. @param {unknown} body @param {Options} [o] */
@@ -576,7 +577,7 @@ export async function startFilmShare(root, raw, { fetch: get = fetch, poster, du
   return { job: id };
 }
 
-/** Takes back what the person shared: one in review is closed, one listed is proposed for removal. @param {string} id @param {Options} [o] */
+/** Takes back what the person shared: one in review is no longer reviewed, one listed is no longer listed. @param {string} id @param {Options} [o] */
 export async function withdrawSubmission(id, { fetch: get } = {}) {
   const key = await accountKey();
   if (!key) throw signInFirst();

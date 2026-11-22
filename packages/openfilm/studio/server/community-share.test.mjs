@@ -90,12 +90,13 @@ test('the person\'s page in the Community: none when signed out; a name is taken
   assert.deepEqual(await communityProfile({ fetch: async () => { throw new Error('not asked when signed out'); } }), { signedIn: false, profile: null });
   await assert.rejects(saveCommunityProfile({ name: 'mika' }), (e) => e.status === 409 && e.extra.code === 'sign-in');
   process.env.OPENFILM_API_KEY = 'ofk_test_key';
-  const profile = { name: 'mika', displayName: 'Mika', bio: '', avatar: null, since: '2026-11-21T12:00:00.000Z' };
+  const profile = { id: 2, name: 'mika', displayName: 'Mika', bio: '', avatar: null, since: '2026-11-21T12:00:00.000Z' };
   const cloud = service({
-    'GET /v1/community/profile': { profile: null, suggested: 'mika-films' },
+    'GET /v1/community/profile': { profile: null, id: 2, suggested: 'mika-films' },
     'PUT /v1/community/profile': (call) => (call.body.name === 'taken' ? Response.json({ error: 'name_taken', message: 'That name is taken. Pick another.' }, { status: 409 }) : { profile }),
   });
-  assert.deepEqual(await communityProfile({ fetch: cloud.get }), { signedIn: true, profile: null, suggested: 'mika-films' });
+  /* the account's UID comes before any name */
+  assert.deepEqual(await communityProfile({ fetch: cloud.get }), { signedIn: true, profile: null, id: 2, suggested: 'mika-films' });
   assert.deepEqual(await saveCommunityProfile({ name: 'mika', displayName: 'Mika', more: 'ignored' }, { fetch: cloud.get }), { signedIn: true, profile });
   assert.deepEqual(cloud.calls.at(-1), { what: 'PUT /v1/community/profile', authorization: 'Bearer ofk_test_key', body: { name: 'mika', displayName: 'Mika' } });
   await assert.rejects(saveCommunityProfile({ name: 'taken' }, { fetch: cloud.get }), (e) => e.status === 409 && e.extra.code === 'name_taken' && /taken/.test(e.message));

@@ -45,6 +45,9 @@ import { DocAgent, DocHighlights, DocKeys, DocLines, DocOff, DocSection, DocStep
 import { SettingsButton, SettingsGroup, SettingsSwitch } from '../settings/ui';
 import { LARGE_DIALOG_COLUMN as PAGE_INSET } from '../dialog-chrome';
 import { useInSidePage } from '../SidePage';
+import { CommunityPageHead } from '../CommunityFrame';
+import { CommunityHome, CreatorsPage, Shelf as HomeShelf, TutorialsPage } from './CommunityHome';
+import { BenchmarkPage } from './ModelBenchmark';
 import { ASSET_KINDS, COMMUNITY_ICON, KindIcon, isCodeKind, type FeatureKind } from '../feature-kinds';
 import { byOpenFilm, libraryUrl, makerName, nameOf, packItems, packOf, posterUrl, previewUrl, setAdded, templatePreviewUrl, TEXT_COMPONENT, useLibraryAdded, useLibraryIndex, type LibraryItem, type LibraryPack } from '@/lib/library';
 import { isClipMotion } from '@/lib/clip-presets';
@@ -104,8 +107,10 @@ type AgentGroup = { id: HostAgentId; name: string; skills: AgentSkill[] };
 /** An agent's connectors (its own MCP servers): `filtered` false, it cannot be told, and has them all. */
 type McpGroup = { id: HostAgentId; name: string; filtered: boolean; servers: Array<{ name: string; detail: string; allowed: boolean }> };
 
-export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenchOn }: {
+export function PluginsPane({ line, sub = null, query, projectId, opened, onOpen, onWorkbenchOn }: {
   line: PluginsLine;
+  /** the place's sub-level asked for (a kind of plugin, a category of skill), from the desktop page's chip menus */
+  sub?: string | null;
   query: string;
   projectId: string | null;
   /** the page shown (a skill's uid or the name agents know it by; `plugin:<id>` one of OpenFilm's own plugins), none: the list */
@@ -115,6 +120,9 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
   onWorkbenchOn?: (plugin: Plugin) => void;
 }) {
   const t = useT();
+  /* drawn as the desktop sidebar's page (components/CommunityFrame): its first page and its own places are laid out
+     as a community of makers' work is (library/CommunityHome) */
+  const inPage = useInSidePage();
   const words = useSkillWords();
   const pluginWords = usePluginWords();
   const own = usePlugins();
@@ -157,7 +165,7 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
   const [featured, setFeatured] = React.useState<Featured | null>(() => seenFeatured());
   const [examples, setExamples] = React.useState<Example[]>(() => seenExamples() ?? []);
   React.useEffect(() => {
-    if (line !== 'featured' && !line.startsWith('author:')) return undefined;
+    if (line !== 'featured' && line !== 'creators' && !line.startsWith('author:')) return undefined;
     let live = true;
     void sourcesApi.examples().then((list) => { if (live) setExamples(list); });
     if (line === 'featured') void sourcesApi.featured().then((read) => { if (live) setFeatured(read); });
@@ -203,8 +211,13 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
     showPluginsLine(`kind:${it.cat}`);
   }, [opened, library, onOpen]);
   /* the kind of plugin, the category of skill picked on their pages (none: all) */
-  const [pluginSort, setPluginSort] = React.useState<'editors' | 'connectors' | 'community' | null>(null);
+  const [pluginSort, setPluginSort] = React.useState<'editors' | 'connectors' | null>(null);
   const [skillSort, setSkillSort] = React.useState<Category | null>(null);
+  /* the sub-level asked for, each time it is asked */
+  React.useEffect(() => {
+    if (line === 'plugins') setPluginSort(sub === 'editors' || sub === 'connectors' ? sub : null);
+    if (line === 'skills') setSkillSort((CATEGORIES as readonly string[]).includes(sub ?? '') ? sub as Category : null);
+  }, [line, sub]);
   /* the order the person put their workbenches in */
   const benchOrder = useWorkbenchOrder();
   const lang = useLanguage();
@@ -369,9 +382,9 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
   /* a plugin or a skill of the catalog (OpenFilm's or the community's): Get installs it, asked first when it brings
      scripts. `onShelf`: among other kinds of things on a picked shelf, where each has a picture (a plugin its mark
      large) and says what kind of thing it is */
-  const skillCard = (k: SkillEntry, onShelf: boolean) => (
-    <StoreCard key={k.uid} icon={isPlugin(k) ? <WorkbenchMark plugin={pluginOfSkill(k)} size={44} /> : <SkillMark skill={k} size={44} />}
-      cover={!isPlugin(k) ? (hover) => <SkillCover skill={k} title={words(k).title} playing={hover} />
+  const skillCard = (k: SkillEntry, onShelf: boolean, row = false) => (
+    <StoreCard key={k.uid} icon={isPlugin(k) ? <WorkbenchMark plugin={pluginOfSkill(k)} size={row ? 40 : 44} /> : <SkillMark skill={k} size={row ? 40 : 44} />}
+      cover={row ? undefined : !isPlugin(k) ? (hover) => <SkillCover skill={k} title={words(k).title} playing={hover} />
         : onShelf ? () => <span className="absolute inset-0 grid place-items-center bg-[var(--bg-field)]"><WorkbenchMark plugin={pluginOfSkill(k)} size={64} /></span> : undefined}
       title={words(k).title} summary={words(k).summary} onOpen={() => open(k.uid)} by={publisher(k)} dim={installedOf(k) && Boolean(k.off)}
       meta={onShelf ? t(isPlugin(k) ? 'assetDrawer.featuredKind_plugin' : 'assetDrawer.featuredKind_skill') : metaOf(stats[k.uid]?.installs, t(`assetDrawer.skillCat_${categoryOfSkill(k)}`))}
@@ -427,7 +440,7 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
     <CallOut icon={<Upload size={18} strokeWidth={1.7} aria-hidden />} text={text}
       action={<AddButton label={t('assetDrawer.publishAction')} text={t('assetDrawer.publishAction')} onClick={() => showPluginsLine('publish')} />} />
   );
-  const kindName = (kind: FeatureKind) => t(isCodeKind(kind) ? `assetDrawer.view_${kind}` : `assetDrawer.cat_${kind}`);
+  const kindName = (kind: FeatureKind) => (inPage && kind === 'media' ? t('communityHome.mediaKind') : t(isCodeKind(kind) ? `assetDrawer.view_${kind}` : `assetDrawer.cat_${kind}`));
   /* the kind of film an example is, in words (none: Other) */
   const exampleKind = (c: string | null) => { if (!c) return t('assetDrawer.examplesOther'); const key = `gallery.cat.${c}`; const said = t(key); return said === key ? c : said; };
   /* a thing on a picked shelf (the Community's featured.json), whatever its kind: its picture, its name, what kind of
@@ -577,7 +590,7 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
     const nothing = !benchItems.length && !connectorRows.length && !connectors.length && !skillRows.length && !agentsOwn.length && !packRows.length;
     const count = t('assetDrawer.mineCount').replace('{plugins}', String(benchItems.length + connectorRows.length)).replace('{skills}', String(skillRows.length));
     return (
-      <PluginsPage key={line} title={t('assetDrawer.place_mine')} note={nothing ? undefined : count}>
+      <PluginsPage key={line} title={inPage ? t('communityHome.saved') : t('assetDrawer.place_mine')} note={nothing ? undefined : count}>
         {consent.dialog}
         {status}
         {updates.length ? (
@@ -635,6 +648,18 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
     );
   }
 
+  /* everyone with work here, the most first: their plugins and skills, their films, their packs */
+  const creatorsOf = () => {
+    const counts = new Map<string, number>();
+    const owners = [...offered.map(ownerOf), ...examples.map((e) => e.owner?.toLowerCase() ?? ''), ...(library?.packs ?? []).filter((p) => !p.official).map((p) => p.by?.toLowerCase() ?? '')];
+    for (const who of owners) if (who) counts.set(who, (counts.get(who) ?? 0) + 1);
+    return [...counts].map(([name, count]) => ({ name, count })).filter((m) => matches(m.name, makerName(m.name))).sort((a, b) => b.count - a.count);
+  };
+  /* the desktop page's own places: OpenFilm's guides, the model leaderboard, the makers */
+  if (line === 'tutorials') return <TutorialsPage />;
+  if (line === 'benchmark') return <BenchmarkPage />;
+  if (line === 'creators') return <CreatorsPage makers={creatorsOf()} onMaker={(name) => showPluginsLine(`author:${name}`)} />;
+
   /* Featured: the Community's first page. The shelves a maintainer picked (the Community's featured.json), each thing
      by its picture whatever its kind; the makers put forward; then some of each kind there is, less what a shelf
      above shows already, each with the way to all of it: the page stands with no shelf picked at all. Searched: what
@@ -649,6 +674,40 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
     const moreSkills = byInstalls(catalogSkills).filter((k) => !onShelf.has(`skill:${k.uid}`));
     const morePlugins = [...ownPlugins.filter((p) => !p.soon).map(pluginCard), ...byInstalls(catalogPlugins).filter((k) => !onShelf.has(`skill:${k.uid}`)).map(catalogCard)];
     const morePacks = packsOf(null).filter((p) => !p.lone && !onShelf.has(`pack:${p.id}`));
+    /* the desktop page: laid out as a community of makers' work is browsed (library/CommunityHome) */
+    if (inPage) {
+      const packCard = (p: LibraryPack) => shelfCard({ kind: 'pack', key: `pack:${p.id}`, pack: p });
+      /* the banner's pictures: films, skills and packs by turns, those a maintainer picked first */
+      const filmTiles = examples.filter((e) => e.poster).map((e) => ({ key: `example:${e.id}`, label: e.title, picture: <img src={e.poster!} alt="" draggable={false} />, onOpen: () => openExample(e.id) }));
+      const skillTiles = byInstalls(catalogSkills).map((k) => ({ key: `skill:${k.uid}`, label: words(k).title, picture: <SkillCover skill={k} title={words(k).title} playing={false} />, onOpen: () => open(k.uid) }));
+      const packTiles = communityPacks.map((p) => ({ key: `pack:${p.id}`, label: nameOf(p.name, lang), picture: <PackCover pack={p} first={packItems(library, p)[0]} lang={lang} />, onOpen: () => open(`${PACK_PAGE}${p.id}`) }));
+      const pickedKeys = new Set(picked.flatMap((x) => x.things.map((thing) => thing.key)));
+      const turns = Math.max(filmTiles.length, skillTiles.length, packTiles.length);
+      const heroTiles = Array.from({ length: turns }, (_, i) => [filmTiles[i], skillTiles[i], packTiles[i]]).flat()
+        .filter((tile): tile is NonNullable<typeof tile> => Boolean(tile))
+        .sort((a, b) => Number(pickedKeys.has(b.key)) - Number(pickedKeys.has(a.key))).slice(0, 10);
+      const music = (library?.items ?? []).find((it) => it.cat === 'music');
+      const shownMakers = makers.length ? makers : creatorsOf().slice(0, 6);
+      return (
+        <>
+          {consent.dialog}
+          <CommunityHome searching={Boolean(q)} status={status} heroTiles={heroTiles}
+            films={moreExamples.slice(0, 8)} filmKind={(e) => exampleKind(e.category)} onFilm={(e) => openExample(e.id)} onFilms={() => showPluginsLine('examples')}
+            picked={picked.map(({ shelf, things }) => ({ id: shelf.id, title: inLanguage(shelf.title, lang) ?? shelf.id, note: inLanguage(shelf.text, lang), cards: things.map(shelfCard) }))}
+            skills={(q ? byInstalls(catalogSkills) : moreSkills).slice(0, 6).map((k) => skillCard(k, false, true))} onSkills={() => showPluginsLine('skills')}
+            plugins={morePlugins.slice(0, 6)} onPlugins={() => showPluginsLine('plugins')}
+            templates={packsOf('template').filter((p) => !p.lone).slice(0, 6).map(packCard)} onTemplates={() => showPluginsLine('kind:template')}
+            stickers={(library?.items ?? []).filter((it) => it.cat === 'sticker').slice(0, 16).map((it) => <AssetCover key={it.id} item={it} lang={lang} />)}
+            track={music ? { title: nameOf(music.name, lang), by: music.by ? makerName(music.by) : 'OpenFilm' } : null}
+            panelPlugins={ownPlugins.filter((p) => !p.mcpServers && !p.soon).slice(0, 6).map((p) => ({ key: p.id, title: pluginWords(p).title, mark: <WorkbenchMark plugin={p} size={24} /> }))}
+            onAssets={() => showPluginsLine('assets')} onMusic={() => showPluginsLine('kind:music')}
+            makers={shownMakers} onMaker={(name) => showPluginsLine(`author:${name}`)} onMakers={() => showPluginsLine('creators')}
+            onTutorials={() => showPluginsLine('tutorials')} onBenchmark={() => showPluginsLine('benchmark')} onPublish={() => showPluginsLine('publish')}
+            results={q && morePacks.length ? <HomeShelf title={t('communityHome.assets')}><div className={COVER_GRID}>{morePacks.slice(0, 8).map(packCard)}</div></HomeShelf> : null} />
+          {lightbox}
+        </>
+      );
+    }
     const nothing = !picked.length && !moreExamples.length && !moreSkills.length && !morePlugins.length && !morePacks.length;
     return (
       <PluginsPage key={line} title={t('assetDrawer.place_featured')} note={q ? undefined : t('assetDrawer.note_featured')}>
@@ -706,29 +765,32 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
   /* Plugins: a banner of what is put forward, OpenFilm's own (turned on here), the catalog's (installed here), each
      on a shelf */
   if (line === 'examples') return <ExamplesStore query={q} projectId={projectId} />;
-  /* Plugins: what each kind is (editors: a way of working on the film; connectors: a service the agent reaches), each
-     a grid of cards; OpenFilm's own first, then the catalog's, then the community's. Get, then it is the person's */
+  /* Plugins: of two kinds, by what each is (editors: a way of working on the film; connectors: a service the agent
+     reaches), each a grid of cards; OpenFilm's own first, then the catalog's (the community's among them: a plugin got
+     from the catalog brings its own place to work, an editor). Get, then it is the person's */
   if (line === 'plugins') {
     const officialCatalog = byInstalls(catalogPlugins.filter((k) => !communityOf(k)));
     const community = byInstalls(catalogPlugins.filter((k) => communityOf(k)));
     const editors = ownPlugins.filter((p) => !p.mcpServers);
     const connectors = ownPlugins.filter((p) => p.mcpServers);
-    const sorts = [
-      { key: 'editors' as const, label: t('assetDrawer.shelfEditors'), note: t('assetDrawer.note_shelfEditors'), cards: [...editors.map(pluginCard), ...officialCatalog.map(catalogCard)] },
+    const allSorts = [
+      { key: 'editors' as const, label: t('assetDrawer.shelfEditors'), note: t('assetDrawer.note_shelfEditors'), cards: [...editors.map(pluginCard), ...officialCatalog.map(catalogCard), ...community.map(catalogCard)] },
       { key: 'connectors' as const, label: t('assetDrawer.shelfConnectors'), note: t('assetDrawer.note_shelfConnectors'), cards: connectors.map(pluginCard) },
-      { key: 'community' as const, label: t('assetDrawer.fromCommunity'), note: undefined, cards: community.map(catalogCard) },
-    ].filter((x) => x.cards.length);
-    const pick = sorts.some((x) => x.key === pluginSort) ? pluginSort : null;
+    ];
+    const sorts = allSorts.filter((x) => x.cards.length);
+    const pick = (inPage ? allSorts : sorts).some((x) => x.key === pluginSort) ? pluginSort : null;
     return (
       <PluginsPage key={line} title={t('assetDrawer.tab_plugins')} note={q ? undefined : t('assetDrawer.note_plugins')}>
         {consent.dialog}
         {status}
-        <StoreChips label={t('assetDrawer.tab_plugins')} value={pick} onChange={setPluginSort}
-          items={sorts.length > 1 ? [{ key: null, label: t('assetDrawer.allItems') }, ...sorts.map((x) => ({ key: x.key, label: x.label, count: x.cards.length }))] : []} />
+        <StoreChips label={t('assetDrawer.tab_plugins')} value={pick} onChange={(k) => showPluginsLine('plugins', k)}
+          items={inPage ? [{ key: null, label: t('assetDrawer.allItems') }, ...allSorts.map((x) => ({ key: x.key, label: x.label, ...(x.cards.length ? { count: x.cards.length } : {}) }))]
+            : sorts.length > 1 ? [{ key: null, label: t('assetDrawer.allItems') }, ...sorts.map((x) => ({ key: x.key, label: x.label, count: x.cards.length }))] : []} />
         {sorts.filter((x) => !pick || x.key === pick).map((x) => (
           <StoreSection key={x.key} title={x.label} note={x.note}><div className={STORE_GRID}>{x.cards}</div></StoreSection>
         ))}
-        {!sorts.length ? <Empty text={t('assetDrawer.noSkillsFound')} /> : null}
+        {!sorts.length ? <Empty text={t('assetDrawer.noSkillsFound')} />
+          : pick && !sorts.some((x) => x.key === pick) ? <Empty text={q ? t('assetDrawer.noSkillsFound') : t('communityHome.emptyCategory')} /> : null}
         {q ? null : publishCall(t('assetDrawer.publishCall'))}
       </PluginsPage>
     );
@@ -737,14 +799,16 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
   /* Skills: a grid for each kind of work they help with (OpenFilm's and the community's together, the most used
      first), one kind at a time when picked */
   if (line === 'skills') {
-    const shelves = CATEGORIES.map((c) => ({ c, list: byInstalls(catalogSkills.filter((k) => categoryOfSkill(k) === c)) })).filter((x) => x.list.length);
-    const pick = shelves.some((x) => x.c === skillSort) ? skillSort : null;
+    const allShelves = CATEGORIES.map((c) => ({ c, list: byInstalls(catalogSkills.filter((k) => categoryOfSkill(k) === c)) }));
+    const shelves = allShelves.filter((x) => x.list.length);
+    const pick = (inPage ? allShelves : shelves).some((x) => x.c === skillSort) ? skillSort : null;
     return (
       <PluginsPage key={line} title={t('assetDrawer.tab_skills')} note={q ? undefined : t('assetDrawer.note_skills')}>
         {consent.dialog}
         {status}
-        <StoreChips label={t('assetDrawer.tab_skills')} value={pick} onChange={setSkillSort}
-          items={shelves.length > 1 ? [{ key: null, label: t('assetDrawer.allItems') }, ...shelves.map(({ c, list }) => ({ key: c, label: t(`assetDrawer.skillCat_${c}`), count: list.length }))] : []} />
+        <StoreChips label={t('assetDrawer.tab_skills')} value={pick} onChange={(k) => showPluginsLine('skills', k)}
+          items={inPage ? [{ key: null, label: t('assetDrawer.allItems') }, ...allShelves.map(({ c, list }) => ({ key: c, label: t(`assetDrawer.skillCat_${c}`), ...(list.length ? { count: list.length } : {}) }))]
+            : shelves.length > 1 ? [{ key: null, label: t('assetDrawer.allItems') }, ...shelves.map(({ c, list }) => ({ key: c, label: t(`assetDrawer.skillCat_${c}`), count: list.length }))] : []} />
         {waiting ? (
           <div role="status" aria-label={t('assetDrawer.discoverReading')} className={COVER_GRID}>
             {Array.from({ length: 6 }, (_, i) => <StoreCardSkeleton key={i} cover />)}
@@ -753,7 +817,8 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
         {shelves.filter((x) => !pick || x.c === pick).map(({ c, list }) => (
           <StoreSection key={c} title={t(`assetDrawer.skillCat_${c}`)} note={t(`assetDrawer.skillCatNote_${c}`)}><div className={COVER_GRID}>{list.map(catalogCard)}</div></StoreSection>
         ))}
-        {!catalogSkills.length && !waiting ? <Empty text={t('assetDrawer.noSkillsFound')} /> : null}
+        {!catalogSkills.length && !waiting ? <Empty text={t('assetDrawer.noSkillsFound')} />
+          : pick && !waiting && !shelves.some((x) => x.c === pick) ? <Empty text={q ? t('assetDrawer.noSkillsFound') : t('communityHome.emptyCategory')} /> : null}
         {q ? null : publishCall(t('assetDrawer.publishCall'))}
       </PluginsPage>
     );
@@ -765,7 +830,7 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
   const kind = line.startsWith('kind:') ? line.slice('kind:'.length) as FeatureKind : null;
   /* every kind of the library, each with its place: what the Community has of it, else its place drawn empty (each kind's
      way in and way to publish are still being settled) */
-  const kinds = ASSET_KINDS;
+  const kinds: readonly FeatureKind[] = inPage ? IN_PAGE_KINDS : ASSET_KINDS;
   const kindChips = (
     <StoreChips label={t('assetDrawer.tab_assets')} value={kind} onChange={(k) => showPluginsLine(k ? `kind:${k}` : 'assets')}
       items={[{ key: null, label: t('assetDrawer.allItems') }, ...kinds.map((k) => {
@@ -874,6 +939,22 @@ function ExamplesStore({ query, projectId }: { query: string; projectId: string 
 function ExampleTile({ example, kind }: { example: Example; kind: string }) {
   const [hover, setHover] = React.useState(false);
   const length = lengthOf(example.duration);
+  /* in a desktop sidebar page (the Community's): a card as the store's are there, its picture then its name and whose */
+  if (useInSidePage()) return (
+    <button type="button" onClick={() => openExample(example.id)} onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)} title={example.description || undefined}
+      className="group flex w-full min-w-0 flex-col overflow-hidden rounded-[10px] border border-[var(--frame-line)] bg-[color-mix(in_srgb,var(--text)_3.5%,transparent)] text-left outline-none transition-colors hover:border-[color-mix(in_srgb,var(--text)_26%,transparent)] focus-visible:border-[var(--accent)]" data-community-example={example.id}>
+      <span className="relative block aspect-video w-full overflow-hidden bg-[var(--bg-field)]">
+        <ExampleCover example={example} playing={hover} />
+        {length ? <span className="absolute bottom-2 right-2 rounded-[5px] bg-black/60 px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-white backdrop-blur-sm">{length}</span> : null}
+      </span>
+      <span className="block min-w-0 px-3 py-2.5">
+        <span className="block truncate text-[13px] font-medium text-[var(--text)]">{example.title}</span>
+        <span className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[12px] leading-[17px] text-[var(--text-muted)]">
+          <Publisher owner={example.owner} /><span aria-hidden className="opacity-60">·</span><span className="truncate">{kind}</span>
+        </span>
+      </span>
+    </button>
+  );
   return (
     <button type="button" onClick={() => openExample(example.id)} onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
       className="group flex w-full flex-col text-left outline-none" data-community-example={example.id}>
@@ -903,7 +984,7 @@ function ExampleCover({ example, playing }: { example: Example; playing: boolean
 }
 
 /** Examples side by side, as wide as the window allows. */
-const EXAMPLE_GRID = 'grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-x-6 gap-y-8';
+const EXAMPLE_GRID = 'example-grid grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-x-6 gap-y-8';
 /*
  * One row of a grid, for a shelf that shows some of a kind and leads to all of it: of four things, those that would
  * start a second row are left out (three columns fit: the fourth; two: the third too). Each width is the least at
@@ -1008,6 +1089,9 @@ function AgentLine({ title, detail, control }: { title: string; detail: string; 
   );
 }
 
+/* the library's kinds in the desktop's Community page, as its 素材 menu lists them: pictures, then sounds */
+const IN_PAGE_KINDS: readonly FeatureKind[] = ['template', 'text', 'sticker', 'effect', 'transition', 'filter', 'media', 'music', 'sound'];
+
 /** Nothing to list: a word under the title, and where to go instead. */
 function Empty({ text, action }: { text: string; action?: { label: string; run: () => void } | undefined }) {
   return (
@@ -1020,11 +1104,12 @@ function Empty({ text, action }: { text: string; action?: { label: string; run: 
 
 /** A list's page: its title, what the list is in one line, then the list, in the middle of the room the window gives. */
 function PluginsPage({ title, note, badge, children }: { title: string; note?: string; badge?: string; children: React.ReactNode }) {
-  /* in a desktop sidebar page its frame names the place: the note alone heads the list */
+  /* in the desktop's Community page: a place of its own, its name large over it (no row of places: those are the first
+     page's, components/CommunityFrame), its own sub-levels the list's first chips */
   if (useInSidePage()) return (
-    <div className={`min-h-0 flex-1 overflow-y-auto overscroll-contain ${PAGE_INSET} pb-14 pt-3`}>
-      {note ? <p className="max-w-[640px] text-[13px] leading-5 text-[var(--text-muted)]">{note}</p> : null}
-      <div className="mt-6">{children}</div>
+    <div className={`min-h-0 flex-1 overflow-y-auto overscroll-contain ${PAGE_INSET} pb-14`} data-community-scroll="">
+      <CommunityPageHead title={title} note={note} badge={badge} />
+      {children}
     </div>
   );
   return (

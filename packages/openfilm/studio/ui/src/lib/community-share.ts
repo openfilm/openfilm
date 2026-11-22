@@ -8,7 +8,8 @@ import React from 'react';
 import { openPlugins } from './plugins-window.ts';
 import { SourceError } from './project-sources.ts';
 
-export interface CommunityProfile { name: string; displayName: string; bio: string; avatar: string | null; since: string }
+/** A person's page in the Community; `id` is their account's UID (a number anyone may see, never changed). */
+export interface CommunityProfile { id?: number; name: string; displayName: string; bio: string; avatar: string | null; since: string }
 export type ShareProblem = 'not-media' | 'format' | 'too-big' | 'too-long' | 'codec' | 'too-large';
 /** A library file as it would be shared; `problem`: why the Community would not take it as it is. */
 export interface Shareable { path: string; media: 'video' | 'image' | 'audio' | null; ext: string; bytes: number; durationMs: number; name: string; title: string; problem?: ShareProblem }
@@ -47,7 +48,7 @@ async function call<T>(path: string, method = 'GET', json?: unknown): Promise<T>
 }
 
 export const shareApi = {
-  profile: () => call<{ signedIn: boolean; profile: CommunityProfile | null; suggested?: string }>('community/profile'),
+  profile: () => call<{ signedIn: boolean; profile: CommunityProfile | null; id?: number; suggested?: string }>('community/profile'),
   saveProfile: (body: { name?: string; displayName?: string; bio?: string }) => call<{ profile: CommunityProfile }>('community/profile', 'PUT', body),
   /** Anyone's page, or null when no account has that name (a GitHub author's has none). */
   author: (name: string) => call<{ profile: CommunityProfile | null }>(`community/profiles/${encodeURIComponent(name)}`).then((r) => r.profile, () => null),
@@ -55,7 +56,7 @@ export const shareApi = {
   share: (request: ShareRequest) => call<{ job: string }>('community/share', 'POST', request),
   job: (id: string) => call<ShareJob>(`community/share/${encodeURIComponent(id)}`),
   submissions: () => call<{ signedIn: boolean; submissions: Submission[] }>('community/submissions'),
-  /** Take back one of them: in review, it is closed; listed, its removal is proposed. */
+  /** Take back one of them: in review, it is no longer reviewed; listed, it is no longer listed. */
   withdraw: (id: string) => call<{ submission: Submission }>(`community/submissions/${encodeURIComponent(id)}/withdraw`, 'POST'),
   film: (projectId: string) => call<FilmShareable>(`projects/${encodeURIComponent(projectId)}/community`),
   shareFilm: (projectId: string, request: FilmRequest) => call<{ job: string }>(`projects/${encodeURIComponent(projectId)}/community/share`, 'POST', request),

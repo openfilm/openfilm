@@ -6,8 +6,8 @@
  * its title and description, and which parts of it go, the edit always, its canvas and the rest of its media when
  * chosen (FilmShareFlow).
  *
- * Then what they shared so far, each with how its review went and the way to take it back (MySubmissions): a
- * maintainer of the Community reviews everything, and nothing shows there before.
+ * Then what they shared so far, each with how its review went and the way to take it back (MySubmissions): the
+ * Community's reviewers look at everything, and nothing shows there before.
  *
  * Also the head of an author's page: their name and words in the Community, for one who shares from OpenFilm.
  */
@@ -422,9 +422,10 @@ export function MyProfileRow({ stamp = 0, onOpen }: { stamp?: number; onOpen: (n
     return () => { live = false; };
   }, [stamp]);
   if (!profile) return null;
-  const shown = profile.displayName && profile.displayName !== profile.name ? `${profile.displayName} (@${profile.name})` : `@${profile.name}`;
+  const named = profile.displayName && profile.displayName !== profile.name ? `${profile.displayName} (@${profile.name})` : `@${profile.name}`;
+  const shown = profile.id ? `${named} · ${t('assetDrawer.uid').replace('{id}', String(profile.id))}` : named;
   return (
-    <div className="mb-8 flex items-center gap-4" data-my-profile={profile.name}>
+    <div className="mb-8 flex items-center gap-4" data-my-profile={profile.name} data-my-uid={profile.id}>
       <p className="min-w-0 flex-1 truncate text-[14px] text-[var(--text-muted)]">{t('assetDrawer.shareAs').replace('{name}', () => shown)}</p>
       <SettingsButton onClick={() => onOpen(profile.name)}>{t('assetDrawer.myPage')}</SettingsButton>
     </div>
@@ -433,8 +434,8 @@ export function MyProfileRow({ stamp = 0, onOpen }: { stamp?: number; onOpen: (n
 
 /**
  * What the person shared so far, newest first, each with how its review went, and the way to take it back: asked
- * twice (the button says so the second time), since one listed leaves the Community once a maintainer merges its
- * removal. `stamp`: read again when it changes.
+ * twice (the button says so the second time), since one listed leaves the Community at once. `stamp`: read again when
+ * it changes.
  */
 export function MySubmissions({ stamp = 0 }: { stamp?: number }) {
   const t = useT();
@@ -511,7 +512,7 @@ export function AuthorHead({ name }: { name: string }) {
           {profile.avatar ? <img src={profile.avatar} alt="" referrerPolicy="no-referrer" className="h-14 w-14 shrink-0 rounded-full bg-[var(--bg-field)] object-cover" />
             : <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-[var(--bg-field)] text-[20px] font-semibold uppercase text-[var(--text-muted)]">{(profile.displayName || profile.name).slice(0, 1)}</span>}
           <div className="min-w-0 flex-1">
-            <p className="truncate text-[17px] font-semibold text-[var(--text)]">{profile.displayName} <span className="font-normal text-[var(--text-faint)]">@{profile.name}</span></p>
+            <p className="truncate text-[17px] font-semibold text-[var(--text)]">{profile.displayName} <span className="font-normal text-[var(--text-faint)]">@{profile.name}{profile.id ? ` · ${t('assetDrawer.uid').replace('{id}', String(profile.id))}` : ''}</span></p>
             {profile.bio ? <p className="mt-0.5 text-[14px] leading-relaxed text-[var(--text-muted)]">{profile.bio}</p> : null}
             {Number.isFinite(year) ? <p className="mt-0.5 text-[13px] text-[var(--text-faint)]">{t('assetDrawer.authorSince').replace('{year}', String(year))}</p> : null}
           </div>

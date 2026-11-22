@@ -8,29 +8,40 @@
  */
 import React from 'react';
 import { createPortal } from 'react-dom';
-import { Blocks, CircleUserRound, Clapperboard, BookOpenText, Import, LibraryBig, Plus, Rss, Sparkles, Upload } from 'lucide-react';
+import { Blocks, Bookmark, CircleUserRound, Clapperboard, BookOpenText, GraduationCap, Import, LibraryBig, Plus, Rss, Shapes, Sparkles, Trophy, Upload, Users } from 'lucide-react';
 import { useT } from '@/i18n';
 import { studioHost } from '@/lib/host';
 import type { Plugin } from '@/lib/plugins';
 import { useSidePageHost } from '@/lib/side-page';
-import { closePlugins, showPluginsLine, showPluginsPage, usePluginsWindow, type PluginsLine } from '@/lib/plugins-window';
+import { closePlugins, openPlugins, showPluginsLine, showPluginsPage, usePluginsWindow, type PluginsLine } from '@/lib/plugins-window';
 import { ContextMenu, type ContextMenuEntry } from './ContextMenu';
 import { LargeDialog, LargeDialogGroup, LargeDialogPlace, LargeDialogSearch } from './LargeDialog';
 import { PluginsPane } from './library/PluginsPane';
-import { SidePage, SidePageButton } from './SidePage';
+import { CommunityFrame, type CommunityMenuItem } from './CommunityFrame';
+import { CATEGORIES } from '@/lib/plugin-profile';
 
 /* the side's marks: thin lines in the text's own colour, as a file browser's side draws its places */
 const ICON = { size: 18, strokeWidth: 1.6 } as const;
 
 export function PluginsWindow({ projectId, onWorkbenchOn }: { projectId: string | null; onWorkbenchOn?: (plugin: Plugin) => void }) {
   const t = useT();
-  const { open, line, page, query: asked } = usePluginsWindow();
+  const { open, line, page, query: asked, sub } = usePluginsWindow();
   /* the desktop window draws it as a page right of its sidebar (lib/side-page), else it is a window of its own */
   const host = useSidePageHost();
   const [query, setQuery] = React.useState('');
   const [menu, setMenu] = React.useState<{ x: number; y: number; items: ContextMenuEntry[] } | null>(null);
   const search = React.useRef<HTMLInputElement>(null);
   React.useEffect(() => { if (open) setQuery(asked ?? ''); }, [open, asked]);
+  /* where one has been in it since it was opened, for the page's Back and Forward (the desktop page's bar) */
+  const [trail, setTrail] = React.useState<{ entries: { line: PluginsLine; page: string | null; sub: string | null }[]; index: number }>({ entries: [], index: -1 });
+  React.useEffect(() => {
+    if (!open) { setTrail({ entries: [], index: -1 }); return; }
+    setTrail(old => {
+      const at = old.entries[old.index];
+      if (at && at.line === line && at.page === page && at.sub === (sub ?? null)) return old;
+      return { entries: [...old.entries.slice(0, old.index + 1), { line, page, sub: sub ?? null }], index: old.index + 1 };
+    });
+  }, [open, line, page, sub]);
   if (!open) return null;
   const importAny = studioHost?.skills?.add;
   const place = (to: PluginsLine, icon: React.ReactNode, name: string, active = line === to) => (
@@ -45,32 +56,74 @@ export function PluginsWindow({ projectId, onWorkbenchOn }: { projectId: string 
     const r = e.currentTarget.getBoundingClientRect();
     setMenu({ x: r.left, y: r.top, items: addItems() });
   };
-  const pane = <PluginsPane line={line} query={query} projectId={projectId} opened={page} onOpen={showPluginsPage}
+  const pane = <PluginsPane line={line} sub={sub ?? null} query={query} projectId={projectId} opened={page} onOpen={showPluginsPage}
     {...(onWorkbenchOn ? { onWorkbenchOn } : {})} />;
   const onSearch = (value: string) => { setQuery(value); if (page) showPluginsPage(null); };
-  /* in the desktop sidebar's page: its frame (components/SidePage), the places as pills, Add at the top right */
+  /* in the desktop sidebar's page: the Community's own frame (components/CommunityFrame): the way, the search and
+     Publish in a bar at the top; the places as chips, what the person saved first, then the tutorials, the films, the
+     skills, the plugins, the model leaderboard, the templates, the library's things, music and the makers */
   if (host) {
     const shown = line === 'assets' || line.startsWith('kind:') ? 'assets' : line;
+    const names: Record<string, string> = {
+      mine: t('communityHome.saved'), tutorials: t('communityHome.tutorials'), examples: t('communityHome.examples'),
+      skills: t('assetDrawer.tab_skills'), plugins: t('assetDrawer.tab_plugins'), benchmark: t('communityHome.benchmark'),
+      'kind:template': t('communityHome.templates'), assets: t('communityHome.assets'), 'kind:music': t('communityHome.music'),
+      creators: t('communityHome.creators'), publish: t('communityHome.publish'), sources: t('assetDrawer.sourcesManage'),
+    };
+    const where = line.startsWith('author:') ? line.slice('author:'.length) : names[shown];
+    const kindLabel = (kind: string) => (kind === 'media' ? t('communityHome.mediaKind') : t(`assetDrawer.cat_${kind}`));
+    const subNames: Record<string, string> = { editors: t('assetDrawer.shelfEditors'), connectors: t('assetDrawer.shelfConnectors') };
+    const below = line.startsWith('kind:') ? kindLabel(line.slice('kind:'.length))
+      : sub && line === 'plugins' ? subNames[sub] : sub && line === 'skills' && (CATEGORIES as readonly string[]).includes(sub) ? t(`assetDrawer.skillCat_${sub}`) : undefined;
+    const mark = { size: 15, strokeWidth: 1.7, 'aria-hidden': true } as const;
+    /* each place its own colour, on its chip's mark and on the chip while it is shown */
+    const chip = (id: PluginsLine, icon: React.ReactNode, menu?: CommunityMenuItem[]) => ({ id, label: names[id] ?? id, icon, on: !page && shown === id, onPick: () => showPluginsLine(id), ...(menu ? { menu } : {}) });
+    const go = (to: PluginsLine, label: string, subLevel: string | null = null) => ({ id: `${to}:${subLevel ?? ''}`, label, onPick: () => showPluginsLine(to, subLevel) });
+    const kindItem = (kind: string) => go(`kind:${kind}` as PluginsLine, kindLabel(kind));
+    /* a place's categories, chosen from its chip (the place itself, all of it, is its page's first chip): groups apart
+       by rules, as a community's menus are */
+    const skillsMenu: CommunityMenuItem[] = [
+      go('skills', t('assetDrawer.skillCat_recipe'), 'recipe'), { rule: true },
+      ...(['edit', 'picture', 'sound', 'material'] as const).map((c) => go('skills', t(`assetDrawer.skillCat_${c}`), c)), { rule: true },
+      go('skills', t('assetDrawer.skillCat_tool'), 'tool'),
+    ];
+    const pluginsMenu: CommunityMenuItem[] = [
+      go('plugins', t('assetDrawer.shelfEditors'), 'editors'), go('plugins', t('assetDrawer.shelfConnectors'), 'connectors'),
+    ];
+    const assetsMenu: CommunityMenuItem[] = [
+      kindItem('template'), { rule: true },
+      ...['media', 'sticker', 'text'].map(kindItem), { rule: true },
+      ...['effect', 'transition', 'filter'].map(kindItem), { rule: true },
+      ...['music', 'sound'].map(kindItem),
+    ];
+    const step = (to: number) => {
+      const entry = trail.entries[to];
+      if (!entry) return;
+      setTrail(old => ({ ...old, index: to }));
+      openPlugins({ line: entry.line, page: entry.page, sub: entry.sub });
+    };
     return createPortal(
       <LargeDialog embedded label={t('assetDrawer.pluginsWindow')} closeLabel={t('assetDrawer.closePlugins')} onClose={closePlugins} focusFirst={search}
         onEscape={() => { if (!page) return false; showPluginsPage(null); return true; }}>
-        <SidePage layout="store" bare={Boolean(page)} title={t('assetDrawer.pluginsWindow')} note={t('desktopNavigation.communityNote')}
-          places={[
-            { id: 'featured', label: t('assetDrawer.place_featured') },
-            { id: 'plugins', label: t('assetDrawer.tab_plugins') }, { id: 'skills', label: t('assetDrawer.tab_skills') },
-            { id: 'assets', label: t('assetDrawer.tab_assets') }, { id: 'examples', label: t('assetDrawer.tab_examples') },
-            { id: 'mine', label: t('assetDrawer.place_mine') }, { id: 'publish', label: t('assetDrawer.place_publish') },
+        <CommunityFrame home={t('assetDrawer.pluginsWindow')} onHome={() => showPluginsLine('featured')}
+          crumbs={[...(where && line !== 'featured' ? [where] : []), ...(below ? [below] : []), ...(page ? [t('desktopNavigation.libDetails')] : [])]}
+          back={trail.index > 0 ? () => step(trail.index - 1) : undefined}
+          forward={trail.index < trail.entries.length - 1 ? () => step(trail.index + 1) : undefined}
+          search={{ value: query, onChange: onSearch, placeholder: t('desktopNavigation.communitySearch'), inputRef: search }}
+          onPublish={() => showPluginsLine('publish')} publishLabel={t('communityHome.publishShort')}
+          chips={[
+            chip('mine', <Bookmark {...mark} />), chip('tutorials', <GraduationCap {...mark} />), chip('examples', <Clapperboard {...mark} />),
+            chip('skills', <Sparkles {...mark} />, skillsMenu), chip('plugins', <Blocks {...mark} />, pluginsMenu),
+            chip('assets', <Shapes {...mark} />, assetsMenu), chip('creators', <Users {...mark} />), chip('benchmark', <Trophy {...mark} />),
           ]}
-          place={page ? null : shown} onPlace={(to) => showPluginsLine(to)}
-          search={{ value: query, onChange: onSearch, placeholder: t('assetDrawer.featuresSearch'), inputRef: search }}
-          actions={<SidePageButton icon={<Plus size={15} strokeWidth={2} />} aria-haspopup="menu" data-community-add
-            onClick={(e) => {
-              const r = e.currentTarget.getBoundingClientRect();
-              setMenu({ x: r.right, y: r.bottom + 6, items: addItems() });
-            }}>{t('assetDrawer.addMenu')}</SidePageButton>}
-          data={{ 'data-community-page': '' }}>
+          trailing={line === 'mine' || line === 'sources' ? (
+            <button type="button" className="flex h-9 items-center gap-2 rounded-[8px] border border-[color-mix(in_srgb,var(--text)_16%,transparent)] px-3.5 text-[13px] text-[var(--text)] hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)]" aria-haspopup="menu" data-community-add
+              onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); setMenu({ x: r.right, y: r.bottom + 6, items: addItems() }); }}>
+              <Plus size={14} strokeWidth={2} aria-hidden />{t('communityHome.add')}
+            </button>
+          ) : undefined}>
           {pane}
-        </SidePage>
+        </CommunityFrame>
         {menu ? <ContextMenu x={menu.x} y={menu.y} align="end" items={menu.items} onClose={() => setMenu(null)} /> : null}
       </LargeDialog>, host);
   }

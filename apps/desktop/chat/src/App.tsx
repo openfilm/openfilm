@@ -1336,14 +1336,8 @@ function ChatPane({ project, banners, selection, assetsOpen, assetsOverlay }: { 
           hidden
           onChange={(event) => { attachFiles(Array.from(event.target.files ?? [])); event.target.value = ''; }}
         />
-        {/* the Community: what there is to add to OpenFilm, and what was added, in Studio's Community window */}
-        {app.showExamples ? (
-          <Tooltip label={t('project.plugins')}>
-            <button type="button" onClick={() => app.showExamples?.({ kind: 'plugins' })} className="openfilm-composer-tool" aria-label={t('project.plugins')}>
-              <Shapes size={16} strokeWidth={1.75} />
-            </button>
-          </Tooltip>
-        ) : null}
+        {/* the Community is the sidebar's page, where what it has is found and looked after; here a film is made with
+            what was added (skills and connectors from Add, at the start of the line) */}
         <Tooltip label={t('project.assets')}>
           <button type="button" onClick={() => app.setAssetsOpen(!assetsOpen)} aria-pressed={assetsOpen} className="openfilm-composer-tool" aria-label={t('project.assets')}>
             <LibraryBig size={16} strokeWidth={1.75} />

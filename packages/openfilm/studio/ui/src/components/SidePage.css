@@ -2,8 +2,17 @@
  * What is drawn differently inside a desktop sidebar page (components/SidePage): the Community's store lays its
  * things out as cards with room between them, where a window lists them in rows (components/library/Store).
  */
-[data-side-page-frame] .store-grid { grid-template-columns: repeat(auto-fill, minmax(272px, 1fr)); gap: 14px; }
-[data-side-page-frame] .cover-grid { grid-template-columns: repeat(auto-fill, minmax(248px, 1fr)); gap: 14px; }
+/* rows of a list (plugins, connectors): two across in a wide window, as a community lists its plugins */
+[data-side-page-frame] .store-grid { grid-template-columns: repeat(auto-fill, minmax(min(100%, 440px), 1fr)); gap: 10px 40px; }
+[data-side-page-frame] .cover-grid { grid-template-columns: repeat(auto-fill, minmax(236px, 1fr)); gap: 16px; }
+/* a shelf's one row (what does not fit is left out of it): four across where there is room, each a quarter of it */
+[data-side-page-frame] .\@container > :is(.cover-grid, .example-grid) { grid-template-columns: repeat(auto-fill, minmax(max(236px, calc((100% - 48px) / 4)), 1fr)); gap: 16px; }
+[data-side-page-frame] .example-grid { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
+
+/* The strip at a page's top that drags the window (SidePageDrag): nothing of the page is under it. */
+.side-page-drag { position: absolute; inset: 0 0 auto; z-index: 1; height: 38px; pointer-events: none; -webkit-app-region: drag; app-region: drag; }
+/* The sidebar put away: the window's controls and the sidebar's button are at the page's top left, the Community's bar starts after them. */
+[data-side-page-host]:not([data-docked]) [data-community-bar] { --bar-start: calc(var(--titlebar-logo-x) + 40px); }
 
 /* The library page (components/LibraryPage): the media pane in the page's column, its tiles a little further apart. The
    page's head has Import and New folder, so the pane's own bar leaves them, and the line before them, out. */

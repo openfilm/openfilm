@@ -309,7 +309,7 @@ function DesktopHeader({ frame, navigation, menu, children }: {
   </div>;
   const header = <header data-titlebar data-project-navigation-ready={frame.projectId} data-chat-right={rightChat || undefined}
     data-nav-first={!chatOpen || rightChat || page !== null || undefined} data-sidebar-docked={docked || undefined} data-side-page={page ?? undefined}
-    className={tabStyles.header} style={{ height: DESKTOP_TITLEBAR_HEIGHT, paddingLeft: workspaceLeft || undefined }}
+    className={tabStyles.header} style={{ height: DESKTOP_TITLEBAR_HEIGHT, paddingLeft: workspaceLeft || undefined, ...(page && docked ? { width: workspaceLeft } : null) }}
     onContextMenu={event => event.preventDefault()}>
     {corner}
     {menu}
@@ -340,7 +340,7 @@ function DesktopHeader({ frame, navigation, menu, children }: {
   </header>;
   /* where the page is drawn (lib/side-page): from the window's top, right of the docked sidebar, over the chat and the editor;
      Esc not taken in the page closes it */
-  const pageHost = <div ref={setSidePageHost} data-side-page-host={page ?? undefined} aria-hidden={!page || undefined}
+  const pageHost = <div ref={setSidePageHost} data-side-page-host={page ?? undefined} data-docked={docked || undefined} aria-hidden={!page || undefined}
     className="fixed bottom-0 right-0 z-50 flex min-h-0 min-w-0 flex-col bg-[var(--dialog-main)]"
     style={{ left: workspaceLeft, top: 0, display: page ? undefined : 'none' }}
     onKeyDown={event => {

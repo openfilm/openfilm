@@ -14,9 +14,24 @@ import * as React from 'react';
 import { Search } from 'lucide-react';
 import './SidePage.css';
 
-const InSidePage = React.createContext(false);
+export const InSidePage = React.createContext(false);
 /** Whether this is drawn in a side page, whose frame names it already. */
 export const useInSidePage = () => React.useContext(InSidePage);
+
+/**
+ * What a page's frame puts at the top of the page's own scrolling column, so it goes up with what is read (the
+ * Community's banner and its places, components/CommunityFrame): a page that scrolls itself draws it first.
+ */
+export const SidePageLead = React.createContext<React.ReactNode>(null);
+export const useSidePageLead = () => React.useContext(SidePageLead);
+/** What the frame adds at the right of a page's own head (the Community's Saved: adding from a folder or a link). */
+export const SidePageActions = React.createContext<React.ReactNode>(null);
+export const useSidePageActions = () => React.useContext(SidePageActions);
+
+/** The strip at a page's top that drags the window: the page has no bar over it (shell/top-bar keeps only its corner). */
+export function SidePageDrag() {
+  return <div aria-hidden className="side-page-drag" />;
+}
 
 /** The page's room either side: a column in the middle of the window, as wide as the kind of page reads best at. */
 const COLUMN = { gallery: 1360, store: 1160, manager: 0 } as const;
@@ -63,8 +78,9 @@ export function SidePage({ layout, title, note, places, place, onPlace, search, 
     </label>
   ) : null;
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-[var(--bg-panel)] text-[var(--text)] [--dialog-main:var(--bg-panel)]"
+    <div className="relative flex min-h-0 min-w-0 flex-1 flex-col bg-[var(--bg-panel)] text-[var(--text)] [--dialog-main:var(--bg-panel)]"
       style={{ '--page-x': x } as React.CSSProperties} data-side-page-frame={layout} {...data}>
+      <SidePageDrag />
       {bare ? <div aria-hidden className="h-[38px] shrink-0" /> : layout === 'store' ? (
         <header className="relative shrink-0 pb-6 pt-[72px] text-center" style={{ paddingInline: x }}>
           {actions ? <div className="absolute right-8 top-[46px] flex items-center gap-2">{actions}</div> : null}

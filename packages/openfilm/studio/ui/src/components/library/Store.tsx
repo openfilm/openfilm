@@ -11,6 +11,7 @@ import { ContextMenu, type ContextMenuEntry } from '../ContextMenu';
 import { LARGE_DIALOG_COLUMN as PAGE_INSET } from '../dialog-chrome';
 import { Own, opener } from './CommunityViews';
 import { useInSidePage } from '../SidePage';
+import detail from './DetailPage.module.css';
 
 /**
  * Things side by side, in columns as wide as the window allows: rows of apps (a plugin, a connector), one under the
@@ -48,30 +49,48 @@ export function StoreCard({ icon, cover, title, badges, by, summary, meta, actio
       {meta ? <span className="min-w-0 truncate tabular-nums">{meta}</span> : null}
     </div>
   ) : null;
-  /* in a desktop sidebar page (components/SidePage): a card of its own either way, as a storefront shows what it has.
-     With a picture, the picture fills its top; without, its icon heads it with what to do opposite */
+  /* in a desktop sidebar page (the Community's, components/CommunityFrame), as a community of makers' work lists it:
+     with a picture, a card (the picture, then its name and whose it is in a line under it); without, a row of a list
+     (its icon, its name, whose it is, what it is for, what to do at the right) */
   if (inPage) {
-    return (
-      <div {...opener(onOpen)} data-store-card={title} onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
-        className="group flex min-w-0 cursor-pointer flex-col overflow-hidden rounded-[16px] border border-[var(--frame-line)] bg-[color-mix(in_srgb,var(--text)_3%,transparent)] outline-none transition-colors hover:border-[color-mix(in_srgb,var(--text)_22%,transparent)] hover:bg-[color-mix(in_srgb,var(--text)_5%,transparent)] focus-visible:border-[var(--accent)]">
-        {cover ? (
-          <div className={`relative aspect-[16/9] w-full overflow-hidden bg-[var(--bg-field)] ${dim ? 'opacity-50 grayscale' : ''}`}>
-            <div className="absolute inset-0 transition duration-300 group-hover:scale-[1.03]">{cover(hover)}</div>
-          </div>
-        ) : (
-          <div className="flex items-start justify-between gap-3 px-4 pt-4">
-            <span className={`shrink-0 ${dim ? 'opacity-50 grayscale' : ''}`}>{icon}</span>
-            {action ? <Own className="shrink-0">{action}</Own> : null}
-          </div>
-        )}
-        <div className={`flex min-w-0 flex-1 flex-col px-4 pb-4 ${cover ? 'pt-3.5' : 'pt-3'}`}>
-          <div className="flex min-w-0 items-start gap-3">
-            <div className="min-w-0 flex-1">{name}</div>
-            {cover && action ? <Own className="-mt-0.5 shrink-0">{action}</Own> : null}
-          </div>
-          <p className={`mt-1 text-[13px] leading-[19px] text-[var(--text-muted)] ${cover ? 'line-clamp-2' : 'line-clamp-3 min-h-[38px]'}`}>{summary}</p>
-          {foot ? <div className="mt-auto pt-2">{foot}</div> : null}
+    const said = (
+      <div className="flex min-w-0 items-center gap-1.5">
+        <span className={`truncate font-medium ${cover ? 'text-[13px]' : 'text-[13.5px]'} ${dim ? 'text-[var(--text-muted)]' : 'text-[var(--text)]'}`}>{title}</span>
+        {badges}
+      </div>
+    );
+    const line = by || meta ? (
+      <div className="flex min-w-0 items-center gap-1.5 text-[12px] leading-[17px] text-[var(--text-faint)]">
+        {by ? <span className="flex min-w-0 items-center truncate">{by}</span> : null}
+        {by && meta ? <span aria-hidden className="opacity-60">·</span> : null}
+        {meta ? <span className="min-w-0 truncate tabular-nums">{meta}</span> : null}
+      </div>
+    ) : null;
+    if (cover) return (
+      <div {...opener(onOpen)} data-store-card={title} title={summary || undefined} onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
+        className="group flex min-w-0 cursor-pointer flex-col overflow-hidden rounded-[11px] border border-[var(--frame-line)] bg-[color-mix(in_srgb,var(--text)_3%,transparent)] outline-none transition-colors hover:border-[color-mix(in_srgb,var(--text)_28%,transparent)] focus-visible:border-[var(--accent)]">
+        <div className={`relative aspect-[16/10] w-full overflow-hidden bg-[var(--bg-field)] ${dim ? 'opacity-50 grayscale' : ''}`}>
+          <div className="absolute inset-0 transition duration-300 group-hover:scale-[1.03]">{cover(hover)}</div>
         </div>
+        <div className="flex min-w-0 items-center gap-3 px-3 py-2.5">
+          <div className="min-w-0 flex-1">
+            {said}
+            {line ?? (summary ? <p className="mt-0.5 truncate text-[12px] leading-[17px] text-[var(--text-muted)]">{summary}</p> : null)}
+          </div>
+          {action ? <Own className="shrink-0">{action}</Own> : null}
+        </div>
+      </div>
+    );
+    return (
+      <div {...opener(onOpen)} data-store-card={title}
+        className="group -mx-3 flex min-w-0 cursor-pointer items-start gap-3.5 rounded-[12px] px-3 py-3.5 outline-none transition-colors hover:bg-[var(--bg-hover)] focus-visible:shadow-[inset_0_0_0_1.5px_var(--accent)]">
+        <span className={`shrink-0 [&>*]:!h-10 [&>*]:!w-10 ${dim ? 'opacity-50 grayscale' : ''}`}>{icon}</span>
+        <div className="flex min-w-0 flex-1 flex-col gap-1">
+          {said}
+          {line}
+          {summary ? <p className="line-clamp-2 text-[12.5px] leading-[1.5] text-[var(--text-muted)]">{summary}</p> : null}
+        </div>
+        {action ? <Own className="mt-1 shrink-0">{action}</Own> : null}
       </div>
     );
   }
@@ -112,13 +131,15 @@ export function StoreCard({ icon, cover, title, badges, by, summary, meta, actio
 /** A card's place while the store is read: a picture's (`cover`) or an app row's. */
 export function StoreCardSkeleton({ cover = false }: { cover?: boolean }) {
   const inPage = useInSidePage();
-  if (inPage) return (
-    <div aria-hidden className="min-w-0 overflow-hidden rounded-[16px] border border-[var(--frame-line)]">
-      {cover ? <div className="skeleton aspect-[16/9]" /> : <div className="px-4 pt-4"><div className="skeleton h-11 w-11 rounded-[11px]" /></div>}
-      <div className="px-4 pb-5 pt-3.5">
-        <div className="skeleton h-3.5 w-1/2 rounded-full" />
-        <div className="skeleton mt-2.5 h-3 w-4/5 rounded-full opacity-70" />
-      </div>
+  if (inPage) return cover ? (
+    <div aria-hidden className="min-w-0 overflow-hidden rounded-[10px] border border-[var(--frame-line)]">
+      <div className="skeleton aspect-[16/10]" />
+      <div className="px-3 py-3"><div className="skeleton h-3 w-1/2 rounded-full" /><div className="skeleton mt-2 h-2.5 w-3/5 rounded-full opacity-70" /></div>
+    </div>
+  ) : (
+    <div aria-hidden className="flex min-w-0 items-start gap-3.5">
+      <div className="skeleton h-11 w-11 shrink-0 rounded-[11px]" />
+      <div className="min-w-0 flex-1"><div className="skeleton h-3.5 w-2/5 rounded-full" /><div className="skeleton mt-2 h-3 w-4/5 rounded-full opacity-70" /></div>
     </div>
   );
   return cover ? (
@@ -142,8 +163,8 @@ export function StoreCardSkeleton({ cover = false }: { cover?: boolean }) {
 export function StateMark({ off = false }: { off?: boolean }) {
   const t = useT();
   return off
-    ? <span className="inline-flex h-7 items-center rounded-full border border-dashed border-[var(--border-strong)] px-2.5 text-[12.5px] font-medium text-[var(--text-faint)]">{t('assetDrawer.stateOff')}</span>
-    : <span className="inline-flex h-7 items-center gap-1 rounded-full bg-[var(--bg-field)] px-2.5 text-[12.5px] font-medium text-[var(--text-muted)]"><Check size={13} aria-hidden />{t('assetDrawer.stateInstalled')}</span>;
+    ? <span data-state-mark="off" className="inline-flex h-7 items-center rounded-full border border-dashed border-[var(--border-strong)] px-2.5 text-[12.5px] font-medium text-[var(--text-faint)]">{t('assetDrawer.stateOff')}</span>
+    : <span data-state-mark="" className="inline-flex h-7 items-center gap-1 rounded-full bg-[var(--bg-field)] px-2.5 text-[12.5px] font-medium text-[var(--text-muted)]"><Check size={13} aria-hidden />{t('assetDrawer.stateInstalled')}</span>;
 }
 
 /** A page's button: the first thing to do filled, the others quiet, one that takes away in the warning's colour. */
@@ -190,13 +211,39 @@ export function DetailShell({ onBack, icon, title, badges, byline, summary, acti
   data?: Record<string, string>;
 }) {
   const t = useT();
+  const inPage = useInSidePage();
+  /* in a desktop sidebar page (the Community's): a hero in the colours of its own icon (the icon large and blurred
+     behind it), its facts and sections as cards, its side beside them; the bar at the page's top goes back */
+  if (inPage) return (
+    <div className={`${detail.page} ${PAGE_INSET}`} {...data}>
+      <header className={detail.hero}>
+        <span className={detail.backdrop} aria-hidden>{icon}</span>
+        <div className={detail.heroInner}>
+          <span className={detail.icon}>{icon}</span>
+          <div className={detail.heroText}>
+            <div className={detail.titleRow}><h2>{title}</h2>{badges}</div>
+            {byline ? <div className={detail.byline}>{byline}</div> : null}
+            {summary ? <p className={detail.summary}>{summary}</p> : null}
+            {actions ? <div className={detail.actions} data-detail-actions="">{actions}</div> : null}
+          </div>
+        </div>
+      </header>
+      {notice}
+      {hero ? <div className={detail.preview}>{hero}</div> : null}
+      <div className={detail.body} data-aside={aside ? '' : undefined}>
+        <div className={detail.main}>{children}</div>
+        {aside ? <aside className={detail.aside} data-detail-aside="">{aside}</aside> : null}
+      </div>
+    </div>
+  );
   return (
     <>
-      <div className={`flex shrink-0 ${PAGE_INSET} pb-2 pt-8`}>
+      {/* in a desktop sidebar page the bar at its top goes back (components/CommunityFrame) */}
+      {inPage ? <div className="h-5 shrink-0" /> : <div className={`flex shrink-0 ${PAGE_INSET} pb-2 pt-8`}>
         <button type="button" onClick={onBack} className="-ml-1 flex h-8 items-center gap-1.5 rounded-md pl-1.5 pr-2.5 text-[14px] text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]">
           <ArrowLeft size={14} />{t('gallery.back')}
         </button>
-      </div>
+      </div>}
       <div className={`min-h-0 flex-1 overflow-y-auto ${PAGE_INSET} pb-12 pt-3`} {...data}>
         <header className="flex items-start gap-5">
           <span className="shrink-0">{icon}</span>
@@ -245,7 +292,23 @@ export function StoreChips<K extends string>({ label, items, value, onChange }: 
   label: string; items: ReadonlyArray<{ key: K | null; label: string; count?: number; icon?: React.ReactNode }>;
   value: K | null; onChange: (key: K | null) => void;
 }) {
+  const inPage = useInSidePage();
   if (items.length < 2) return null;
+  /* in the desktop's Community page: the place's sub-levels under its name, outlined as its first page's places are */
+  if (inPage) return (
+    <div role="tablist" aria-label={label} className="mb-10 flex flex-wrap gap-2" data-store-chips="">
+      {items.map((it) => {
+        const on = value === it.key;
+        return (
+          <button key={it.key ?? ''} type="button" role="tab" aria-selected={on} onClick={() => onChange(it.key)}
+            className={`inline-flex h-9 shrink-0 items-center gap-2 whitespace-nowrap rounded-[8px] border px-3.5 text-[13px] text-[var(--text)] outline-none transition-colors focus-visible:shadow-[0_0_0_1px_var(--accent)] ${on ? 'border-[color-mix(in_srgb,var(--text)_32%,transparent)] bg-[color-mix(in_srgb,var(--text)_10%,transparent)]' : 'border-[color-mix(in_srgb,var(--text)_16%,transparent)] hover:border-[color-mix(in_srgb,var(--text)_26%,transparent)] hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)]'}`}>
+            {it.icon}{it.label}
+            {it.count != null ? <span className="text-[12px] tabular-nums text-[var(--text-faint)]">{it.count.toLocaleString()}</span> : null}
+          </button>
+        );
+      })}
+    </div>
+  );
   return (
     <div role="tablist" aria-label={label} className="-mx-1 mb-8 flex gap-1.5 overflow-x-auto px-1 pb-1 pr-8 [mask-image:linear-gradient(to_right,black_calc(100%-40px),transparent)] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" data-store-chips="">
       {items.map((it) => {
@@ -265,6 +328,22 @@ export function StoreChips<K extends string>({ label, items, value, onChange }: 
 /** A part of a store page: its name, a word under it, See all at its right when there is more. */
 export function StoreSection({ title, badge, note, all, children }: { title: string; badge?: React.ReactNode; note?: string | undefined; all?: (() => void) | undefined; children: React.ReactNode }) {
   const t = useT();
+  /* in a desktop sidebar page: its name alone heads it, the way to all of it in the name itself (a chevron after it) */
+  if (useInSidePage()) return (
+    <section className="mb-10" data-community-shelf={title}>
+      <header className="mb-3.5 flex min-w-0 items-center gap-3">
+        <h3 className="flex shrink-0 items-center text-[13.5px] font-medium text-[var(--text)]">
+          {all ? (
+            <button type="button" onClick={all} aria-label={`${title}: ${t('assetDrawer.seeAll')}`} className="group -ml-1.5 flex items-center gap-1 rounded-md px-1.5 py-1 outline-none transition hover:bg-[var(--bg-hover)] focus-visible:shadow-[0_0_0_1px_var(--accent)]">
+              {title}{badge}<ChevronRight size={14} className="text-[var(--text-muted)] transition group-hover:translate-x-0.5" aria-hidden />
+            </button>
+          ) : <>{title}{badge}</>}
+        </h3>
+        {note ? <p className="min-w-0 truncate text-[12.5px] text-[var(--text-faint)]">{note}</p> : null}
+      </header>
+      {children}
+    </section>
+  );
   return (
     <section className="mb-12" data-community-shelf={title}>
       <header className="mb-4 flex items-end gap-4">
