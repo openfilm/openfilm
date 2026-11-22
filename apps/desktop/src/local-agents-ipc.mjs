@@ -166,7 +166,7 @@ export function agentProblem(entry, step, e, turnId = null) {
  * in (agent-skills.mjs).
  * @param {{ trusted: (event: any) => boolean, binDir?: string | null, fallbackDir?: string | null, env?: Record<string, string>,
  *           harness?: (id: string) => Promise<any>, onWorking?: (folders: string[]) => void, onAsking?: (folders: string[]) => void, onTurn?: (turn: { kind: 'done' | 'failed' | 'asking', agent: string, cwd: string, meta: any, error?: string }) => void, onConnectionResult?: (id: string, error: unknown | null) => void, logDir?: () => string | null,
- *           skills?: { dataDir: string, mine: string } | null, isAgentUpdating?: (id: string) => boolean }} opts
+ *           skills?: { dataDir: string, mine: string, browserDoorFor?: (sender: import('electron').WebContents, agent: string) => Promise<{ name: string, type: string, url: string } | null> } | null, isAgentUpdating?: (id: string) => boolean }} opts
  */
 export function registerLocalAgentIpc(ipcMain, { trusted, binDir = null, fallbackDir = null, env = {}, harness = async () => null, log = () => {}, onWorking = () => {}, onAsking = () => {}, onTurn = (_turn) => {}, onConnectionResult = (_agent, _error) => {}, logDir = () => null, skills = null, isAgentUpdating = () => false }) {
   const harnessFor = async (agent) => (HARNESS_AGENTS.includes(agent) ? harness(agent) : undefined);
@@ -175,7 +175,11 @@ export function registerLocalAgentIpc(ipcMain, { trusted, binDir = null, fallbac
   const problems = env.OPENFILM_HOME ? problemsFile(env.OPENFILM_HOME) : undefined;
   const noteProblem = (entry, step, e, turnId = null) => recordProblem(agentProblem(entry, step, e, turnId), { file: problems });
   /** a session's skills and MCP servers: OpenFilm's, and of the person's own those let in (agent-skills.mjs) */
-  const skillsFor = (agent) => (skills && skillRecord ? { ...skills, allowed: skillRecord.allowed(agent), mcpAllowed: skillRecord.mcpAllowed(agent) } : null);
+  /* and the browser's door of the project of the page that starts it (browser-door.mjs), where there is one */
+  const skillsFor = (agent, sender = null) => (skills && skillRecord ? {
+    ...skills, allowed: skillRecord.allowed(agent), mcpAllowed: skillRecord.mcpAllowed(agent),
+    ...(skills.browserDoorFor && sender ? { browserFor: () => skills.browserDoorFor(sender, agent) } : {}),
+  } : null);
   /** @type {Map<string, { session: AgentSession, sender: import('electron').WebContents, pending: Map<string, (answer: any) => void>, agent: string, cwd: string, turn: any }>} */
   const sessions = new Map();
   let activePrompts = 0;
@@ -297,7 +301,7 @@ export function registerLocalAgentIpc(ipcMain, { trusted, binDir = null, fallbac
            once what the person changed while it worked (openfilm's studio/client.mjs agentName) */
         env: { ...env, OPENFILM_AGENT: `app:${typeof meta?.sessionId === 'string' && meta.sessionId ? meta.sessionId : key}` },
         logDir: logDir(),
-        skills: skillsFor(agent),
+        skills: skillsFor(agent, event.sender),
         harness: await harnessFor(agent),
         onUpdate: (update) => {
           if (entry.info && update.sessionUpdate === 'config_option_update' && Array.isArray(update.configOptions)) {

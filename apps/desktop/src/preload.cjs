@@ -163,6 +163,10 @@ contextBridge.exposeInMainWorld('openfilmNative', {
     stop: (id) => ipcRenderer.invoke('desktop:browser:stop', { id }),
     focus: () => ipcRenderer.invoke('desktop:browser:focus'),
     place: (bounds) => ipcRenderer.invoke('desktop:browser:place', { bounds: bounds ?? null }),
+    /* the person takes a tab an agent drives over (`held` false: hands it back) */
+    takeOver: (id, held = true) => ipcRenderer.invoke('desktop:browser:take-over', { id, held: held !== false }),
+    /* an agent drives a tab of this page's project: the Browser workbench is to be shown ({ projectId }) */
+    onShow: on('desktop:browser:show'),
   },
   /* the chat's column as the person left it, kept for the next launch */
   saveLayout: (layout) => ipcRenderer.send('desktop:layout', { chatOpen: layout?.chatOpen === true, chatWidth: Number(layout?.chatWidth) }),

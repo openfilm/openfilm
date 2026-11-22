@@ -124,6 +124,15 @@ test("OpenCode: every skill denied but its own, OpenFilm's and those let in; Pi:
   assert.deepEqual(kimi.log, { openfilm: names, allowed: [], mcpAllowed: [], filtered: false, mcpFiltered: false });
   /* by its full name, saying whose it is; the rest of it links (a junction on Windows) to the project's own folder */
   assert.match(readFileSync(join(pi.piSkills.paths[0], 'project-brand', 'SKILL.md'), 'utf8'), /^---\nname: project-brand\n[\s\S]*> OpenFilm skill `project\/brand`, by this project\./);
+  /* the browser's door of the session's project (browser-door.mjs), given with the connectors' doors */
+  const door = { name: 'openfilm-browser', title: 'Browser', type: 'http', url: 'http://127.0.0.1:9/secret' };
+  const browsing = await sessionSkills('kimi', { cwd: w.project, home: w.home, dataDir: w.dataDir, mine: join(w.openfilmHome, 'skills'), prefsHome: w.openfilmHome, browserFor: async () => door });
+  assert.deepEqual(browsing.connectors, [door]);
+  assert.equal(browsing.log.browser, true);
+  /* none while the browser is off (or its door could not be had) */
+  const off = await sessionSkills('kimi', { cwd: w.project, home: w.home, dataDir: w.dataDir, mine: join(w.openfilmHome, 'skills'), prefsHome: w.openfilmHome, browserFor: async () => { throw new Error('no door'); } });
+  assert.equal(off.connectors, undefined);
+  assert.equal(off.log.browser, undefined);
 });
 
 test('expired session cleanup unlinks skills without removing their real folders', async () => {

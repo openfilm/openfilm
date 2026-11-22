@@ -18,9 +18,11 @@
  *   · a download goes where the person picks, a file that can run is said to be one first, and every file kept is
  *     marked as come from the web, so the system checks it before it is first opened.
  *
- * Tabs belong to a project: each project's page shows its own, and an agent working in a project drives only those.
- * What a tab shows of itself (its address, its title, whether it loads) is read here from the tab, never taken from
- * its page.
+ * Tabs belong to a project: each project's page shows its own, and an agent working in a project drives only those
+ * (browser-door.mjs). A tab an agent drives says so (`drivenBy`), the person can take it over (`takeOver`), and a form
+ * an agent's action sends by POST waits for the person's word (`askToSend`; the page's own way of sending one is held
+ * here on the network, `holdPosts`). What a tab shows of itself (its address, its title, whether it loads) is read here
+ * from the tab, never taken from its page.
  */
 import { Menu, WebContentsView, app, clipboard, dialog, session, shell, systemPreferences } from 'electron';
 import { execFile } from 'node:child_process';
@@ -35,12 +37,17 @@ export const PARTITION = 'persist:openfilm-browser';
 const MOST_TABS = 12;
 /** the downloads a project's page is told of, the newest last */
 const DOWNLOADS_KEPT = 6;
+/** how long after an agent's last action its tab still says it drives it */
+const DRIVEN_MS = 12_000;
+/** the size a tab's page has until a workbench shows it somewhere (an agent may read and draw it before that) */
+const FIRST_BOUNDS = { x: 0, y: 0, width: 1280, height: 800 };
 const mac = process.platform === 'darwin';
 
 /**
  * @typedef {{ id: string, view: WebContentsView, title: string, loading: boolean, typed: string | null,
  *   failed: { code: number | 'refused', text: string, address: string } | null, crashed: boolean, shown: boolean,
- *   refusedHere: Set<string> }} Tab
+ *   refusedHere: Set<string>, driver: { name: string, timer: ReturnType<typeof setTimeout> } | null, held: boolean,
+ *   posts: { heldUntil: number, by: string, allowed: number, allowedUntil: number } }} Tab
  * @typedef {{ tabs: Tab[], active: string | null, may: (tabsNow: number) => boolean,
  *   downloads: Array<{ id: string, name: string, state: string, received: number, total: number, path: string | null }> }} Project
  * @typedef {{ x: number, y: number, width: number, height: number }} Bounds
@@ -76,6 +83,8 @@ export function createBrowser(o) {
   const byContents = new Map();
   /** where the page in front shows its project's tab (no bounds: nowhere) */
   let placed = { projectId: /** @type {string | null} */ (null), bounds: /** @type {Bounds | null} */ (null) };
+  /** the size a tab was last shown at: a new tab's page is laid out at it before it is first shown */
+  let lastBounds = FIRST_BOUNDS;
   /** dialogs open now, by what they ask: a page asking again while one is up gets that one's answer */
   /** @type {Map<string, Promise<{ allow: boolean, remember: boolean }>>} */
   const asking = new Map();
@@ -123,7 +132,20 @@ export function createBrowser(o) {
     ses.webRequest.onBeforeRequest((details, callback) => {
       const page = details.webContents && !details.webContents.isDestroyed() ? details.webContents.getURL() : '';
       const verdict = request({ url: details.url, type: details.resourceType, top: page || details.referrer || null, own: o.ownOrigins() });
-      callback({ cancel: verdict === 'block' });
+      if (verdict === 'block') { callback({ cancel: true }); return; }
+      /* a form sent by POST while an agent acts on the tab, some other way than the page's form (which the door holds
+         in the page): it waits here for the person */
+      const entry = typeof details.webContentsId === 'number' ? byContents.get(details.webContentsId) : null;
+      const posts = entry?.tab.posts;
+      const now = Date.now();
+      if (entry && posts && details.method === 'POST' && (details.resourceType === 'mainFrame' || details.resourceType === 'subFrame') && posts.heldUntil > now) {
+        /* the one the person just allowed (the door sends it as it was held) */
+        if (posts.allowed > 0 && posts.allowedUntil > now) { posts.allowed -= 1; callback({ cancel: false }); return; }
+        api.askToSend({ projectId: entry.projectId, tabId: entry.tab.id, agent: posts.by, address: page, form: { action: details.url, button: null, fields: [] } })
+          .then((yes) => callback({ cancel: !yes }), () => callback({ cancel: true }));
+        return;
+      }
+      callback({ cancel: false });
     });
     ses.on('will-download', (event, item, contents) => download(event, item, contents));
     return ses;
@@ -291,8 +313,12 @@ export function createBrowser(o) {
     });
     view.setVisible(false);
     view.setBackgroundColor('#ffffff');
+    /* laid out at the size it will likely be shown at, so what an agent reads and draws of it before is as the person
+       will see it; in the window from the start, out of sight */
+    view.setBounds(lastBounds);
+    try { o.window()?.contentView.addChildView(view); } catch { /* no window */ }
     /** @type {Tab} */
-    const tab = { id: randomUUID(), view, title: '', loading: false, typed: null, failed: null, crashed: false, shown: false, refusedHere: new Set() };
+    const tab = { id: randomUUID(), view, title: '', loading: false, typed: null, failed: null, crashed: false, shown: false, refusedHere: new Set(), driver: null, held: false, posts: { heldUntil: 0, by: '', allowed: 0, allowedUntil: 0 } };
     const page = view.webContents;
     byContents.set(page.id, { projectId, tab });
     /* calls between people (WebRTC) show a site the address the computer reaches the web by, not those of its network */
@@ -360,6 +386,8 @@ export function createBrowser(o) {
       act();
     });
     page.on('context-menu', (_event, params) => {
+      /* an agent's right click is the page's to answer, not a menu of the app's popping up under the person */
+      if (tab.posts.heldUntil > Date.now()) return;
       const w = words().menu;
       /** @type {import('electron').MenuItemConstructorOptions[]} */
       const items = [];
@@ -375,7 +403,7 @@ export function createBrowser(o) {
       );
       Menu.buildFromTemplate(items).popup();
     });
-    page.once('destroyed', () => byContents.delete(page.id));
+    page.once('destroyed', () => { byContents.delete(page.id); if (tab.driver) clearTimeout(tab.driver.timer); });
     return tab;
   }
 
@@ -390,6 +418,7 @@ export function createBrowser(o) {
       const on = tab === inFront && placed.bounds !== null && !tab.failed && !tab.crashed && !tab.view.webContents.isDestroyed() && tab.view.webContents.getURL() !== '';
       if (on && placed.bounds) {
         tab.view.setBounds(placed.bounds);
+        lastBounds = placed.bounds;
         if (!tab.shown || raise) { win.contentView.addChildView(tab.view); tab.view.setVisible(true); tab.shown = true; }
       } else if (tab.shown) { tab.view.setVisible(false); tab.shown = false; }
     }
@@ -437,6 +466,8 @@ export function createBrowser(o) {
             /* an address refused has no host to show: what was asked for, as text */
             failed: tab.failed ? { code: tab.failed.code, text: tab.failed.text, address: shownAddress(tab.failed.address).text || tab.failed.address.slice(0, 300) } : null,
             back: !gone && page.navigationHistory.canGoBack(), forward: !gone && page.navigationHistory.canGoForward(),
+            /* the agent driving it now (its name, as the person knows it), and whether the person took it over */
+            driver: tab.driver?.name ?? null, held: tab.held,
           };
         }),
         downloads: (p?.downloads ?? []).map((d) => ({ ...d })),
@@ -533,6 +564,63 @@ export function createBrowser(o) {
     owns: (/** @type {import('electron').WebContents} */ contents) => byContents.has(contents.id),
     /** A tab's page, for what drives it (the agents' door). */
     pageOf: (/** @type {string} */ projectId, /** @type {string | null} */ tabId = null) => tabOf(projectId, tabId)?.view.webContents ?? null,
+    /** Whether a tab is shown in the window now. */
+    isShown: (/** @type {string} */ projectId, /** @type {string} */ tabId) => Boolean(tabOf(projectId, tabId)?.shown),
+    /** An agent acted on a tab: it says so for a while (its workbench shows who). */
+    drivenBy(/** @type {string} */ projectId, /** @type {string} */ tabId, /** @type {string} */ name) {
+      const tab = tabOf(projectId, tabId);
+      if (!tab) return;
+      const was = tab.driver?.name;
+      if (tab.driver) clearTimeout(tab.driver.timer);
+      tab.driver = { name: String(name).slice(0, 60), timer: setTimeout(() => { tab.driver = null; tell(projectId); }, DRIVEN_MS) };
+      tab.driver.timer.unref?.();
+      if (was !== tab.driver.name) tell(projectId);
+    },
+    /** The person takes a tab over from the agent (`held`: the agent's actions on it refused), or hands it back. */
+    takeOver(/** @type {string} */ projectId, /** @type {string} */ tabId, held = true) {
+      const tab = tabOf(projectId, tabId);
+      if (!tab) return;
+      tab.held = held;
+      if (held && tab.driver) { clearTimeout(tab.driver.timer); tab.driver = null; }
+      tell(projectId);
+    },
+    /**
+     * An agent is about to act on a tab: a form the page sends by POST in the next `ms` waits for the person, said to
+     * come from `agent`.
+     */
+    holdPosts(/** @type {string} */ projectId, /** @type {string} */ tabId, /** @type {number} */ ms, /** @type {string} */ agent) {
+      const tab = tabOf(projectId, tabId);
+      /* each action starts afresh: a yes given to an earlier one lets nothing of this one through */
+      if (tab) tab.posts = { heldUntil: Date.now() + ms, by: String(agent).slice(0, 60), allowed: 0, allowedUntil: 0 };
+    },
+    /** The person said yes to a form: that one is let through (within `ms`), and no other. */
+    allowPosts(/** @type {string} */ projectId, /** @type {string} */ tabId, /** @type {number} */ ms) {
+      const tab = tabOf(projectId, tabId);
+      if (tab) tab.posts = { ...tab.posts, heldUntil: Math.max(tab.posts.heldUntil, Date.now() + ms), allowed: 1, allowedUntil: Date.now() + ms };
+    },
+    /**
+     * The person asked, in the system's dialog, whether a form an agent's action sends goes (what it sends shown, a
+     * password never). No is the default, and closing it is a no.
+     * @param {{ projectId: string, tabId: string, agent: string, address: string, form: { action: string, button: string | null, fields: Array<{ name: string, value: string }> } }} ask
+     * @returns {Promise<boolean>}
+     */
+    askToSend({ tabId, agent, address, form }) {
+      const id = `send ${tabId}`;
+      const open = asking.get(id);
+      if (open) return open.then((a) => a.allow);
+      const w = words();
+      const win = o.window();
+      const host = shownAddress(address).host || shownAddress(form.action).host || '';
+      const to = shownAddress(form.action).text || String(form.action).slice(0, 300);
+      const fields = form.fields.filter((f) => f.value).slice(0, 12).map((f) => `${f.name}: ${f.value}`);
+      const detail = [w.sendTo.replace('{address}', to), ...(form.button ? [w.sendButton.replace('{button}', form.button)] : []), ...(fields.length ? ['', w.sendFields, ...fields] : [])].join('\n');
+      const options = { type: /** @type {const} */ ('question'), title: o.productName, message: w.send.replaceAll('{agent}', agent || w.agent).replaceAll('{host}', host), detail, buttons: [w.sendYes, w.sendNo], defaultId: 1, cancelId: 1, noLink: true };
+      const answered = (win ? dialog.showMessageBox(win, options) : dialog.showMessageBox(options))
+        .then(({ response }) => ({ allow: response === 0, remember: false }), () => ({ allow: false, remember: false }))
+        .finally(() => asking.delete(id));
+      asking.set(id, answered);
+      return answered.then((a) => a.allow);
+    },
     /** Everything the sites kept (cookies, storage, cache) and every answer the person gave, forgotten. */
     async forget() {
       answers = {};
