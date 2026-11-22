@@ -146,6 +146,24 @@ contextBridge.exposeInMainWorld('openfilmNative', {
     set: (next) => ipcRenderer.invoke('desktop:prefs:set', next),
     onChange: on('desktop:prefs'),
   },
+  /* the browser (browser.mjs): the tabs of this page's project, drawn by its Browser workbench, which says where in
+     the window the tab in front goes (`place`: null, nowhere). Every address and title comes from the app's own
+     reading of the tab. */
+  browser: {
+    state: () => ipcRenderer.invoke('desktop:browser:state'),
+    onState: on('desktop:browser'),
+    onFocusAddress: on('desktop:browser:focus-address'),
+    open: (text) => ipcRenderer.invoke('desktop:browser:open', { text: typeof text === 'string' ? text : null }),
+    go: (id, text) => ipcRenderer.invoke('desktop:browser:go', { id, text: String(text) }),
+    close: (id) => ipcRenderer.invoke('desktop:browser:close', { id }),
+    select: (id) => ipcRenderer.invoke('desktop:browser:select', { id }),
+    back: (id) => ipcRenderer.invoke('desktop:browser:back', { id }),
+    forward: (id) => ipcRenderer.invoke('desktop:browser:forward', { id }),
+    reload: (id) => ipcRenderer.invoke('desktop:browser:reload', { id }),
+    stop: (id) => ipcRenderer.invoke('desktop:browser:stop', { id }),
+    focus: () => ipcRenderer.invoke('desktop:browser:focus'),
+    place: (bounds) => ipcRenderer.invoke('desktop:browser:place', { bounds: bounds ?? null }),
+  },
   /* the chat's column as the person left it, kept for the next launch */
   saveLayout: (layout) => ipcRenderer.send('desktop:layout', { chatOpen: layout?.chatOpen === true, chatWidth: Number(layout?.chatWidth) }),
   /* the page's theme, for the window behind it and the system's menus and dialogs */

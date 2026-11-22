@@ -1,0 +1,6 @@
+{
+  "name": "openfilm-browser",
+  "private": true,
+  "type": "module",
+  "browser": "ui.js"
+}

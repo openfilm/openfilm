@@ -14,7 +14,7 @@ test('the screening, the edit and the canvas are on until the person says, Color
   const h = home();
   assert.deepEqual(workbenchesOn(h), ['screening', 'edit', 'canvas']);
   assert.deepEqual(pluginStates(h).filter((p) => p.workbench && !p.soon).map((p) => [p.id, p.on]),
-    [['screening', true], ['edit', true], ['canvas', true], ['color', false], ['motion', false], ['stage', false]]);
+    [['screening', true], ['edit', true], ['canvas', true], ['color', false], ['motion', false], ['stage', false], ['browser', false]]);
   setPluginOn('color', true, h);
   setPluginOn('canvas', false, h);
   assert.deepEqual(workbenchesOn(h), ['screening', 'edit', 'color']);
@@ -110,14 +110,14 @@ test('every plugin made has a switch; what is not made yet is never on, and no a
   const state = (id) => pluginStates(h).find((p) => p.id === id);
   /* Upcoming editors appear in the catalog alongside the available editors and connectors. */
   assert.deepEqual(PLUGINS.map((p) => [p.id, p.on]), [['screening', true], ['edit', true], ['canvas', true], ['color', false],
-    ['sound', false], ['motion', false], ['stage', false], ['composite', false],
+    ['sound', false], ['motion', false], ['stage', false], ['browser', false], ['composite', false],
     ['dropbox', false], ['frameio', false], ['notion', false], ['adobe', false], ['canva', false], ['vimeo', false]]);
   const { CORE_SKILLS } = await import('./skills.mjs');
   /* the film's and the media's go with none: each is there while a plugin on needs it */
   assert.deepEqual(CORE_SKILLS.map((skill) => pluginOfSkill(skill)), [undefined, undefined, 'canvas']);
   assert.deepEqual(PLUGINS.map((p) => [p.id, p.skills, p.requires]),
     [['screening', [], ['film', 'media']], ['edit', [], ['film', 'media']], ['canvas', ['canvas'], ['media']], ['color', ['color'], ['film']],
-      ['sound', [], ['film']], ['motion', ['motion'], ['film']], ['stage', ['stage'], []], ['composite', [], ['film']],
+      ['sound', [], ['film']], ['motion', ['motion'], ['film']], ['stage', ['stage'], []], ['browser', [], []], ['composite', [], ['film']],
       ...['dropbox', 'frameio', 'notion', 'adobe', 'canva', 'vimeo'].map((id) => [id, [], []])]);
   mkdirSync(h, { recursive: true });
   writeFileSync(join(h, 'prefs.json'), JSON.stringify({ plugins: { sound: true, composite: true } }));
@@ -206,7 +206,7 @@ test('each plugin of OpenFilm\'s own is in one category, and one made is rated, 
   /* by what it helps make, in the order a film is made */
   assert.deepEqual(Object.fromEntries(PLUGINS.map((p) => [p.id, p.profile?.category])), {
     screening: 'edit', edit: 'edit', canvas: 'material', color: 'picture',
-    sound: 'sound', motion: 'picture', stage: 'material', composite: 'picture',
+    sound: 'sound', motion: 'picture', stage: 'material', browser: 'tool', composite: 'picture',
     dropbox: 'material', frameio: 'edit', notion: 'tool', adobe: 'picture', canva: 'picture', vimeo: 'tool',
   });
 });

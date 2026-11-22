@@ -197,8 +197,12 @@ await builder.build({
       gatekeeperAssess: false,
       entitlements: join(desktop, 'build/entitlements.mac.plist'),
       entitlementsInherit: join(desktop, 'build/entitlements.mac.plist'),
-      /* what macOS says when Studio's record button first asks for the microphone (the entitlement above lets it) */
-      extendInfo: { NSMicrophoneUsageDescription: 'OpenFilm records sound from the microphone when you press Record.' },
+      /* what macOS says when the app first asks for the microphone (Studio's record button, or a site the person
+         allowed in the browser) and for the camera (such a site only); the entitlements above let it */
+      extendInfo: {
+        NSMicrophoneUsageDescription: 'OpenFilm records sound from the microphone when you press Record, and uses it for sites you allow in its browser.',
+        NSCameraUsageDescription: 'OpenFilm uses the camera only for sites you allow in its browser.',
+      },
       ...(unsigned ? { identity: null } : { identity: IDENTITY, notarize: true }),
     },
     /* the downloads keep one name from version to version: the website links the latest release's by it */
