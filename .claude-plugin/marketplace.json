@@ -8,7 +8,7 @@
     {
       "name": "openfilm",
       "source": "./",
-      "description": "Make films as web pages with OpenFilm skills and connectors for Adobe, Canva, Dropbox, Frame.io, Notion and Vimeo."
+      "description": "Make films as web pages with OpenFilm skills."
     }
   ]
 }

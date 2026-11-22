@@ -76,7 +76,7 @@ npx skills add openfilm/openfilm
 
 ### Install as an agent plugin
 
-From [`.agents/plugins/marketplace.json`](.agents/plugins/marketplace.json) (skills plus Adobe, Canva, Dropbox, Frame.io, Notion and Vimeo MCP servers):
+From [`.agents/plugins/marketplace.json`](.agents/plugins/marketplace.json) (OpenFilm skills):
 
 ```bash
 codex plugin marketplace add openfilm/openfilm

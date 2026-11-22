@@ -1,7 +1,6 @@
 {
   "name": "openfilm",
-  "version": "0.4.1",
-  "description": "The open source AI video agent: films as web pages, skills that teach your coding agent to make them, and connectors for Adobe, Canva, Dropbox, Frame.io, Notion and Vimeo.",
+  "description": "The open source AI video agent: films as web pages, and skills that teach your coding agent to make them.",
   "author": {
     "name": "OpenFilm",
     "url": "https://github.com/openfilm"
@@ -13,7 +12,6 @@
     "video",
     "motion-graphics",
     "agents",
-    "mcp",
     "animation"
   ],
   "privacyPolicyUrl": "https://openfilm.dev/privacy/",
