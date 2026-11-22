@@ -17,13 +17,13 @@
     "es": "La web junto a tu chat: consulta y busca referencias sin salir del proyecto."
   },
   "details": {
-    "en": "When to use it: you want to read a page, check a reference or look at a site while you work on the film.\nHow it is kept apart: sites get their own storage, never the app's or your own browser's, and none of them reaches your projects or this computer's files.\nWhat it asks: a site gets your camera, microphone or notifications only after you say so, site by site.\nWhere it works: in the desktop app.",
-    "zh-CN": "什么时候用：做片子的时候想读一个网页、查一个参考、看一个网站。\n怎么隔离：网站用自己的存储，碰不到应用和你自己浏览器里的数据，也碰不到你的项目和这台电脑上的文件。\n它会问什么：网站要用摄像头、麦克风或通知，要你逐个网站同意才行。\n在哪里能用：桌面应用。",
-    "ja": "使うとき：制作中にページを読む、参考を確かめる、サイトを見るとき。\n分け方：サイトは専用の保存領域を使い、アプリやあなたのブラウザのデータ、プロジェクトやこのコンピュータのファイルには届きません。\n尋ねること：カメラ、マイク、通知は、サイトごとにあなたが許可してから。\n使える場所：デスクトップアプリ。",
-    "ko": "언제 쓰나요: 영상을 만들다가 페이지를 읽거나 참고 자료를 확인하거나 사이트를 볼 때.\n어떻게 분리되나요: 사이트는 자체 저장소만 쓰고, 앱이나 내 브라우저의 데이터, 프로젝트와 이 컴퓨터의 파일에는 닿지 못합니다.\n무엇을 묻나요: 카메라, 마이크, 알림은 사이트마다 허용한 뒤에만 씁니다.\n어디서 쓰나요: 데스크톱 앱.",
-    "es": "Cuándo usarlo: quieres leer una página, comprobar una referencia o ver un sitio mientras trabajas en el vídeo.\nCómo se mantiene aparte: los sitios tienen su propio almacenamiento, nunca el de la app ni el de tu navegador, y ninguno llega a tus proyectos ni a los archivos de este ordenador.\nQué pregunta: un sitio usa tu cámara, micrófono o notificaciones solo después de que lo permitas, sitio por sitio.\nDónde funciona: en la app de escritorio."
+    "en": "When to use it: you want to read a page, check a reference or look at a site while you work on the film.\nHow it is kept apart: sites get their own storage, never the app's or your own browser's, and none of them reaches your projects or this computer's files.\nWhat it asks: a site gets your camera, microphone or notifications only after you say so, site by site.\nWhere it works: in the desktop app.\nWhat agents do there: the agent you chat with can open, read and click through pages in the project's tabs while you watch; Take Over stops it, and a form it would send waits for you.",
+    "zh-CN": "什么时候用：做片子的时候想读一个网页、查一个参考、看一个网站。\n怎么隔离：网站用自己的存储，碰不到应用和你自己浏览器里的数据，也碰不到你的项目和这台电脑上的文件。\n它会问什么：网站要用摄像头、麦克风或通知，要你逐个网站同意才行。\n在哪里能用：桌面应用。\n智能体能做什么：和你聊天的智能体可以在项目的标签页里打开、阅读、点击网页，你在旁边看着；点「接管」它就停手，它要提交的表单要等你同意。",
+    "ja": "使うとき：制作中にページを読む、参考を確かめる、サイトを見るとき。\n分け方：サイトは専用の保存領域を使い、アプリやあなたのブラウザのデータ、プロジェクトやこのコンピュータのファイルには届きません。\n尋ねること：カメラ、マイク、通知は、サイトごとにあなたが許可してから。\n使える場所：デスクトップアプリ。\nエージェントができること：チャット中のエージェントは、あなたが見ている前でプロジェクトのタブのページを開き、読み、クリックできます。「引き継ぐ」で止まり、送信しようとするフォームはあなたの許可を待ちます。",
+    "ko": "언제 쓰나요: 영상을 만들다가 페이지를 읽거나 참고 자료를 확인하거나 사이트를 볼 때.\n어떻게 분리되나요: 사이트는 자체 저장소만 쓰고, 앱이나 내 브라우저의 데이터, 프로젝트와 이 컴퓨터의 파일에는 닿지 못합니다.\n무엇을 묻나요: 카메라, 마이크, 알림은 사이트마다 허용한 뒤에만 씁니다.\n어디서 쓰나요: 데스크톱 앱.\n에이전트가 하는 일: 채팅 중인 에이전트가 프로젝트의 탭에서 페이지를 열고 읽고 클릭하며, 당신은 그것을 지켜봅니다. 「넘겨받기」를 누르면 멈추고, 보내려는 양식은 당신의 허락을 기다립니다.",
+    "es": "Cuándo usarlo: quieres leer una página, comprobar una referencia o ver un sitio mientras trabajas en el vídeo.\nCómo se mantiene aparte: los sitios tienen su propio almacenamiento, nunca el de la app ni el de tu navegador, y ninguno llega a tus proyectos ni a los archivos de este ordenador.\nQué pregunta: un sitio usa tu cámara, micrófono o notificaciones solo después de que lo permitas, sitio por sitio.\nDónde funciona: en la app de escritorio.\nQué hacen los agentes: el agente con el que hablas puede abrir, leer y recorrer páginas en las pestañas del proyecto mientras miras; Tomar el control lo detiene, y un formulario que fuera a enviar espera tu permiso."
   },
-  "about": "tabs of the web beside the chat, each page kept apart from the app and the computer",
+  "about": "tabs of the web beside the chat, each page kept apart from the app and the computer; once on, agents use the project's tabs too (openfilm-browser tools), the person watching",
   "category": "tool",
   "difficulty": 1,
   "ease": 5,

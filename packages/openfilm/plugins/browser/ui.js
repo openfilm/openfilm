@@ -7,35 +7,40 @@
 // behind it: while anything covers the room, the web page steps aside (`place(null)`) and comes back after.
 
 const WORDS = {
-  en: { field: 'Search or enter an address', back: 'Back', forward: 'Forward', reload: 'Reload', stop: 'Stop', newTab: 'New tab', close: 'Close tab', untitled: 'New Tab',
+  en: { driving: '{agent} is using this tab', takeOver: 'Take Over', held: 'You took over this tab: agents leave it to you', handBack: 'Hand Back',
+    field: 'Search or enter an address', back: 'Back', forward: 'Forward', reload: 'Reload', stop: 'Stop', newTab: 'New tab', close: 'Close tab', untitled: 'New Tab',
     secure: 'The connection is private', insecure: 'Not secure: others on the network can read this page', local: 'On this computer or its network',
     start: 'Go anywhere on the web', startHint: 'Sites are kept apart from your projects and from this computer.',
     refused: 'OpenFilm doesn’t open this address', refusedHint: 'Web pages over http and https open here. Files, the app’s own pages and other apps’ links do not.',
     cert: 'The connection to {host} isn’t private', certHint: 'The site’s certificate doesn’t check, so the page was not opened. There is no way round this here.',
     unreachable: 'Can’t reach {host}', blocked: 'This page was not allowed to load', crashed: 'This page stopped', again: 'Try Again',
     done: 'Downloaded', failed: 'Not downloaded', showFile: 'Show', desktop: 'The browser comes with the OpenFilm desktop app.' },
-  'zh-CN': { field: '搜索或输入网址', back: '后退', forward: '前进', reload: '重新加载', stop: '停止', newTab: '新标签页', close: '关闭标签页', untitled: '新标签页',
+  'zh-CN': { driving: '{agent} 正在使用这个标签页', takeOver: '接管', held: '你接管了这个标签页：智能体不会再操作它', handBack: '交还',
+    field: '搜索或输入网址', back: '后退', forward: '前进', reload: '重新加载', stop: '停止', newTab: '新标签页', close: '关闭标签页', untitled: '新标签页',
     secure: '连接是私密的', insecure: '不安全：同一网络上的人能看到这个页面', local: '这台电脑或它所在的网络',
     start: '去网上任何地方', startHint: '网站与你的项目、这台电脑是隔开的。',
     refused: 'OpenFilm 不打开这个地址', refusedHint: '这里打开 http 和 https 的网页。文件、应用自己的页面和其他应用的链接不行。',
     cert: '与 {host} 的连接不是私密的', certHint: '网站的证书没有通过检查，所以没有打开这个页面。这里没有办法绕过。',
     unreachable: '无法访问 {host}', blocked: '这个页面不被允许加载', crashed: '这个页面停止了', again: '重试',
     done: '已下载', failed: '未下载', showFile: '显示', desktop: '浏览器随 OpenFilm 桌面应用提供。' },
-  ja: { field: '検索またはアドレスを入力', back: '戻る', forward: '進む', reload: '再読み込み', stop: '中止', newTab: '新しいタブ', close: 'タブを閉じる', untitled: '新しいタブ',
+  ja: { driving: '{agent} がこのタブを使っています', takeOver: '引き継ぐ', held: 'このタブを引き継ぎました：エージェントは操作しません', handBack: '返す',
+    field: '検索またはアドレスを入力', back: '戻る', forward: '進む', reload: '再読み込み', stop: '中止', newTab: '新しいタブ', close: 'タブを閉じる', untitled: '新しいタブ',
     secure: '接続は保護されています', insecure: '保護されていません：同じネットワークの人がこのページを読めます', local: 'このコンピュータまたはそのネットワーク',
     start: 'ウェブのどこへでも', startHint: 'サイトはプロジェクトやこのコンピュータから切り離されています。',
     refused: 'OpenFilm はこのアドレスを開きません', refusedHint: 'ここでは http と https のページを開きます。ファイル、アプリ自身のページ、ほかのアプリのリンクは開きません。',
     cert: '{host} への接続は保護されていません', certHint: 'サイトの証明書を確認できないため、ページを開きませんでした。ここでは回避できません。',
     unreachable: '{host} に接続できません', blocked: 'このページは読み込めませんでした', crashed: 'このページは停止しました', again: '再試行',
     done: 'ダウンロード済み', failed: 'ダウンロードできませんでした', showFile: '表示', desktop: 'ブラウザは OpenFilm デスクトップアプリに付属します。' },
-  ko: { field: '검색하거나 주소 입력', back: '뒤로', forward: '앞으로', reload: '새로 고침', stop: '중지', newTab: '새 탭', close: '탭 닫기', untitled: '새 탭',
+  ko: { driving: '{agent}이(가) 이 탭을 사용하고 있습니다', takeOver: '넘겨받기', held: '이 탭을 넘겨받았습니다: 에이전트는 손대지 않습니다', handBack: '돌려주기',
+    field: '검색하거나 주소 입력', back: '뒤로', forward: '앞으로', reload: '새로 고침', stop: '중지', newTab: '새 탭', close: '탭 닫기', untitled: '새 탭',
     secure: '연결이 비공개입니다', insecure: '안전하지 않음: 같은 네트워크의 다른 사람이 이 페이지를 읽을 수 있습니다', local: '이 컴퓨터 또는 그 네트워크',
     start: '웹 어디로든', startHint: '사이트는 프로젝트와 이 컴퓨터에서 분리되어 있습니다.',
     refused: 'OpenFilm은 이 주소를 열지 않습니다', refusedHint: '여기서는 http와 https 페이지를 엽니다. 파일, 앱 자체의 페이지, 다른 앱의 링크는 열지 않습니다.',
     cert: '{host}에 대한 연결이 비공개가 아닙니다', certHint: '사이트의 인증서가 확인되지 않아 페이지를 열지 않았습니다. 여기서는 우회할 수 없습니다.',
     unreachable: '{host}에 연결할 수 없습니다', blocked: '이 페이지는 불러올 수 없습니다', crashed: '이 페이지가 멈췄습니다', again: '다시 시도',
     done: '다운로드됨', failed: '다운로드되지 않음', showFile: '보기', desktop: '브라우저는 OpenFilm 데스크톱 앱에 포함되어 있습니다.' },
-  es: { field: 'Busca o escribe una dirección', back: 'Atrás', forward: 'Adelante', reload: 'Recargar', stop: 'Detener', newTab: 'Pestaña nueva', close: 'Cerrar pestaña', untitled: 'Pestaña nueva',
+  es: { driving: '{agent} está usando esta pestaña', takeOver: 'Tomar el control', held: 'Tomaste el control de esta pestaña: los agentes la dejan para ti', handBack: 'Devolver',
+    field: 'Busca o escribe una dirección', back: 'Atrás', forward: 'Adelante', reload: 'Recargar', stop: 'Detener', newTab: 'Pestaña nueva', close: 'Cerrar pestaña', untitled: 'Pestaña nueva',
     secure: 'La conexión es privada', insecure: 'No es segura: otros en la red pueden leer esta página', local: 'En este ordenador o su red',
     start: 'Ve a cualquier lugar de la web', startHint: 'Los sitios se mantienen aparte de tus proyectos y de este ordenador.',
     refused: 'OpenFilm no abre esta dirección', refusedHint: 'Aquí se abren páginas web por http y https. Los archivos, las páginas de la app y los enlaces de otras apps, no.',
@@ -87,6 +92,11 @@ input::placeholder { color: var(--text-faint, #888); }
 .note p { margin: 0; max-width: 420px; color: var(--text-dim, #aaa); overflow-wrap: anywhere; }
 .note code { font: 11px var(--font-mono, ui-monospace, monospace); color: var(--text-faint, #888); overflow-wrap: anywhere; }
 .note button { margin-top: 6px; padding: 5px 14px; background: var(--bg-field, rgba(128,128,128,.16)); color: var(--text, #eee); }
+.agent { display: flex; align-items: center; gap: 8px; padding: 4px 6px 4px 10px; border-bottom: 1px solid var(--border, rgba(128,128,128,.25)); background: color-mix(in srgb, var(--accent, #0a84ff) 13%, transparent); color: var(--text, #eee); }
+.agent:empty { display: none; }
+.agent span { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.agent .glow { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--accent, #0a84ff); animation: pulse 1.2s ease-in-out infinite; }
+.agent button { flex: none; padding: 2px 10px; background: var(--bg-field, rgba(128,128,128,.16)); color: var(--text, #eee); }
 .downloads { display: flex; gap: 14px; padding: 5px 10px; border-top: 1px solid var(--border, rgba(128,128,128,.25)); color: var(--text-dim, #aaa); overflow: hidden; white-space: nowrap; }
 .downloads:empty { display: none; }
 .downloads button { display: inline; padding: 0 5px; color: var(--accent, #0a84ff); }
@@ -102,7 +112,7 @@ export default class OpenFilmBrowser extends HTMLElement {
     this.native = globalThis.openfilmNative?.browser ?? null;
     this.shown = { active: null, tabs: [], downloads: [] };
     this.placedAs = '';
-    this.attachShadow({ mode: 'open' }).innerHTML = `<style>${STYLE}</style><div class="frame"><div class="tabs" role="tablist"></div><div class="bar"></div><div class="room"></div><div class="downloads"></div></div>`;
+    this.attachShadow({ mode: 'open' }).innerHTML = `<style>${STYLE}</style><div class="frame"><div class="tabs" role="tablist"></div><div class="bar"></div><div class="agent" role="status"></div><div class="room"></div><div class="downloads"></div></div>`;
   }
 
   get words() { return WORDS[document.documentElement.lang] ?? WORDS.en; }
@@ -156,6 +166,7 @@ export default class OpenFilmBrowser extends HTMLElement {
     else if (act === 'close') { event.stopPropagation(); void this.native.close(id); }
     else if (act === 'reload') void (this.tab?.loading ? this.native.stop(id) : this.native.reload(id));
     else if (act === 'reveal') void globalThis.openfilmNative?.revealPath?.(button.dataset.path);
+    else if (act === 'take-over' || act === 'hand-back') void this.native.takeOver?.(id, act === 'take-over');
     else if (act === 'back' || act === 'forward') void this.native[act](id);
   };
 
@@ -209,6 +220,9 @@ export default class OpenFilmBrowser extends HTMLElement {
     reload.setAttribute('aria-label', reload.title);
     reload.innerHTML = icon(tab?.loading ? 'stop' : 'reload', 15);
     this.drawAddress();
+    /* an agent drives the tab (src/browser-door.mjs), or the person took it over from one */
+    root.querySelector('.agent').innerHTML = tab?.held ? `<span>${escape(w.held)}</span><button data-do="hand-back">${escape(w.handBack)}</button>`
+      : tab?.driver ? `<i class="glow"></i><span>${escape(w.driving.replace('{agent}', tab.driver))}</span><button data-do="take-over">${escape(w.takeOver)}</button>` : '';
 
     /* what the room says while it holds no page: nothing opened yet, a page that did not open, one that stopped */
     const host = escape(tab?.failed ? (() => { try { return new URL(tab.failed.address).hostname; } catch { return tab.failed.address; } })() : '');

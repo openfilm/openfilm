@@ -50,6 +50,8 @@ import { turnNotice } from './turn-notices.mjs';
 import { studioRestarts } from './studio-restart.mjs';
 import { PROTOCOL, createLinks, linkFromArgv } from './deep-links.mjs';
 import { createBrowser } from './browser.mjs';
+import { createBrowserDoor } from './browser-door.mjs';
+import { driverOf } from './browser-drive.mjs';
 
 const here = (path) => fileURLToPath(new URL(path, import.meta.url));
 const mac = process.platform === 'darwin';
@@ -178,8 +180,11 @@ let browser = null;
 /** where each tab's page shows its project's browser, as the page last said (none: nowhere) */
 /** @type {Map<string, { x: number, y: number, width: number, height: number }>} */
 const browserBounds = new Map();
-/** the doors on this computer the app opened for its agents (connectors.mjs): never reached from the browser */
+/** the doors on this computer the app opened for its agents (connectors.mjs, browser-door.mjs): never reached from the browser */
 const agentDoors = new Set();
+/** the agents' way to their project's tabs of the browser (browser-door.mjs) */
+/** @type {ReturnType<typeof createBrowserDoor> | null} */
+let browserDoor = null;
 /** The browser of the page in front, where that page says; `raise`: above the page just brought to the front. */
 function placeBrowser(raise = false) {
   const id = pagePresentation?.currentId() ?? null;
@@ -408,6 +413,7 @@ async function closeTab(id) {
   const next = tabs.close(id);
   presentation().retire(id);
   browser?.closeProject(tab.projectId);
+  browserDoor?.forget(tab.projectId);
   if (next) showTab(next.id);
   else { showPage(HOME); tellTabs(); }
 }
@@ -431,7 +437,7 @@ function closeGoneTabs() {
   const { closed, front } = tabs.closeProjects(ids);
   if (!closed.length) return;
   for (const id of closed) presentation().retire(id);
-  for (const projectId of ids) browser?.closeProject(projectId);
+  for (const projectId of ids) { browser?.closeProject(projectId); browserDoor?.forget(projectId); }
   if (front) showTab(front.id);
   else { showPage(HOME); tellTabs(); }
 }
@@ -945,6 +951,8 @@ async function start() {
   browserHandle('desktop:browser:reload', (projectId, opts) => { browser.reload(projectId, tabId(opts)); return { ok: true }; });
   browserHandle('desktop:browser:stop', (projectId, opts) => { browser.stop(projectId, tabId(opts)); return { ok: true }; });
   browserHandle('desktop:browser:focus', (projectId) => { browser.focus(projectId); return { ok: true }; });
+  /* the person takes a tab an agent drives over, or hands it back (browser-door.mjs refuses the agent's actions on it) */
+  browserHandle('desktop:browser:take-over', (projectId, opts) => { const id = tabId(opts); if (id) browser.takeOver(projectId, id, opts.held !== false); return { ok: true }; });
   /* where this page shows it, in the window (null: nowhere): taken up at once when this page is the one in front */
   browserHandle('desktop:browser:place', (_projectId, { bounds }, self) => {
     const b = bounds && typeof bounds === 'object' ? { x: Number(bounds.x), y: Number(bounds.y), width: Number(bounds.width), height: Number(bounds.height) } : null;
@@ -984,6 +992,39 @@ async function start() {
     },
   });
   app.on('will-quit', () => { void connectors.close(); });
+  /* the agents' way to their project's tabs (browser-door.mjs): while the Browser plugin is on, as its workbench is */
+  const plugins = await import('openfilm/plugins');
+  const browserOn = () => { try { return plugins.pluginStates(prefsHome).some((p) => p.id === 'browser' && p.on); } catch { return false; } };
+  const door = createBrowserDoor({
+    browser,
+    driverOf,
+    /* the Browser workbench brought up in the project's page, where the tab the agent drives is in front */
+    show: (projectId) => {
+      const page = views.get(tabs?.byProject(projectId)?.id ?? '')?.webContents;
+      if (page && !page.isDestroyed()) page.send('desktop:browser:show', { projectId });
+    },
+    may: () => (browserOn() ? null : 'The browser is off in OpenFilm: the person turns the Browser plugin on in Community › Added (in the OpenFilm menu). Ask them to, if you need it.'),
+    askToSend: (ask) => browser?.askToSend(ask) ?? Promise.resolve(false),
+    log: (line) => log(`${line}\n`),
+  });
+  browserDoor = door;
+  app.on('will-quit', () => { void door.close(); });
+  /** The door of the project of the page that started a session, for that agent; none while the Browser is off. */
+  const browserDoorFor = async (/** @type {import('electron').WebContents} */ sender, /** @type {string} */ agent) => {
+    const projectId = tabs?.get(tabOf(sender) ?? '')?.projectId;
+    if (!projectId || !browserOn()) return null;
+    const given = await door.doorFor(projectId, AGENTS[agent]?.label ?? (agent === 'openfilm' || agent === 'byok' ? 'OpenFilm' : agent));
+    agentDoors.add(new URL(given.url).origin);
+    return given;
+  };
+  /* the bench (bench/browser-agent.test.mjs) reaches a project's door as an agent's session is given it */
+  if (FLAVOR === 'bench') {
+    Object.assign(globalThis, { benchBrowserDoor: async (/** @type {string} */ projectId, /** @type {string} */ agent) => {
+      const given = await door.doorFor(projectId, agent);
+      agentDoors.add(new URL(given.url).origin);
+      return given;
+    } });
+  }
   localAgents = registerLocalAgentIpc(ipcMain, {
     trusted: fromPage,
     log,
@@ -1017,7 +1058,7 @@ async function start() {
       const doors = await connectors.forSession(servers);
       for (const door of doors) { try { agentDoors.add(new URL(door.url).origin); } catch { /* no address */ } }
       return doors;
-    } },
+    }, browserDoorFor },
   });
   /* the connectors: signed in here once, reached by every agent at their doors (connectors.mjs) */
   registerConnectorsIpc(ipcMain, connectors, { trusted: fromPage, log });

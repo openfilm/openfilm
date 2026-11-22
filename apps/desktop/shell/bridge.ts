@@ -49,6 +49,8 @@ interface Native {
   takeLink(): Promise<{ kind: 'community'; uid: string } | null>;
   onOpenLink(listener: Listener<{ kind: 'community'; uid: string }>): Stop;
   onStudioBrowser(listener: Listener<unknown>): Stop;
+  /* the browser (src/browser.mjs): an agent drives a tab of this page's project (src/browser-door.mjs) */
+  browser?: { onShow?(listener: Listener<{ projectId: string }>): Stop };
   onFfmpeg(listener: Listener<unknown>): Stop;
   onUpdate(listener: Listener<unknown>): Stop;
   restartToUpdate(): Promise<{ ok: boolean; error?: string }>;
@@ -359,6 +361,8 @@ export const host: StudioHost = {
     void native.takeLink().then((link) => { if (link) listener({ type: 'show-examples', open: { kind: 'skill', name: link.uid } }); }, () => {});
     /* and those that come while the app runs */
     native.onOpenLink((link) => command?.({ type: 'show-examples', open: { kind: 'skill', name: link.uid } }));
+    /* an agent drives a tab of the project's browser: its Browser workbench shown, so the person sees what it does */
+    native.browser?.onShow?.((shown) => { if (typeof shown?.projectId === 'string') command?.({ type: 'show-workbench', projectId: shown.projectId, workbench: 'browser' }); });
   },
   settings: { onOpen: (listener) => native.onOpenSettings(listener) },
   /* read live: Studio may read the panel before or after the kept layout arrives */

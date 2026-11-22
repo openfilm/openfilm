@@ -306,15 +306,25 @@ function defaultsFile(dir, name, settings) {
  * `mine`: the person's own skills folder (openfilm/skills mySkillsDir); `prefsHome`: the Studio home whose prefs.json
  * says which official skills are installed and which skills are off (openfilm/skills usableSkills).
  * `connectorsFor`: the connectors signed in, at their doors (connectors.mjs forSession); none without it.
+ * `browserFor`: the browser's door of the session's project (browser-door.mjs doorFor), given with the connectors'
+ * (`connectors`, as agents.mjs acpServers takes them); none without it, or while the browser is off.
  * @param {{ cwd: string, env?: Record<string, string>, dataDir: string, mine?: string, prefsHome?: string, allowed?: string[],
- *   mcpAllowed?: string[], home?: string, connectorsFor?: (servers: Array<{ name: string, plugin: string, type: string }>) => Promise<Array<{ name: string, type: string, url: string }>> }} o
+ *   mcpAllowed?: string[], home?: string, connectorsFor?: (servers: Array<{ name: string, plugin: string, type: string }>) => Promise<Array<{ name: string, type: string, url: string }>>,
+ *   browserFor?: () => Promise<{ name: string, title?: string, type: string, url: string } | null> }} o
  */
 export async function sessionSkills(agent, o) {
-  const [given, on] = await Promise.all([skillsOf(agent, o), pluginsLib().then((p) => p.connectorServers(o.prefsHome), () => [])]);
+  const [given, on, browser] = await Promise.all([
+    skillsOf(agent, o), pluginsLib().then((p) => p.connectorServers(o.prefsHome), () => []),
+    o.browserFor ? o.browserFor().catch(() => null) : null,
+  ]);
   /* the connectors on (openfilm/plugins connectorServers) that the person signed in to in OpenFilm, each at its door here
      (connectors.mjs forSession): given to the session (agents.mjs acpServers), never with credentials of its own */
   const connectors = on.length && o.connectorsFor ? await o.connectorsFor(on).catch(() => []) : [];
-  return connectors.length ? { ...given, connectors, log: { ...given.log, connectors: connectors.map((c) => c.name) } } : given;
+  if (!connectors.length && !browser) return given;
+  return {
+    ...given, connectors: [...connectors, ...(browser ? [browser] : [])],
+    log: { ...given.log, ...(connectors.length ? { connectors: connectors.map((c) => c.name) } : {}), ...(browser ? { browser: true } : {}) },
+  };
 }
 
 /** @param {string} agent @param {Parameters<typeof sessionSkills>[1]} o */

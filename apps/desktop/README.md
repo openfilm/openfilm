@@ -15,6 +15,10 @@ npm run typecheck
 `node bench/browser.test.mjs` builds and checks the browser (src/browser.mjs) in an isolated Electron app: what a web
 page is kept from (the app, Studio, this computer and its network), what it must ask the person for, and where it is drawn.
 
+`node bench/browser-agent.test.mjs` builds and checks the agents' door to it (src/browser-door.mjs) the same way: an MCP
+client opens a test page in its project's tabs, reads it, clicks a link, gets a screenshot, has a form held for the
+person, and is refused another project's tab.
+
 Run from source, the app is its own "OpenFilm Dev": its own name, data folder, Studio home and port, so it never
 shares anything with an installed OpenFilm. Its renamed copy of Electron lives in `.dev/` (git-ignored).
 
