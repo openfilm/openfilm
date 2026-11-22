@@ -23,7 +23,7 @@ const hasFfmpeg = (() => {
 })();
 test(
   'video effects inspector persists controls, recovers a failed model load, compares and undoes edits',
-  { timeout: 120000, skip: !cached ? 'vision models not cached' : !hasFfmpeg ? 'no ffmpeg' : process.env.CI ? 'the vision models are not reliable on CI runners without a GPU (#499)' : false },
+  { timeout: 120000, skip: !cached ? 'vision models not cached' : !hasFfmpeg ? 'no ffmpeg' : false },
   async () => {
     const scratch = await mkdtemp(join(tmpdir(), 'of-vision-ui-'));
     const names = ['HOME', 'SHARED_HOME', 'LIBRARY', 'SAVED', 'EXPORTS'];
@@ -52,9 +52,11 @@ test(
           '3',
           '-r',
           '10',
+          '-c:v',
+          'libvpx-vp9',
           '-pix_fmt',
           'yuv420p',
-          join(root, 'v.mp4'),
+          join(root, 'v.webm'),
         ]);
       else
         execFileSync('ffmpeg', [
@@ -64,9 +66,11 @@ test(
           'lavfi',
           '-i',
           'color=c=red:size=320x180:rate=10:duration=3',
+          '-c:v',
+          'libvpx-vp9',
           '-pix_fmt',
           'yuv420p',
-          join(root, 'v.mp4'),
+          join(root, 'v.webm'),
         ]);
       const stage = realFace ? { w: 410, h: 512 } : { w: 320, h: 180 };
       await writeFile(
@@ -78,7 +82,7 @@ test(
         filmHtml({
           stage,
           tracks: [
-            { clips: [{ id: 'v', src: 'v.mp4', time: [0, 3] }] },
+            { clips: [{ id: 'v', src: 'v.webm', time: [0, 3] }] },
             { clips: [{ id: 'back', src: 'back.svg', time: [0, 3] }] },
           ],
         }),
@@ -107,7 +111,7 @@ test(
       const style = async () =>
         readFilmFile(await readFile(join(root, 'film.html'), 'utf8')).doc.tracks[0].clips[0].style ?? '';
       await page.goto(`${studio.origin}/projects/${project.id}?key=${studio.key}`);
-      const video = page.locator('[data-block-kind="video"][data-block-title="v.mp4"]');
+      const video = page.locator('[data-block-kind="video"][data-block-title="v.webm"]');
       await video.waitFor();
       await video.click({ position: { x: 30, y: 10 } });
       await page.locator('[data-inspector-workspace]').getByRole('tab', { name: 'Effects', exact: true }).click();
@@ -115,9 +119,19 @@ test(
       await page.context().route(failure, (route) => route.abort('failed'));
       await page.getByRole('switch', { name: 'Remove background', exact: true }).click();
       await until(async () => (await style()).includes('--of-cutout: 1'), 'cutout is saved in film.html');
+      // A paused cutout runs a draft followed by a precise pass. Keep the outage in place
+      // until both finish, or refinement can recover and remove Retry before it is clicked.
+      const frame = page.frameLocator('iframe[title="film"]:not([data-loading]):not([data-leaving])');
+      await until(() => frame.locator('body').evaluate(() => {
+        const status = window.__filmEditor?.stage?.vision('v');
+        return status?.phase === 'error' && !status.refining;
+      }), 'the paused cutout finishes processing with the injected failure');
       await page.locator('[data-vision-status="error"]').waitFor();
       await page.context().unroute(failure);
-      await page.getByRole('button', { name: 'Retry processing' }).click();
+      await Promise.all([
+        page.waitForRequest(failure),
+        page.getByRole('button', { name: 'Retry processing' }).click(),
+      ]);
       await page.locator('[data-vision-status="ready"]').waitFor();
       let heldSubject;
       const blockedSubject = '**/__film/vision/subject.onnx';
@@ -127,7 +141,7 @@ test(
       await page.getByRole('button', { name: 'Cutout method', exact: true }).click();
       await page.getByRole('option', { name: 'Detailed subject · download 99 MB', exact: true }).click();
       await until(async () => Boolean(heldSubject), 'the optional model starts only after it is selected');
-    await page.locator('[data-vision-status="loading"]').waitFor();
+      await page.locator('[data-vision-status="loading"]').waitFor();
       await page.getByRole('button', { name: 'Cutout method', exact: true }).click();
       await page.getByRole('option', { name: 'Portrait detail · built in', exact: true }).click();
       await page.locator('[data-vision-status="ready"]').waitFor();
