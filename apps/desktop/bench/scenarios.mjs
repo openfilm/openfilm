@@ -37,21 +37,27 @@ async function until(what, test, ms = 60_000, every = 50) {
   }
 }
 
+/** The page of a project's tab, else the first of Studio's (the projects, which keep a page of their own beside the tabs'). */
+const studioPage = (context) => {
+  const all = context.pages().filter((p) => p.url().startsWith('http://127.0.0.1:'));
+  return all.find((p) => new URL(p.url()).pathname.startsWith('/projects/')) ?? all[0];
+};
+
 /** Studio's page and the chat's: two pages in the app with two views, one page in the app with one (shell/). */
 async function connect(cdp) {
   const browser = await chromium.connectOverCDP(cdp);
   const context = browser.contexts()[0];
-  const studio = await until('the Studio page', async () => context.pages().find((p) => p.url().startsWith('http://127.0.0.1:')));
+  const studio = await until('the Studio page', async () => studioPage(context));
   await until('the chat', async () => context.pages().some((p) => p.url().startsWith('file:'))
     || await studio.evaluate(() => Boolean(document.getElementById('of-chat'))), 30_000, 100);
   const chat = context.pages().find((p) => p.url().startsWith('file:')) ?? studio;
   return { browser, studio, chat };
 }
 
-/** The film's frame: the visible `iframe[title=film]`'s. */
+/** The film's frame: the shown `iframe[title=film]`'s (Studio keeps a second one loading, or leaving, beside it). */
 async function filmFrame(studio) {
   return until('the film frame', async () => {
-    const handle = await studio.$('iframe[title="film"]:not([style*="hidden"])');
+    const handle = await studio.$('iframe[title="film"]:not([data-loading]):not([data-leaving])');
     return handle ? await handle.contentFrame() : null;
   });
 }
@@ -76,7 +82,8 @@ async function ready(studio, chat, dir = null) {
 /** Measure `act` in Studio's page, the chat's page and the film's frame. */
 async function measured(pages, act) {
   const onePage = pages.chat === pages.studio;
-  const frames = { studio: pages.studio.mainFrame(), ...(onePage ? {} : { chat: pages.chat.mainFrame() }), film: pages.film };
+  /* the film's frame as shown now: Studio replaces it when the film changes */
+  const frames = { studio: pages.studio.mainFrame(), ...(onePage ? {} : { chat: pages.chat.mainFrame() }), film: await filmFrame(pages.studio) };
   for (const p of new Set([pages.studio, pages.chat])) await probe(p);
   await Promise.all(Object.values(frames).map(startFrame));
   const extra = await act();
@@ -139,8 +146,16 @@ export async function benchRun({ dir, log }) {
     let pages = await connect(app.cdp);
     /* the film opened as `openfilm open` opens it, without a browser */
     const run = await until('Studio advertised', async () => (existsSync(join(dir, 'home/run.json')) ? JSON.parse(readFileSync(join(dir, 'home/run.json'), 'utf8')) : null), 60_000, 200);
-    const opened = await fetch(`${run.origin}/api/open`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-studio-key': run.key }, body: JSON.stringify({ path: project, fallback: 0 }) });
-    if (!opened.ok) throw new Error(`opening the film: ${opened.status}`);
+    /* the film opens in a tab, a page of its own (the projects' stays beside it). Studio tells only the pages
+       connected when it is asked: asked again while no page has taken it */
+    const context = pages.browser.contexts()[0];
+    for (let attempt = 1; ; attempt += 1) {
+      const opened = await fetch(`${run.origin}/api/open`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-studio-key': run.key }, body: JSON.stringify({ path: project, fallback: 0, pages: 1 }) });
+      if (!opened.ok) throw new Error(`opening the film: ${opened.status}`);
+      const shown = await until('the film\'s page', async () => context.pages().find((p) => p.url().includes('/projects/')), 10_000, 100).catch(() => null);
+      if (shown) { pages = { ...pages, studio: shown, chat: pages.chat === pages.studio ? shown : pages.chat }; break; }
+      if (attempt === 3) break;
+    }
     await ready(pages.studio, pages.chat, dir);
     pages = { ...pages, film: await filmFrame(pages.studio) };
     await sleep(3000);
@@ -216,6 +231,10 @@ export async function benchRun({ dir, log }) {
     });
     figures.stream.memory = treeMemory(app.child.pid);
     await pages.browser.close().catch(() => {});
+  } catch (e) {
+    /* a run that failed leaves no server behind to keep the benchmark from ending */
+    await model.close();
+    throw e;
   } finally {
     await quit(app.child);
   }
