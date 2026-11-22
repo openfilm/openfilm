@@ -13,6 +13,8 @@ A folder:
 - `assets/`: media files (video, pictures, sound). The person sees every one in Studio: keep only what the film can use, and delete the pieces you made them from.
 - Files and folders starting with a dot (`.film`, `.git`) belong to the tools: leave them.
 
+Studio can merge the person's timeline edits back into `film.html` when an outside tool overwrites it with an older copy. Before a large edit, the person can open **Version history** in Studio and choose **Save version**. To return the project to a saved version, select it there and choose **Restore this version**.
+
 ## film.html
 
     <!doctype html>
