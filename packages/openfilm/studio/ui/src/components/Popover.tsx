@@ -18,6 +18,7 @@ export function Popover({
   open,
   onOpenChange,
   trigger,
+  anchorRef,
   children,
   placement = 'bottom',
   align = 'start',
@@ -29,6 +30,8 @@ export function Popover({
   open: boolean;
   onOpenChange: (v: boolean) => void;
   trigger: React.ReactNode;
+  /** A shared toolbar control whose bounds position the panel. */
+  anchorRef?: React.RefObject<HTMLElement | null>;
   children: React.ReactNode;
   placement?: 'top' | 'bottom' | 'auto';
   /** end: align the panel's right edge to the trigger's right edge (avoids overflow for triggers near the right side of the screen); center: under its middle. */
@@ -47,7 +50,7 @@ export function Popover({
   const [panelStyle, setPanelStyle] = React.useState<React.CSSProperties | null>(null);
 
   const update = React.useCallback(() => {
-    const el = ref.current;
+    const el = anchorRef?.current ?? ref.current;
     if (!el) return;
     const r = el.getBoundingClientRect();
     const gap = 6;
@@ -82,7 +85,7 @@ export function Popover({
       ['--popover-max-h' as string]: `${room}px`,
       overflow: 'visible',
     });
-  }, [placement, align, clampToViewport, layer]);
+  }, [anchorRef, placement, align, clampToViewport, layer]);
 
   React.useLayoutEffect(() => {
     if (!open) {

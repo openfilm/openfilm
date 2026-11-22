@@ -24,7 +24,7 @@ import type { ActionId } from '@/lib/keymap';
 import { useKeyHint } from '@/lib/keymap-store';
 import type { TimelineBlock, TimelineTrack } from '@/lib/timeline-layout';
 import type { MediaListing } from '@/lib/workspace-resources';
-import { ownTrackHeight, sizeOf, trackHeightsOf, withTrackHeight, TRACK_SIZES, type TrackSize } from '@/lib/track-heights';
+import { ownTrackHeight, sizeOf, withTrackHeight, TRACK_SIZES, type TrackSize } from '@/lib/track-heights';
 import type { Player } from '@/editor/player';
 import type { OutsideStep } from '@/editor/use-film';
 import type { ContextMenuEntry } from './ContextMenu';
@@ -45,10 +45,11 @@ const sounding = (b: TimelineBlock) => Boolean(b.clipId && b.loc && b.src) && (
 ) && b.volume !== 0;
 
 export function useEditorTools({
-  projectId, tracks, film, settings, patchSettings, player, timeRef, seek, edit, record, editModel, selectedClipIds, listing, toast, pickFile,
+  projectId, tracks, heights, film, settings, patchSettings, player, timeRef, seek, edit, record, editModel, selectedClipIds, listing, toast, pickFile,
 }: {
   projectId: string;
   tracks: readonly TimelineTrack[];
+  heights: ReadonlyMap<number, number>;
   film: Film | null;
   settings: ProjectSettings | null;
   patchSettings: (patch: Parameters<typeof api.patchSettings>[1]) => void;
@@ -175,7 +176,6 @@ export function useEditorTools({
   /* ── track heights: kept in the project's settings; while an edge is dragged, the height in hand ── */
   const [live, setLive] = React.useState<{ docIndex: number; height: number } | null>(null);
   React.useEffect(() => { setLive(null); }, [settings]);
-  const heights = React.useMemo(() => trackHeightsOf(settings?.trackHeights ?? [], film?.tracks ?? []), [settings, film]);
   const shownTracks = React.useMemo(() => tracks.map((tr) => {
     const h = tr.docIndex == null ? undefined : live?.docIndex === tr.docIndex ? live.height : heights.get(tr.docIndex);
     return h == null ? tr : { ...tr, height: h };

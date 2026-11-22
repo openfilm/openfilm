@@ -6,10 +6,11 @@ import { join } from 'node:path';
 import { chromium } from 'playwright-core';
 import { filmHtml } from '../src/film-doc.mjs';
 import { writeMarkers } from './server/markers.mjs';
+import { patchProjectSettings } from './server/project-settings.mjs';
 import { openProject } from './server/projects.mjs';
 import { startStudio } from './server/server.mjs';
 
-test('timeline range selection, marker scrolling and compact track layout', { timeout: 60_000 }, async () => {
+test('timeline range selection, fixed markers and scrollable track padding', { timeout: 60_000 }, async () => {
   const scratch = await mkdtemp(join(tmpdir(), 'of-range-clear-'));
   const names = ['HOME', 'SHARED_HOME', 'LIBRARY', 'SAVED', 'EXPORTS', 'TRASH_DIR'];
   const saved = new Map(names.map((name) => [`OPENFILM_${name}`, process.env[`OPENFILM_${name}`]]));
@@ -74,7 +75,7 @@ test('timeline range selection, marker scrolling and compact track layout', { ti
     assert.equal(await page.getByRole('button', { name: 'Time range', exact: true }).count(), 0);
     const clip = await block.boundingBox();
     const viewport = await scroll.boundingBox();
-    await page.mouse.click(clip.x + (clip.width + 1) / 4, viewport.y - 8, { button: 'right' });
+    await page.mouse.click(clip.x + (clip.width + 1) / 4, viewport.y + 8, { button: 'right' });
     await timeRange.click();
     await page.getByRole('menuitem', { name: /Mark in/ }).click();
     await seek(3);
@@ -114,8 +115,17 @@ test('timeline range selection, marker scrolling and compact track layout', { ti
     const tracks = Array.from({ length: 8 }, (_, index) => ({
       clips: [{ id: `card-${index}`, src: 'card.svg', time: [0, 4] }],
     }));
+    const sound = Buffer.alloc(44 + 64_000);
+    sound.write('RIFF'); sound.writeUInt32LE(sound.length - 8, 4); sound.write('WAVEfmt ', 8);
+    sound.writeUInt32LE(16, 16); sound.writeUInt16LE(1, 20); sound.writeUInt16LE(1, 22);
+    sound.writeUInt32LE(8000, 24); sound.writeUInt32LE(16000, 28);
+    sound.writeUInt16LE(2, 32); sound.writeUInt16LE(16, 34);
+    sound.write('data', 36); sound.writeUInt32LE(sound.length - 44, 40);
+    await writeFile(join(markersRoot, 'sound.wav'), sound);
+    tracks.push({ clips: [{ id: 'sound', src: 'sound.wav', time: [0, 4] }] });
     await writeFile(join(markersRoot, 'film.html'), filmHtml({ stage: { w: 320, h: 180 }, tracks }));
     await writeMarkers(markersRoot, [{ id: 'beat', t: 1, color: 'green', name: 'Beat' }]);
+    await patchProjectSettings(markersRoot, { trackHeights: [{ height: 96, index: 7, clips: ['card-7'] }] });
     const markersProject = await openProject(markersRoot);
     await page.goto(`${studio.origin}/projects/${markersProject.id}?key=${studio.key}`);
 
@@ -124,17 +134,40 @@ test('timeline range selection, marker scrolling and compact track layout', { ti
     await block.waitFor({ state: 'visible' });
     const markerBefore = await marker.boundingBox();
     const clipBefore = await block.boundingBox();
-    assert.ok(markerBefore.y + markerBefore.height <= clipBefore.y, 'the marker has space above the tracks');
-    const scrolledBy = await scroll.evaluate((element) => {
-      const top = element.scrollTop;
-      element.scrollTop += 24;
-      return element.scrollTop - top;
-    });
-    assert.ok(scrolledBy >= markerBefore.height, 'the fixture can scroll the entire marker strip out of view');
-    assert.equal((await marker.boundingBox()).y, markerBefore.y - scrolledBy);
+    const trackView = await scroll.boundingBox();
+    const topSpace = clipBefore.y - trackView.y;
+    assert.ok(topSpace >= 36, 'the first track starts below the scrollable top padding');
+    const readTop = () => scroll.evaluate((element) => element.scrollTop);
+    const initialTop = await readTop();
+    const wheelBy = async (pixels) => {
+      const top = await readTop();
+      await page.mouse.wheel(0, pixels);
+      await page.waitForFunction((target) => document.querySelector('[data-timeline] .tl-scroll').scrollTop >= target, top + pixels);
+      return (await readTop()) - initialTop;
+    };
+    await page.mouse.move(clipBefore.x + 20, trackView.y + 8);
+    const firstStep = await wheelBy(12);
+    const clipAfterStep = await block.boundingBox();
+    assert.equal(clipAfterStep.y, clipBefore.y - firstStep, 'the first scroll reduces the top padding');
+    assert.ok(clipAfterStep.y > trackView.y, 'the first clip is still below the scrollport edge');
+    const clipHit = await page.evaluate(({ x, y }) => document.elementFromPoint(x + 12, y + 2)?.closest('[data-block-id]')?.dataset.blockId, clipAfterStep);
+    assert.equal(clipHit, await block.getAttribute('data-block-id'), 'the top of the first clip remains visible while padding remains');
+    assert.equal((await marker.boundingBox()).y, markerBefore.y, 'the marker is fixed during the first scroll step');
+
+    const scrolledBy = await wheelBy(48);
+    assert.ok(scrolledBy > topSpace, 'the space above the first track can scroll out of view');
     assert.equal((await block.boundingBox()).y, clipBefore.y - scrolledBy);
-    const atOldMarker = await page.evaluate(({ x, y }) => Boolean(document.elementFromPoint(x + 4, y + 4)?.closest('[data-marker]')), markerBefore);
-    assert.equal(atOldMarker, false, 'the marker does not stay clickable over the tracks');
+    assert.equal((await marker.boundingBox()).y, markerBefore.y, 'vertical scrolling leaves the marker in place');
+    const markerHit = await page.evaluate(({ x, y }) => document.elementFromPoint(x + 4, y + 4)?.closest('[data-marker]')?.dataset.marker, markerBefore);
+    assert.equal(markerHit, 'beat', 'scrolled clips cannot overlap the marker strip');
+
+    await scroll.evaluate((element) => { element.scrollTop = element.scrollHeight; });
+    const lastClip = scroll.locator('[data-block-kind]:not([data-block-kind="video"]):not([data-block-kind="mg"])');
+    await lastClip.waitFor({ state: 'visible' });
+    const audioBox = await lastClip.boundingBox();
+    const bottomSpace = trackView.y + trackView.height - audioBox.y - audioBox.height;
+    assert.ok(Math.abs(topSpace - bottomSpace) < 1, 'top and bottom scrollable padding have the same height');
+    assert.equal((await marker.boundingBox()).y, markerBefore.y);
 
     await scroll.evaluate((element) => { element.scrollTop = 0; });
     await seek(1);
@@ -143,31 +176,117 @@ test('timeline range selection, marker scrolling and compact track layout', { ti
     await page.keyboard.press('Escape');
 
     const seam = page.getByRole('separator', { name: 'Resize timeline', exact: true });
-    const divider = await seam.boundingBox();
+    const resizeTimeline = async (dy) => {
+      const divider = await seam.boundingBox();
+      const x = divider.x + divider.width / 2;
+      const y = divider.y + divider.height / 2;
+      await page.mouse.move(x, y);
+      await page.mouse.down();
+      await page.mouse.move(x, y + dy, { steps: 8 });
+      await page.mouse.up();
+    };
     const beforeResize = await scroll.boundingBox();
-    await page.mouse.move(divider.x + divider.width / 2, divider.y + divider.height / 2);
-    await page.mouse.down();
-    await page.mouse.move(divider.x + divider.width / 2, divider.y + divider.height / 2 + 220, { steps: 8 });
-    await page.mouse.up();
-    await page.waitForFunction((height) => {
-      const viewport = document.querySelector('[data-timeline] .tl-scroll')?.getBoundingClientRect();
+    const atMainOnly = () => page.waitForFunction(() => {
+      const { top, bottom, height } = document.querySelector('[data-timeline] .tl-scroll').getBoundingClientRect();
       const main = document.querySelector('[data-main-track]')?.getBoundingClientRect();
-      return viewport && main && viewport.height < height && main.top >= viewport.top && main.bottom <= viewport.bottom;
-    }, beforeResize.height);
+      return main && height === 96 && Math.abs(main.top - top) < 1 && Math.abs(main.bottom - bottom) < 1;
+    });
+    await resizeTimeline(220);
+    await atMainOnly();
     const compactView = await scroll.boundingBox();
     const rulerBox = await ruler.boundingBox();
-    assert.ok(compactView.y - (rulerBox.y + rulerBox.height) >= 32, 'the compact timeline keeps space under its ruler');
-    const compactTop = await scroll.evaluate((element) => element.scrollTop);
-    assert.ok(compactTop > 0, 'shrinking brought the main track into view');
+    const compactMarker = await marker.boundingBox();
+    assert.ok(compactView.height < beforeResize.height);
+    assert.equal(compactMarker.y, rulerBox.y + rulerBox.height, 'the markers stay immediately below the ruler while resizing');
+    assert.ok(compactView.y - compactMarker.y - compactMarker.height <= 2, 'the top padding scrolls away at the main-track limit');
     const cover = await page.locator('[data-cover-tile]').boundingBox();
     assert.ok(cover.y >= compactView.y && cover.y + cover.height <= compactView.y + compactView.height);
 
-    const gutter = { x: clipBefore.x + 20, y: compactView.y - 8 };
-    await page.mouse.move(gutter.x, gutter.y);
+    await resizeTimeline(-64);
+    await page.waitForFunction(() => {
+      const viewport = document.querySelector('[data-timeline] .tl-scroll').getBoundingClientRect();
+      const main = document.querySelector('[data-main-track]')?.getBoundingClientRect();
+      return main && main.top > viewport.top + 32 && Math.abs(main.bottom - viewport.bottom) < 1;
+    });
+    await resizeTimeline(100);
+    await atMainOnly();
+
+    const compactTop = await scroll.evaluate((element) => element.scrollTop);
+    await page.mouse.move(clipBefore.x + 20, compactView.y + 8);
     await page.mouse.wheel(0, -120);
     await page.waitForFunction((top) => document.querySelector('[data-timeline] .tl-scroll').scrollTop < top, compactTop);
-    assert.equal(await page.evaluate(({ x, y }) => Boolean(document.elementFromPoint(x, y)?.closest('[data-block-id]')), gutter),
-      false, 'clips stay below the reserved space when the timeline scrolls');
+    assert.equal((await marker.boundingBox()).y, compactMarker.y, 'the markers stay fixed while scrolling at the minimum height');
+
+    await resizeTimeline(-64);
+    await scroll.evaluate((element) => element.scrollTo(0, 0));
+    const tools = page.locator('[data-timeline] button');
+    await tools.nth(1).click();
+    const modeMenu = page.locator('[data-popover-panel]').filter({ hasText: 'Split' });
+    await modeMenu.waitFor();
+    assert.equal((await modeMenu.boundingBox()).x, (await tools.first().boundingBox()).x, 'the mode menu aligns to the left of the tool');
+    await page.keyboard.press('Escape');
+
+    const panView = await scroll.boundingBox();
+    const panRuler = await ruler.boundingBox();
+    const panX = panView.x + panView.width / 2;
+    const pin = await marker.boundingBox();
+    await page.mouse.click(pin.x + pin.width / 2 + 6, panRuler.y + 10);
+    assert.ok(Number(await ruler.getAttribute('aria-valuenow')) > 1000, 'a ruler click uses its own frame near a marker');
+
+    const dragFrom = async (x, y, dx) => {
+      await page.mouse.move(x, y);
+      await page.mouse.down();
+      await page.mouse.move(x + dx, y, { steps: 8 });
+      await page.mouse.up();
+    };
+    const emptyY = panView.y + 12;
+    const readTime = async () => Number(await ruler.getAttribute('aria-valuenow'));
+    const clickAt = async (x) => { await page.mouse.click(x, emptyY); return readTime(); };
+    /* Find two nearby pixels whose clicks land on different frames, then cross that boundary during one click. */
+    let pressX = Math.round(panRuler.x + 42);
+    let pressFrame = await clickAt(pressX);
+    let releaseFrame = await clickAt(pressX + 2);
+    for (let i = 0; i < 10 && pressFrame === releaseFrame; i++) {
+      pressX += 2;
+      pressFrame = releaseFrame;
+      releaseFrame = await clickAt(pressX + 2);
+    }
+    assert.notEqual(pressFrame, releaseFrame);
+    await seek(0);
+    await dragFrom(pressX, emptyY, 2);
+    assert.equal(await readTime(), releaseFrame, 'a click with slight pointer movement seeks to the release frame');
+
+    for (const y of [panView.y - 8, panView.y + 12]) {
+      await page.mouse.click(panX, panRuler.y + 10);
+      const start = Number(await ruler.getAttribute('aria-valuenow'));
+      const knob = await page.locator('[data-timeline] [data-zoom-bleed] [role="presentation"]').boundingBox();
+      await dragFrom(knob.x + knob.width / 2, y, -70);
+      assert.ok(Number(await ruler.getAttribute('aria-valuenow')) < start, 'dragging the line above the tracks scrubs at fit');
+    }
+
+    await page.getByRole('button', { name: /^Zoom in/ }).click();
+    await scroll.evaluate((element) => element.scrollTo(0, 0));
+    await page.mouse.click(panX, panRuler.y + 10);
+    const playhead = await ruler.getAttribute('aria-valuenow');
+    for (const [y, area] of [[panView.y - 8, 'the marker strip'], [panView.y + 12, 'the top padding']]) {
+      await scroll.evaluate((element) => { element.scrollLeft = 0; });
+      await dragFrom(panX + 40, y, -80);
+      assert.equal(await scroll.evaluate((element) => element.scrollLeft), 80, `dragging ${area} pans the timeline`);
+      assert.equal(await ruler.getAttribute('aria-valuenow'), playhead, `panning from ${area} keeps the playhead time`);
+    }
+
+    await seek(0);
+    await scroll.evaluate((element) => element.scrollTo(0, 0));
+    const secondClip = await scroll.locator('[data-block-id]').nth(1).boundingBox();
+    for (const y of [panView.y + 8, panView.y - 8]) {
+      await page.mouse.move(panX, y);
+      await page.mouse.down();
+      await page.mouse.move(panX, secondClip.y + 10, { steps: 8 });
+      await page.mouse.up();
+      await page.waitForFunction(() => window.lastSelection?.refs.filter((ref) => ref.kind === 'clip').length === 2);
+      await page.keyboard.press('Escape');
+      await page.waitForFunction(() => !window.lastSelection?.refs.some((ref) => ref.kind === 'clip'));
+    }
   } finally {
     await browser?.close();
     await studio?.close();

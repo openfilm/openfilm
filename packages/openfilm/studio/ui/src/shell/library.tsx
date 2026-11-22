@@ -16,7 +16,7 @@ import { onRevealInLibrary } from '@/lib/library-reveal';
 import * as React from 'react';
 import { api, type MediaMade } from '@/api';
 import { useT } from '@/i18n';
-import { HOST_PANEL_WIDTH, studioHost, type HostPanel } from '@/lib/host';
+import { HOST_PANEL_WIDTH, studioHost, workspaceOrigin, type HostPanel } from '@/lib/host';
 import { BUILT_IN, fromLibrary, useLibraryIndex } from '@/lib/library';
 import type { Plugin } from '@/lib/plugins';
 import { importIntoSaved, refreshSaved, savedActions, savedSources, starSaved, useSavedListing, useStarredSaved } from '@/lib/saved';
@@ -39,8 +39,6 @@ import { useWiring, wiringStore, type Wiring } from './frame';
  * Studio is open, across projects. */
 type MediaScope = string;
 const MEDIA_SCOPE: { current: MediaScope } = { current: 'project' };
-/** where the app's panel starts: under Studio's top bar (its h-8) */
-export const HOST_PANEL_TOP = 32;
 /* no template's try failed, and no way out of a try: what the drawer is given when no workbench tries anything */
 const NO_STATUS: Partial<Record<string, 'failed'>> = {};
 const nothing = () => {};
@@ -159,6 +157,7 @@ export function LibraryPlace({ frame }: { frame: ReturnType<typeof useProjectFra
     toast, showWorkbench, setSettingsOpen,
     libraryPane: pane, updateWorkspace, setPanelWidth,
   } = frame;
+  const paneOpen = pane.open && (pane.dock === 'chat' || frame.newWorkbenchTab !== 'active');
   /* Settings › Services, where a voice's service is connected */
   const openServices = React.useCallback(() => { setSettingsOpen('models'); }, [setSettingsOpen]);
   /* a file of the media pane clicked is taken in hand by the workbench shown (its viewer shows it): by none, nothing */
@@ -262,21 +261,21 @@ export function LibraryPlace({ frame }: { frame: ReturnType<typeof useProjectFra
       {...(studioHost?.refer ? { fileRef: refOfFile, onRefer: studioHost.refer } : {})}
       reveal={revealMedia}
       onRevealed={mediaRevealed}
-      shown={pane.open}
+      shown={paneOpen}
       litPath={library?.litPath ?? null}
       onAdd={canvasOpen ? (file) => { void requestCanvasFiles(file.path); } : library ? (file) => library.add(file, false) : undefined}
     />
   );
   return (
     <>
-      {pane.seam ? <PanelSeam panel={{ label: pane.seam.label, width: pane.seam.width, setWidth: setPanelWidth }} bottom={pane.seam.bottom} side={pane.seam.side} /> : null}
-      <WorkspaceLibraryPane open={pane.open} dock={pane.dock}
+      {pane.seam ? <PanelSeam panel={{ label: pane.seam.label, width: pane.seam.width, setWidth: setPanelWidth }} bottom={pane.seam.bottom} side={pane.seam.side} workspaceLeft={frame.workspaceLeft} /> : null}
+      <WorkspaceLibraryPane open={paneOpen} dock={pane.dock}
         rect={pane.rect}
         free={pane.free}
         onResize={updateWorkspace}>
           <LibraryDrawer media={media} mediaScope={mediaScope} onMediaScope={switchMedia} mediaRequest={revealMedia?.seq} actions={actions}
             tried={library?.tried ?? null} templateStatus={library?.templateStatus ?? NO_STATUS} previewBar={canvasOpen ? null : library?.preview.bar ?? null} previewPicture={canvasOpen ? null : library?.preview.picture ?? null} dismissRef={library?.preview.dismissRef ?? noDismiss}
-            onPreviewStart={canvasOpen ? pauseWorkbench : library?.preview.begin ?? nothing} onDownloadFailed={onLibraryDownloadFailed} shown={pane.open} under={pane.under} beside={pane.beside}
+            onPreviewStart={canvasOpen ? pauseWorkbench : library?.preview.begin ?? nothing} onDownloadFailed={onLibraryDownloadFailed} shown={paneOpen} under={pane.under} beside={pane.beside}
             onUpload={(files, into) => { if (into === 'project') void onImport(files, 'assets', () => {}); else void savedImport(files, into, () => {}).catch((e: unknown) => toast.showError(e instanceof Error ? e.message : String(e))); }}
             onKeep={(path, name, into) => saveFiles([{ path, name } as WorkspaceResource], into)}
             captions={library?.captions} covers={library?.covers} speak={library?.speak} recorder={library?.recorder} onServices={openServices}
@@ -294,12 +293,12 @@ export function LibraryPlace({ frame }: { frame: ReturnType<typeof useProjectFra
  * The seam that sizes the app's panel while Studio's assets drawer covers it (the panel's own seam is under the
  * drawer then): the same 10 px strip over the column's right edge, dragged or moved with the arrow keys.
  */
-function PanelSeam({ panel, bottom, side = 'left' }: { panel: Pick<HostPanel, 'label' | 'width' | 'setWidth'>; bottom: number; side?: 'left' | 'right' }) {
+function PanelSeam({ panel, bottom, side, workspaceLeft }: { panel: Pick<HostPanel, 'label' | 'width' | 'setWidth'>; bottom: number; side: 'left' | 'right'; workspaceLeft: number }) {
   const drag = React.useRef<{ x: number; width: number } | null>(null);
   return (
     <div role="separator" aria-orientation="vertical" aria-label={panel.label} tabIndex={0}
       className="workspace-resize-handle fixed z-[38] w-[9px] cursor-col-resize touch-none outline-none"
-      style={{ top: HOST_PANEL_TOP, bottom, left: side === 'right' ? `calc(100vw - ${HOST_PANEL_WIDTH} - 4px)` : `calc(${HOST_PANEL_WIDTH} - 5px)` }}
+      style={{ top: workspaceOrigin().top, bottom, left: side === 'right' ? `calc(100vw - ${HOST_PANEL_WIDTH} - 4px)` : `calc(${workspaceLeft}px + ${HOST_PANEL_WIDTH} - 5px)` }}
       onPointerDown={(e) => {
         if (e.button !== 0) return;
         e.preventDefault();

@@ -273,6 +273,10 @@ export const zhCN: Words = {
     untitledSession: '新对话',
   },
   projectMenu: {
+    revealChat: '打开对话记录文件夹',
+    archiveBusy: '对话进行中，无法归档',
+    more: '更多',
+    manageSessions: '管理对话',
     archive: '归档',
     archived: '已归档',
     asking: '等你回答',

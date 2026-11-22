@@ -93,7 +93,7 @@ export function WorkspaceEditor({ value, spec, title, frames, hasChat, onChange,
     if(!edge||!value.tree)return;event.preventDefault();event.stopPropagation();
     onChange(shownWith(panel,moveDock(value.tree,panel,'root',edge)));
   };
-  return createPortal(<div ref={root} data-workspace-editor role="dialog" aria-modal="true" tabIndex={-1} aria-label={words.editing} className={`${styles.editor} ${moving?styles.moving:''}`}>
+  return createPortal(<div ref={root} data-workspace-editor role="dialog" aria-modal="true" tabIndex={-1} style={{ top: frames.root.top }} aria-label={words.editing} className={`${styles.editor} ${moving?styles.moving:''}`}>
     {(Object.entries(frames.panels) as [DockPanel,Frames['root']][]).map(([panel,rect])=><div key={panel} data-layout-panel={panel} className={styles.tile} {...pointerGrip(panel)} style={{...rect,left:rect.left+2,top:rect.top+2,width:Math.max(0,rect.width-4),height:Math.max(0,rect.height-4)}}>
       <button type="button" aria-label={t('layout.movePanel').replace('{name}',label(panel))} className={styles.handle} onKeyDown={moveWithKeyboard(panel)}><GripVertical size={14}/><span>{label(panel)}</span></button>
       {panelHides(panel,spec)?<button type="button" data-layout-control className={styles.hide} aria-label={t('layout.hidePanel').replace('{name}',label(panel))} onClick={()=>toggle(panel)}><X size={14}/></button>:null}

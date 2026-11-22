@@ -1,0 +1,37 @@
+.starts { padding: 22px var(--page-x, 24px) 6px; }
+.starts h3 { margin: 0 0 12px; color: var(--text-muted); font-size: 13.5px; font-weight: 400; }
+.row { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 176px)); gap: 12px; }
+.tile { display: grid; gap: 9px; min-width: 0; text-align: start; outline: none; }
+.tile:disabled { opacity: .6; }
+/* the face: a deep colour, a lighter mark of the same hue, and a faint grain of dots fading in from its corner */
+.face {
+  position: relative;
+  display: grid;
+  place-items: center;
+  height: 108px;
+  overflow: hidden;
+  border-radius: 14px;
+  background: var(--face);
+  color: var(--mark);
+  transition: filter 140ms ease, transform 140ms ease;
+}
+.face::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(circle, color-mix(in srgb, var(--mark) 26%, transparent) 1.1px, transparent 1.5px);
+  background-size: 11px 11px;
+  -webkit-mask-image: linear-gradient(135deg, transparent 45%, #000 130%);
+  mask-image: linear-gradient(135deg, transparent 45%, #000 130%);
+  pointer-events: none;
+}
+.face > svg { position: relative; }
+.face[data-tone='blue'] { --face: #17408f; --mark: #a9c8ff; }
+.face[data-tone='violet'] { --face: #45309a; --mark: #cfc2ff; }
+.face[data-tone='teal'] { --face: #0d4f48; --mark: #86ead9; }
+.face[data-tone='amber'] { --face: #7a3511; --mark: #ffbf96; }
+.face[data-tone='slate'] { --face: #2d3340; --mark: #c5cede; }
+.tile:hover:not(:disabled) .face { filter: brightness(1.12); }
+.tile:active:not(:disabled) .face { transform: scale(.985); }
+.tile:focus-visible .face { outline: 2px solid var(--accent); outline-offset: 2px; }
+.label { overflow: hidden; padding-inline: 2px; color: var(--text); font-size: 13.5px; text-overflow: ellipsis; white-space: nowrap; }

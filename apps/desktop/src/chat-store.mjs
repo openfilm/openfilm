@@ -77,11 +77,16 @@ function readJson(file, fallback) {
   try { return JSON.parse(readFileSync(file, 'utf8')); } catch { return fallback; }
 }
 
+/** The navigation needs only this small index, even for a project with many large transcripts. */
+export function readSessions(project) {
+  const kept = readJson(join(chatDir(project), 'sessions.json'), {}) ?? {};
+  const sessions = Array.isArray(kept.sessions) ? kept.sessions.filter((s) => s && typeof s.id === 'string') : [];
+  return { sessions, last: typeof kept.last === 'string' ? kept.last : null };
+}
+
 /** The project's conversations and finished turns, as the chat shows them. */
 export function loadChat(project) {
   const dir = chatDir(project);
-  const kept = readJson(join(dir, 'sessions.json'), {});
-  const sessions = Array.isArray(kept.sessions) ? kept.sessions.filter((s) => s && typeof s.id === 'string') : [];
   const turns = [];
   let names = [];
   try { names = readdirSync(join(dir, 'turns')).filter((n) => n.endsWith('.json')); } catch { /* none yet */ }
@@ -90,7 +95,7 @@ export function loadChat(project) {
     if (entry?.turn?.id && Array.isArray(entry.items)) turns.push(entry);
   }
   turns.sort((a, b) => String(a.turn.createdAt).localeCompare(String(b.turn.createdAt)));
-  return { sessions, last: typeof kept.last === 'string' ? kept.last : null, turns };
+  return { ...readSessions(project), turns };
 }
 
 export function saveSessions(project, { sessions, last }) {

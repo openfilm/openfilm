@@ -246,14 +246,20 @@ export function readWorkspaceProfiles(storage: Pick<Storage, 'getItem'>): Worksp
 }
 export const serializeProfiles = (profiles: WorkspaceProfiles) => JSON.stringify({ version: 3, arrangements: profiles });
 
+/** the desktop title bar: 10px, the 14px window controls, 10px, and its 1px line under them */
+export const DESKTOP_TITLEBAR_HEIGHT = 35;
+/** Coordinates are relative to the window, including any chrome reserved on its top and left. */
+export interface WorkspaceViewport { width: number; height: number; left?: number; top?: number }
+
 /** The chat's width in the desktop shell, even when computing an inactive workspace's layout. */
 export function workspaceChatWidth(width: number, preferred: number, min = 340, studioMin = 640): number {
   return Math.max(Math.min(preferred, width - studioMin), Math.min(min, width));
 }
 
 /** Geometry for the independent library. A narrow window temporarily uses the bottom without overwriting its dock. */
-export function workspaceGeometry(layout: WorkspaceLayout, viewport: { width: number; height: number }, chatWidth = 0) {
-  const width = Math.max(0, viewport.width), height = Math.max(0, viewport.height - 32);
+export function workspaceGeometry(layout: WorkspaceLayout, viewport: WorkspaceViewport, chatWidth = 0) {
+  const origin = viewport.left ?? 0, top = viewport.top ?? 32;
+  const width = Math.max(0, viewport.width - origin), height = Math.max(0, viewport.height - top);
   const chat = Math.max(0, Math.min(chatWidth, width));
   const left = layout.chat && layout.chatSide === 'left' ? chat : 0;
   const right = layout.chat && layout.chatSide === 'right' ? chat : 0;
@@ -269,7 +275,7 @@ export function workspaceGeometry(layout: WorkspaceLayout, viewport: { width: nu
   const h = dock === 'bottom' ? libraryHeight : height;
   return {
     dock, responsive: dock !== requested,
-    library: { left: dock === 'right' ? width - right - w : left, top: dock === 'bottom' ? 32 + height - h : 32, width: w, height: h },
-    inset: { left: left + (independent && dock === 'left' ? w + 1 : 0), right: right + (independent && dock === 'right' ? w + 1 : 0), bottom: independent && dock === 'bottom' ? h + 1 : 0 },
+    library: { left: origin + (dock === 'right' ? width - right - w : left), top: dock === 'bottom' ? top + height - h : top, width: w, height: h },
+    inset: { left: origin + left + (independent && dock === 'left' ? w + 1 : 0), right: right + (independent && dock === 'right' ? w + 1 : 0), bottom: independent && dock === 'bottom' ? h + 1 : 0 },
   };
 }

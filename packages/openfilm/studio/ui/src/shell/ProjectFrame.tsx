@@ -21,12 +21,14 @@ import { studioHost, type StudioCommand } from '@/lib/host';
 import { linkOfCommand, routeLink } from '@/lib/links';
 import { mediaFetch } from '@/lib/media-queue';
 import { mediaProbeTargets } from '@/lib/media-probes';
+import { useHoverOpen } from '@/lib/hover-open';
 import { leaveProject } from '@/lib/navigate';
 import { recycleRefusalOf } from '@/lib/recycle';
 import { factsOfProbe, mediaListingOf, srcHitsAsset, warmProjectMedia, type MediaListing, type MediaProxy, type MediaResult, type MediaSources, type WorkspaceResource } from '@/lib/workspace-resources';
 import type { ImportProgress } from '@/components/MediaPool';
 import { Toast, useToast } from '@/components/Toast';
 import { BrandLoadingScreen } from '@/components/BrandLoadingScreen';
+import { NewWorkbenchPage } from '@/components/NewWorkbenchPage';
 import { forgetAsked, setOpener, showIn, tellCommand, workbenchOpens } from '@/studio/hub';
 import { usePublishFrame, wiringStore } from './frame';
 import { Arrangement } from './arrangement';
@@ -303,7 +305,8 @@ export function useProjectFrame(projectId: string) {
   const shown = useWorkbenchShown(projectId, loaded?.project.id, toast.showError, rearranging);
 
   /* ── how the window is laid out: the app's panel, the library, the canvas and the workbench's panes (shell/layout) ── */
-  const layout = useLayout({ canvasOpen: shown.canvasOpen, noBench: shown.noBench, among: shown.among, specs: shown.specs, inPage: shown.inPage, rearranging });
+  const projectSidebar = useHoverOpen();
+  const layout = useLayout({ dockSidebar: projectSidebar.docked, canvasOpen: shown.canvasOpen, noBench: shown.noBench, among: shown.among, specs: shown.specs, inPage: shown.inPage, rearranging });
 
   /* ── the library: what its pane shows of the project, whichever workbench is shown (shell/library) ── */
   const library = useLibraryShown(projectId, { listing, mediaSources, mediaMade, toast, canvasOpen: shown.canvasOpen, openLibrary: layout.openLibrary });
@@ -322,7 +325,7 @@ export function useProjectFrame(projectId: string) {
     const route = routeLink(link, [...claims.filter(([name]) => name === showing), ...claims.filter(([name]) => name !== showing)], shown.workModes);
     if (!route) return;
     if ('file' in route) { library.showFile(route.file); return; }
-    if (showing !== route.workbench) shown.showWorkbench(route.workbench);
+    if (showing !== route.workbench || shown.newWorkbenchTab === 'active') shown.showWorkbench(route.workbench);
     showIn(route.workbench, route.link);
   };
   /* openfilm/studio `open`, from any plugin's element */
@@ -334,7 +337,7 @@ export function useProjectFrame(projectId: string) {
   const appCommand = React.useRef<(command: StudioCommand) => void>(() => {});
   appCommand.current = (command) => {
     if (command.type === 'show-workbench') {
-      if (command.projectId === projectId && shown.workModes.includes(command.workbench) && shown.nowShown !== command.workbench) shown.showWorkbench(command.workbench);
+      if (command.projectId === projectId && shown.workModes.includes(command.workbench) && (shown.nowShown !== command.workbench || shown.newWorkbenchTab === 'active')) shown.showWorkbench(command.workbench);
       return;
     }
     if (command.type === 'open') { if (typeof command.link === 'string') openLink.current(command.link); return; }
@@ -376,6 +379,7 @@ export function useProjectFrame(projectId: string) {
     filesTick, rawListing, facts, probeMedia, proxies, onUndecoded, prefsTick, folder, mediaSources, listing,
     mediaMade, madeWords, madeVersions, missingMedia, setMissingMedia, findMissing,
     projectApi, onPick, onBring, onRelink, onCollect, onImport, onMove, onMoveCheck, onDelete, onExtractAudio, coverSet, onSetCover, onNewFolder, reveal,
+    projectSidebar,
     ...shown,
     ...layout,
     ...library,
@@ -406,6 +410,7 @@ export function ProjectFrame({ projectId }: { projectId: string }) {
   const [told, setTold] = React.useState(false);
   React.useLayoutEffect(() => { setTold(true); }, []);
   const read = Boolean(loaded) && !failure;
+  const picking = read && state.newWorkbenchTab === 'active';
   return (
     <>
       {failure ? (
@@ -419,10 +424,13 @@ export function ProjectFrame({ projectId }: { projectId: string }) {
         <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
           <div className="relative z-10 grid min-h-0 min-w-0 flex-1 bg-[var(--dock-line)]" style={{ gridTemplateColumns: 'minmax(0, 1fr)', gridTemplateRows: 'auto minmax(0, 1fr)', gridTemplateAreas: '"bar" "main"' }}>
             <TopBar frame={state} />
-            {told && slots ? <><Arrangement frame={state} /><AmongPanes frame={state} /></> : null}
-            <InPanesPlace frame={state} />
+            <div className="contents" inert={picking}>
+              {told && slots ? <><Arrangement frame={state} /><AmongPanes frame={state} /></> : null}
+              <InPanesPlace frame={state} />
+            </div>
           </div>
         </div>
+        {picking && <NewWorkbenchPage frame={state} />}
         <div ref={slotRefs.over} style={PLACE} />
         <PageWindows frame={state} />
         <LibraryPlace frame={state} />

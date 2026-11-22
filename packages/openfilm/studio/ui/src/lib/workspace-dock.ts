@@ -2,7 +2,7 @@
  * A workspace is a tree of splits over the page's own blocks (`chat`, `library`) and the workbench's (by key,
  * lib/workspaces BlockSpec). Hidden leaves keep their place, so reopening never loses a position.
  */
-import { centerOf, type ArrangementSpec, type BlockSpec, type WorkspaceLayout } from './workspaces.ts';
+import { centerOf, workspaceChatWidth, type ArrangementSpec, type BlockSpec, type WorkspaceLayout, type WorkspaceViewport } from './workspaces.ts';
 
 export type DockPanel = string;
 export type DockEdge = 'left' | 'right' | 'top' | 'bottom' | 'center';
@@ -80,8 +80,38 @@ export function visibleDockPanels(layout: WorkspaceLayout, hasChat: boolean, spe
 /** The smallest a panel is drawn where panels float (width, height): the page's own, and each block as declared. */
 export const panelMinimum = (spec: ArrangementSpec) => (panel: DockPanel): readonly [number, number] =>
   panel === 'chat' ? [280,180] : panel === 'library' ? [200,140] : spec.blocks.find((b) => b.key === panel)?.min ?? [240,180];
-export function dockFrames(tree: DockNode, viewport: { width: number; height: number }, visible: ReadonlySet<DockPanel>, minimumOf: (panel: DockPanel) => readonly [number, number]) {
+/** An independent, full-height chat column can use the same split as the native desktop dock. */
+function chatColumn(tree: DockNode | null) {
+  if (!tree || 'panel' in tree || tree.axis !== 'x') return null;
+  if ('panel' in tree.first && tree.first.panel === 'chat') return { side: 'left' as const, tree, work: tree.second };
+  if ('panel' in tree.second && tree.second.panel === 'chat') return { side: 'right' as const, tree, work: tree.first };
+  return null;
+}
+
+/** Carry the window's chat into another workbench. Its library, tools and any nested chat keep their own arrangement. */
+export function carryWorkspaceChat(previous: WorkspaceLayout, next: WorkspaceLayout, panel: { open: boolean; preferredWidth?: number }, windowWidth: number): WorkspaceLayout {
+  const before = chatColumn(previous.tree);
+  let chatWidth = panel.preferredWidth ?? previous.chatWidth;
+  if (before) {
+    const room = Math.max(0, windowWidth - 1);
+    const { ratio, size, anchor } = before.tree;
+    const first = size === undefined ? room * ratio : anchor === 'first' ? size : room - size;
+    const firstPixels = Math.round(first);
+    chatWidth = Math.max(340, Math.min(800, before.side === 'left' ? firstPixels : room - firstPixels));
+  }
+  const chatSide = before?.side ?? previous.chatSide;
+  const after = chatColumn(next.tree);
+  const chat = leaf('chat');
+  const tree = after ? { ...after.tree, ...(chatSide === 'left'
+    ? { first: chat, second: after.work, anchor: 'first' as const }
+    : { first: after.work, second: chat, anchor: 'second' as const }), size: chatWidth } : next.tree;
+  return { ...next, tree, chat: panel.open, chatSide, chatWidth,
+    assets: next.assets && (panel.open || next.libraryDock !== 'chat') };
+}
+
+export function dockFrames(tree: DockNode, viewport: WorkspaceViewport, visible: ReadonlySet<DockPanel>, minimumOf: (panel: DockPanel) => readonly [number, number]) {
   const panels: Partial<Record<DockPanel,DockRect>> = {}, seams: DockSeam[] = [];
+  const column = chatColumn(tree);
   const minimum = (node: DockNode): readonly [number,number] | null => {
     if ('panel' in node) return visible.has(node.panel) ? minimumOf(node.panel) : null;
     const a = minimum(node.first), b = minimum(node.second);
@@ -95,7 +125,15 @@ export function dockFrames(tree: DockNode, viewport: { width: number; height: nu
     if (!b) { walk(node.first,rect,path+'0'); return; }
     const horizontal = node.axis === 'x', room = Math.max(0,(horizontal ? rect.width : rect.height)-1);
     const minA = a[horizontal ? 0 : 1], minB = b[horizontal ? 0 : 1];
-    const fit = Math.min(1,room/(minA+minB)), lo = minA*fit, hi = room-minB*fit;
+    const fit = Math.min(1,room/(minA+minB));
+    let lo = minA*fit, hi = room-minB*fit;
+    if (node === tree && column) {
+      // Outer chat seams follow the desktop dock's limits. The workbench fits its tools inside the remaining room.
+      const narrow = Math.min(room, workspaceChatWidth(rect.width, 340));
+      const wide = Math.min(room, workspaceChatWidth(rect.width, 800));
+      lo = column.side === 'left' ? narrow : room - wide;
+      hi = column.side === 'left' ? wide : room - narrow;
+    }
     const preferred = node.size === undefined ? room*node.ratio : node.anchor === 'first' ? node.size : room-node.size;
     const first = Math.max(0,Math.min(room,Math.round(Math.max(lo,Math.min(hi,preferred)))));
     const second = Math.max(0,room-first), gap = Math.min(1,horizontal ? rect.width : rect.height);
@@ -104,7 +142,8 @@ export function dockFrames(tree: DockNode, viewport: { width: number; height: nu
     walk(node.first,{ ...rect,...(horizontal ? {width:first} : {height:first}) },path+'0');
     walk(node.second,{ ...rect,...(horizontal ? {left:rect.left+first+gap,width:second} : {top:rect.top+first+gap,height:second}) },path+'1');
   };
-  const root = { left:0,top:32,width:Math.max(0,viewport.width),height:Math.max(0,viewport.height-32) };
+  const left = viewport.left ?? 0, top = viewport.top ?? 32;
+  const root = { left, top, width:Math.max(0,viewport.width-left), height:Math.max(0,viewport.height-top) };
   walk(tree,root,'');
   return { panels,seams,root };
 }

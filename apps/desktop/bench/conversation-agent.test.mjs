@@ -135,14 +135,38 @@ try {
   await page.waitForSelector('[data-prompt-editor]');
   const model = page.getByRole('button', { name: /^Model X/ });
   await model.waitFor();
-  assert.equal(await page.locator('[data-prompt-shell]').evaluate((node) => getComputedStyle(node).backgroundColor), 'rgb(32, 32, 32)');
-  const savedTitle = page.locator('[data-conversation-title="saved"] button');
+  const composer = page.locator('[data-prompt-shell]');
+  assert.equal(await composer.evaluate((node) => getComputedStyle(node).backgroundColor), 'rgb(48, 48, 48)');
+  const editorBounds = await composer.locator('[data-prompt-editor]').boundingBox();
+  const modelBounds = await model.boundingBox();
+  const actionBounds = await composer.locator('[data-composer-action]').boundingBox();
+  assert.ok(actionBounds.x >= editorBounds.x + editorBounds.width && modelBounds.y >= editorBounds.y + editorBounds.height,
+    'send sits beside the editor, with the model picker underneath');
+  const viewport = page.locator('[data-conversation-viewport]');
+  assert.deepEqual(await viewport.evaluate(node => {
+    const { paddingLeft, paddingRight } = getComputedStyle(node);
+    return [paddingLeft, paddingRight, getComputedStyle(node.closest('aside')).backgroundColor];
+  }), ['16px', '16px', 'rgb(25, 25, 25)']);
+  const chatBounds = await page.locator('#of-chat').boundingBox();
+  const promptBounds = await composer.boundingBox();
+  assert.equal(promptBounds.x - chatBounds.x, 16, 'the composer shares the message gutter');
+  const savedTitle = page.locator('[data-chat-header] [data-conversation-title="saved"] button');
   assert.deepEqual(await savedTitle.evaluate((node) => ({
     labelColor: getComputedStyle(node.querySelector('span')).color,
+    labelSize: getComputedStyle(node.querySelector('span')).fontSize,
     titleHeight: getComputedStyle(node).height,
     barDivider: getComputedStyle(node.closest('[data-conversation-bar]')).borderBottomWidth,
-  })), { labelColor: 'rgb(163, 163, 163)', titleHeight: '22px', barDivider: '0px' });
-  assert.equal(await page.locator('[data-conversation-bar] [role="tab"]').count(), 0);
+  })), { labelColor: 'rgb(240, 240, 240)', labelSize: '13px', titleHeight: '26px', barDivider: '0px' });
+  await savedTitle.click();
+  const titleInput = page.locator('[data-conversation-title="saved"]').getByRole('textbox', { name: 'Rename' });
+  await titleInput.fill('Discard this title');
+  await titleInput.press('Escape');
+  assert.equal(await savedTitle.innerText(), 'Saved conversation');
+  await savedTitle.press('F2');
+  await titleInput.fill('Saved chat');
+  await titleInput.press('Enter');
+  await savedTitle.getByText('Saved chat', { exact: true }).waitFor();
+  assert.equal(await page.locator('[data-conversation-menu]').count(), 0);
   assert.match(await model.innerText(), /High/, 'the menu keeps Model X\'s High effort when the global Model Y only offers Low and Medium');
   await page.locator('[data-prompt-editor]').fill('Check the saved effort.');
   await page.locator('[data-prompt-editor]').press('Enter');
@@ -177,7 +201,7 @@ try {
   await send('Hold this task.');
   await waitForSent(2);
   await stop.waitFor();
-  assert.equal(await savedTitle.locator(':scope > span').count(), 1, 'a running conversation has only its label and dropdown arrow');
+  assert.equal(await savedTitle.locator('svg').count(), 0, 'the running conversation keeps a plain title');
   await editor.fill('Send while another reply is running.');
   assert.equal(await composerAction.count(), 1);
   assert.equal(await stop.count(), 0);
@@ -214,12 +238,14 @@ try {
   await sendButton.waitFor();
 
   const title = page.locator('[data-conversation-title] button');
-  const dropdown = title.locator('svg.lucide-chevron-down');
+  const sidebar = page.locator('[data-project-sidebar]');
   const history = page.getByRole('dialog', { name: 'Chat history' });
   const openMenu = async () => {
-    await dropdown.click();
+    await page.locator('[data-project-sidebar-trigger]').press('ArrowDown');
+    const current = sidebar.locator('[data-project-tab]').filter({ has: page.locator('[data-navigation-project][aria-current="page"]') });
+    await current.hover();
+    await sidebar.locator('[data-navigation-manage-chats]').click();
     await history.waitFor();
-    assert.equal(await title.getAttribute('aria-expanded'), 'true');
     assert.equal(await history.getByRole('button', { name: 'New parallel chat', exact: true }).count(), 0);
     assert.equal(await history.locator('[aria-label="Working"]').count(), 0, 'history shows no running indicator');
   };
@@ -232,13 +258,14 @@ try {
     await history.getByRole('button', { name, exact: true }).click();
   };
   const mode = (workbench) => page.waitForFunction((id) => window.openfilmDesktop.workbench()?.current === id, workbench);
+  await page.locator('[data-titlebar] [data-workbench-tab="edit"][aria-selected="true"]').waitFor();
   await mode('edit');
   await send('Hold this task before switching conversations.');
   await waitForSent(8);
   await editor.fill('Draft belongs to the first conversation.');
   await newChat();
   assert.equal(await title.innerText(), 'New chat');
-  assert.equal(await dropdown.count(), 1);
+  assert.equal(await title.getAttribute('aria-haspopup'), null);
   assert.equal((await editor.innerText()).trim(), '');
   assert.equal(await title.locator(':scope > span').count(), 1, 'a different conversation does not inherit the running indicator');
   const blankId = await title.evaluate((button) => button.closest('[data-conversation-title]').dataset.conversationTitle);
@@ -248,14 +275,12 @@ try {
   assert.equal(await title.evaluate((button) => button.closest('[data-conversation-title]').dataset.conversationTitle), blankId);
   assert.equal(await editor.innerText(), 'Keep this draft here.');
   assert.equal(await editor.evaluate((node) => node === document.activeElement), true);
-  await dropdown.click();
-  await history.waitFor({ state: 'detached' });
+  await page.keyboard.press('Escape');
+  await history.waitFor({ state: 'hidden' });
   assert.equal((await sent()).length, 8, 'browsing or creating a blank conversation does not interrupt a request');
   await mode('edit');
-  await page.evaluate(() => {
-    const { projectId } = window.openfilmDesktop.workbench();
-    window.openfilmDesktop.showWorkbench(projectId, 'canvas');
-  });
+  await page.locator('[data-titlebar] [data-add-workbench]').click();
+  await page.locator('[data-new-workbench-page] [data-mode-option="canvas"]').click();
   await mode('canvas');
   const canvas = page.locator('[data-workspace-canvas]');
   await canvas.waitFor();
@@ -273,7 +298,7 @@ try {
     globalThis.finishConversationAgent({ ok: true, stopReason: 'cancelled' });
   });
   await waitForSent(9);
-  await selectChat('Saved conversation');
+  await selectChat('Saved chat');
   await mode('edit');
   assert.equal(await editor.innerText(), 'Draft belongs to the first conversation.');
   assert.equal(await title.count(), 1);
@@ -318,7 +343,7 @@ try {
   assert.equal(await app.evaluate(() => globalThis.conversationAgentTurnIds.at(-1) === globalThis.conversationAgentTurnIds.at(-2)), true);
   assert.equal(await app.evaluate(() => globalThis.conversationAgentResumed), 'fixture-codex-chat');
 
-  await selectChat('Saved conversation');
+  await selectChat('Saved chat');
   await app.evaluate(({ ipcMain }) => {
     ipcMain.removeHandler('desktop:chat:snapshot');
     ipcMain.handle('desktop:chat:snapshot', () => {

@@ -539,6 +539,8 @@
 }
 
 .resourceFrame { display: flex; flex: 1; min-height: 0; min-width: 0; }
+.standalone { padding: 10px clamp(12px, 2vw, 28px) 16px 12px; }
+.standalone > nav { flex-basis: clamp(160px, 18vw, 216px); border: 1px solid var(--border); border-radius: 12px; background: var(--bg-raised); }
 .resourceContent { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; }
 .resourceNotice { display: flex; align-items: center; gap: 10px; padding: 5px 20px; background: var(--bg-hover); border-bottom: 1px solid var(--border); font-size: 12px; color: var(--text-muted); }
 .resourceNotice > span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
@@ -645,3 +647,32 @@
 .listBar ~ .list .listHeader { top: 56px; background: var(--dialog-main); }
 .listTools [data-resource-view] > span { display: none; }
 .listTools [data-resource-view] { height: 32px; padding-inline: 8px; gap: 2px; border-radius: 8px; }
+
+/* In the desktop sidebar's projects page (components/SidePage `gallery`): the page's column; each project a card of its
+   own, its cover across the top and its name and date under it, large enough to tell films apart at a glance. */
+:global([data-side-page-frame='gallery']) .listBar,
+:global([data-side-page-frame='gallery']) .grid,
+:global([data-side-page-frame='gallery']) .list,
+:global([data-side-page-frame='gallery']) .status { padding-inline: var(--page-x); }
+:global([data-side-page-frame='gallery']) .listBar { min-height: 56px; padding-top: 18px; padding-bottom: 10px; }
+:global([data-side-page-frame='gallery']) .listTitle { color: var(--text-muted); font-size: 13.5px; font-weight: 400; letter-spacing: 0; }
+:global([data-side-page-frame='gallery']) .grid {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, calc(var(--resource-tile, 180px) * 1.55)), 1fr));
+  gap: 18px;
+  padding-top: 4px;
+  padding-bottom: 28px;
+}
+:global([data-side-page-frame='gallery']) .card {
+  overflow: hidden;
+  padding: 0 0 14px;
+  border: 1px solid var(--frame-line);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--text) 3%, transparent);
+}
+:global([data-side-page-frame='gallery']) .card:hover { border-color: color-mix(in srgb, var(--text) 22%, transparent); background: color-mix(in srgb, var(--text) 5%, transparent); }
+:global([data-side-page-frame='gallery']) .card[aria-selected='true'] { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 7%, transparent); }
+:global([data-side-page-frame='gallery']) .card .cover { aspect-ratio: 16 / 9; margin-bottom: 13px; border-radius: 0; box-shadow: none; }
+:global([data-side-page-frame='gallery']) .card .name { padding-inline: 16px 10px; font-size: 14.5px; line-height: 22px; }
+:global([data-side-page-frame='gallery']) .card .meta { margin-top: 1px; padding-inline: 16px; font-size: 12.5px; }
+:global([data-side-page-frame='gallery']) .card .duration { right: 8px; bottom: 8px; padding: 2px 6px; border-radius: 5px; font-size: 11px; }
+:global([data-side-page-frame='gallery']) .status { border-top: 0; }

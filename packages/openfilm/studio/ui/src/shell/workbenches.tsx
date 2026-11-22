@@ -11,7 +11,8 @@
  * Where these go (the room kept round them, the canvas's own frame where the panels float) is the layout's
  * (shell/layout); what the canvas does to the film is reached through the edit's wiring (plugins/canvas).
  */
-import { CANVAS_KEY, SURFACE_KEY, canvasShown, surfacePicked } from '@/lib/workbench-start';
+import { lastWorkbench, openOn } from '@/lib/workbench-start';
+import { studioHost } from '@/lib/host';
 import * as React from 'react';
 import { api, projectEvents } from '@/api';
 import { useT } from '@/i18n';
@@ -30,22 +31,9 @@ import { addTo } from '@/studio/hub';
 import type { useProjectFrame } from './ProjectFrame';
 import { usePublishShown, wiringStore } from './frame';
 
-/**
- * A panel shown or hidden, as the person last left it (kept in this browser; open when nothing is kept): the value,
- * the way to change and keep it (the person's own toggle), and the way to change it for now only (shown on its own).
- */
-function useKeptFlag(key: string, initial = true): [boolean, (open: boolean) => void, React.Dispatch<React.SetStateAction<boolean>>] {
-  const [open, setOpen] = React.useState(() => {
-    try { const kept = localStorage.getItem(key); return kept == null ? initial : kept !== '0'; } catch { return initial; }
-  });
-  const keep = React.useCallback((next: boolean) => {
-    setOpen(next);
-    try { localStorage.setItem(key, next ? '1' : '0'); } catch { /* not kept */ }
-  }, [key]);
-  return [open, keep, setOpen];
-}
 /** The workbenches whose showing the shell holds itself: the edit, Motion and Color (views of the edit) and the canvas. */
 const HELD_HERE: readonly string[] = ['edit', 'motion', 'color', 'canvas'];
+type NewWorkbenchTab = 'active' | 'inactive' | null;
 /* whether a project shows its canvas, and the plugin's surface it was left on, kept on this computer by project
    (lib/workbench-start) */
 
@@ -55,62 +43,44 @@ const HELD_HERE: readonly string[] = ['edit', 'motion', 'color', 'canvas'];
  * panels are being rearranged (shell/layout writes it).
  */
 export function useWorkbenchShown(projectId: string, canvasProject: string | undefined, showError: (message: string) => void, rearranging: React.RefObject<boolean>) {
-  /* the canvas over the panes, or the edit: by project, as left */
-  const [canvasLeft, setCanvasOpenState] = React.useState(() => canvasShown(projectId));
-  React.useEffect(() => { setCanvasOpenState(canvasShown(projectId)); }, [projectId]);
-  /* the edit graded clip by clip (plugins/color): the color panel in the inspector's place */
-  const [colorOpen, keepColorOpen] = useKeptFlag('openfilm.project.color', false);
-  /* the chosen editor in the panes, kept with the project */
-  const [pickedSurface, setPickedSurface] = React.useState<string | null>(() => surfacePicked(projectId));
-  React.useEffect(() => { setPickedSurface(surfacePicked(projectId)); }, [projectId]);
-  const setSurface = React.useCallback((next: string | null) => {
-    setPickedSurface(next);
-    try { if (next) localStorage.setItem(`${SURFACE_KEY}:${projectId}`, next); else localStorage.removeItem(`${SURFACE_KEY}:${projectId}`); } catch { /* for this launch only */ }
-  }, [projectId]);
-  /* not while the page's panels are being rearranged; opening it stops the film playing (the panes under it are
-     hidden): that is the workbench's, asked of it as this runs */
-  const setCanvasOpen = React.useCallback((open: boolean) => {
-    if (rearranging.current) return;
-    if (open) {
-      wiringStore.get()?.pause?.();
-      setSurface(null);
-    }
-    setCanvasOpenState(open);
-    try { localStorage.setItem(`${CANVAS_KEY}:${projectId}`, open ? '1' : '0'); } catch { /* for this launch only */ }
-  }, [projectId, rearranging, setSurface]);
-  /* the ways of working turned on (Settings → Advanced): one turned off while in use gives way to the first still on */
+  const [choice, setChoice] = React.useState(() => ({ projectId, name: lastWorkbench(projectId), newTab: null as NewWorkbenchTab }));
+  if (choice.projectId !== projectId) setChoice({ projectId, name: lastWorkbench(projectId), newTab: null });
   const workModes = useWorkModes(projectId);
-  /* every plugin off: no workbench is shown, only the library (and the app's chat), which opens */
-  const noBench = workModes.length === 0;
-  const picked = pickedSurface != null && workModes.includes(pickedSurface) ? pickedSurface : null;
-  const motionOpen = picked === 'motion';
-  const surface = motionOpen ? null : picked;
-  /* the canvas as left for the project, shown only while no plugin's surface is in its place: one picked over it (its
-     own arrangement among the panels) is laid out as the panes are, not in the canvas's room */
-  const canvasOpen = canvasLeft && picked == null;
-  const workMode: 'canvas' | 'edit' | 'motion' | 'color' = canvasOpen ? 'canvas' : motionOpen ? 'motion' : colorOpen ? 'color' : 'edit';
-  const setWorkMode = React.useCallback((mode: typeof workMode) => {
+  const nowShown = workModes.includes(choice.name) ? choice.name : workModes.includes('edit') ? 'edit' : workModes[0] ?? null;
+  const noBench = nowShown === null;
+  const newWorkbenchTab = noBench ? null : choice.newTab;
+  const canvasOpen = nowShown === 'canvas', motionOpen = nowShown === 'motion', colorOpen = nowShown === 'color';
+  const workMode = canvasOpen ? 'canvas' : motionOpen ? 'motion' : colorOpen ? 'color' : 'edit';
+  const surface = nowShown && !HELD_HERE.includes(nowShown) ? nowShown : null;
+
+  const showWorkbench = React.useCallback((name: string, options?: { keepNewTab?: boolean }) => {
     if (rearranging.current) return;
-    if (mode === 'canvas') { setCanvasOpen(true); return; }
-    setSurface(mode === 'motion' ? 'motion' : null);
-    setCanvasOpen(false);
-    keepColorOpen(mode === 'color');
-  }, [setCanvasOpen, setSurface, keepColorOpen, rearranging]);
-  /* the plugins of the project, and the arrangements their workbenches are laid out in (lib/blocks) */
+    if (name === 'canvas') wiringStore.get()?.pause?.();
+    setChoice(previous => ({
+      projectId, name,
+      newTab: previous.newTab && (options?.keepNewTab ? previous.newTab : 'inactive'),
+    }));
+    openOn(projectId, name);
+  }, [projectId, rearranging]);
+  const openNewWorkbenchTab = () => {
+    if (rearranging.current) return;
+    wiringStore.get()?.pause?.();
+    setChoice(previous => ({ ...previous, newTab: 'active' }));
+  };
+  const closeNewWorkbenchTab = () => setChoice(previous => ({ ...previous, newTab: null }));
+  const pickNewWorkbench = (name: string) => {
+    showWorkbench(name);
+    closeNewWorkbenchTab();
+  };
+  const setCanvasOpen = React.useCallback((open: boolean) => showWorkbench(open ? 'canvas' : 'edit'), [showWorkbench]);
   const plugins = usePluginsOf(projectId);
   const specs = arrangementSpecs(plugins);
-  /* Edit, Motion and Color share a film session; Canvas owns its board */
-  const heldHere = React.useCallback((workbench: string) => HELD_HERE.includes(workbench), []);
-  const showWorkbench = React.useCallback((mode: string) => {
-    if (heldHere(mode)) setWorkMode(mode as typeof workMode);
-    else setSurface(mode);
-  }, [setWorkMode, setSurface, heldHere]);
   /* the arrangement laid out among the page's panels: the plugin's picked, when it has one of its own; else the edit's,
      under the canvas and any other plugin's surface too */
   /* one someone made is laid out among the panels once its element may run; until then its surface says why not */
   const surfacePlugin = surface != null ? plugins.find((p) => p.workbench === surface) : undefined;
   const surfaceArrangement = surface != null && (!surfacePlugin?.skill || surfacePlugin.element) ? arrangementOf(surface, plugins) : null;
-  const among = surfaceArrangement != null && !heldHere(surface!) ? surfaceArrangement
+  const among = surfaceArrangement != null ? surfaceArrangement
     /* Color is the edit graded, in an arrangement of its own (the edit's viewer among its scopes, shots and tools) */
     : motionOpen ? 'motion' : surface == null && colorOpen && specs.has('color') ? 'color' : 'edit';
   /* the edit and the canvas are not shown: no workbench is on, or a plugin's surface is in their place */
@@ -120,10 +90,6 @@ export function useWorkbenchShown(projectId: string, canvasProject: string | und
   const benchPlugins = React.useMemo(() => plugins.filter((p) => p.on && p.workbench), [plugins]);
   const pickBench = benchPlugins.length > 1 && benchPlugins.some((p) => p.workbench !== 'edit' && p.workbench !== 'canvas');
   const canToggleCanvas = workModes.includes('canvas') && workModes.length > 1;
-  /* one turned off while in use gives way to the first still on */
-  React.useEffect(() => {
-    if (surface == null && workModes.length && !workModes.includes(workMode)) showWorkbench(workModes[0]!);
-  }, [workModes, workMode, surface, showWorkbench]);
   /* the workbench shown, told to the wiring (shell/frame): what the shell reaches is that workbench's first */
   usePublishShown(noBench ? null : surface ?? (canvasOpen ? 'canvas' : 'edit'));
   /*
@@ -159,7 +125,7 @@ export function useWorkbenchShown(projectId: string, canvasProject: string | und
   /* warmed in place, then kept hidden under the edit: opening it never reloads or refits the same board */
   const [canvasKept, setCanvasKept] = React.useState(canvasOpen);
   React.useEffect(() => { if (canvasOpen) setCanvasKept(true); }, [canvasOpen]);
-  React.useEffect(() => { setCanvasKept(canvasShown(projectId)); }, [projectId]);
+  React.useEffect(() => { setCanvasKept(lastWorkbench(projectId) === 'canvas'); }, [projectId]);
   /*
    * OpenFilm's own workbenches that are not in the page yet are warmed (their elements' modules loaded) once this
    * project has opened and the page has painted, while it is visible: the canvas is then put in its box, hidden. A
@@ -187,7 +153,6 @@ export function useWorkbenchShown(projectId: string, canvasProject: string | und
     return () => { live = false; cancel(); document.removeEventListener('visibilitychange', warm); };
   }, [canvasProject, toWarm]);
   /* the workbench shown, and the one shown before it */
-  const nowShown = noBench ? null : surface ?? workMode;
   const before = React.useRef<{ now: string | null; was: string | null }>({ now: nowShown, was: null });
   if (before.current.now !== nowShown) before.current = { now: nowShown, was: before.current.now };
   /* keymap `work-mode` (⌘E): back to the workbench shown before (else the next one); ⌥1, ⌥2… (Alt elsewhere): the
@@ -198,14 +163,13 @@ export function useWorkbenchShown(projectId: string, canvasProject: string | und
     const digit = event.altKey && !event.metaKey && !event.ctrlKey && /^Digit[1-9]$/.test(event.code) ? Number(event.code.slice(5)) : 0;
     if (digit) {
       const name = names[digit - 1];
-      if (name && name !== nowShown) showWorkbench(name);
+      if (name && (name !== nowShown || newWorkbenchTab === 'active')) showWorkbench(name);
       return Boolean(name);
     }
     if (keyAction(event) !== 'work-mode') return false;
     const was = before.current.was;
     const next = was && was !== nowShown && names.includes(was) ? was : names[(names.indexOf(nowShown ?? '') + 1) % Math.max(1, names.length)];
     if (next && next !== nowShown) showWorkbench(next);
-    else if (surface != null) setSurface(null);
     else if (canToggleCanvas) setCanvasOpen(!canvasOpen);
     return true;
   };
@@ -238,8 +202,9 @@ export function useWorkbenchShown(projectId: string, canvasProject: string | und
     : workbench === 'canvas' ? Boolean(arranged.canvas.element ?? placedNext.canvas) : amongElements.some((e) => e.name === workbench)), [arranged, placedNext.edit, placedNext.canvas, amongElements]);
 
   return {
-    canvasOpen, setCanvasOpen, motionOpen, workMode, setWorkMode, workModes, noBench, surface, showWorkbench, nowShown, away,
+    canvasOpen, setCanvasOpen, motionOpen, workMode, setWorkMode: showWorkbench, workModes, noBench, surface, showWorkbench, nowShown, away,
     benchPlugins, pickBench, canToggleCanvas, pluginsRead, arranged, placed: placedNext,
+    newWorkbenchTab, openNewWorkbenchTab, closeNewWorkbenchTab, pickNewWorkbench,
     canvasKept, requestCanvasFiles, specs, among, amongElements, inPage, surfaceArrangement,
   };
 }
@@ -350,7 +315,7 @@ export function InPanesPlace({ frame }: { frame: ReturnType<typeof useProjectFra
         return (
           <div key={id} data-workspace-surface={id} aria-hidden={!shown} inert={!shown}
             className="relative z-[3] flex min-h-0 min-w-0 bg-[var(--dock-line)]"
-            style={{ gridArea: 'main', paddingTop: DOCK_GAP, ...room, ...(shown ? null : { display: 'none' }) }}>
+            style={{ gridArea: 'main', paddingTop: studioHost?.conversations ? 0 : DOCK_GAP, ...room, ...(shown ? null : { display: 'none' }) }}>
             <div className="relative flex min-h-0 min-w-0 flex-1 bg-[var(--bg-panel)]">
               <PluginSurface id={id} page={plugin.page} files={plugin.files} program={plugin.program} runs={plugin.runs} inApp={plugin.inApp} element={plugin.element} projectId={projectId} folder={loaded.project.path} />
             </div>
@@ -368,7 +333,7 @@ export function InPanesPlace({ frame }: { frame: ReturnType<typeof useProjectFra
           panes' lines (the one under the top bar, the one by the chat) */}
       {(canvasKept || canvasOpen) && (arranged.canvas.on || placed.canvas) ? (
         <div data-workspace-canvas className="relative z-[2] flex min-h-0 min-w-0 bg-[var(--dock-line)]" aria-hidden={!canvasOpen || away} inert={!canvasOpen || away}
-          style={{ gridArea: 'main', paddingTop: DOCK_GAP, ...places.canvas, ...places.canvasFrame, ...(canvasOpen && !away ? null : HIDDEN) }}>
+          style={{ gridArea: 'main', paddingTop: studioHost?.conversations ? 0 : DOCK_GAP, ...places.canvas, ...places.canvasFrame, ...(canvasOpen && !away ? null : HIDDEN) }}>
           <div className="relative min-h-0 min-w-0 flex-1 bg-[var(--bg-panel)]">
             {arranged.canvas.element ?? placed.canvas ? (
               <PluginElement url={(arranged.canvas.element ?? placed.canvas)!} projectId={projectId} ready={Boolean(slots)} loading={<CanvasLoading />}

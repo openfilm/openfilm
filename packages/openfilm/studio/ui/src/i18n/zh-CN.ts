@@ -98,6 +98,14 @@ export const zhCN: Words = {
     desktop: '桌面版',
   },
   /* the projects the app window has open (ProjectSwitcher), a new tab's launcher, and the examples (ExamplesGallery) */
+  workspaceTabs: {
+    new: "新标签页", search: "搜索插件和资源", noMatches: "没有匹配项", assets: "素材",
+    projectsNote: "打开和管理你的影片项目",
+    communityNote: "发现插件、技能和共享素材",
+    assetsNote: "浏览影片可用的媒体素材",
+  },
+  desktopNavigation: { newChat: "新对话", searchProjects: "搜索项目", noMatches: "没有匹配的项目", loadChatsFailed: "无法加载对话", openChatFailed: "无法打开对话", pages: "页面", myProjects: "我的项目", search: "搜索", library: "资源库", projectsNote: "你的影片，每个都是这台电脑上的一个文件夹。", communityNote: "大家分享的插件、技能、素材和示例，以及你已添加的。", libraryNote: "所有影片都能用的素材：你的文件夹，以及从这台电脑或 NAS 连接的文件夹。", libraryCommunity: "OpenFilm 与社区素材", libraryEmpty: "还没有资源库文件夹。", more: "更多", rename: "重命名", removeFromList: "从列表中移除", closeTab: "关闭标签", pin: "置顶", unpin: "取消置顶", archive: "归档", archiveRunning: "对话进行中，无法归档", renameFailed: "无法重命名", editFailed: "无法修改对话", currentStays: "当前打开的项目不能移除", startTitle: "新建", startBlank: "空白影片", startCanvas: "从画布开始", startExample: "从示例开始", libImport: "导入", libDetails: "详情", libKind: "类型", libSize: "大小", libDimensions: "尺寸", libDuration: "时长", libModified: "修改时间", libWhere: "位置" },
+  searchPalette: { placeholder: "搜索项目、对话和操作", all: "全部", projects: "项目", chats: "对话", actions: "操作", recent: "最近", results: "结果", none: "没有找到", close: "关闭", type: "切换类型", open: "打开", newProject: "新建项目", inProject: "{name}" },
   projectTabs: {"label": "已打开的项目", "new": "打开另一个项目", "closeNamed": "关闭 {name}", "revealFailed": "无法打开项目文件夹。", "coverCurrent": "请先切换到此标签页，再将当前帧设为封面。"},
   switcher: { oneClip: '1 个片段', clips: '{n} 个片段', label: '切换项目', open: '其它已打开', all: '全部项目…', close: '关闭', working: '进行中', asking: '等你回答', exporting: '导出中 {n}%', cover: '设定当前帧为封面', coverShort: "设定当前帧为封面", reveal: '打开文件夹' },
   providerNames: { doubao: '豆包' },
@@ -221,6 +229,9 @@ export const zhCN: Words = {
   },
   /* the app's update, ready to install (Studio's top bar, in an app that has updates: lib/host.ts `update`) */
   update: {
+    cardTitle: "新版本 {version}",
+    cardNote: "重启即可更新，也会在退出时自动安装。",
+    later: "稍后",
     restart: '重启以更新',
     ready: 'OpenFilm {version} 已准备好。现在重启即可更新；或者退出时自动安装，下次打开就是新版本。',
     agentBusy: '智能体还在工作，等它完成后再重启。',
@@ -2448,6 +2459,8 @@ export const zhCN: Words = {
     recent: '最近使用',
   },
   layout: {
+    expandWorkspace: "展开工作区",
+    showConversation: "显示对话栏",
     resizeSplit: "调整布局分隔线",
     viewer: "预览",
     movePanel: "移动{name}",
@@ -2538,6 +2551,14 @@ export const zhCN: Words = {
   canvas: {
     title: '画布',
     toEdit: '切换到剪辑',
+    openEditor: '打开工作台',
+    newWorkbenchTab: '新标签页',
+    newTabSearch: "搜索编辑器",
+    newTabOpen: "打开",
+    newTabMore: "在社区中找更多编辑器",
+    newTabCommunity: "在社区中搜索“{query}”",
+    newTabNoMatch: "没有匹配的编辑器",
+    keepEditor: '至少保留一个工作台',
     workspaceLabel: '编辑器',
     motionEmpty: '还没有可以做动画的画面片段',
     motionMode: '模式',
@@ -3231,6 +3252,10 @@ export const zhCN: Words = {
   /* the timeline's audio and editing tools: meters, solo, markers, loudness, freeze frame, replace, track heights */
   editorTools: {
     meters: "音频电平表",
+    metersHide: "隐藏音频电平表",
+    metersShow: "显示音频电平表",
+    metersMoveToTimecode: "移到时间码旁",
+    metersMoveToRight: "移到时间轴右侧",
     metersClip: "削波：声音达到了 0 dB。点击清除",
     metersPeak: "最近的最高峰值，dBFS",
     solo: "独听：只听这条轨道，仅在此处（⌥ 点击：只独听这一条）",

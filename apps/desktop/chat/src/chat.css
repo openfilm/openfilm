@@ -30,6 +30,8 @@ html[data-assets-open] body {
  * or they can't be clicked.
  */
 :root {
+  /* the widest the conversation and the composer are drawn, centred in a wider chat */
+  --chat-column: 760px;
   --inset-titlebar-h: 0px;
   --inset-titlebar-w: 0px;
   /* The top-left control group's size. 0 in a browser, so the room made for it collapses. */

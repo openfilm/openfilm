@@ -91,6 +91,14 @@ export const ko: Words = {
     desktop: '데스크톱',
   },
   /* the projects the app window has open (ProjectSwitcher), a new tab's launcher, and the examples (ExamplesGallery) */
+  workspaceTabs: {
+    new: "새 탭", search: "플러그인 및 리소스 검색", noMatches: "일치하는 항목 없음", assets: "소재",
+    projectsNote: "영상 프로젝트 열기 및 관리",
+    communityNote: "플러그인, 스킬, 공유 소재 찾기",
+    assetsNote: "영상에 사용할 미디어 둘러보기",
+  },
+  desktopNavigation: { newChat: "새 대화", searchProjects: "프로젝트 검색", noMatches: "일치하는 프로젝트 없음", loadChatsFailed: "대화를 불러올 수 없습니다", openChatFailed: "대화를 열 수 없습니다", pages: "페이지", myProjects: "내 프로젝트", search: "검색", library: "라이브러리", projectsNote: "내 영상. 각각 이 컴퓨터의 폴더입니다.", communityNote: "사람들이 공유한 플러그인, 스킬, 소재, 예제와 내가 추가한 것.", libraryNote: "모든 영상에 쓰는 소재: 내 폴더와 이 컴퓨터나 NAS에서 연결한 폴더.", libraryCommunity: "OpenFilm 및 커뮤니티 소재", libraryEmpty: "아직 라이브러리 폴더가 없습니다.", more: "더 보기", rename: "이름 변경", removeFromList: "목록에서 제거", closeTab: "탭 닫기", pin: "고정", unpin: "고정 해제", archive: "보관", archiveRunning: "진행 중에는 보관할 수 없습니다", renameFailed: "이름을 바꿀 수 없습니다", editFailed: "대화를 변경할 수 없습니다", currentStays: "열려 있는 프로젝트는 제거할 수 없습니다", startTitle: "새로 만들기", startBlank: "빈 영상", startCanvas: "캔버스에서 시작", startExample: "예제로 시작", libImport: "가져오기", libDetails: "세부 정보", libKind: "종류", libSize: "크기", libDimensions: "해상도", libDuration: "길이", libModified: "수정한 날짜", libWhere: "위치" },
+  searchPalette: { placeholder: "프로젝트, 대화, 작업 검색", all: "전체", projects: "프로젝트", chats: "대화", actions: "작업", recent: "최근", results: "결과", none: "결과 없음", close: "닫기", type: "유형 전환", open: "열기", newProject: "새 프로젝트", inProject: "{name}" },
   projectTabs: {"label": "열린 프로젝트", "new": "다른 프로젝트 열기", "closeNamed": "{name} 닫기", "revealFailed": "프로젝트 폴더를 열 수 없습니다.", "coverCurrent": "이 탭으로 전환한 뒤 현재 프레임을 표지로 설정하세요."},
   switcher: { oneClip: '클립 1개', clips: '클립 {n}개', label: '프로젝트 전환', open: '다른 열린 프로젝트', all: '모든 프로젝트…', close: '닫기', working: '작업 중', asking: '답변 대기 중', exporting: '내보내는 중 {n}%', cover: '현재 프레임을 표지로 설정', coverShort: "표지로 설정", reveal: '폴더 보기' },
   launcher: { projects: '내 프로젝트', examples: '예시' },
@@ -213,6 +221,9 @@ export const ko: Words = {
   },
   /* the app's update, ready to install (Studio's top bar, in an app that has updates: lib/host.ts `update`) */
   update: {
+    cardTitle: "새 버전 {version}",
+    cardNote: "다시 시작하면 업데이트됩니다. 종료할 때도 자동으로 설치됩니다.",
+    later: "나중에",
     restart: '재시작하여 업데이트',
     ready: 'OpenFilm {version} 준비가 끝났습니다. 지금 재시작해 업데이트하거나, 종료할 때 자동으로 설치되어 다음에 열면 새 버전이 됩니다.',
     agentBusy: '에이전트가 아직 작업 중입니다. 끝난 뒤 재시작하세요.',
@@ -2432,6 +2443,8 @@ export const ko: Words = {
     recent: '최근',
   },
   layout: {
+    expandWorkspace: "작업 공간 넓히기",
+    showConversation: "대화 표시",
     resizeSplit: "레이아웃 분할 크기 조절",
     viewer: "미리보기",
     movePanel: "{name} 이동",
@@ -2522,6 +2535,14 @@ export const ko: Words = {
   canvas: {
     title: '캔버스',
     toEdit: '편집으로 전환',
+    openEditor: '에디터 열기',
+    newWorkbenchTab: '새 탭',
+    newTabSearch: "편집기 검색",
+    newTabOpen: "열기",
+    newTabMore: "커뮤니티에서 편집기 더 찾기",
+    newTabCommunity: "커뮤니티에서 “{query}” 검색",
+    newTabNoMatch: "일치하는 편집기가 없습니다",
+    keepEditor: '에디터를 하나 이상 열어 두세요',
     workspaceLabel: '에디터',
     motionEmpty: '아직 애니메이션할 화면 클립이 없습니다',
     motionMode: '모드',
@@ -3215,6 +3236,10 @@ export const ko: Words = {
   /* the timeline's audio and editing tools: meters, solo, markers, loudness, freeze frame, replace, track heights */
   editorTools: {
     meters: "오디오 미터",
+    metersHide: "오디오 미터 숨기기",
+    metersShow: "오디오 미터 표시",
+    metersMoveToTimecode: "타임코드 옆으로 이동",
+    metersMoveToRight: "타임라인 오른쪽으로 이동",
     metersClip: "클리핑: 소리가 0 dB에 닿았습니다. 클릭하여 초기화",
     metersPeak: "최근 최대 피크, dBFS",
     solo: "솔로: 이 트랙만 듣기, 여기서만 (⌥ 클릭: 이 트랙만)",

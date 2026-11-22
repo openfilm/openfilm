@@ -1,0 +1,15 @@
+/*
+ * What is drawn differently inside a desktop sidebar page (components/SidePage): the Community's store lays its
+ * things out as cards with room between them, where a window lists them in rows (components/library/Store).
+ */
+[data-side-page-frame] .store-grid { grid-template-columns: repeat(auto-fill, minmax(272px, 1fr)); gap: 14px; }
+[data-side-page-frame] .cover-grid { grid-template-columns: repeat(auto-fill, minmax(248px, 1fr)); gap: 14px; }
+
+/* The library page (components/LibraryPage): the media pane in the page's column, its tiles a little further apart. The
+   page's head has Import and New folder, so the pane's own bar leaves them, and the line before them, out. */
+[data-library-page] .library-files [data-explorer-toolbar] { height: 52px; min-height: 52px; padding-inline: calc(var(--page-x) - 6px) var(--page-x); border-bottom: 0; }
+[data-library-page] .library-files [data-explorer-command='new-folder'],
+[data-library-page] .library-files [data-explorer-command='import'],
+[data-library-page] .library-files [data-explorer-toolbar] > span[aria-hidden]:first-of-type { display: none; }
+[data-library-page] .library-files :has(> [data-browser-grid]) { padding-inline: var(--page-x); padding-top: 4px; }
+[data-library-page] .library-files [data-browser-grid]:not([class*='flex-col']) { gap: 18px 14px; }

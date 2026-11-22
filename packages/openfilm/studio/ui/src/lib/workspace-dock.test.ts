@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { workspacePresets, readWorkspaceLayout, type WorkspaceLayout } from './workspaces.ts';
-import { defaultDockTree, dockFrames as framesOf, dockPanels, panelMinimum, readDockTree, visibleDockPanels as visibleOf, moveDock, resizeDock, dockDropAt, type DockNode } from './workspace-dock.ts';
+import { carryWorkspaceChat, defaultDockTree, dockFrames as framesOf, dockPanels, panelMinimum, readDockTree, visibleDockPanels as visibleOf, moveDock, resizeDock, dockDropAt, type DockNode } from './workspace-dock.ts';
 import { CANVAS, DEFAULT_WORKSPACE, DEFAULT_CANVAS_WORKSPACE, EDIT } from './test-arrangements.ts';
 
 const sides = (layout: WorkspaceLayout, layersSide: 'left' | 'right', inspectorSide: 'left' | 'right'): WorkspaceLayout => ({ ...layout, blocks: { ...layout.blocks, layers: { ...layout.blocks.layers!, edge: layersSide }, inspector: { ...layout.blocks.inspector!, edge: inspectorSide } } });
@@ -101,5 +101,48 @@ test('library embedding and visibility remain separate and reversible without ch
     assert.equal(setDockPanelVisible(parentHidden,'library',true,EDIT).chat,true);
     assert.equal(setDockPanelVisible(inside,'viewer',false,EDIT),inside,'the main block is always shown');
     assert.equal(setDockPanelVisible(inside,'timeline',false,EDIT).blocks.timeline!.open,false);
+  }
+});
+
+test('workbench switches carry the live dock, even into a saved side-column tree, and keep its other blocks', () => {
+  const width = 1600;
+  const previous = { ...DEFAULT_WORKSPACE, chatWidth: 420, chatSide: 'right' as const };
+  const target = { ...DEFAULT_CANVAS_WORKSPACE, assets: true, chat: false, chatWidth: 350, tree: defaultDockTree(DEFAULT_CANVAS_WORKSPACE, CANVAS) };
+  const panel = { open: true, preferredWidth: 532 };
+  const next = carryWorkspaceChat(previous, target, panel, width);
+  assert.equal(next.chat, true);
+  assert.equal(next.chatSide, 'right');
+  assert.equal(next.blocks, target.blocks);
+  assert.equal(next.assets, true);
+  const viewport = { width, height: 900 };
+  const frames = framesOf(next.tree!, viewport, visibleOf(next, true, CANVAS), panelMinimum(CANVAS));
+  assert.equal(frames.panels.chat!.width, panel.preferredWidth);
+  assert.equal(frames.panels.chat!.left, width - panel.preferredWidth);
+
+  // A free seam drag changes the tree ratio directly; the native preferred width can still say 532.
+  const resized = { ...next, tree: resizeDock(next.tree!, '', .5) };
+  const drawn = framesOf(resized.tree, viewport, visibleOf(resized, true, CANVAS), panelMinimum(CANVAS));
+  const back = carryWorkspaceChat(resized, previous, panel, width);
+  assert.equal(back.chatWidth, drawn.panels.chat!.width);
+  assert.notEqual(back.chatWidth, panel.preferredWidth);
+  assert.equal(back.chatSide, 'right');
+  const hidden = carryWorkspaceChat(back, target, { open: false, preferredWidth: back.chatWidth }, width);
+  assert.equal(hidden.chat, false);
+  assert.equal(hidden.assets, false, 'a library inside the chat cannot reopen the hidden column');
+});
+
+test('a narrow window keeps the desired column width and nested or horizontal chat layouts keep their geometry', () => {
+  const narrow = { width: 1050, height: 720 };
+  const panel = { open: true, preferredWidth: 700 };
+  const canvas = { ...DEFAULT_CANVAS_WORKSPACE, tree: defaultDockTree(DEFAULT_CANVAS_WORKSPACE, CANVAS) };
+  const next = carryWorkspaceChat(DEFAULT_WORKSPACE, canvas, panel, narrow.width);
+  const rect = framesOf(next.tree!, narrow, visibleOf(next, true, CANVAS), panelMinimum(CANVAS)).panels.chat!;
+  assert.equal(rect.width, narrow.width - 640);
+  const back = carryWorkspaceChat(next, DEFAULT_WORKSPACE, panel, narrow.width);
+  assert.equal(back.chatWidth, 700);
+  for (const tree of [moveDock(canvas.tree, 'chat', 'root', 'bottom'), moveDock(canvas.tree, 'library', 'chat', 'top')]) {
+    const special = carryWorkspaceChat(next, { ...canvas, tree }, panel, narrow.width);
+    assert.equal(special.tree, tree);
+    assert.equal(carryWorkspaceChat(special, DEFAULT_WORKSPACE, panel, narrow.width).chatWidth, 700);
   }
 });

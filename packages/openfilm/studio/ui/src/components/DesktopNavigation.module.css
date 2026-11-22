@@ -1,0 +1,117 @@
+.panel {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  flex-direction: column;
+  color: var(--text);
+  font-size: 13.5px;
+  user-select: none;
+}
+.panel svg { flex: none; }
+
+/* the search, at the top: a button that opens it over the page */
+.search {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  margin: 2px 10px 10px;
+  padding: 0 6px 0 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  color: var(--text-muted);
+  text-align: start;
+  transition: background-color 120ms ease, border-color 120ms ease;
+}
+.search span { flex: 1; min-width: 0; font-size: 13px; }
+.search kbd { padding: 1px 5px; border-radius: 4px; background: var(--bg-field); color: var(--text-muted); font: 500 11px/16px inherit; font-family: inherit; }
+.search:hover { background: var(--bg-hover); }
+:global([data-theme='dark']) .search { border-color: #353535; }
+:global([data-theme='dark']) .search:hover { background: #2c2c2b; border-color: #424240; }
+
+/* the pages: the projects, the Community, the library */
+.places { flex: none; display: grid; gap: 1px; padding: 0 8px 14px; }
+.place { display: flex; align-items: center; gap: 10px; min-width: 0; height: 32px; padding: 0 10px; border-radius: 8px; color: var(--text); text-align: start; }
+.place svg { color: var(--text-muted); }
+.place:hover { background: var(--bg-hover); }
+.place[aria-current] { background: var(--bg-field); }
+.place[aria-current] svg { color: var(--text); }
+
+.heading { flex: none; display: flex; align-items: center; height: 28px; padding: 0 10px 0 18px; }
+.heading h2 { flex: 1; min-width: 0; margin: 0; font-size: 12px; font-weight: 500; color: var(--text-muted); }
+.headingAction { display: grid; place-items: center; flex: none; width: 22px; height: 22px; border-radius: 5px; color: var(--text-muted); opacity: 0; }
+.heading:hover .headingAction, .headingAction:focus-visible { opacity: 1; }
+.headingAction:hover { background: var(--bg-pressed); color: var(--text); }
+.headingAction:disabled { opacity: .45; }
+
+.tree {
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0 8px 12px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+
+/* a project, and a conversation under it: a row each, a hair apart, its actions at its right while it is pointed at */
+.projectRow, .sessionRow { position: relative; display: flex; align-items: center; min-height: 32px; margin-bottom: 2px; border-radius: 8px; }
+.projectRow[data-with-location] { min-height: 44px; }
+.projectRow:is(:hover, :focus-within), .sessionRow:is(:hover, :focus-within) { background: var(--bg-hover); }
+.sessionRow[aria-current] { background: var(--bg-field); }
+.disclosure { flex: none; display: grid; justify-items: start; align-items: center; align-self: stretch; width: 36px; padding-left: 10px; color: var(--text-muted); }
+.projectRow[data-expanded] .folder { color: var(--accent); }
+.triangle { display: none; width: 16px; place-items: center; color: var(--text-muted); }
+.projectRow:is(:hover, :focus-within) .folder { display: none; }
+.projectRow:is(:hover, :focus-within) .triangle { display: grid; }
+.disclosure:hover .triangle { color: var(--text); }
+.projectName { flex: 1; display: flex; align-items: center; align-self: stretch; min-width: 0; padding-right: 8px; color: var(--text); text-align: start; }
+.projectName[aria-current] { font-weight: 550; }
+.projectLabel { display: grid; flex: 1; gap: 1px; min-width: 0; }
+.projectLabel span, .projectLabel small, .session span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.projectLabel small { color: var(--text-faint); font-size: 10.5px; font-weight: 400; }
+
+/* a conversation's name lines up with its project's name (10 + 16 + 10 px in) */
+.session { flex: 1; display: flex; align-items: center; gap: 6px; align-self: stretch; min-width: 0; padding: 0 8px 0 36px; color: var(--text); text-align: start; }
+.session span { flex: 0 1 auto; min-width: 0; }
+.pinned { color: var(--text-faint); }
+
+.rowActions { display: none; flex: none; align-items: center; gap: 2px; padding-right: 6px; }
+.projectRow:is(:hover, :focus-within) .rowActions, .sessionRow:is(:hover, :focus-within) .rowActions { display: flex; }
+.rowAction { display: grid; place-items: center; flex: none; width: 24px; height: 24px; border-radius: 6px; color: var(--text-muted); }
+.rowAction:empty { display: none; }
+.rowAction:hover { background: var(--bg-pressed); color: var(--text); }
+
+.rename {
+  flex: 1;
+  min-width: 0;
+  height: 24px;
+  margin-right: 8px;
+  padding: 0 6px;
+  border-radius: 5px;
+  background: var(--bg-field);
+  color: var(--text);
+  font-size: 13.5px;
+  outline: 1px solid var(--accent);
+  user-select: text;
+}
+.sessionRow .rename { margin-left: 30px; }
+
+.notice { margin: 5px 10px; color: var(--text-muted); font-size: 12px; }
+.footer {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 5px;
+  min-height: 53px;
+  margin-top: auto;
+  padding: 5px 11px;
+}
+.panel button:focus-visible { outline: 1px solid var(--accent); outline-offset: -2px; }
+@media (hover: none) {
+  .rowActions { display: flex; }
+}
+/* the update's card above the account: a line between them then */
+:global([data-update-notice]) + .footer { border-top: 1px solid var(--frame-line); }

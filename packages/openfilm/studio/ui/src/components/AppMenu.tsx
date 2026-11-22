@@ -4,7 +4,7 @@
  * feedback; a star.
  */
 import React from 'react';
-import { ChevronRight, MessageSquare, Settings2, Star, Users } from 'lucide-react';
+import { ChevronRight, ChevronsUpDown, MessageSquare, Settings2, Star, UserRound, Users } from 'lucide-react';
 import { COMMUNITY_ICON as Community } from './feature-kinds';
 import { useLanguage, useT } from '@/i18n';
 import { useClickOpen } from '@/lib/click-open';
@@ -12,11 +12,13 @@ import { studioHost } from '@/lib/host';
 import { menuStep } from '@/lib/menu-position';
 import { openPlugins } from '@/lib/plugins-window';
 import { communityChannels, CREATOR_CHANNELS, CREATOR_HANDLE, PRODUCT_LINKS } from '@/lib/product-links';
+import { useOpenFilmAccount } from '@/lib/providers';
 import { BrandLogo } from './BrandLogo';
 import { Popover } from './Popover';
 import { SocialLogo, type SocialPlatform } from './SocialLogo';
 import { Tooltip } from './Tooltip';
 import { Toast, useToast } from './Toast';
+import { Avatar } from './settings/AccountGroup';
 import type { SettingsSection } from './settings/SettingsModal';
 import styles from './AppMenu.module.css';
 
@@ -24,7 +26,22 @@ import styles from './AppMenu.module.css';
 const SIDE_GAP = 2;
 const SIDE_CLOSE_MS = 120;
 
-export function AppMenu({ onSettings }: { onSettings: (section: SettingsSection) => void }) {
+function AccountMark({ sidebar }: { sidebar: boolean }) {
+  const t = useT();
+  const { own } = useOpenFilmAccount();
+  const name = own?.profile?.name || own?.account;
+  const avatar = name || own?.profile?.avatar
+    ? <Avatar src={own?.profile?.avatar} name={name ?? ''} size={sidebar ? 28 : 24} />
+    : <UserRound size={sidebar ? 16 : 14} aria-hidden />;
+  if (!sidebar) return avatar;
+  return <>
+    <span className={styles.sidebarAvatar}>{avatar}</span>
+    <span className={styles.sidebarName}>{name || t('settings.account.local')}</span>
+    <ChevronsUpDown size={13} className={styles.sidebarChevron} aria-hidden />
+  </>;
+}
+
+export function AppMenu({ onSettings, account = false, sidebar = false }: { onSettings: (section: SettingsSection) => void; account?: boolean; sidebar?: boolean }) {
   const t = useT();
   const language = useLanguage();
   const popup = useClickOpen();
@@ -142,18 +159,20 @@ export function AppMenu({ onSettings }: { onSettings: (section: SettingsSection)
     </Tooltip>;
   };
 
-  return <><Popover open={popup.open} onOpenChange={(next) => { if (next) popup.setOpen(true); else dismiss(focused.current); }} layer={10060}
+  const showsAccount = sidebar || account;
+  const menuLabel = t(showsAccount ? 'settings.account.group' : 'project.appMenu');
+  return <><Popover block={sidebar} placement={sidebar ? 'top' : account ? 'bottom' : 'auto'} clampToViewport={showsAccount} open={popup.open} onOpenChange={(next) => { if (next) popup.setOpen(true); else dismiss(focused.current); }} layer={10060}
     onEscapeKeyDown={(event) => { event.stopPropagation(); if (community) closeCommunity(focused.current); else dismiss(focused.current); }}
-    trigger={<button ref={trigger} type="button" aria-label={t('project.appMenu')} aria-haspopup="menu" aria-expanded={popup.open} aria-controls={popup.open ? id : undefined}
+    trigger={<button ref={trigger} data-account-trigger={showsAccount || undefined} data-sidebar-account={sidebar || undefined} type="button" aria-label={menuLabel} title={showsAccount ? menuLabel : undefined} aria-haspopup="menu" aria-expanded={popup.open} aria-controls={popup.open ? id : undefined}
       onClick={(event) => { event.stopPropagation(); popup.toggle(); if (!popup.open) { if (event.detail === 0) focus(); else focusPanel(); } }}
       onKeyDown={(event) => {
         if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
         event.preventDefault(); event.stopPropagation(); popup.setOpen(true); focus(false, event.key === 'ArrowUp');
       }}
-      className={`flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-md text-[var(--text-muted)] outline-none transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)] focus-visible:ring-1 focus-visible:ring-[var(--accent)] ${popup.open ? 'bg-[var(--bg-hover)] text-[var(--text)]' : ''}`}>
-      <BrandLogo size={15} />
+      className={sidebar ? styles.sidebarAccount : account ? styles.accountTrigger : `flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-md text-[var(--text-muted)] outline-none transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)] focus-visible:ring-1 focus-visible:ring-[var(--accent)] ${popup.open ? 'bg-[var(--bg-hover)] text-[var(--text)]' : ''}`}>
+      {showsAccount ? <AccountMark sidebar={sidebar} /> : <BrandLogo size={15} />}
     </button>}>
-    <div ref={panel} id={id} data-app-menu role="menu" tabIndex={-1} aria-label={t('project.appMenu')}
+    <div ref={panel} id={id} data-app-menu role="menu" tabIndex={-1} aria-label={menuLabel}
       onMouseLeave={hideCommunitySoon} onKeyDown={(event) => onKeyDown(event)} onFocusCapture={() => { focused.current = true; }} onBlur={onBlur} className={styles.menu}>
       <button type="button" role="menuitem" tabIndex={-1} className={styles.row} onMouseEnter={hideCommunitySoon} onFocus={() => closeCommunity()} onClick={() => { dismiss(true); onSettings('general'); }}>
         <Settings2 size={15} className={styles.icon} aria-hidden /><span className={styles.label}>{t('settings.title')}</span>

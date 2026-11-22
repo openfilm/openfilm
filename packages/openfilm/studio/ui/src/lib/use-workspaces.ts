@@ -38,14 +38,20 @@ export function useWorkspaceLayouts(mode: WorkspaceMode, specs: ReadonlyMap<stri
     window.addEventListener('storage', changed);
     return () => { window.removeEventListener('pagehide', flush); window.removeEventListener('storage', changed); flush(); };
   }, []);
-  const update = React.useCallback((patch: Partial<WorkspaceLayout>) => {
+  // A native resize is already on screen. Keep the origin of each in-memory snapshot so an
+  // older acknowledgement can never send its width back to the host after the next resize.
+  const nativeWidths = React.useRef(new WeakSet<WorkspaceLayout>());
+  const update = React.useCallback((patch: Partial<WorkspaceLayout>, origin?: 'host') => {
+    const target = patch.mode ?? modeRef.current;
     setProfiles(previous => {
-      const target = patch.mode ?? modeRef.current;
       const spec = specsRef.current.get(target) ?? unknown(target);
       const now = normalizeLayout(previous[target] ?? defaultWorkspace(spec), spec);
       const read = readWorkspaceLayout({ ...now, ...patch, blocks: { ...now.blocks, ...patch.blocks }, mode: target });
       const next = read && normalizeLayout(read, spec);
       if (!next || JSON.stringify(next) === JSON.stringify(previous[target])) return previous;
+      if (origin === 'host' || (patch.chatWidth === undefined && nativeWidths.current.has(previous[target]))) {
+        nativeWidths.current.add(next);
+      }
       return { ...previous, [target]: next };
     });
   }, []);
@@ -70,7 +76,7 @@ export function useWorkspaceLayouts(mode: WorkspaceMode, specs: ReadonlyMap<stri
     shown.current.add(mode);
     if (!latest.current[mode]) window.setTimeout(() => saveRef.current(), 400);
   }, [known, mode]);
-  return { layout: layoutOf(mode), layoutOf, update, viewport, storageFailed };
+  return { layout: layoutOf(mode), layoutOf, update, nativeWidth: nativeWidths.current.has(profiles[mode]), viewport, storageFailed };
 }
 
 /** Layout editing is a transaction. Pointer previews never write preferences until Done. A patch's `blocks` are merged by key. */

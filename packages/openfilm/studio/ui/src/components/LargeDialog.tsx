@@ -31,7 +31,7 @@ if (typeof window !== 'undefined') {
   }, true);
 }
 
-export function LargeDialog({ label, labelledBy, onClose, onEscape, side, children, closeLabel, focusFirst }: {
+export function LargeDialog({ label, labelledBy, onClose, onEscape, side, children, closeLabel, focusFirst, embedded = false }: {
   /** what the window is called, when no heading in it names it (`labelledBy`) */
   label?: string;
   labelledBy?: string;
@@ -44,6 +44,11 @@ export function LargeDialog({ label, labelledBy, onClose, onEscape, side, childr
   closeLabel: string;
   /** what takes the keys as it opens (its search) */
   focusFirst?: React.RefObject<HTMLElement | null>;
+  /**
+   * Drawn where it is put, as a page (the desktop sidebar's, lib/side-page): no shade, no Close, Tab and the page under
+   * it left free; Esc in it still goes back, then closes.
+   */
+  embedded?: boolean;
 }) {
   const dialog = React.useRef<HTMLDivElement>(null);
   const latest = React.useRef({ onClose, onEscape });
@@ -57,6 +62,10 @@ export function LargeDialog({ label, labelledBy, onClose, onEscape, side, childr
   React.useEffect(() => {
     const entry = { element: () => dialog.current, escape: () => { if (!latest.current.onEscape?.()) latest.current.onClose(); } };
     opened.push(entry);
+    if (embedded) {
+      const r = requestAnimationFrame(() => (focusFirst?.current ?? dialog.current)?.focus({ preventScroll: true }));
+      return () => { opened.splice(opened.indexOf(entry), 1); cancelAnimationFrame(r); };
+    }
     const previousFocus = document.activeElement as HTMLElement | null;
     /* the keys while nothing in the window has them (Esc), and Tab kept in it */
     const onKey = (e: KeyboardEvent) => {
@@ -85,12 +94,20 @@ export function LargeDialog({ label, labelledBy, onClose, onEscape, side, childr
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  const nav = side ? <nav aria-label={label} className={`${LARGE_DIALOG_SIDE} overflow-y-auto px-3 pb-4 pt-3`}>{side}</nav> : null;
+  if (embedded) return (
+    <div ref={dialog} role="region" tabIndex={-1} {...(labelledBy ? { 'aria-labelledby': labelledBy } : { 'aria-label': label })}
+      onKeyDown={escape} className="flex min-h-0 min-w-0 flex-1 bg-[var(--dialog-main)] outline-none">
+      {nav}
+      <div className="relative flex min-w-0 flex-1 flex-col">{children}</div>
+    </div>
+  );
   return createPortal(
     <div className="fixed inset-0 z-[10050] grid place-items-center bg-black/50 p-6" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       {/* Esc pressed in the window is its own, before Studio's keys under it (a picked clip let go, a toast) */}
       <div ref={dialog} role="dialog" aria-modal="true" tabIndex={-1} {...(labelledBy ? { 'aria-labelledby': labelledBy } : { 'aria-label': label })}
         onKeyDown={escape} className={`${LARGE_DIALOG} outline-none`}>
-        {side ? <nav aria-label={label} className={`${LARGE_DIALOG_SIDE} overflow-y-auto px-3 pb-4 pt-3`}>{side}</nav> : null}
+        {nav}
         <div className="relative flex min-w-0 flex-1 flex-col">
           <button type="button" onClick={onClose} aria-label={closeLabel}
             className="absolute right-4 top-4 z-10 flex h-9 w-9 items-center justify-center rounded-[8px] text-[var(--text-muted)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text)]">

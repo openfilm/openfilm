@@ -27,6 +27,13 @@ contextBridge.exposeInMainWorld('openfilmNative', {
   capture: (rect) => ipcRenderer.invoke('desktop:capture', rect),
 
   /* the window's tabs (tabs.mjs), drawn by the page in Studio's top bar */
+  conversations: {
+    list: (projectId) => ipcRenderer.invoke('desktop:conversations:list', { projectId }),
+    open: (projectId, sessionId) => ipcRenderer.invoke('desktop:conversations:open', { projectId, sessionId }),
+    onSelect: on('desktop:conversations:select'),
+    edit: (projectId, sessionId, edit) => ipcRenderer.invoke('desktop:conversations:edit', { projectId, sessionId, edit }),
+    onEdit: on('desktop:conversations:edit'),
+  },
   tabs: {
     list: () => ipcRenderer.invoke('desktop:tabs:list'),
     onChange: on('desktop:tabs'),

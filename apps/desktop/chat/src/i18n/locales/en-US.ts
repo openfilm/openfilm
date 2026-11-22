@@ -274,6 +274,10 @@ export const enUS = {
     untitledSession: 'New chat',
   },
   projectMenu: {
+    revealChat: 'Show chat files',
+    archiveBusy: 'Can\u2019t archive while it is working',
+    more: 'More',
+    manageSessions: 'Manage chats',
     archive: 'Archive',
     archived: 'Archived',
     asking: 'Waiting for you',

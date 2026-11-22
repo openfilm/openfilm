@@ -16,7 +16,7 @@
  */
 import React from 'react';
 import { createPortal } from 'react-dom';
-import { Loader2, X } from 'lucide-react';
+import { Loader2, Plus, X } from 'lucide-react';
 import { api, ApiError, LIBRARY_EVENT } from '@/api';
 import { recycleRefusalOf, recycleRefusalWords, type RecycleRefusal } from '@/lib/recycle';
 import { useT } from '@/i18n';
@@ -35,6 +35,8 @@ import { LARGE_DIALOG_SIZE, LARGE_DIALOG_SURFACE } from './dialog-chrome';
 import resourceStyles from './ProjectsView.module.css';
 import { RecycleBinView } from './RecycleBinView';
 import { ProjectsSidebar } from './ProjectsSidebar';
+import { SidePage, SidePageButton } from './SidePage';
+import { ProjectStarts } from './ProjectStarts';
 import sideStyles from './ProjectsSidebar.module.css';
 import { openOn } from '@/lib/workbench-start';
 import { readResourceView, RESOURCE_VIEW_KEY } from '@/lib/resource-center';
@@ -262,8 +264,11 @@ export function ProjectsPopover({
   onCurrentRemoved,
   onClose,
   examples,
-  onUseCanvas,
+  onUseCanvas, coverFromFrame, embedded = false, standalone = false,
 }: {
+  embedded?: boolean;
+  standalone?: boolean;
+  coverFromFrame?: () => void;
   open: boolean;
   /** The project open in the editor ("" when none: Studio has no project to show, and this window is all there is). */
   currentProjectId: string;
@@ -288,10 +293,10 @@ export function ProjectsPopover({
   /* each time it opens: the projects (the examples are a project tab away), or the examples when asked for */
   const [view, setView] = React.useState<LauncherView>('projects');
   React.useLayoutEffect(() => {
-    if (!open) return;
+    if (!open || embedded) return;
     const previous = document.activeElement as HTMLElement | null;
     return () => { if (previous?.isConnected) previous.focus({ preventScroll: true }); };
-  }, [open]);
+  }, [open, embedded]);
   const [display, setDisplay] = React.useState(readResourceView);
   const [projectNavigation, setProjectNavigation] = React.useState({ folderId: null as string | null, seq: 0 });
   const navigateProjects = (folderId: string | null = null) => { setProjectNavigation(old => ({ folderId, seq: old.seq + 1 })); setView('projects'); };
@@ -312,14 +317,15 @@ export function ProjectsPopover({
   const close = React.useCallback(() => onClose?.(), [onClose]);
 
   React.useEffect(() => {
-    if (!open) return undefined;
+    if (!open || embedded) return undefined;
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !e.defaultPrevented && !pendingDelete && !pendingFolder && !pendingBatch && !askStart) close(); };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [open, close, pendingDelete, pendingFolder, pendingBatch, askStart]);
+  }, [open, embedded, close, pendingDelete, pendingFolder, pendingBatch, askStart]);
 
   const go = (projectId: string, kind: 'creating' | 'opening') => {
     /* the project already open: nowhere to go, and an "Opening" that would never end */
+    if (embedded) { setBusy(null); onOpen(projectId); return; }
     if (projectId === currentProjectId) { close(); return; }
     /* with tabs it opens in its own tab, not this page: this window stays until that tab covers it (closed first, the
        page behind would show for a moment), then it is done here; a few seconds at most */
@@ -520,41 +526,56 @@ export function ProjectsPopover({
     />
   );
 
+  /* in the desktop sidebar's page: a gallery's frame (components/SidePage); the ways to start are a row of tiles over
+     the projects (ProjectStarts) */
+  const framed = (node: React.ReactNode) => !embedded ? node : (
+    <SidePage layout="gallery" title={t('projects.sideProjects')}
+      places={[{ id: 'projects', label: t('launcher.projects'), ...(lib.loaded ? { count: lib.projects.length } : {}) }, { id: 'examples', label: t('launcher.examples') }]}
+      place={view === 'recycle' ? 'projects' : view} onPlace={(place) => (place === 'projects' ? navigateProjects(null) : setView('examples'))}
+      actions={<SidePageButton primary icon={<Plus size={15} strokeWidth={2} />} disabled={busy !== null} onClick={() => void newProject(null)}>{t('projects.newProject')}</SidePageButton>}
+      data={{ 'data-projects-page': '' }}>
+      {node}
+    </SidePage>
+  );
+
   const content = (
     <>
-      <div className="fixed inset-0 z-[10040] bg-black/60" onMouseDown={close} />
+      {!embedded && <div className="fixed inset-0 z-[10040] bg-black/60" onMouseDown={close} />}
       <div
-        role="dialog"
+        role={embedded ? 'region' : 'dialog'}
         aria-label={t('resourceCenter.title')}
-        aria-modal="true"
-        className={`${resourceStyles.dialog} fixed left-1/2 top-1/2 z-[10050] flex ${LARGE_DIALOG_SIZE} -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden ${LARGE_DIALOG_SURFACE}`}
+        aria-modal={embedded ? undefined : true}
+        className={embedded ? 'relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden' : `${resourceStyles.dialog} fixed left-1/2 top-1/2 z-[10050] flex ${LARGE_DIALOG_SIZE} -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden ${LARGE_DIALOG_SURFACE}`}
         onDragOver={onDragOver}
         onDrop={onDrop}
       >
         <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
           {cover.picker}
-          <div className={resourceStyles.resourceFrame}>
-            <ProjectsSidebar
+          {framed(<div className={`${resourceStyles.resourceFrame}${standalone ? ` ${resourceStyles.standalone}` : ''}`}>
+            {!embedded && <ProjectsSidebar
               place={view === 'recycle' ? 'projects' : view}
               onPlace={(place) => (place === 'projects' ? navigateProjects(null) : setView(place))}
               onStart={(workbench) => void newProject(null, workbench)}
               starting={busy !== null}
-            />
+              showAccount={!standalone}
+            />}
             <div className={resourceStyles.resourceContent}>
           {/* OpenFilm's recycle bin (the projects' toolbar opens it): back to the projects from it */}
           {view === 'recycle' ? <RecycleBinView onBack={() => setView('projects')} onClose={onClose} onRestored={lib.retryLoad} /> : (
             <>
               {/* the place's name and the way out of the window */}
-              <header className={sideStyles.pageHead}>
+              {!embedded && <header className={sideStyles.pageHead}>
                 <h2>{t(view === 'examples' ? 'projects.sideExamples' : 'projects.sideProjects')}</h2>
                 <span className={sideStyles.pageTools}>
                   {onClose ? <button type="button" className={sideStyles.pageClose} aria-label={t('project.close')} onClick={onClose}><X size={17} /></button> : null}
                 </span>
-              </header>
+              </header>}
               {view === 'examples' ? gallery : null}
               {lib.loaded ? (
             <ProjectCoverContext.Provider value={cover.actions}>
               <ProjectsView
+                startsSlot={embedded ? <ProjectStarts busy={busy !== null} onNew={() => void newProject(null, 'edit')} onCanvas={() => void newProject(null, 'canvas')}
+                  onFolder={() => void openFolder()} onGitHub={() => setGithub({})} onExamples={() => setView('examples')} /> : undefined}
                 shown={view === 'projects'}
                 onBin={() => setView('recycle')}
                   display={display} onDisplay={setDisplay} navigation={projectNavigation}
@@ -563,6 +584,7 @@ export function ProjectsPopover({
                 onNewProject={(folderId) => void newProject(folderId)}
                 onOpenFolder={() => void openFolder()}
                 onGetFromGitHub={() => setGithub({})}
+                coverFromFrame={coverFromFrame ? { projectId: currentProjectId, run: coverFromFrame } : undefined}
                 onLocate={(project) => void locate(project)}
                 /* presence is checked again before opening the editor */
                 onOpen={(project) => { void openListed(project); }}
@@ -617,7 +639,7 @@ export function ProjectsPopover({
             </>
           )}
             </div>
-          </div>
+          </div>)}
         </div>
         {busy ? (
           <div className="absolute inset-0 z-20 flex items-center justify-center bg-[var(--bg-panel)]/70">
@@ -724,5 +746,5 @@ export function ProjectsPopover({
       />
     </>
   );
-  return createPortal(content, document.body);
+  return embedded ? content : createPortal(content, document.body);
 }

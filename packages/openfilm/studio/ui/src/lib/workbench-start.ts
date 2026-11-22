@@ -1,18 +1,27 @@
-/**
- * Which workbench a project shows when it opens, kept on this computer by project (shell/workbenches reads it): the
- * canvas open or not, and a plugin's surface it was left on. A project started from the projects window's "Start with"
- * is set to that workbench before it opens.
- */
-export const CANVAS_KEY = 'openfilm.canvas.open';
-export const SURFACE_KEY = 'openfilm.surface';
+/** Each project remembers the last workbench chosen in its window. */
+const key = (projectId: string) => `openfilm.workbench:${projectId}`;
 
-export const canvasShown = (projectId: string) => { try { return localStorage.getItem(`${CANVAS_KEY}:${projectId}`) === '1'; } catch { return false; } };
-export const surfacePicked = (projectId: string) => { try { return localStorage.getItem(`${SURFACE_KEY}:${projectId}`); } catch { return null; } };
-
-/** The project opens on the edit or the canvas. */
-export function openOn(projectId: string, workbench: 'edit' | 'canvas'): void {
+/** Older desktops saved a tab selection as well as the workbench behind their resource and start pages. */
+export function lastWorkbench(projectId: string): string {
   try {
-    localStorage.setItem(`${CANVAS_KEY}:${projectId}`, workbench === 'canvas' ? '1' : '0');
-    localStorage.removeItem(`${SURFACE_KEY}:${projectId}`);
-  } catch { /* opens as it would */ }
+    const saved = localStorage.getItem(key(projectId));
+    if (saved) return saved;
+    const tabs = localStorage.getItem(`openfilm.workspace.tabs:${projectId}`);
+    if (tabs) {
+      try {
+        const active = JSON.parse(tabs)?.active;
+        if (typeof active === 'string' && active.startsWith('bench:') && active.length > 6) return active.slice(6);
+      } catch { /* read the workbench settings below */ }
+    }
+    const surface = localStorage.getItem(`openfilm.surface:${projectId}`);
+    if (surface) return surface;
+    const canvas = localStorage.getItem(`openfilm.canvas.open:${projectId}`);
+    if (canvas === '1') return 'canvas';
+    if (canvas === '0' && localStorage.getItem('openfilm.project.color') === '1') return 'color';
+  } catch { /* this window can still select a workbench without storage */ }
+  return 'edit';
+}
+
+export function openOn(projectId: string, workbench: string): void {
+  try { localStorage.setItem(key(projectId), workbench); } catch { /* this window only */ }
 }

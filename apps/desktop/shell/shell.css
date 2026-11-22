@@ -3,10 +3,16 @@
 @source '../node_modules/openfilm/studio/ui/src';
 @source '../chat/src';
 
+:root { --desktop-frame-line: var(--frame-line); }
+
 /* the chat's column: left of Studio, under its top bar (bridge.ts places and sizes it); over Studio's panes and its
    assets drawer, under its menus and dialogs */
-/* the line between the window's top bar and the panes runs over the chat too, as it does over Studio's panes */
-#of-chat { position: fixed; left: 0; bottom: 0; height: auto; z-index: 40; background: transparent; box-sizing: border-box; border-top: 1px solid var(--dock-line, #000); }
+#of-chat { position: fixed; left: 0; bottom: 0; height: auto; z-index: 40; background: transparent; box-sizing: border-box; }
+/* The conversation surface and its scroll fades use the same dark fill. */
+[data-theme='dark'] #of-chat { --bg-app: var(--bg-panel); }
+/* A long chat title truncates within its share of the titlebar, including the popover's size-to-content wrappers. */
+[data-titlebar] [data-conversation-title] > div,
+[data-titlebar] [data-conversation-title] > div > div { min-width:0; max-width:100%; }
 #of-chat[hidden] { display: none; }
 /* the assets open: Studio's drawer fills the column, the composer floating over its foot; only the composer and the
    cards on it take the pointer, the rest of the column (around them too) is the drawer's */
@@ -22,6 +28,13 @@
 
 #of-chat[data-workspace-bounds] .workspace-chat-divider { display:none; }
 
-/* Legacy side chat owns its one-pixel edge. Custom workspaces already reserve the separator gap. */
-#of-chat:not([data-workspace-bounds])[data-side='left'] { border-right:1px solid var(--dock-line); }
-#of-chat:not([data-workspace-bounds])[data-side='right'] { border-left:1px solid var(--dock-line); }
+/* A side-docked chat includes its divider in the column width. Custom layouts leave the pixel outside it. */
+#of-chat:not([data-workspace-bounds])[data-side='left'] { border-right: 1px solid var(--desktop-frame-line); }
+#of-chat:not([data-workspace-bounds])[data-side='right'] { border-left: 1px solid var(--desktop-frame-line); }
+#of-chat[data-workspace-bounds]::after {
+  content: '';
+  position: absolute;
+  inset: 0 -1px;
+  border-inline: 1px solid var(--desktop-frame-line);
+  pointer-events: none;
+}

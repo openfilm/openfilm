@@ -14,5 +14,8 @@ export const LARGE_DIALOG_SURFACE =
 export const LARGE_DIALOG = `relative flex ${LARGE_DIALOG_SIZE} min-h-0 min-w-0 overflow-hidden ${LARGE_DIALOG_SURFACE}`;
 /** A large window's side, on its left. */
 export const LARGE_DIALOG_SIDE = 'flex min-h-0 w-[264px] shrink-0 flex-col border-r border-[var(--border)] bg-[var(--dialog-side)]';
-/** A page of a large window: its column 920 px wide in the middle (the same as its lists), its scrollbar at the window's edge. */
-export const LARGE_DIALOG_COLUMN = 'px-[max(40px,calc((100%-920px)/2))]';
+/**
+ * A page of a large window: its column 920 px wide in the middle (the same as its lists), its scrollbar at the window's
+ * edge. In a desktop sidebar page the column is the page's own (`--page-x`, components/SidePage).
+ */
+export const LARGE_DIALOG_COLUMN = 'px-[var(--page-x,max(40px,calc((100%-920px)/2)))]';

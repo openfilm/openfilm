@@ -2,7 +2,7 @@
  * The parts of `window.openfilmDesktop` that are this app's own (src/preload-chat.cjs); the parts the copied chat code
  * uses (localAgents, pathForFile) are typed in lib/desktop-bridge.ts.
  */
-import type { CommunityItem, HostWorkbench, StudioRef, StudioSelection } from 'openfilm/studio-ui/lib/host.ts';
+import type { CommunityItem, ConversationManagerSlot, HostConversationEdit, HostProjectConversations, HostWorkbench, StudioRef, StudioSelection } from 'openfilm/studio-ui/lib/host.ts';
 import type { FileChange } from './lib/file-changes';
 
 /* what Studio and the chat say to each other about the film is Studio's own contract (its lib/host.ts) */
@@ -22,6 +22,14 @@ interface AppBridge {
   /** Studio's language (its <html lang>) */
   onLanguage(listener: (language: string) => void): () => void;
   onProject(listener: (project: Project) => void): () => void;
+  publishConversations: (current: HostProjectConversations | null) => void;
+  conversationManagerSlot: () => ConversationManagerSlot | null;
+  onConversationManagerSlot: (listener: () => void) => () => void;
+  conversationTitleSlot: () => HTMLElement | null;
+  onConversationTitleSlot: (listener: () => void) => () => void;
+  onSelectConversation: (projectId: string, select: (sessionId: string | null) => void) => () => void;
+  /** the sidebar changes a conversation of this project: false when it cannot (archived while it works) */
+  onEditConversation: (projectId: string, edit: (sessionId: string, edit: HostConversationEdit) => boolean) => () => void;
   workbench(): HostWorkbench | null;
   onWorkbench(listener: (state: HostWorkbench | null) => void): () => void;
   showWorkbench(projectId: string, workbench: string): void;

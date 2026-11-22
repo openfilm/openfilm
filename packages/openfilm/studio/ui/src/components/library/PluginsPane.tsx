@@ -40,6 +40,7 @@ import { KindTile } from './StoreKinds';
 import { DocAgent, DocHighlights, DocKeys, DocLines, DocOff, DocSection, DocSteps, InfoBar, sortDetails } from './DocSections';
 import { SettingsButton, SettingsGroup, SettingsSwitch } from '../settings/ui';
 import { LARGE_DIALOG_COLUMN as PAGE_INSET } from '../dialog-chrome';
+import { useInSidePage } from '../SidePage';
 import { ASSET_KINDS, COMMUNITY_ICON, KindIcon, isCodeKind, type FeatureKind } from '../feature-kinds';
 import { byOpenFilm, libraryUrl, makerName, nameOf, packItems, packOf, posterUrl, previewUrl, setAdded, templatePreviewUrl, TEXT_COMPONENT, useLibraryAdded, useLibraryIndex, type LibraryItem, type LibraryPack } from '@/lib/library';
 import { isClipMotion } from '@/lib/clip-presets';
@@ -864,6 +865,13 @@ function Empty({ text, action }: { text: string; action?: { label: string; run: 
 
 /** A list's page: its title, what the list is in one line, then the list, in the middle of the room the window gives. */
 function PluginsPage({ title, note, badge, children }: { title: string; note?: string; badge?: string; children: React.ReactNode }) {
+  /* in a desktop sidebar page its frame names the place: the note alone heads the list */
+  if (useInSidePage()) return (
+    <div className={`min-h-0 flex-1 overflow-y-auto overscroll-contain ${PAGE_INSET} pb-14 pt-3`}>
+      {note ? <p className="max-w-[640px] text-[13px] leading-5 text-[var(--text-muted)]">{note}</p> : null}
+      <div className="mt-6">{children}</div>
+    </div>
+  );
   return (
     /* a page of its own: another place starts at its top (its key, given by whoever shows it) */
     <div className={`min-h-0 flex-1 overflow-y-auto overscroll-contain ${PAGE_INSET} pb-14 pt-10`}>

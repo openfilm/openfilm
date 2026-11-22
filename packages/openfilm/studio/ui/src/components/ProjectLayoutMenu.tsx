@@ -78,9 +78,13 @@ export function ProjectLayoutMenu({ className, value, spec, title, onChange, onR
     } catch { setNotice(t('layout.importFailed')); }
     finally { if (importInput.current) importInput.current.value = ''; }
   };
-  return <Popover open={open} onOpenChange={show} align="end" layer={10060}
+  const label = t('layout.title');
+  return <Popover open={open} onOpenChange={show} align="end" placement="bottom" clampToViewport layer={10060}
     onEscapeKeyDown={event => { event.stopPropagation(); if (editing) setEditing(null); else if (actions) setActions(null); else show(false); }}
-    trigger={<button ref={button} data-layout-trigger type="button" disabled={layoutEditing} className={className} aria-label={t('layout.title')} aria-haspopup="dialog" aria-expanded={open} aria-controls={open?id:undefined}><PanelsRightBottom size={16}/></button>}>
+    trigger={<button ref={button} data-layout-trigger type="button" disabled={layoutEditing} className={className}
+      aria-label={label} title={label} aria-haspopup="dialog" aria-expanded={open} aria-controls={open ? id : undefined}>
+      <PanelsRightBottom size={16} aria-hidden />
+    </button>}>
     <div ref={panel} id={id} data-layout-menu role="dialog" tabIndex={-1} aria-label={t('layout.title')} className={styles.menu}>
       <div className={styles.heading}><strong>{t('layout.title')}</strong><button type="button" className={styles.reset} onClick={onReset}><RotateCcw size={12}/>{t('layout.restoreDefault')}</button></div>
       <p className={styles.modeLabel}>{words.layouts}</p>

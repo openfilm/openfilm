@@ -1,4 +1,5 @@
 import React from 'react';
+import { studioHost, workspaceOrigin } from '@/lib/host';
 import { useT } from '@/i18n';
 import type { LibraryDock } from '@/lib/workspaces';
 import type { DockRect } from '@/lib/workspace-dock';
@@ -15,7 +16,7 @@ export function WorkspaceLibraryPane({ open, dock, rect, children, free = false,
   const drag=React.useRef<{x:number;y:number;size:number}|null>(null);
   const bottom=dock==='bottom',size=bottom?rect.height:rect.width;
   const set=(size:number)=>onResize(bottom?{libraryHeight:Math.max(160,size)}:{assetsWidth:Math.max(220,size)});
-  return <aside hidden={!open} inert={!open} data-workspace-library={dock} data-workspace-root={rect.top===32?'':undefined} aria-label={t('layout.assets')} className={styles.pane} style={rect}>
+  return <aside hidden={!open} inert={!open} data-workspace-library={dock} data-workspace-root={!studioHost?.conversations && rect.top === workspaceOrigin().top ? '' : undefined} aria-label={t('layout.assets')} className={styles.pane} style={rect}>
     <div className={styles.content}>{open||visited?children:null}</div>
     {!free&&dock!=='chat'?<div role="separator" aria-label={t('layout.resizeLibrary')} aria-orientation={bottom?'horizontal':'vertical'} aria-valuenow={Math.round(size)} tabIndex={0}
       className={`workspace-resize-handle ${styles.seam} ${bottom?styles.top:dock==='right'?styles.left:styles.right}`}

@@ -1,4 +1,5 @@
 import React from 'react';
+import { DESKTOP_TITLEBAR_HEIGHT } from './workspaces';
 
 /**
  * The app Studio is embedded in, when there is one. An app that shows Studio in its own window (rather than a browser
@@ -8,6 +9,16 @@ import React from 'react';
  */
 /** A tab of the app's window (`tabs` below): a project's, its title as Studio shows it. */
 export interface HostTab { id: string; projectId: string; title: string; active: boolean; working: boolean; asking: boolean; exporting: number | null; exportStage?: string }
+
+/** Session names for navigation, separate from the much larger chat transcripts. */
+export interface HostConversationList {
+  current: string | null;
+  sessions: { id: string; title: string; pinned?: boolean; updatedAt?: string }[];
+}
+export interface HostProjectConversations extends HostConversationList { projectId: string }
+/** A conversation changed from the sidebar: renamed, pinned or not, archived. */
+export interface HostConversationEdit { title?: string; pinned?: boolean; archived?: boolean }
+export interface ConversationManagerSlot { node: HTMLElement; dismissSidebar: () => void }
 
 /** Settings → Developer, as the app keeps it (`developer` below). */
 export interface HostDeveloper { logs: boolean; changes: boolean }
@@ -25,6 +36,17 @@ export interface HostConnector {
 export interface StudioHost {
   /** the version of this interface the app speaks */
   version: 1;
+  /** The desktop chat supplies its current title control and the projects' conversations. */
+  conversations?: {
+    get: () => HostProjectConversations | null;
+    subscribe: (listener: () => void) => () => void;
+    list: (projectId: string) => Promise<HostConversationList>;
+    open: (projectId: string, sessionId: string | null) => Promise<unknown>;
+    /** change a conversation of any project (false: it could not be, as one archived while it works) */
+    edit?: (projectId: string, sessionId: string, edit: HostConversationEdit) => Promise<boolean>;
+    setTitleSlot: (element: HTMLElement | null) => void;
+    setManagerSlot: (slot: ConversationManagerSlot | null) => void;
+  };
   /** The native Settings menu asks the current page to open General, including the launcher. */
   settings?: { onOpen: (listener: () => void) => () => void };
   /** the app's name, for the person */
@@ -90,7 +112,8 @@ export interface StudioHost {
     setOpen: (open: boolean) => void;
     setAssetsOpen?: (open: boolean) => void;
     setWidth?: (width: number, done?: boolean) => void;
-    setBounds?: (bounds: { left: number; top: number; width: number; height: number } | null) => void;
+    /** Custom chat bounds, and the left edge of the workspace when native docking is used. */
+    setBounds?: (bounds: { left: number; top: number; width: number; height: number } | null, workspaceLeft?: number) => void;
     setPlacement?: (placement: { side: 'left' | 'right'; libraryDock: 'left' | 'right' | 'bottom' | 'chat' }) => void;
     onChange: (listener: (state: { open: boolean; width: number; preferredWidth?: number; assets?: { open: boolean; bottom: number; beside?: number } }) => void) => void | (() => void);
   };
@@ -553,6 +576,7 @@ export type HostPanel = {
  * The panel's width as --host-panel-width on the page, set the moment the app tells it: what sits beside the panel
  * reads it from there, so while the panel's seam is dragged the two move in the same frame, before Studio renders.
  */
+export const workspaceOrigin = () => ({ left: 0, top: DESKTOP_TITLEBAR_HEIGHT });
 export const HOST_PANEL_WIDTH = 'var(--host-panel-width, 0px)';
 function keepPanelWidth({ open, width }: { open: boolean; width: number }) {
   document.documentElement.style.setProperty('--host-panel-width', `${open ? width : 0}px`);

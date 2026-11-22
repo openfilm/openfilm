@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import vm from 'node:vm';
 import ts from 'typescript';
-import { workspaceChatWidth } from '../../../packages/openfilm/studio/ui/src/lib/workspaces.ts';
+import { DESKTOP_TITLEBAR_HEIGHT, workspaceChatWidth } from '../../../packages/openfilm/studio/ui/src/lib/workspaces.ts';
 
 const bridgeSource = readFileSync(new URL('../shell/bridge.ts', import.meta.url), 'utf8');
 const apiSource = readFileSync(new URL('../../../packages/openfilm/studio/ui/src/api.ts', import.meta.url), 'utf8');
@@ -23,6 +23,7 @@ function harness() {
     platform: 'linux',
     hello: async () => ({ chatOpen: true, chatWidth: 420, chatMin: 340, studioMin: 640, fullScreen: false }),
     agents: {}, localAgents: {}, chat: {}, skills: {},
+    conversations: { onSelect() {}, onEdit() {} },
     setTheme() {}, setLanguage() {}, onFullScreen() {}, onToggleChat() {},
   };
   const context = vm.createContext({
@@ -39,6 +40,7 @@ function harness() {
     setTimeout: (fn) => { timers.push(fn); return timers.length; },
     clearTimeout: (id) => { timers[id - 1] = null; },
     innerWidth: 1280,
+    DESKTOP_TITLEBAR_HEIGHT,
     workspaceChatWidth,
     addEventListener: (name, listener) => events.set(name, listener),
     flushSync: (fn) => fn(),
@@ -55,7 +57,7 @@ function harness() {
   const changed = [];
   bridge.onProject((project) => changed.push({ ...project }));
   return {
-    api, bridge, native, requests, changed, sockets, column, notifications: context.window.openfilmHost.notifications,
+    api, bridge, native, requests, changed, sockets, column, panel: context.window.openfilmHost.panel, notifications: context.window.openfilmHost.notifications,
     subscribe: (id = 'a', listener = () => {}) => projectEvents(id, listener),
     reconnect: () => { sockets.at(-1).onclose(); timers.at(-1)(); sockets.at(-1).onopen(); },
     navigate: (path) => context.history.pushState(null, '', path),
@@ -68,6 +70,18 @@ async function opened(h) {
   h.requests[0].respond({ projects: [project()] });
   await h.bridge.hello();
 }
+
+test('the conversation is docked at the window edge below the project titlebar', async () => {
+  const h = harness();
+  await opened(h);
+  assert.equal(h.column.style.top, `${DESKTOP_TITLEBAR_HEIGHT}px`);
+  assert.equal(h.column.style.left, '0px');
+  h.panel.setWidth(800);
+  assert.equal(h.column.style.width, '640px', 'Studio keeps its minimum in the full 1280px window');
+  h.panel.setPlacement({ side: 'right', libraryDock: 'left' });
+  assert.equal(h.column.style.left, 'auto');
+  assert.equal(h.column.style.right, '0px');
+});
 
 test('the notification bridge defaults missing preferences to off and keeps explicit choices', async () => {
   const h = harness();

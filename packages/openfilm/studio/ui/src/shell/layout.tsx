@@ -14,17 +14,17 @@
 import * as React from 'react';
 import { useLanguage, useT } from '@/i18n';
 import { blockTitle } from '@/lib/blocks';
-import { HOST_PANEL_WIDTH, studioHost, useHostPanel } from '@/lib/host';
+import { PROJECT_SIDEBAR_WIDTH } from '@/lib/hover-open';
+import { HOST_PANEL_WIDTH, studioHost, useHostPanel, workspaceOrigin } from '@/lib/host';
 import { useStudioPlugins } from '@/lib/plugins';
 import { useWorkspaceDraft, useWorkspaceLayouts } from '@/lib/use-workspaces';
-import { defaultDockTree, dockFrames, panelMinimum, visibleDockPanels, type DockRect } from '@/lib/workspace-dock';
+import { carryWorkspaceChat, defaultDockTree, dockFrames, panelMinimum, visibleDockPanels, type DockRect } from '@/lib/workspace-dock';
 import { dockedSizes, type BlockRoom, type DrawnBlock } from '@/lib/workspace-preview';
 import { centerOf, defaultWorkspace, workspaceChatWidth, workspaceGeometry, type ArrangementSpec, type BlockPlace, type BlockSpec, type WorkspaceLayout } from '@/lib/workspaces';
 import { ProjectLayoutMenu } from '@/components/ProjectLayoutMenu';
 import { WorkspaceEditor, WorkspaceSeams } from '@/components/WorkspaceEditor';
 import type { useProjectFrame } from './ProjectFrame';
 import { useSteady, useWiringsOf } from './frame';
-import { HOST_PANEL_TOP } from './library';
 
 /** `value`, the same one until what it holds changes (compared as JSON): the frame is not told anew by every render. */
 function useSame<T>(value: T): T {
@@ -36,7 +36,7 @@ function useSame<T>(value: T): T {
 const insetStyle = ({ inset }: ReturnType<typeof workspaceGeometry>): React.CSSProperties => ({ marginLeft: inset.left, marginRight: inset.right, marginBottom: inset.bottom });
 /** A block's box where the panels float; none where they are docked. */
 const freeBox = (rect: { left: number; top: number; width: number; height: number } | undefined): React.CSSProperties =>
-  (rect ? { position: 'fixed', zIndex: 30, ...rect, paddingTop: 0, borderTop: rect.top === HOST_PANEL_TOP ? '1px solid var(--dock-line)' : 0 } : {});
+  (rect ? { position: 'fixed', zIndex: 30, ...rect, paddingTop: 0, borderTop: !studioHost?.conversations && rect.top === workspaceOrigin().top ? '1px solid var(--dock-line)' : 0 } : {});
 /** An arrangement whose blocks are not known yet (its plugin not listed): the page's own blocks only. */
 const UNKNOWN = new Map<string, ArrangementSpec>();
 const unknownSpec = (name: string): ArrangementSpec => { let spec = UNKNOWN.get(name); if (!spec) UNKNOWN.set(name, spec = { name, blocks: [] }); return spec; };
@@ -48,8 +48,8 @@ const unknownSpec = (name: string): ArrangementSpec => { let spec = UNKNOWN.get(
  * (its plugin on); `rearranging`: written here, whether the panels are being rearranged (the workbench shown stays the
  * one it is meanwhile, shell/workbenches).
  */
-export function useLayout(of: { canvasOpen: boolean; noBench: boolean; among: string; specs: ReadonlyMap<string, ArrangementSpec>; inPage: (workbench: string) => boolean; rearranging: React.RefObject<boolean> }) {
-  const { canvasOpen, noBench, among, specs, inPage, rearranging } = of;
+export function useLayout(of: { dockSidebar: boolean; canvasOpen: boolean; noBench: boolean; among: string; specs: ReadonlyMap<string, ArrangementSpec>; inPage: (workbench: string) => boolean; rearranging: React.RefObject<boolean> }) {
+  const { dockSidebar, canvasOpen, noBench, among, specs, inPage, rearranging } = of;
   const t = useT();
   const language = useLanguage();
   /* the workspace's own setter, made further down */
@@ -63,14 +63,30 @@ export function useLayout(of: { canvasOpen: boolean; noBench: boolean; among: st
   const workspaceMode = canvasOpen ? 'canvas' : among;
   const specOf = React.useCallback((name: string) => specs.get(name) ?? unknownSpec(name), [specs]);
   const shownSpec = specOf(workspaceMode), amongSpec = specOf(among), canvasSpec = specOf('canvas');
-  const { layout: storedWorkspace, layoutOf, update: commitWorkspace, viewport: workspaceViewport, storageFailed: workspaceStorageFailed } = useWorkspaceLayouts(workspaceMode, specs);
+  const { layout: storedWorkspace, layoutOf, update: commitWorkspace, nativeWidth, viewport: windowSize, storageFailed: workspaceStorageFailed } = useWorkspaceLayouts(workspaceMode, specs);
+  // Give narrow windows back some room while keeping the normal width on full-size windows.
+  const workspaceLeft = dockSidebar ? Math.min(PROJECT_SIDEBAR_WIDTH, Math.floor(windowSize.width / 5)) : 0;
+  const viewport = React.useMemo(() => ({ ...windowSize, ...workspaceOrigin(), left: workspaceLeft }), [windowSize, workspaceLeft]);
+  const workspaceViewport = React.useMemo(() => ({ width: windowSize.width - workspaceLeft, height: windowSize.height }), [windowSize, workspaceLeft]);
   const layoutDraft = useWorkspaceDraft();
-  const workspacePrefs = layoutDraft.draft ?? storedWorkspace;
+  // Workbench tabs share the desktop column. A switch carries the live split into the incoming
+  // arrangement before its first paint. Choosing a preset or editing the current layout still applies it directly.
+  const previousWorkspace = React.useRef<WorkspaceLayout | null>(null);
+  const previous = previousWorkspace.current;
+  const nativePanel = studioHost?.panel;
+  const carried = nativePanel && previous && previous.mode !== workspaceMode
+    ? carryWorkspaceChat(previous, storedWorkspace, nativePanel, viewport.width - viewport.left)
+    : null;
+  const workspacePrefs = layoutDraft.draft ?? carried ?? storedWorkspace;
+  React.useLayoutEffect(() => {
+    previousWorkspace.current = workspacePrefs;
+    if (carried) commitWorkspace(carried);
+  }, [workspacePrefs, carried, commitWorkspace]);
   const amongPrefs = workspaceMode === among ? workspacePrefs : layoutOf(among);
   const canvasPrefs = workspaceMode === 'canvas' ? workspacePrefs : layoutOf('canvas');
   rearranging.current = layoutDraft.draft !== null;
-  const updateWorkspace = React.useCallback((patch: Partial<WorkspaceLayout>) => {
-    if (layoutDraft.active.current) layoutDraft.update(patch); else commitWorkspace(patch);
+  const updateWorkspace = React.useCallback((patch: Partial<WorkspaceLayout>, origin?: 'host') => {
+    if (layoutDraft.active.current) layoutDraft.update(patch); else commitWorkspace(patch, origin);
   }, [layoutDraft.active, layoutDraft.update, commitWorkspace]);
   updateWorkspaceRef.current = updateWorkspace;
   /* a block of the arrangement shown changed (shown or hidden, sized): one it does not have is left alone */
@@ -91,8 +107,8 @@ export function useLayout(of: { canvasOpen: boolean; noBench: boolean; among: st
   /* a block is drawn when its workbench is in the page (one of another workbench's whose plugin is off is not) */
   const drawnIn = React.useCallback((spec: ArrangementSpec) => (key: string) => { const block = spec.blocks.find((b) => b.key === key); return !block || block.owner === spec.name || inPage(block.owner); }, [inPage]);
   /* where the panels float (an arrangement with a tree of splits): each panel's box in the window; null when docked */
-  const amongFree = React.useMemo(() => (amongPrefs.tree ? dockFrames(amongPrefs.tree, workspaceViewport, visibleDockPanels(amongPrefs, Boolean(studioHost?.panel), amongSpec, drawnIn(amongSpec)), panelMinimum(amongSpec)) : null), [amongPrefs, amongSpec, workspaceViewport, drawnIn]);
-  const canvasFree = React.useMemo(() => (canvasPrefs.tree ? dockFrames(canvasPrefs.tree, workspaceViewport, visibleDockPanels(canvasPrefs, Boolean(studioHost?.panel), canvasSpec), panelMinimum(canvasSpec)) : null), [canvasPrefs, canvasSpec, workspaceViewport]);
+  const amongFree = React.useMemo(() => (amongPrefs.tree ? dockFrames(amongPrefs.tree, viewport, visibleDockPanels(amongPrefs, Boolean(studioHost?.panel), amongSpec, drawnIn(amongSpec)), panelMinimum(amongSpec)) : null), [amongPrefs, amongSpec, viewport, drawnIn]);
+  const canvasFree = React.useMemo(() => (canvasPrefs.tree ? dockFrames(canvasPrefs.tree, viewport, visibleDockPanels(canvasPrefs, Boolean(studioHost?.panel), canvasSpec), panelMinimum(canvasSpec)) : null), [canvasPrefs, canvasSpec, viewport]);
   const freeGeometry = canvasOpen ? canvasFree : amongFree;
 
   /* ── the blocks among the page's panels where they are docked: the room they share, measured where they are drawn
@@ -115,33 +131,50 @@ export function useLayout(of: { canvasOpen: boolean; noBench: boolean; among: st
   const workspaceLayout: WorkspaceLayout = { ...workspacePrefs, chat: hostPanel?.open ?? workspacePrefs.chat,
     chatWidth: hostPanel?.preferredWidth ?? workspacePrefs.chatWidth };
   const restoringHost = React.useRef(false);
-  const applyHostWorkspace = (next: WorkspaceLayout) => {
+  const applyHostWorkspace = (next: WorkspaceLayout, restoreWidth = true) => {
     const native = studioHost?.panel;
+    if (!next.chat && next.libraryDock === 'chat' && native?.assets?.open) hostAssets?.setOpen(false);
     hostPanel?.setPlacement({ side: next.chatSide, libraryDock: next.libraryDock });
     hostPanel?.setOpen(next.chat);
-    if (native?.preferredWidth !== next.chatWidth) hostPanel?.setWidth(next.chatWidth, true);
+    if (restoreWidth && native?.preferredWidth !== next.chatWidth) hostPanel?.setWidth(next.chatWidth, true);
     if (native?.assets?.open !== next.assets) hostAssets?.setOpen(next.assets);
   };
   const hostApplyRef = React.useRef(applyHostWorkspace); hostApplyRef.current = applyHostWorkspace;
-  // Changing mode restores its own profile before accepting new changes from the native chat.
+  // Apply Studio changes before mirroring native drags and keyboard toggles back into the active arrangement.
   React.useLayoutEffect(() => {
     const next = workspacePrefs;
     restoringHost.current = true;
     let live = true;
     queueMicrotask(() => {
       if (!live) return;
-      try { hostApplyRef.current(next); }
+      try { hostApplyRef.current(next, false); }
       finally { restoringHost.current = false; }
     });
     return () => { live = false; restoringHost.current = false; };
-  }, [workspaceMode, workspacePrefs.chat, workspacePrefs.assets, workspacePrefs.chatWidth, workspacePrefs.libraryDock, workspacePrefs.chatSide]);
+  }, [workspaceMode, workspacePrefs.chat, workspacePrefs.assets, workspacePrefs.libraryDock, workspacePrefs.chatSide]);
+
+  // A profile loaded from storage, a tab switch or a layout draft can set the column. A native
+  // resize only updates storage; its acknowledgement must not suppress the next live resize either.
+  const restoreWidth = Boolean(carried || layoutDraft.draft) || !nativeWidth;
+  const preferred = workspacePrefs.chatWidth;
+  React.useLayoutEffect(() => {
+    const panel = studioHost?.panel;
+    const before = panel?.preferredWidth;
+    if (!restoreWidth || !panel || preferred === before) return;
+    let live = true;
+    queueMicrotask(() => {
+      if (live && panel.preferredWidth === before) panel.setWidth?.(preferred, true);
+    });
+    return () => { live = false; };
+  }, [workspaceMode, preferred, restoreWidth]);
+
   React.useEffect(() => {
     const native = studioHost?.panel;
     if (!hostPanel || !native || restoringHost.current) return;
     // A profile can already match the host and produce no change event. Read the current host, not an older render's
     // snapshot, so a later drag is never mistaken for an acknowledgement of that profile.
     updateWorkspace({ chat: native.open, chatWidth: native.preferredWidth ?? hostPanel.preferredWidth,
-      ...(hostAssets && native.assets ? { assets: native.assets.open } : {}) });
+      ...(hostAssets && native.assets ? { assets: native.assets.open } : {}) }, 'host');
   }, [hostPanel?.open, hostPanel?.preferredWidth, hostAssets?.open, workspaceMode, updateWorkspace]);
   const applyWorkspace = (next: WorkspaceLayout) => {
     if (next.mode !== workspaceMode) return;
@@ -154,7 +187,7 @@ export function useLayout(of: { canvasOpen: boolean; noBench: boolean; among: st
     const drawn = workspaceMode === among ? Object.fromEntries(Object.entries(amongDrawn).map(([key, block]) => [key, block.size])) : {};
     layoutDraft.begin({ ...workspaceLayout, tree: workspaceLayout.tree ?? defaultDockTree({ ...workspaceLayout, chatWidth: hostPanel?.width || workspaceLayout.chatWidth }, shownSpec, drawn) });
   };
-  const cancelLayoutEdit = () => { layoutDraft.close(); applyHostWorkspace(storedWorkspace); };
+  const cancelLayoutEdit = () => { layoutDraft.close(); };
   const finishLayoutEdit = () => { const next = layoutDraft.draft; if (!next) return; layoutDraft.close(); commitWorkspace(next); applyHostWorkspace(next); };
   /* the arrangement shown as it first is, its panels floating: its blocks fitted to their content (none: as declared) */
   const resetLayoutEdit = () => {
@@ -166,22 +199,22 @@ export function useLayout(of: { canvasOpen: boolean; noBench: boolean; among: st
   const boundsKey = JSON.stringify(chatBounds);
   React.useLayoutEffect(() => {
     let live = true;
-    queueMicrotask(() => { if (live) studioHost?.panel?.setBounds?.(chatBounds); });
+    queueMicrotask(() => { if (live) studioHost?.panel?.setBounds?.(chatBounds, workspaceLeft); });
     return () => { live = false; };
-  }, [boundsKey]);
+  }, [boundsKey, workspaceLeft]);
   React.useEffect(() => () => studioHost?.panel?.setBounds?.(null), []);
   const dockOf = (layout: WorkspaceLayout) => {
     const active = layout.mode === workspaceMode && !layout.tree ? hostPanel : null;
     return workspaceGeometry({ ...layout, chat: active?.open ?? layout.chat,
       libraryDock: !hostAssets && layout.libraryDock === 'chat' ? 'left' : layout.libraryDock },
-      workspaceViewport, active?.width ?? (hostPanel && layout.chat ? workspaceChatWidth(workspaceViewport.width, layout.chatWidth) : 0));
+      viewport, active?.width ?? (hostPanel && layout.chat ? workspaceChatWidth(viewport.width - viewport.left, layout.chatWidth) : 0));
   };
   const amongDock = useSame(dockOf(amongPrefs));
   const canvasDock = useSame(dockOf(canvasPrefs));
   const dockGeometry = canvasOpen ? canvasDock : amongDock;
-  const chatWidth = dockGeometry.inset[workspacePrefs.chatSide];
-  const chatLibraryRect = chatBounds ?? { left: workspacePrefs.chatSide === 'right' ? workspaceViewport.width - chatWidth : 0,
-    top: HOST_PANEL_TOP, width: chatWidth, height: workspaceViewport.height - HOST_PANEL_TOP };
+  const chatWidth = hostPanel?.width ?? 0;
+  const chatLibraryRect = chatBounds ?? { left: workspacePrefs.chatSide === 'right' ? viewport.width - chatWidth : viewport.left,
+    top: viewport.top, width: chatWidth, height: viewport.height - viewport.top };
   const independentLibrary = workspacePrefs.libraryDock !== 'chat' || !hostAssets;
   const libraryOpen = independentLibrary ? assetsPaneOpen : Boolean(hostAssets?.open);
   const openLibrary = (open: boolean) => { updateWorkspace({ assets: open }); hostAssets?.setOpen(open); };
@@ -232,7 +265,7 @@ export function useLayout(of: { canvasOpen: boolean; noBench: boolean; among: st
   const previewSizes = React.useCallback((layout: WorkspaceLayout, room: BlockRoom): Readonly<Record<string, DrawnBlock>> => sizesOf(specOf(layout.mode), layout, room, null), [sizesOf, specOf]);
 
   return {
-    workspaceMode, workspacePrefs, shownSpec, workspaceLayout: useSame(workspaceLayout), workspaceViewport, workspaceStorageFailed,
+    workspaceMode, workspacePrefs, shownSpec, workspaceLayout: useSame(workspaceLayout), workspaceViewport, workspaceLeft, workspaceStorageFailed,
     layoutDraft: rearranged, layoutEditing, updateWorkspace, placeBlock, openBlock, previewSizes,
     amongFree, canvasFree, freeGeometry, amongDock, canvasDock, places, blockBox, arrangement, amongDrawn, setBlockRoom, drawnIn,
     chat, chatThere, libraryPane,
@@ -242,11 +275,9 @@ export function useLayout(of: { canvasOpen: boolean; noBench: boolean; among: st
 }
 
 /**
- * The layout's menu, the first of the buttons on the right of the top bar (`className`: the bar's buttons'): the
- * arrangements to pick from, each drawn as the window would be, and the way into rearranging. The same one until what
- * it shows changes.
+ * Workspace presets and the layout editor, opened from the top bar.
  */
-export function LayoutMenu({ frame, className }: { frame: ReturnType<typeof useProjectFrame>; className: string }) {
+export function LayoutMenu({ frame, className }: { frame: ReturnType<typeof useProjectFrame>; className?: string }) {
   const { workspaceLayout, shownSpec, applyWorkspace, resetWorkspace, beginLayoutEdit, chatThere, workspaceViewport, layoutEditing, workspaceStorageFailed, previewSizes, benchPlugins } = frame;
   /* the words of the workbench whose arrangement it is (one someone made is not among OpenFilm's own plugins) */
   const title = benchPlugins.find((p) => p.workbench === workspaceLayout.mode)?.title;
@@ -266,7 +297,7 @@ export function LayoutOver({ frame }: { frame: ReturnType<typeof useProjectFrame
   if (!loaded || failure) return null;
   return (
     <>
-      {freeGeometry && workspacePrefs.tree ? <WorkspaceSeams tree={workspacePrefs.tree} frames={freeGeometry} editing={Boolean(layoutDraft.draft)} onChange={tree => updateWorkspace({ tree })} onCheckpoint={layoutDraft.draft ? layoutDraft.checkpoint : undefined} /> : null}
+      {frame.newWorkbenchTab !== 'active' && freeGeometry && workspacePrefs.tree ? <WorkspaceSeams tree={workspacePrefs.tree} frames={freeGeometry} editing={Boolean(layoutDraft.draft)} onChange={tree => updateWorkspace({ tree })} onCheckpoint={layoutDraft.draft ? layoutDraft.checkpoint : undefined} /> : null}
       {layoutDraft.draft && freeGeometry ? <WorkspaceEditor value={layoutDraft.draft} spec={shownSpec} title={benchPlugins.find((p) => p.workbench === layoutDraft.draft!.mode)?.title} frames={freeGeometry} hasChat={chatThere} onChange={layoutDraft.change}
         onDone={finishLayoutEdit} onCancel={cancelLayoutEdit} onUndo={layoutDraft.undo} onRedo={layoutDraft.redo} canUndo={layoutDraft.canUndo} canRedo={layoutDraft.canRedo}
         onReset={resetLayoutEdit} /> : null}

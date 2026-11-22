@@ -1,4 +1,4 @@
-.editor { position:fixed; inset:32px 0 0; z-index:9000; user-select:none; background:rgb(0 0 0 / .12); }
+.editor { position:fixed; inset:0; z-index:9000; user-select:none; background:rgb(0 0 0 / .12); }
 .tile { position:fixed; border:1px dashed color-mix(in srgb,var(--accent) 65%,transparent); border-radius:5px; background:color-mix(in srgb,var(--bg-panel) 8%,transparent); overflow:hidden; cursor:grab; touch-action:none; }
 .handle { display:flex; align-items:center; gap:7px; position:absolute; top:8px; left:8px; max-width:calc(100% - 48px); min-height:30px; padding:5px 10px; border:1px solid var(--border-strong); border-radius:6px; background:var(--bg-panel); box-shadow:0 2px 8px #0002; color:var(--text); font-size:12px; cursor:grab; touch-action:none; }
 .handle span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }

@@ -10,14 +10,15 @@ import { useT } from '@/i18n';
 import { ContextMenu, type ContextMenuEntry } from '../ContextMenu';
 import { LARGE_DIALOG_COLUMN as PAGE_INSET } from '../dialog-chrome';
 import { Own, opener } from './CommunityViews';
+import { useInSidePage } from '../SidePage';
 
 /**
  * Things side by side, in columns as wide as the window allows: rows of apps (a plugin, a connector), one under the
  * other with a hairline between, or cards with a picture (a skill's cover).
  */
-export const STORE_GRID = 'grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-x-8';
+export const STORE_GRID = 'store-grid grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-x-8';
 /** Cards with a picture side by side (skills by their covers): two where the window is narrow, more as it widens. */
-export const COVER_GRID = 'grid grid-cols-[repeat(auto-fill,minmax(210px,1fr))] gap-x-6';
+export const COVER_GRID = 'cover-grid grid grid-cols-[repeat(auto-fill,minmax(210px,1fr))] gap-x-6';
 
 /**
  * A plugin or a skill in the store. Without a picture, as an app store lists apps: its icon, its name (a word after it:
@@ -33,6 +34,7 @@ export function StoreCard({ icon, cover, title, badges, by, summary, meta, actio
   meta?: React.ReactNode; action?: React.ReactNode; onOpen?: () => void; dim?: boolean;
 }) {
   const [hover, setHover] = React.useState(false);
+  const inPage = useInSidePage();
   const name = (
     <div className="flex min-w-0 items-center gap-1.5">
       <span className={`truncate text-[14.5px] font-semibold tracking-[-0.01em] ${dim ? 'text-[var(--text-muted)]' : 'text-[var(--text)]'}`}>{title}</span>
@@ -46,6 +48,33 @@ export function StoreCard({ icon, cover, title, badges, by, summary, meta, actio
       {meta ? <span className="min-w-0 truncate tabular-nums">{meta}</span> : null}
     </div>
   ) : null;
+  /* in a desktop sidebar page (components/SidePage): a card of its own either way, as a storefront shows what it has.
+     With a picture, the picture fills its top; without, its icon heads it with what to do opposite */
+  if (inPage) {
+    return (
+      <div {...opener(onOpen)} data-store-card={title} onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
+        className="group flex min-w-0 cursor-pointer flex-col overflow-hidden rounded-[16px] border border-[var(--frame-line)] bg-[color-mix(in_srgb,var(--text)_3%,transparent)] outline-none transition-colors hover:border-[color-mix(in_srgb,var(--text)_22%,transparent)] hover:bg-[color-mix(in_srgb,var(--text)_5%,transparent)] focus-visible:border-[var(--accent)]">
+        {cover ? (
+          <div className={`relative aspect-[16/9] w-full overflow-hidden bg-[var(--bg-field)] ${dim ? 'opacity-50 grayscale' : ''}`}>
+            <div className="absolute inset-0 transition duration-300 group-hover:scale-[1.03]">{cover(hover)}</div>
+          </div>
+        ) : (
+          <div className="flex items-start justify-between gap-3 px-4 pt-4">
+            <span className={`shrink-0 ${dim ? 'opacity-50 grayscale' : ''}`}>{icon}</span>
+            {action ? <Own className="shrink-0">{action}</Own> : null}
+          </div>
+        )}
+        <div className={`flex min-w-0 flex-1 flex-col px-4 pb-4 ${cover ? 'pt-3.5' : 'pt-3'}`}>
+          <div className="flex min-w-0 items-start gap-3">
+            <div className="min-w-0 flex-1">{name}</div>
+            {cover && action ? <Own className="-mt-0.5 shrink-0">{action}</Own> : null}
+          </div>
+          <p className={`mt-1 text-[13px] leading-[19px] text-[var(--text-muted)] ${cover ? 'line-clamp-2' : 'line-clamp-3 min-h-[38px]'}`}>{summary}</p>
+          {foot ? <div className="mt-auto pt-2">{foot}</div> : null}
+        </div>
+      </div>
+    );
+  }
   if (cover) {
     return (
       <div {...opener(onOpen)} data-store-card={title} onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
@@ -82,6 +111,16 @@ export function StoreCard({ icon, cover, title, badges, by, summary, meta, actio
 
 /** A card's place while the store is read: a picture's (`cover`) or an app row's. */
 export function StoreCardSkeleton({ cover = false }: { cover?: boolean }) {
+  const inPage = useInSidePage();
+  if (inPage) return (
+    <div aria-hidden className="min-w-0 overflow-hidden rounded-[16px] border border-[var(--frame-line)]">
+      {cover ? <div className="skeleton aspect-[16/9]" /> : <div className="px-4 pt-4"><div className="skeleton h-11 w-11 rounded-[11px]" /></div>}
+      <div className="px-4 pb-5 pt-3.5">
+        <div className="skeleton h-3.5 w-1/2 rounded-full" />
+        <div className="skeleton mt-2.5 h-3 w-4/5 rounded-full opacity-70" />
+      </div>
+    </div>
+  );
   return cover ? (
     <div aria-hidden className="mb-8 min-w-0">
       <div className="skeleton aspect-[16/9] rounded-[12px]" />

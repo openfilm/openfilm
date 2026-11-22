@@ -60,6 +60,7 @@ export function ProjectsView({
   onNewProject,
   onOpenFolder,
   onGetFromGitHub,
+  coverFromFrame,
   onLocate,
   examples = [],
   examplesCollapsed = false,
@@ -81,7 +82,10 @@ export function ProjectsView({
   display,
   onDisplay,
   navigation, onBin,
+  startsSlot,
 }: {
+  /** the ways to start at the top, drawn by whoever shows the projects in place of the three cards (the desktop page's tiles) */
+  startsSlot?: React.ReactNode;
   projects: LibraryProject[];
   /** A project is being created or opened; "New project" does not take a second click meanwhile. */
   creating?: boolean;
@@ -91,6 +95,7 @@ export function ProjectsView({
   onOpenFolder: () => void;
   /** "Get from GitHub…": a repository or a folder in one, copied into the library and opened. */
   onGetFromGitHub: () => void;
+  coverFromFrame?: { projectId: string; run: () => void };
   /** A project whose folder is gone: pick the folder it is in now. */
   onLocate: (project: LibraryProject) => void;
   /** The example films (none: the section is not shown), folded away or not, and opening one. */
@@ -340,6 +345,7 @@ export function ProjectsView({
                 onDuplicate: () => onDuplicate(project),
                 onMoveToFolder: () => setMoving(picked),
                 onChangeCover: cover ? () => cover.change(project) : undefined,
+                onCoverFromFrame: coverFromFrame?.projectId === project.id ? coverFromFrame.run : undefined,
                 onRestoreCover: cover && project.cover ? () => cover.restore(project) : undefined,
                 onReveal: () => void api.revealProject(project.id).catch(() => {}),
                 onRemove: () => onRemoveFromList([project.id]),
@@ -741,7 +747,7 @@ export function ProjectsView({
           >
             {/* ways to start (at the top level, not while searching): a new project, a folder on this computer, a
                 repository, side by side */}
-            {!folderId && !query ? (
+            {!folderId && !query && startsSlot ? startsSlot : !folderId && !query ? (
               <div className={styles.starts}>
                 <button type="button" className={`${styles.startCard} ${styles.startNew}`} disabled={creating} data-start="new" onClick={() => onNewProject(null)}>
                   <span className={styles.startPlus}><Plus size={20} strokeWidth={2.2} /></span>

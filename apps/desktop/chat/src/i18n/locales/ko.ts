@@ -269,6 +269,10 @@ export const ko: Words = {
     untitledSession: '새 채팅',
   },
   projectMenu: {
+    revealChat: '대화 파일 보기',
+    archiveBusy: '진행 중에는 보관할 수 없습니다',
+    more: '더 보기',
+    manageSessions: '채팅 관리',
     archive: '보관',
     archived: '보관됨',
     asking: '답변 대기 중',

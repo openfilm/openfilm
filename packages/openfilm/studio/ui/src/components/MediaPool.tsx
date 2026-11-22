@@ -137,6 +137,9 @@ export type ImportProgress = (file: number, ratio: number, landed?: string) => v
 type Upload = { id: string; name: string; into: string; kind: WorkspaceResourceKind; ratio: number; preview?: string; landed?: string };
 let uploadSeq = 0;
 
+/** What a page round the pane can ask of it (`browser.commands`). */
+export interface MediaPoolCommands { import(from: HTMLElement): void; newFolder(): void }
+
 export interface MediaPoolProps {
   projectId: string;
   /** The project's media and pages; null while the first listing loads (the pane stays blank). */
@@ -245,6 +248,8 @@ export interface MediaPoolProps {
     flat?: boolean;
     recent?: boolean;
     tileMin?: number;
+    /** set by the pane: its own commands, for buttons drawn outside it */
+    commands?: React.RefObject<MediaPoolCommands | null>;
     display?: { value: ResourceView; onChange: (view: ResourceView) => void };
     empty?: { title: string; body?: string; canImport?: boolean };
     onOpen?: (file: WorkspaceResource) => void;
@@ -938,6 +943,17 @@ export function MediaPool({
     window.addEventListener('pointerup', end);
     window.addEventListener('pointercancel', end);
   };
+  /* what a page round the pane asks of it from buttons of its own (the desktop library page's head): the ways to bring
+     files in, as a menu under the button pressed, and a new folder named where it will be */
+  if (browser?.commands) browser.commands.current = {
+    import: (from) => {
+      if (!onPick || !onBring) { inputRef.current?.click(); return; }
+      const r = from.getBoundingClientRect();
+      menuFrom.current = from;
+      setMenu({ x: r.left, y: r.bottom + 6, flipTo: r.top - 4, items: importMenu, dense: true });
+    },
+    newFolder: () => { setQuery(''); setView(v => ({ ...v, filter: 'all' })); setCreating(true); },
+  };
   const barMenu = (e: React.MouseEvent<HTMLElement>, items: ContextMenuEntry[]) => {
     const from = e.currentTarget;
     if (menu && menuFrom.current === from) { setMenu(null); menuFrom.current = null; return; }
@@ -1138,9 +1154,9 @@ export function MediaPool({
         </nav>
         {/* making: a folder, files brought in, a folder connected */}
         <span className={resourceStyles.toolGap} aria-hidden />
-        {!browser.flat || browser.explorer.onNewFolder ? <button type="button" className={resourceStyles.iconButton} data-explorer-command="" aria-label={t('assets.newFolder')} title={t('assets.newFolder')} disabled={readOnly} onClick={() => { if (browser.explorer?.onNewFolder) { browser.explorer.onNewFolder(); return; } setQuery(''); setView(v => ({ ...v, filter: 'all' })); setCreating(true); }}><FolderPlus size={15} /></button> : null}
+        {!browser.flat || browser.explorer.onNewFolder ? <button type="button" className={resourceStyles.iconButton} data-explorer-command="new-folder" aria-label={t('assets.newFolder')} title={t('assets.newFolder')} disabled={readOnly} onClick={() => { if (browser.explorer?.onNewFolder) { browser.explorer.onNewFolder(); return; } setQuery(''); setView(v => ({ ...v, filter: 'all' })); setCreating(true); }}><FolderPlus size={15} /></button> : null}
         {/* a view of no one folder (the resource center's home) has nowhere to bring files into */}
-        {!browser.flat ? <button type="button" className={resourceStyles.iconButton} data-explorer-command="" aria-label={t('media.import')} title={t(readOnly ? 'assetLibrary.externalReadOnly' : 'media.import')} disabled={readOnly} onClick={e => onPick && onBring ? barMenu(e, importMenu) : inputRef.current?.click()}><Upload size={15} /></button> : null}
+        {!browser.flat ? <button type="button" className={resourceStyles.iconButton} data-explorer-command="import" aria-label={t('media.import')} title={t(readOnly ? 'assetLibrary.externalReadOnly' : 'media.import')} disabled={readOnly} onClick={e => onPick && onBring ? barMenu(e, importMenu) : inputRef.current?.click()}><Upload size={15} /></button> : null}
         {browser.explorer.onConnect ? <button type="button" className={resourceStyles.iconButton} aria-label={t('assetLibrary.connectFolder')} title={t('resourceCenter.networkHint')} onClick={browser.explorer.onConnect}><Link2 size={15} /></button> : null}
         {/* seeing: which, in what order, how; the rest in More */}
         <span className={resourceStyles.toolGap} aria-hidden />

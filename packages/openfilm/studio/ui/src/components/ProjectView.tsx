@@ -127,12 +127,13 @@ import type { LayerRow, LayerSelection } from '@/lib/layers-tree';
 import { SourcePreview } from './SourcePreview';
 import { ResourceInspector, type MadeProps } from './ResourceInspector';
 import { FilmInspector } from './FilmInspector';
-import { EDIT_TIMELINE_MIN_H, Timeline, timelineFitHeight, type TimelineCommands, type TimelineHistory } from './Timeline';
+import { Timeline, timelineFitHeight, timelineMinimumHeight, type TimelineCommands, type TimelineHistory } from './Timeline';
+import { trackHeightsOf } from '@/lib/track-heights';
 import { useEditorTools } from './use-editor-tools';
-import { AudioMeters, METERS_W } from './AudioMeters';
 import { trackFlagStep, type SessionTimeline } from './OperationHistory';
 import { FilmFullscreenBar, useFullscreenKeys } from './FilmFullscreenBar';
 import { ViewerBar } from './ViewerBar';
+import { AudioMeters, AUDIO_METERS_WIDTH } from './AudioMeters';
 import { ViewerZoom, ViewerZoomButton } from './ViewerZoom';
 import type { PlaybackClock } from './LiveTime';
 import { ExportCenter } from './export/ExportCenter';
@@ -238,6 +239,9 @@ function clipIdAt(film: Film | null, loc: string): string | null {
   const at = parseFilmDocLoc(loc);
   return at ? film?.tracks[at.track]?.clips[at.clip]?.id ?? null : null;
 }
+
+const AUDIO_METERS_KEY = 'openfilm.viewer.audioMeters';
+const AUDIO_METERS_POSITION_KEY = 'openfilm.viewer.audioMetersPosition';
 
 export function ProjectView({ projectId, onProject }: {
   projectId: string;
@@ -686,6 +690,7 @@ export function ProjectView({ projectId, onProject }: {
 
   /* ── the project's editor settings (`.film/settings.json`): its frame rate, its tracks' names ── */
   const [settings, setSettings] = React.useState<ProjectSettings | null>(null);
+  const trackHeights = React.useMemo(() => trackHeightsOf(settings?.trackHeights ?? [], film.film?.tracks ?? []), [settings?.trackHeights, film.film]);
   React.useEffect(() => {
     setSettings(null);
     void api.settings(projectId).then(setSettings, () => setSettings({}));
@@ -797,7 +802,7 @@ export function ProjectView({ projectId, onProject }: {
     fitTimelineHeight.current = Math.max(TIMELINE_H, Math.min(timelineFitHeight(timelineTracks), cap));
   }
   const timelineFit = fitTimelineHeight.current;
-  const timelineMin = timelineTracks.length ? EDIT_TIMELINE_MIN_H : MIN_DOCK_H;
+  const timelineMin = Math.max(MIN_DOCK_H, timelineMinimumHeight(timelineTracks, trackHeights));
 
   /* what is selected in the picture: a layer of a page, or a clip in hand */
   const [stageElement, setStageElement] = React.useState<StageElement | null>(null);
@@ -2634,9 +2639,48 @@ export function ProjectView({ projectId, onProject }: {
   const pickReplacementRef = React.useRef<(family: ReplaceFamily) => Promise<string | null>>(async () => null);
   const pickReplacement = React.useCallback((family: ReplaceFamily) => pickReplacementRef.current(family), []);
   const tools = useEditorTools({
-    projectId, tracks: timelineTracks, film: film.film, settings, patchSettings, player, timeRef, seek: scrubCommit, edit: editOps, record: film.record,
+    projectId, tracks: timelineTracks, heights: trackHeights, film: film.film, settings, patchSettings, player, timeRef, seek: scrubCommit, edit: editOps, record: film.record,
     editModel, selectedClipIds: selectedKeys, listing, toast, pickFile: pickReplacement,
   });
+  const [showMeters, setShowMeters] = React.useState(() => {
+    try { return localStorage.getItem(AUDIO_METERS_KEY) !== 'hidden'; }
+    catch { return true; }
+  });
+  const [metersInTimeline, setMetersInTimeline] = React.useState(() => {
+    try { return localStorage.getItem(AUDIO_METERS_POSITION_KEY) === 'right'; }
+    catch { return false; }
+  });
+  const meterTrigger = React.useRef<HTMLButtonElement>(null);
+  const [meterMenu, setMeterMenu] = React.useState<{ x: number; y: number; flipTo?: number } | null>(null);
+  const openMeterMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (e.type === 'click') {
+      const rect = e.currentTarget.getBoundingClientRect();
+      setMeterMenu(current => current?.flipTo !== undefined ? null : { x: rect.left, y: rect.bottom + 4, flipTo: rect.top - 4 });
+    } else {
+      setMeterMenu({ x: e.clientX, y: e.clientY });
+    }
+  };
+  const meterVisibilityItem = React.useMemo(() => ({
+    id: 'audio-meters',
+    label: t(showMeters ? 'editorTools.metersHide' : 'editorTools.metersShow'),
+    onSelect: () => {
+      setShowMeters(!showMeters);
+      try {
+        if (showMeters) localStorage.setItem(AUDIO_METERS_KEY, 'hidden');
+        else localStorage.removeItem(AUDIO_METERS_KEY);
+      } catch { /* still applied in this editor */ }
+    },
+  }), [showMeters, t]);
+  const moveMeters = () => {
+    setMetersInTimeline(!metersInTimeline);
+    try {
+      if (metersInTimeline) localStorage.removeItem(AUDIO_METERS_POSITION_KEY);
+      else localStorage.setItem(AUDIO_METERS_POSITION_KEY, 'right');
+    } catch { /* still applied in this editor */ }
+  };
+  const timelineMetersShown = metersInTimeline && showMeters;
+  const timelineMeterItem = metersInTimeline ? meterVisibilityItem : undefined;
   const shownTracks = React.useMemo(() => foldHeads(tools.tracks, foldedHeads), [tools.tracks, foldedHeads]);
   const organizeTimelineTracks = React.useCallback(async () => {
     const current = filmRef.current;
@@ -5784,6 +5828,9 @@ export function ProjectView({ projectId, onProject }: {
                     clock={clock}
                     totalMs={totalMs}
                     playing={playing || preparingPlayback}
+                    meters={showMeters && !metersInTimeline ? <AudioMeters levels={tools.levels} playing={playing}
+                      onMenu={openMeterMenu} menuTrigger={meterTrigger} menuOpen={Boolean(meterMenu)} /> : null}
+                    onTimecodeContextMenu={openMeterMenu}
                     onPlayPause={toggle}
                     playback={{
                       loop,
@@ -5927,11 +5974,13 @@ export function ProjectView({ projectId, onProject }: {
               <InBlock id="timeline">
               <div className={`${PANE} flex-1 bg-[var(--bg-panel)]`} data-workspace-timeline
                 onPointerDownCapture={() => { dismissLibraryPreview.current(); if (pickedMedia) pickMedia(null); }}>
-                <div className="absolute inset-0 flex min-h-0 min-w-0 flex-col" data-timeline-scope="main" style={{ right: METERS_W }}>
+                <div className="absolute inset-0 flex min-h-0 min-w-0 flex-col" data-timeline-scope="main"
+                  style={timelineMetersShown ? { right: AUDIO_METERS_WIDTH } : undefined}>
                   {motionOpen && compBlock && compTracks ? (
                   /* a composition: its page's elements as layers, on the timeline of the page's own time */
                   <Timeline
                     tracks={compTracks.map((r) => r.track)}
+                    emptyMenuItem={timelineMeterItem}
                     layers={layerView(compMotion, compTracks, Boolean(compKeys?.keys.size), compPicked.length > 0)}
                     totalMs={compBlock.endMs - compBlock.startMs}
                     timeMs={compLocalMs}
@@ -5951,6 +6000,8 @@ export function ProjectView({ projectId, onProject }: {
                   />
                   ) : (
                   <Timeline
+                    keepMainOnResize={own.places.timeline?.size != null || own.free != null}
+                    emptyMenuItem={timelineMeterItem}
                     blockMenuExtra={timelineMenuExtra}
                     chat={timelineChat}
                     {...(hostHover ? { onHoverBlock: hoverBlock } : {})}
@@ -6024,13 +6075,26 @@ export function ProjectView({ projectId, onProject }: {
                   {motionOpen ? (compBlock ? compMotion.overlay : filmMotion.overlay) : null}
                   {newLayerMenu ? <ContextMenu x={newLayerMenu.x} y={newLayerMenu.y} items={newLayerItems()} onClose={() => setNewLayerMenu(null)} /> : null}
                 </div>
-                {/* the audio meters, beside the timeline */}
-                <div className="absolute inset-y-0 right-0"><AudioMeters levels={tools.levels} playing={playing} /></div>
+                {timelineMetersShown ? (
+                  <div className="absolute inset-y-0 right-0">
+                    <AudioMeters levels={tools.levels} playing={playing} onMenu={openMeterMenu} vertical />
+                  </div>
+                ) : null}
               </div>
               </InBlock>
             ) : null}
           </>
 
+      {meterMenu ? (
+        <ContextMenu {...meterMenu} trigger={meterTrigger} dense onClose={() => setMeterMenu(null)} items={[
+          ...(showMeters ? [{
+            id: 'audio-meters-position',
+            label: t(metersInTimeline ? 'editorTools.metersMoveToTimecode' : 'editorTools.metersMoveToRight'),
+            onSelect: moveMeters,
+          }] : []),
+          meterVisibilityItem,
+        ]} />
+      ) : null}
       {ReactDOM.createPortal(<>
       {templateAsk ? (
         <TemplatePicker

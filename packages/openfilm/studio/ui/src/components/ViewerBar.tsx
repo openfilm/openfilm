@@ -7,12 +7,12 @@ import { useT } from '@/i18n';
 import { formatTimecode, useTimecodeFps } from '@/lib/timecode';
 import { LiveText, type PlaybackClock } from './LiveTime';
 import { PlaybackMenu, type PlaybackSettings } from './PlaybackMenu';
+import { Tooltip } from './Tooltip';
 import { FullscreenButton, mediaButton } from './player-controls/MediaButtons';
 import { Icon, PATH_PAUSE, PATH_PLAY } from './player-controls/controls-bar';
 
 /** The speed's and full screen's icons in this bar (Screening's, in a taller bar, are larger: player-controls/MediaButtons). */
 const MEDIA_ICON = 18;
-import { Tooltip } from './Tooltip';
 
 /** The bar's buttons: the pane-bar size (22×22, icon 14) plus a keyboard focus ring (Tab must show where it is). */
 
@@ -21,6 +21,8 @@ export function ViewerBar({
   clock,
   totalMs,
   playing,
+  meters,
+  onTimecodeContextMenu,
   onPlayPause,
   onFullscreen,
   playback,
@@ -31,6 +33,8 @@ export function ViewerBar({
   clock?: PlaybackClock | null;
   totalMs: number;
   playing: boolean;
+  meters?: React.ReactNode;
+  onTimecodeContextMenu?: React.MouseEventHandler<HTMLSpanElement>;
   onPlayPause: () => void;
   /** Full screen; the button is disabled while the film has no length. */
   onFullscreen?: () => void;
@@ -48,11 +52,15 @@ export function ViewerBar({
      characters — a narrow pane would push the play button over the timecode. These columns shrink and clip. */
   return (
     <div className="@container grid h-10 shrink-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 px-2">
-      {/* Both timecodes keep the hour field. The duration clips first in narrow panes. */}
-      <span className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-[11px] tabular-nums text-[var(--text)]">
-        <LiveText clock={clock} timeMs={timeMs} format={(ms) => formatTimecode(ms, { fps })} />
-        <span className="text-[var(--text-faint)]">{' / '}{formatTimecode(totalMs, { fps })}</span>
-      </span>
+      <div className="flex min-w-0 items-center gap-2">
+        {/* Both timecodes keep the hour field. The duration clips first in narrow panes. */}
+        <span data-viewer-timecode="" onContextMenu={onTimecodeContextMenu}
+          className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-[11px] tabular-nums text-[var(--text)]">
+          <LiveText clock={clock} timeMs={timeMs} format={(ms) => formatTimecode(ms, { fps })} />
+          <span className="text-[var(--text-faint)]">{' / '}{formatTimecode(totalMs, { fps })}</span>
+        </span>
+        {meters}
+      </div>
       <Tooltip label={playing ? t('viewer.pause') : t('viewer.play')} action="play-pause">
         <button
           type="button"
@@ -66,7 +74,7 @@ export function ViewerBar({
           <Icon d={playing ? PATH_PAUSE : PATH_PLAY} size={MEDIA_ICON} />
         </button>
       </Tooltip>
-      <span className="flex items-center justify-end gap-1">
+      <div className="flex items-center justify-end gap-1">
         {extra}
         {playback ? (
           <PlaybackMenu settings={playback} disabled={!playable} size={MEDIA_ICON} />
@@ -74,7 +82,7 @@ export function ViewerBar({
         {onFullscreen ? (
           <FullscreenButton label={t('viewer.fullscreen')} action="preview-fullscreen" size={MEDIA_ICON} disabled={!playable} onClick={() => { if (playable) onFullscreen(); }} />
         ) : null}
-      </span>
+      </div>
     </div>
   );
 }

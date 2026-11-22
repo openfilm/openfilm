@@ -19,12 +19,13 @@ export type ProjectsPlace = 'projects' | 'examples';
 
 const ICON = { size: 16, strokeWidth: 1.6, 'aria-hidden': true } as const;
 
-export function ProjectsSidebar({ place, onPlace, onStart, starting }: {
+export function ProjectsSidebar({ place, onPlace, onStart, starting, showAccount = true }: {
   place: ProjectsPlace;
   onPlace: (place: ProjectsPlace) => void;
   /** a new project, opened on this workbench */
   onStart: (workbench: 'edit' | 'canvas') => void;
   starting: boolean;
+  showAccount?: boolean;
 }) {
   const t = useT();
   const row = (id: ProjectsPlace, icon: React.ReactNode, label: string) => (
@@ -39,7 +40,7 @@ export function ProjectsSidebar({ place, onPlace, onStart, starting }: {
   );
   return (
     <nav className={styles.side} aria-label={t('projects.sideProjects')}>
-      <AccountCard />
+      {showAccount && <AccountCard />}
       <div className={styles.group}>
         {row('projects', <House {...ICON} />, t('projects.sideProjects'))}
         {row('examples', <Clapperboard {...ICON} />, t('projects.sideExamples'))}

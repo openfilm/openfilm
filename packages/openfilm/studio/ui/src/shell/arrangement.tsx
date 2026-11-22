@@ -7,6 +7,7 @@
  * workbench draws into it. The room the docked blocks share is measured here, and which blocks are shown is said.
  */
 import * as React from 'react';
+import { studioHost } from '@/lib/host';
 import { DOCK_GAP, DockPaneDivider, PaneDivider } from '@/components/PaneDivider';
 import { centerOf, type BlockSpec } from '@/lib/workspaces';
 import { attached, blockKey, drawingStore, mountOf, shownBlocks } from '@/studio/blocks';
@@ -101,7 +102,7 @@ export function Arrangement({ frame }: { frame: ReturnType<typeof useProjectFram
   const withSeam = (block: BlockSpec, style: React.CSSProperties) => (before(block) ? [slot(block, style), seam(block)] : [seam(block), slot(block, style)]);
   return (
     <section ref={colRef} inert={!shown} aria-hidden={!shown} className="relative flex min-h-0 min-w-0 flex-col bg-[var(--dock-line)]"
-      style={{ gridArea: 'main', paddingTop: DOCK_GAP, ...places.among, ...(shown ? null : HIDDEN) }}>
+      style={{ gridArea: 'main', paddingTop: studioHost?.conversations ? 0 : DOCK_GAP, ...places.among, ...(shown ? null : HIDDEN) }}>
       <div ref={rowRef} className="relative flex min-h-0 min-w-0 flex-1 flex-row" style={{ order: 2 * tops.length }}>
         {spec.blocks.filter((block) => block === center || beside.includes(block)).flatMap((block) => (!isThere(block) ? []
           : block === center ? [slot(block, { order: 50 }, true)] : withSeam(block, { width: amongDrawn[block.key]!.size, order: order(block) })))}

@@ -62,7 +62,7 @@ import { useLanguage, useT } from '@/i18n';
 import { CcMark } from './CcMark';
 import type { ActionId } from '@/lib/keymap';
 import { keyAction, useKeyHint } from '@/lib/keymap-store';
-import { MAIN_TRACK_H, MAIN_TRACK_MIN_H, ownTrackHeight } from '@/lib/track-heights';
+import { MAIN_TRACK_MIN_H, ownTrackHeight } from '@/lib/track-heights';
 import type { Op } from '@/api';
 import type { ClipEdit } from '@/lib/film-clip-edits';
 import { laneOfBlock, pasteLane, trackByLane } from '@/lib/timeline-clipboard';
@@ -166,7 +166,7 @@ import {
 import { OperationHistory, trackFlagStep, type SessionTimeline } from './OperationHistory';
 import { BlockThumbs, createThumbZoom } from './BlockThumbs';
 import { BlockWaveform } from './BlockWaveform';
-import { ContextMenu, type ContextMenuEntry } from './ContextMenu';
+import { ContextMenu, type ContextMenuEntry, type ContextMenuItem } from './ContextMenu';
 import { ConfirmDialog } from './ConfirmDialog';
 import { CoverTile } from './cover/CoverChrome';
 import { MotionLaneHeads, MotionLaneRows, lanesHeight, type MotionLanes } from './MotionLanes';
@@ -270,12 +270,10 @@ const NAMELESS_W = 12;
 const GAP = 2;
 /** Space above and below a clip within its track. */
 const CLIP_INSET_Y = 0.5;
-/** Fixed space between the ruler and the scrollable edit tracks. */
-const EDIT_TRACK_GUTTER = 36;
-/** Space below the last track. */
-const TL_VPAD = 10;
-const EDIT_TRACK_PADDING = EDIT_TRACK_GUTTER + MARKER_ROW_PADDING + TL_VPAD;
-export const EDIT_TIMELINE_MIN_H = TOOLBAR_H + RULER_H + H_SCROLL_H + EDIT_TRACK_PADDING + GAP + MAIN_TRACK_H;
+/** Scrollable space before the first edit track and after the last. */
+const EDIT_TRACK_PADDING = 36;
+const LAYER_BOTTOM_PADDING = 10;
+const TIMELINE_CHROME_H = TOOLBAR_H + RULER_H + H_SCROLL_H;
 /** While playing, the timeline pages when the playhead gets this close to the edge. */
 const FOLLOW_EDGE = 24;
 /** A wheel or pinch zoom is laid out once no step has come for this long (ms); until then it is drawn scaled. */
@@ -354,7 +352,20 @@ function baseRowH(track: Pick<TimelineTrack, 'kind' | 'height' | 'main'> & { cap
  */
 export function timelineFitHeight(tracks: readonly (Pick<TimelineTrack, 'kind' | 'height' | 'main'> & { captions?: unknown; text?: boolean })[]): number {
   const lanes = tracks.reduce((h, tr) => h + rowH(tr) + GAP, 0);
-  return TOOLBAR_H + RULER_H + lanes + EDIT_TRACK_PADDING + H_SCROLL_H;
+  return TIMELINE_CHROME_H + MARKER_ROW_PADDING + lanes + 2 * EDIT_TRACK_PADDING - GAP;
+}
+
+function compactTrack(tracks: readonly TimelineTrack[]): TimelineTrack | undefined {
+  return tracks.find((track) => track.main && !track.folded) ?? tracks.find((track) => !track.folded);
+}
+
+/** At the minimum dock height, the scrollport fits exactly the main track. */
+export function timelineMinimumHeight(tracks: readonly TimelineTrack[], heights: ReadonlyMap<number, number>): number {
+  const track = compactTrack(tracks);
+  if (!track) return 0;
+  const savedHeight = track.docIndex == null ? undefined : heights.get(track.docIndex);
+  const height = savedHeight == null ? baseRowH(track) : baseRowH({ ...track, height: savedHeight });
+  return TIMELINE_CHROME_H + MARKER_ROW_PADDING + height;
 }
 
 /** The top of row `laneIndex` (or of a new row opened at that index) within the content. */
@@ -622,12 +633,16 @@ export interface TimelineHistory {
 }
 
 export interface TimelineProps {
+  /** The pane height is owned by the workspace layout after it has been sized by the user. */
+  keepMainOnResize?: boolean;
   /** The rows, top to bottom. Empty before the film has anything — the timeline is still there. */
   tracks: readonly TimelineTrack[];
   /** Entries put first on the menu of the clips right-clicked (an app Studio is embedded in adds its own). */
   blockMenuExtra?: (blocks: readonly TimelineBlock[], clicked?: TimelineBlock) => ContextMenuEntry[];
   /** The menu of a track's head (right-clicked); without entries the head has no menu. */
   trackMenuExtra?: (track: TimelineTrack) => ContextMenuEntry[];
+  /** Optional workspace action in the menu of empty track space. */
+  emptyMenuItem?: ContextMenuItem;
   onOrganizeTracks?: () => void;
   /** The media files whose words the film's captions come from (a voice with its transcript): their clips say so by their name. */
   transcribed?: ReadonlySet<string>;
@@ -1036,8 +1051,10 @@ function TimelineRangeBar({
  */
 export const Timeline = React.memo(function Timeline({
   tracks: tracksIn,
+  keepMainOnResize = false,
   blockMenuExtra,
   trackMenuExtra,
+  emptyMenuItem,
   onOrganizeTracks,
   transcribed,
   captionPick,
@@ -1149,6 +1166,7 @@ export const Timeline = React.memo(function Timeline({
      vertically), so clips and ticks never drift apart by a few pixels */
   const headShiftRef = React.useRef<HTMLDivElement | null>(null);
   const rulerRef = React.useRef<HTMLDivElement | null>(null);
+  const markerViewportRef = React.useRef<HTMLDivElement | null>(null);
   const skinsShiftRef = React.useRef<HTMLDivElement | null>(null);
   const padTopRef = React.useRef(0);
   const dragExtentRef = React.useRef(0);
@@ -1289,7 +1307,8 @@ export const Timeline = React.memo(function Timeline({
   const emptyEdit = !hasLanes && !layers;
   const playable = totalMs > 0 && hasLanes;
   const trackBackground = 'var(--tl-gap)';
-  const trackGutter = hasLanes && !layers ? EDIT_TRACK_GUTTER : 0;
+  const markerRowH = markerLane?.shown ? MARKER_ROW_H : 0;
+  const trackInset = hasLanes && (!layers || markerRowH) ? MARKER_ROW_PADDING : 0;
   /* The cover is a fixed-width prefix inside the scrolling canvas. Time coordinates exclude that prefix. */
   const coverInset = cover && !layers ? COVER_COL_W : 0;
   const coverLane = coverInset ? tracks.findIndex((tr) => tr.main && tr.index === 1) : -1;
@@ -1350,7 +1369,10 @@ export const Timeline = React.memo(function Timeline({
     ? tracks.reduce((h, tr) => h + rowH(tr) + GAP, 0)
     : 0;
   /* Motion layers stack from the top; edit rows stay clear of the marker row. */
-  const padTop = layers ? MARKER_ROW_PADDING : Math.max(MARKER_ROW_PADDING, Math.floor((view.height - tracksH) / 2));
+  /* The first row already has a gap above it. Count that gap in the space before the first track. */
+  const edgeSpace = Math.max(EDIT_TRACK_PADDING, (view.height - tracksH + GAP) / 2);
+  const padTop = layers ? (trackInset ? 0 : MARKER_ROW_PADDING) : edgeSpace - GAP;
+  const padBottom = layers ? LAYER_BOTTOM_PADDING : edgeSpace;
   padTopRef.current = padTop;
   const viewHeightRef = React.useRef(view.height);
   viewHeightRef.current = view.height;
@@ -1540,6 +1562,11 @@ export const Timeline = React.memo(function Timeline({
   const zoomKeyRef = React.useRef(zoomKey);
   zoomKeyRef.current = zoomKey;
 
+  const syncRulerScroll = React.useCallback((left: number) => {
+    if (rulerRef.current) rulerRef.current.scrollLeft = left;
+    if (markerViewportRef.current) markerViewportRef.current.scrollLeft = left;
+  }, []);
+
   /* after every render: a zoom laid out goes to its scroll before paint, and a gesture is redrawn against what is laid
      out now (or ends, once it has stopped and the layout shows it) */
   React.useLayoutEffect(() => {
@@ -1555,7 +1582,7 @@ export const Timeline = React.memo(function Timeline({
       scrollLeftRef.current = left;
       const before = previewRef.current;
       if (before && left !== want) previewRef.current = { ...before, offset: before.offset - (left - want) };
-      if (rulerRef.current) rulerRef.current.scrollLeft = left;
+      syncRulerScroll(left);
       if (left !== view.left) setView((cur) => ({ ...cur, left }));
     }
     /* clips moved, or were drawn again: their labels pinned where the view is now */
@@ -1601,29 +1628,38 @@ export const Timeline = React.memo(function Timeline({
     const p = previewRef.current;
     if (p) previewRef.current = { ...p, offset: p.offset - (left - scrollLeftRef.current) };
     scrollLeftRef.current = left;
-    if (rulerRef.current) rulerRef.current.scrollLeft = left;
+    syncRulerScroll(left);
     pinLabels(left);
     if (p) drawZoom();
     setView((cur) => (cur.left === left ? cur : { ...cur, left }));
-  }, [drawZoom, pinLabels]);
+  }, [drawZoom, pinLabels, syncRulerScroll]);
 
-  /* When the pane shrinks, scroll just far enough to fit the main track, or show its top if it is taller than the pane. */
-  const previousTrackViewHeight = React.useRef(0);
+  /* Resize around the main track. At the minimum, the padding and the other tracks are outside the viewport. */
+  const previousTrackView = React.useRef<{ height: number; mainTop: number; mainHeight: number; anchor: number | null } | null>(null);
   React.useLayoutEffect(() => {
-    if (!view.height) return;
-    const previous = previousTrackViewHeight.current;
-    previousTrackViewHeight.current = view.height;
     const el = scrollRef.current;
-    if (!el || !trackGutter || !previous || view.height >= previous) return;
-    const mainLane = tracks.findIndex((track) => track.main && !track.folded);
-    if (mainLane < 0) return;
-    const mainTop = trackSlotTop(tracks, mainLane, padTop);
-    const mainBottom = mainTop + baseRowH(tracks[mainLane]!);
-    const top = Math.min(mainTop, Math.max(el.scrollTop, mainBottom + TL_VPAD - view.height));
-    if (top === el.scrollTop) return;
+    const track = layers ? undefined : compactTrack(tracks);
+    if (!el || !track || !view.height) { previousTrackView.current = null; return; }
+    const height = view.height;
+    const mainTop = trackSlotTop(tracks, tracks.indexOf(track), padTop);
+    const mainHeight = baseRowH(track);
+    const previous = previousTrackView.current;
+    if (previous?.height === height && previous.mainTop === mainTop && previous.mainHeight === mainHeight) return;
+
+    const before = el.scrollTop;
+    const next = { height, mainTop, mainHeight, anchor: previous?.anchor ?? null };
+    previousTrackView.current = next;
+    const compact = height <= mainHeight;
+    const shrinking = keepMainOnResize && previous != null && height < previous.height;
+    const expandingFromAnchor = previous != null && height > previous.height && previous.anchor === before;
+    if (!compact && !shrinking && !expandingFromAnchor) return;
+    const first = Math.max(0, mainTop + mainHeight - height);
+    const top = compact ? mainTop : expandingFromAnchor ? first : Math.max(first, Math.min(mainTop, before));
+    if (top === before && !compact) return;
     el.scrollTop = top;
+    next.anchor = el.scrollTop;
     onScroll();
-  }, [view.height, trackGutter, tracks, padTop, onScroll]);
+  }, [view.height, layers, tracks, padTop, keepMainOnResize, onScroll]);
 
   /*
    * Where the browser has scroll timelines, the heads and the rows' backgrounds follow the vertical scroll on the
@@ -1645,7 +1681,7 @@ export const Timeline = React.memo(function Timeline({
       rowsOnTimelineRef.current = false;
       for (const a of moving) a.cancel();
     };
-  }, [padTop, tracksH, view.height, hasLanes]);
+  }, [padTop, padBottom, tracksH, view.height, hasLanes]);
 
   const panViewTo = React.useCallback((fromMs: number) => {
     const el = scrollRef.current;
@@ -1664,13 +1700,13 @@ export const Timeline = React.memo(function Timeline({
     }
   }, [flashRange, pxPerMs, coverInset, panViewTo]);
 
-  /* Ctrl/⌘ + wheel (and pinch) zooms around the pointer. A native non-passive listener: React's onWheel is passive and
-     cannot stop the browser's page zoom. Horizontal swipes and Shift+wheel scroll here too: the track area hides its
-     horizontal scrollbar. */
+  /* The whole timeline shares one horizontal scroll position. A native non-passive listener also handles zoom and
+     lets the track viewport keep its native vertical scrolling. */
   React.useEffect(() => {
     const el = scrollRef.current;
-    const surface = el?.parentElement;
-    if (!el || !surface) return;
+    const trackArea = el?.parentElement;
+    const timeline = rootRef.current;
+    if (!el || !trackArea || !timeline) return;
     /* one step per frame: a pinch sends a hundred wheel events a second */
     let factor = 1;
     let anchorX = 0;
@@ -1684,7 +1720,10 @@ export const Timeline = React.memo(function Timeline({
     /* Firefox reports lines (deltaMode 1) or pages (2) */
     const pixels = (e: WheelEvent, d: number) => (e.deltaMode === 1 ? d * 16 : e.deltaMode === 2 ? d * 400 : d);
     const onWheel = (e: WheelEvent) => {
+      const target = e.target as Node;
+      const overTrackArea = trackArea.contains(target);
       if (e.ctrlKey || e.metaKey) {
+        if (!overTrackArea) return;
         e.preventDefault();
         factor *= Math.exp(-pixels(e, e.deltaY) / 180);
         anchorX = e.clientX;
@@ -1693,16 +1732,17 @@ export const Timeline = React.memo(function Timeline({
       }
       const dx = pixels(e, e.deltaX || (e.shiftKey ? e.deltaY : 0));
       if (dx) el.scrollLeft += dx;
-      if (e.shiftKey && dx) e.preventDefault();
-      /* The fixed gap belongs to the same track area, including when the pointer is above its scrollport. */
-      if (!el.contains(e.target as Node)) {
-        if (!e.shiftKey) el.scrollTop += pixels(e, e.deltaY);
-        e.preventDefault();
+      if (el.contains(target)) {
+        if (e.shiftKey && dx) e.preventDefault();
+        return;
       }
+      /* Forward vertical scrolling from the marker strip. Other areas forward horizontal input only. */
+      if (overTrackArea && !e.shiftKey) el.scrollTop += pixels(e, e.deltaY);
+      if (dx || overTrackArea) e.preventDefault();
     };
-    surface.addEventListener('wheel', onWheel, { passive: false });
+    timeline.addEventListener('wheel', onWheel, { passive: false });
     return () => {
-      surface.removeEventListener('wheel', onWheel);
+      timeline.removeEventListener('wheel', onWheel);
       if (raf) cancelAnimationFrame(raf);
     };
   }, []);
@@ -1717,7 +1757,7 @@ export const Timeline = React.memo(function Timeline({
     const el = scrollRef.current;
     if (!el) return { lane: -1, band: 'above' };
     const viewY = clientY - el.getBoundingClientRect().top;
-    if (trackGutter && viewY < 0) return { lane: -1, band: 'above' };
+    if (trackInset && viewY < 0) return { lane: -1, band: 'above' };
     let y = viewY + el.scrollTop - padTop;
     if (y < 0) return { lane: -1, band: 'above' };
     for (let i = 0; i < tracks.length; i += 1) {
@@ -1733,7 +1773,7 @@ export const Timeline = React.memo(function Timeline({
       y -= h;
     }
     return { lane: tracks.length, band: 'below' };
-  }, [tracks, padTop, trackGutter]);
+  }, [tracks, padTop, trackInset]);
   const laneAtY = React.useCallback((clientY: number): number => laneHitAtY(clientY).lane, [laneHitAtY]);
 
   /** Hit the laid-out clips underneath the drag preview, even when that preview moves or covers them. */
@@ -1760,7 +1800,6 @@ export const Timeline = React.memo(function Timeline({
 
   /* dragging clips; every clip flat for snapping, across rows (putting a sound on a picture cut is the common case) */
   const allBlocks = React.useMemo(() => tracks.flatMap((tr) => tr.blocks), [tracks]);
-  const markerRowH = markerLane?.shown ? MARKER_ROW_H : 0;
   /* a marker hovered or dragged: its line through the whole timeline */
   const [markerGuide, setMarkerGuide] = React.useState<MarkerGuide | null>(null);
   const markerDragMs = markerGuide?.held ? markerGuide.ms : null;
@@ -1806,6 +1845,9 @@ export const Timeline = React.memo(function Timeline({
   });
   /* whole pixels: a fractional width blurs every clip edge on it */
   const trackPx = pxPerMs > 0 ? Math.max(laneW, Math.ceil(extentMs * pxPerMs)) : laneW;
+  React.useLayoutEffect(() => {
+    if (markerViewportRef.current) markerViewportRef.current.scrollLeft = scrollLeftRef.current;
+  }, [markerRowH, trackPx, view.width]);
   /* the same at another density: how far a zoom gesture can take the view (see zoomStep) */
   canvasPxAtRef.current = (px: number) => {
     const ms = liveCanvasMs({
@@ -1914,7 +1956,7 @@ export const Timeline = React.memo(function Timeline({
 
   /** Right after a seek the playhead is under the pointer: show the scrub cursor without waiting for a move. */
   const warmPlayheadAt = React.useCallback((clientX: number, clientY: number, atMs: number) => {
-    const el = scrollRef.current;
+    const el = scrollRef.current?.parentElement;
     if (!el) return;
     const r = el.getBoundingClientRect();
     const inside = clientX >= r.left && clientX <= r.right && clientY >= r.top && clientY <= r.bottom;
@@ -1933,25 +1975,28 @@ export const Timeline = React.memo(function Timeline({
     movePlayheadAt(ms);
     onScrubPreview(ms);
   }, [clearSkim, movePlayheadAt, onScrubPreview]);
-  const seekMarker = React.useCallback((ms: number) => {
+  const commitPlayhead = React.useCallback((ms: number) => {
     const at = Math.max(0, Math.min(ms, totalMs));
     clearSkim();
     movePlayheadAt(at);
     onScrubCommit(at);
+    return at;
   }, [clearSkim, movePlayheadAt, onScrubCommit, totalMs]);
 
   /* A scrub follows the pointer from pointerdown to pointerup even outside the timeline (listeners on window). Each
      frame previews, release commits: hundreds of seeks would make the sound tear. With snapping on, the line snaps to
-     clip edges and markers. A click without dragging takes the same path, and pauses. */
+     clip edges and markers during a drag. A click pauses at the frame under the pointer. */
   const startScrub = React.useCallback((e: React.PointerEvent) => {
     if (e.button !== 0 || !playable) return;
     e.preventDefault();
     scrubCleanup.current?.();
     const pointer = e.pointerId;
+    const startX = e.clientX;
+    let dragged = false;
     const targets = snap ? snapTargetsFor(allBlocks, '', 0, undefined, snapPointsMs).filter((t) => t.kind !== 'playhead') : [];
     const timeAt = (clientX: number): number => {
       const raw = msAtClientX(clientX);
-      return Math.min(totalMs, targets.length ? snapMs(raw, targets, pxPerMs).ms : raw);
+      return Math.min(totalMs, dragged && targets.length ? snapMs(raw, targets, pxPerMs).ms : raw);
     };
     let at = timeAt(e.clientX);
     setScrubMs(at);
@@ -1984,6 +2029,7 @@ export const Timeline = React.memo(function Timeline({
     const move = (ev: PointerEvent) => {
       if (ev.pointerId !== pointer) return;
       atX = ev.clientX;
+      dragged ||= Math.abs(atX - startX) >= DRAG_THRESHOLD_PX;
       if (!raf) raf = requestAnimationFrame(flush);
       edge.at(ev.clientX);
     };
@@ -2006,6 +2052,7 @@ export const Timeline = React.memo(function Timeline({
     const up = (ev: PointerEvent) => {
       if (ev.pointerId !== pointer) return;
       atX = ev.clientX;
+      dragged ||= Math.abs(atX - startX) >= DRAG_THRESHOLD_PX;
       finish();
       warmPlayheadAt(atX, ev.clientY, timeAt(atX));
     };
@@ -2141,18 +2188,37 @@ export const Timeline = React.memo(function Timeline({
     return clientY - el.getBoundingClientRect().top + el.scrollTop;
   }, []);
   /**
-   * A press on empty track space: dragging ≥5 px draws a marquee; otherwise it is a click that moves the playhead
-   * (on release, so a marquee never throws the playhead to its start).
+   * A drag on empty track space draws a marquee. Above the first track a sideways drag can pan independently,
+   * with a marquee taking over when the pointer enters the tracks. A click seeks on release.
    */
-  const startMarquee = React.useCallback((e: React.PointerEvent) => {
-    if (e.button !== 0 || !playable) return;
+  const startMarquee = React.useCallback((e: React.PointerEvent, inHeader = false) => {
+    if (e.button !== 0 || !e.isPrimary || !playable) return;
     e.preventDefault();
+    const pointer = e.pointerId;
     const startX = e.clientX;
+    const startY = e.clientY;
     const fromMs = msAtClientX(e.clientX);
     const fromLane = laneAtY(e.clientY);
     const fromY = contentY(e.clientY);
     /* ⇧ / ⌘ adds to the selection instead of replacing it */
     const additive = e.shiftKey || e.metaKey || e.ctrlKey;
+    const scroller = scrollRef.current;
+    let pan = inHeader && !additive && scroller && scroller.scrollWidth - scroller.clientWidth > 1 ? scroller : null;
+    const panFrom = pan?.scrollLeft ?? 0;
+    if (pan) e.currentTarget.setPointerCapture(pointer);
+    const crossedThreshold = (ev: PointerEvent) => Math.max(Math.abs(ev.clientX - startX), Math.abs(ev.clientY - startY)) >= DRAG_THRESHOLD_PX;
+    const panAt = (ev: PointerEvent): boolean => {
+      if (!pan) return false;
+      const viewportTop = pan.getBoundingClientRect().top;
+      const firstRowY = viewportTop + Math.max(0, padTop + GAP - pan.scrollTop);
+      if (ev.clientY >= firstRowY) {
+        pan.scrollLeft = panFrom;
+        pan = null;
+        return false;
+      }
+      pan.scrollLeft = panFrom + startX - ev.clientX;
+      return true;
+    };
     const base = additive ? selectedRef.current : [];
     let dragged = false;
     /* measured and set once per frame */
@@ -2179,20 +2245,30 @@ export const Timeline = React.memo(function Timeline({
       if (!raf) raf = requestAnimationFrame(flush);
     });
     const move = (ev: PointerEvent): void => {
-      if (!dragged && Math.abs(ev.clientX - startX) < DRAG_THRESHOLD_PX) return;
+      if (ev.pointerId !== pointer) return;
+      if (!dragged && !crossedThreshold(ev)) return;
       dragged = true;
+      if (panAt(ev)) return;
       pending = ev;
       lastEv = ev;
       if (!raf) raf = requestAnimationFrame(flush);
       edge.at(ev.clientX);
     };
-    const up = (ev: PointerEvent): void => {
+    const stop = (): void => {
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', cancel);
       edge.stop();
       if (raf) cancelAnimationFrame(raf);
       setMarquee(null);
+    };
+    const cancel = (ev: PointerEvent): void => { if (ev.pointerId === pointer) stop(); };
+    const up = (ev: PointerEvent): void => {
+      if (ev.pointerId !== pointer) return;
+      stop();
+      dragged ||= crossedThreshold(ev);
       if (dragged) {
+        if (panAt(ev)) return;
         const hits = withLinked(marqueeHits(tracks, {
           fromMs, toMs: msAtClientX(ev.clientX), fromLane, toLane: laneAtY(ev.clientY),
         }));
@@ -2208,16 +2284,18 @@ export const Timeline = React.memo(function Timeline({
          it). Its own time, not the frame the playhead lands on: a gap a frame wide is still a gap */
       selectOne(null);
       const docIndex = tracks[fromLane]?.docIndex;
-      const exactMs = Math.max(0, canvasXAt(e.clientX) / pxPerMs);
+      const exactMs = Math.max(0, canvasXAt(ev.clientX) / pxPerMs);
       /* Motion's rows are layers: the space between them is no gap to close */
       const found = !layers && docIndex != null && onEditOps && !tracks[fromLane]?.locked ? gapAt(modelRef.current, docIndex, exactMs) : null;
       setGap(found ? { track: docIndex!, ...found } : null);
-      onScrubCommit(fromMs);
-      warmPlayheadAt(ev.clientX, ev.clientY, fromMs);
+      /* A short pointer movement still counts as a click. Seek to where the pointer is on release. */
+      const at = commitPlayhead(msAtClientX(ev.clientX));
+      warmPlayheadAt(ev.clientX, ev.clientY, at);
     };
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', up);
-  }, [playable, msAtClientX, laneAtY, contentY, tracks, selectOne, onScrubCommit, warmPlayheadAt, setSelected, withLinked, onEditOps, pxPerMs, canvasXAt]);
+    window.addEventListener('pointercancel', cancel);
+  }, [playable, msAtClientX, laneAtY, contentY, tracks, selectOne, commitPlayhead, warmPlayheadAt, setSelected, withLinked, onEditOps, pxPerMs, canvasXAt, padTop]);
 
   /*
    * With the app's chat, the ruler points at time for it (onReferRuler) while ⌘ (Ctrl) is held: a ⌘-click there is
@@ -2298,30 +2376,27 @@ export const Timeline = React.memo(function Timeline({
     window.addEventListener('blur', stop);
   }, [msAtClientX, onReferRuler, playable, totalMs]);
 
-  /**
-   * A press within ±4 px of the playhead line in the empty track space grabs the playhead. Clips and keyframes keep
-   * their own hit targets. The ruler and the knob can also drag the playhead.
-   */
+  /** Grab the playhead line throughout the track area, including above the first row. */
+  const isPlayheadHit = React.useCallback((e: React.PointerEvent) => {
+    if (!playable || !hasLanes || e.shiftKey || e.metaKey || e.ctrlKey || overTimelineItem(e)) return false;
+    return playheadGapPx(e.clientX, timeMsRef.current) <= PLAYHEAD_GRAB_PX;
+  }, [playable, hasLanes, playheadGapPx]);
+
   const grabPlayhead = React.useCallback((e: React.PointerEvent) => {
-    if (e.button !== 0 || !playable || !hasLanes || overTimelineItem(e)) return;
-    if (playheadGapPx(e.clientX, timeMsRef.current) > PLAYHEAD_GRAB_PX) return;
+    if (e.button !== 0 || !isPlayheadHit(e)) return;
     e.stopPropagation();
     startScrub(e);
-  }, [playable, hasLanes, playheadGapPx, startScrub]);
+  }, [isPlayheadHit, startScrub]);
 
   /**
-   * The scrub cursor within the same ±4 px. A class, not state (a re-render per pointer move is not worth a cursor);
+   * The scrub cursor follows the same hit area. A class, not state (a re-render per pointer move is not worth a cursor);
    * the class is !important so it wins over clips' own cursors.
    */
   const hotPlayhead = React.useCallback((e: React.PointerEvent) => {
-    const el = scrollRef.current;
-    if (!el) return;
-    const hot = playable && hasLanes && !overTimelineItem(e)
-      && playheadGapPx(e.clientX, timeMsRef.current) <= PLAYHEAD_GRAB_PX;
-    el.classList.toggle('tl-playhead-hot', hot);
-  }, [playable, hasLanes, playheadGapPx]);
-  const coldPlayhead = React.useCallback(() => {
-    scrollRef.current?.classList.remove('tl-playhead-hot');
+    if (!e.buttons) e.currentTarget.classList.toggle('tl-playhead-hot', isPlayheadHit(e));
+  }, [isPlayheadHit]);
+  const coldPlayhead = React.useCallback((e: React.PointerEvent) => {
+    e.currentTarget.classList.remove('tl-playhead-hot');
   }, []);
 
   /**
@@ -4000,7 +4075,7 @@ export const Timeline = React.memo(function Timeline({
             }}
           />
         ) : null}
-        {near ? trackOverlay?.(track, pxPerMs, seekMarker) : null}
+        {near ? trackOverlay?.(track, pxPerMs, commitPlayhead) : null}
         {near && track.locked ? (
           <div
             className="pointer-events-none absolute inset-0 z-[20]"
@@ -4017,7 +4092,7 @@ export const Timeline = React.memo(function Timeline({
   }, [
     tracks, trackPx, pxPerMs, ringed, selected, drag, waveUrl, mode, msAtClientX, onSplit, clipThumbs, posters, mediaTrouble, t, libraryTitle,
     openBlockMenu, openLaneMenu, onEditBlocks, collapseIfClick, selectOne, setSelected, clipElements, thumbWindow, thumbZoom, view.width,
-    chatClip, chatDraft, placedOf, pickForTrim, gap, withLinked, runSplit, trackOverlay, seekMarker,
+    chatClip, chatDraft, placedOf, pickForTrim, gap, withLinked, runSplit, trackOverlay, commitPlayhead,
     fadeOfBlock, fadeDrag, startFade, volumeDrag, startVolume, transitions, transitionDrag, pickedTransition, onPickTransition, onTransition, startTransitionResize,
     nearFirst, nearLast, speedOn, hoveredBlock, motionLanes, layers, onEnterCompound, snap, allBlocks, onSeek, totalMs, transcribed, captionPick,
     movingClips, floatingScrollLeft, floatingScrollTop, headW, padTop,
@@ -4303,7 +4378,12 @@ export const Timeline = React.memo(function Timeline({
           if (items.length) items.push({ id: 'range-sep', separator: true });
           items.push(timeRange);
         }
-        return withSkimming(items);
+        const result = withSkimming(items);
+        if (emptyMenuItem) {
+          if (result.length) result.push({ id: 'empty-extra-sep', separator: true });
+          result.push(emptyMenuItem);
+        }
+        return result;
       };
       /* a caption track: a caption put in here (its words typed in the inspector) */
       const captionRow = tracks.find((tr) => tr.lane === menu.lane)?.captions;
@@ -4575,10 +4655,11 @@ export const Timeline = React.memo(function Timeline({
     menu, t, keyHint, onSplit, onDetachAudio, onRemove, onRemoveMany, onCopy, onPaste, onExportBlock, mediaTrouble, relinkCandidates,
     onRelink, hasClipboard, runSplit, removeMany, rippleRemove, magnetRemove, onEditOps, onAddCaption, tracks, blockMenuExtra, headEntries, withLinked,
     runPlan, closeGapOn, rippleTrimToPlayhead, linkBlocks, unlinkBlocks, transitions, onTransition, onPickTransition, transitionEntries,
-    speedOn, selectedKey, onEditBlocks, onDuplicate, onCompound, onUncompound, withTrackOrganizer, withSkimming, trackControls, timeRangeItem,
+    speedOn, selectedKey, onEditBlocks, onDuplicate, onCompound, onUncompound, withTrackOrganizer, withSkimming, trackControls, timeRangeItem, emptyMenuItem,
   ]);
 
   inHandRef.current = Boolean(drag.preview || assetHint || marquee || rangeDraft || referDraft || scrubbing || markerGuide?.held || laneOrder || fadeDrag || volumeDrag || transitionDrag);
+  const panCursor = trackPx > laneW + 1 ? ' cursor-grab active:cursor-grabbing' : '';
 
   return (
     /* no background on the outer box: the pane's rounded corners come from the pane's own background */
@@ -4764,8 +4845,7 @@ export const Timeline = React.memo(function Timeline({
         </ToolButton>
       </div>
 
-      {/* ── Body: two columns. The head column is not inside the scroller (no scrollbar under it, no rubber-band,
-          wheel over it does nothing); the ruler follows the track area's scrollLeft. ── */}
+      {/* ── Body: the track area scrolls the heads vertically and the ruler horizontally. ── */}
       <div className="relative flex min-h-0 min-w-0 flex-1">
         {/* left: track heads */}
         <div
@@ -4778,11 +4858,11 @@ export const Timeline = React.memo(function Timeline({
           }}
         >
           {/* Match the ruler and fixed gap so heads line up with their rows. */}
-          <div style={{ height: RULER_H + trackGutter }} />
+          <div style={{ height: RULER_H + trackInset }} />
           <div
             className="relative overflow-hidden"
             /* the ground the heads lie on, seen in the gaps between them as between the rows */
-            style={{ height: `calc(100% - ${RULER_H + trackGutter + H_SCROLL_H}px)`, background: trackBackground }}
+            style={{ height: `calc(100% - ${RULER_H + trackInset + H_SCROLL_H}px)`, background: trackBackground }}
           >
             {/* moved with the track area's vertical scroll (onScroll), as the rows' backgrounds are; its own block
                 (flow-root), so the first head's margin stays inside it and the reorder guide's top counts from it */}
@@ -4833,7 +4913,7 @@ export const Timeline = React.memo(function Timeline({
           onDragLeave={onAssetDragLeave}
           onDrop={onAssetDrop}
         >
-          {/* ruler: follows the track area, ignores the wheel (two scroll sources would fight) */}
+          {/* The ruler follows the track area's horizontal scroll. */}
           <div
             ref={rulerRef}
             className="relative shrink-0 overflow-hidden"
@@ -4872,16 +4952,30 @@ export const Timeline = React.memo(function Timeline({
 
           {/* track area: backgrounds fixed to the view, clips scroll horizontally above them */}
           <div className="relative min-h-0 min-w-0 flex-1" style={{ background: trackBackground }}
-            onContextMenu={hasLanes && (onOrganizeTracks || onSkimPreview || canOpenRangeMenu) ? (e) => openLaneMenu(e, null) : undefined}>
-            {trackGutter ? (
-              <div className="absolute inset-x-0 top-0" style={{ height: trackGutter }} onPointerDown={startMarquee} />
+            onPointerDownCapture={grabPlayhead}
+            onPointerMove={hotPlayhead}
+            onPointerLeave={coldPlayhead}
+            onContextMenu={emptyMenuItem || (hasLanes && (onOrganizeTracks || onSkimPreview || canOpenRangeMenu)) ? (e) => openLaneMenu(e, null) : undefined}>
+            {trackInset ? (
+              <div data-timeline-pan="" className={`absolute inset-x-0 top-0 touch-none${panCursor}`}
+                style={{ height: trackInset }} onPointerDown={(e) => startMarquee(e, true)} />
+            ) : null}
+            {markerRowH && markerLane ? (
+              <div ref={markerViewportRef} data-marker-lane=""
+                className="pointer-events-none absolute left-0 top-0 z-[22] touch-none overflow-hidden select-none [&_[data-marker]]:pointer-events-auto"
+                style={{ width: view.width || '100%', height: markerRowH }}>
+                <div data-zoom-layer="content" className="absolute inset-y-0"
+                  style={{ left: coverInset, width: trackPx }}>
+                  {markerLane.render({ pxPerMs, widthPx: trackPx, snapForDrag: snapMarkerDrag, preview: previewMarker, seek: commitPlayhead, guide: setMarkerGuide })}
+                </div>
+              </div>
             ) : null}
             {hasLanes ? (
               <div
                 aria-hidden
                 data-lane-skins=""
                 className="pointer-events-none absolute inset-y-0 right-0 overflow-hidden"
-                style={{ left: Math.max(0, -scrollLeft), top: trackGutter }}
+                style={{ left: Math.max(0, -scrollLeft), top: trackInset }}
               >
                 <div ref={skinsShiftRef} style={{ transform: rowsShift }}>
                   {laneSkins}
@@ -4891,27 +4985,14 @@ export const Timeline = React.memo(function Timeline({
           <div
             ref={scrollRef}
             onScroll={onScroll}
-            style={{ top: trackGutter }}
-            /* capture phase: a press on the playhead line goes to the scrub before clips and marquee (grabPlayhead);
-               move / leave only manage the cursor */
-            onPointerDownCapture={grabPlayhead}
-            onPointerMove={(e) => { hotPlayhead(e); aimBlade(e); }}
-            onPointerLeave={() => { coldPlayhead(); hideBlade(); }}
+            style={{ top: trackInset }}
+            onPointerMove={aimBlade}
+            onPointerLeave={hideBlade}
             /* no rubber-band: a ruler that bounces makes people think they dragged wrong */
             className={`tl-scroll absolute inset-0 overflow-y-auto overflow-x-hidden overscroll-none bg-transparent${
               mode === 'split' ? ' tl-blade' : ''
             }`}
           >
-            {markerRowH && markerLane ? (
-              <div
-                data-marker-lane=""
-                data-zoom-layer="content"
-                className="pointer-events-none absolute top-0 z-[22] touch-none overflow-hidden select-none [&_[data-marker]]:pointer-events-auto"
-                style={{ left: coverInset, width: trackPx, height: markerRowH }}
-              >
-                {markerLane.render({ pxPerMs, widthPx: trackPx, snapForDrag: snapMarkerDrag, preview: previewMarker, seek: seekMarker, guide: setMarkerGuide })}
-              </div>
-            ) : null}
             {cover && coverTrack && !coverTrack.folded ? (
               <div data-zoom-layer="cover" className="absolute left-0 z-10"
                 style={{ width: coverInset, top: trackSlotTop(tracks, coverLane, padTop), height: baseRowH(coverTrack) }}>
@@ -4940,7 +5021,7 @@ export const Timeline = React.memo(function Timeline({
                 /* full height, so the empty space below the rows can be clicked too (a seek); the centering space is
                    padding, not a child's margin — a margin would collapse outside this box and not take clicks */
                 style={{
-                  width: trackPx, marginLeft: coverInset, minHeight: '100%', paddingTop: padTop, paddingBottom: TL_VPAD,
+                  width: trackPx, marginLeft: coverInset, minHeight: '100%', paddingTop: padTop, paddingBottom: padBottom,
                 }}
                 onPointerDown={startMarquee}
               >
@@ -4990,6 +5071,10 @@ export const Timeline = React.memo(function Timeline({
                 ) : null}
               </div>
             )}
+            {hasLanes && !layers ? (
+              <div data-timeline-pan="" className={`absolute left-0 top-0 z-[1] touch-none${panCursor}`}
+                style={{ height: padTop + GAP, width: coverInset + trackPx }} onPointerDown={(e) => startMarquee(e, true)} />
+            ) : null}
           </div>
           </div>
           <TimelineRangeBar
@@ -5019,13 +5104,13 @@ export const Timeline = React.memo(function Timeline({
             totalMs={totalMs}
             scrollRef={scrollRef}
           >
-            <div className="absolute inset-y-0 left-0 w-px" style={{ background: 'var(--tl-playhead)' }} />
+            <div className="absolute inset-y-0 left-0 w-px -translate-x-1/2 bg-[var(--tl-playhead)]" />
             {/* The 24×20 hit area makes the knob easier to grab. */}
             <span
               role="presentation"
               onPointerDown={playable ? startScrub : undefined}
               data-zoom-keep=""
-              className={`absolute top-0 left-1/2 flex h-[20px] w-[24px] -translate-x-1/2 items-start justify-center ${playable ? 'pointer-events-auto cursor-col-resize' : ''}`}
+              className={`absolute top-0 left-0 flex h-[20px] w-[24px] -translate-x-1/2 items-start justify-center ${playable ? 'pointer-events-auto cursor-col-resize' : ''}`}
             >
               <PlayheadKnob filled={scrubbing} />
             </span>
@@ -5034,7 +5119,7 @@ export const Timeline = React.memo(function Timeline({
       </div>
 
       {floatingClips.length ? (
-        <div aria-hidden inert className="pointer-events-none absolute inset-x-0 z-[50]" style={{ top: TOOLBAR_H + RULER_H + trackGutter }}>
+        <div aria-hidden inert className="pointer-events-none absolute inset-x-0 z-[50]" style={{ top: TOOLBAR_H + RULER_H + trackInset }}>
           {floatingClips}
         </div>
       ) : null}
@@ -5144,7 +5229,7 @@ export const Timeline = React.memo(function Timeline({
             </div>
             {/* pinned to the view's left while the band starts before it */}
             {fromX + width > 0 ? (
-              <div className="pointer-events-none absolute z-[36] overflow-hidden" style={{ left: headW, right: 0, top: TOOLBAR_H + RULER_H + 3, height: 20 }}>
+              <div className="pointer-events-none absolute z-[36] overflow-hidden" style={{ left: headW, right: 0, top: TOOLBAR_H + RULER_H + (trackInset ? MARKER_ROW_PADDING : 0) + 3, height: 20 }}>
                 <div data-zoom-layer="view" className="absolute inset-0">
                   <div
                     data-zoom-keep=""
@@ -5397,6 +5482,7 @@ function ModePicker({
   const t = useT();
   const keyHint = useKeyHint();
   const [open, setOpen] = React.useState(false);
+  const toolsRef = React.useRef<HTMLDivElement>(null);
 
   const items: { id: TimelineMode; label: string; key: string | undefined; icon: React.ReactNode }[] = [
     { id: 'select', label: t('timeline.modeSelect'), key: keyHint('select-mode'), icon: <MousePointer2 size={16} /> },
@@ -5405,7 +5491,7 @@ function ModePicker({
   const current = items.find((i) => i.id === mode) ?? items[0]!;
 
   return (
-    <div className="relative flex items-center">
+    <div ref={toolsRef} className="relative flex items-center">
       {/* no active background: the cursor and the blade line already say split mode is on, and the icon changes.
           The button toggles between modes; its tooltip names the mode it switches to, with that mode's key. */}
       <ToolButton
@@ -5420,12 +5506,12 @@ function ModePicker({
       <Popover
         open={open}
         onOpenChange={setOpen}
+        anchorRef={toolsRef}
         placement="bottom"
         align="start"
         trigger={
           <button
             type="button"
-            onClick={() => setOpen((v) => !v)}
             className="flex h-[28px] w-[15px] shrink-0 items-center justify-center rounded-[6px] text-[var(--editor-control)] transition hover:bg-[var(--bg-hover)]"
             aria-label={current.label}
           >
@@ -5434,7 +5520,7 @@ function ModePicker({
         }
       >
         <div
-          className="min-w-[150px] rounded-[8px] border p-1 shadow-lg"
+          className="min-w-[136px] rounded-[8px] border p-1 shadow-lg"
           style={{ background: 'var(--bg-raised)', borderColor: 'var(--border)' }}
         >
           {items.map((item) => (

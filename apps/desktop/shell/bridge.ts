@@ -10,8 +10,8 @@
  * (src/preload.cjs). Imported before Studio's modules and the chat's: Studio reads its host as it loads.
  */
 import { flushSync } from 'react-dom';
-import { workspaceChatWidth } from 'openfilm/studio-ui/lib/workspaces.ts';
-import type { CommunityItem, HostAgent, HostAsk, HostProject as Project, HostUpdate, HostUpdateState, HostWorkbench, StudioCommand, StudioHost, StudioRef, StudioSelection } from 'openfilm/studio-ui/lib/host.ts';
+import { DESKTOP_TITLEBAR_HEIGHT, workspaceChatWidth } from 'openfilm/studio-ui/lib/workspaces.ts';
+import type { CommunityItem, HostAgent, HostAsk, ConversationManagerSlot, HostConversationEdit, HostProjectConversations, HostProject as Project, HostUpdate, HostUpdateState, HostWorkbench, StudioCommand, StudioHost, StudioRef, StudioSelection } from 'openfilm/studio-ui/lib/host.ts';
 
 type Listener<T> = (value: T) => void;
 type Stop = () => void;
@@ -28,6 +28,11 @@ interface Native {
   /* the connectors (src/connectors.mjs) */
   connectors: NonNullable<StudioHost['connectors']>;
   /* the window's tabs (src/tabs.mjs) */
+  conversations: Pick<NonNullable<StudioHost['conversations']>, 'list' | 'open'> & {
+    onSelect(listener: Listener<{projectId: string; sessionId: string | null}>): Stop;
+    edit(projectId: string, sessionId: string, edit: HostConversationEdit): Promise<boolean>;
+    onEdit(listener: Listener<{projectId: string; sessionId: string; edit: HostConversationEdit}>): Stop;
+  };
   tabs: NonNullable<StudioHost['tabs']>;
   localAgents: Record<string, unknown>;
   chat: Record<string, (...args: never[]) => Promise<unknown>>;
@@ -67,7 +72,7 @@ const events = <T,>() => signal<T>(undefined as T);
 const workbench = signal<HostWorkbench | null>(null);
 
 /* ── the chat's column, left of Studio: open or not, how wide, and the assets drawer over it ── */
-const TOP_BAR = 32;
+const TOP_BAR = DESKTOP_TITLEBAR_HEIGHT;
 const column = document.getElementById('of-chat')!;
 const layout = { open: true, width: 420, min: 340, studioMin: 640, side: 'left' as 'left' | 'right', libraryDock: 'left' as 'left' | 'right' | 'bottom' | 'chat' };
 /** the assets open in the column (Studio draws them, above the composer); `bottom`: the composer's height, all the
@@ -79,7 +84,8 @@ const chatOpenSignal = signal(true);
 
 /** The column's width as the window allows it: Studio keeps its least width, the chat its own while it fits. */
 let workspaceBounds: { left: number; top: number; width: number; height: number } | null = null;
-const shownWidth = () => workspaceBounds && layout.open ? workspaceBounds.width : (layout.open ? workspaceChatWidth(innerWidth, layout.width, layout.min, layout.studioMin) : 0);
+let workspaceLeft = 0;
+const shownWidth = () => workspaceBounds && layout.open ? workspaceBounds.width : (layout.open ? workspaceChatWidth(Math.max(0, innerWidth - workspaceLeft), layout.width, layout.min, layout.studioMin) : 0);
 const panelState = () => ({ open: layout.open, width: shownWidth(), preferredWidth: layout.width, assets: { open: assets.open && (layout.libraryDock !== 'chat' || layout.open), bottom: assets.bottom, beside: assets.beside } });
 const panelListeners = new Set<Listener<ReturnType<typeof panelState>>>();
 
@@ -89,11 +95,10 @@ function place() {
   column.hidden = !layout.open || !onProject();
   column.style.width = `${shownWidth()}px`;
   column.style.top = `${workspaceBounds?.top ?? TOP_BAR}px`;
-  column.style.left = workspaceBounds ? `${workspaceBounds.left}px` : layout.side === 'left' ? '0px' : 'auto';
+  column.style.left = workspaceBounds ? `${workspaceBounds.left}px` : layout.side === 'left' ? `${workspaceLeft}px` : 'auto';
   column.style.right = workspaceBounds ? 'auto' : layout.side === 'right' ? '0px' : 'auto';
   column.style.bottom = workspaceBounds ? 'auto' : '0px';
   column.style.height = workspaceBounds ? `${workspaceBounds.height}px` : 'auto';
-  column.style.borderTopWidth = !workspaceBounds || workspaceBounds.top === TOP_BAR ? '1px' : '0px';
   column.toggleAttribute('data-workspace-bounds', workspaceBounds !== null);
   column.dataset.side = layout.side;
   /* the column never moves or resizes for the assets: the chat shows only its composer then, and the rest of the
@@ -151,6 +156,25 @@ language.on((next) => native.setLanguage(next));
 
 /* ── the project Studio shows (its address, /projects/<id>) ── */
 const project = signal<Project | null>(null);
+const conversationList = signal<HostProjectConversations | null>(null);
+const titleSlot = signal<HTMLElement | null>(null);
+const managerSlot = signal<ConversationManagerSlot | null>(null);
+let pendingConversation: { projectId: string; sessionId: string | null } | null = null;
+let conversationAction: { projectId: string; select: (id: string | null) => void } | null = null;
+/* the chat of the project shown changes its own conversations (the sidebar asks it; another window's sidebar too) */
+let conversationEditor: { projectId: string; edit: (id: string, edit: HostConversationEdit) => boolean } | null = null;
+native.conversations.onEdit(request => {
+  if (request.projectId === projectId() && conversationEditor?.projectId === request.projectId) conversationEditor.edit(request.sessionId, request.edit);
+});
+
+function selectConversation(request: {projectId: string; sessionId: string | null}) {
+  if (request.projectId !== projectId()) return;
+  setChatOpen(true);
+  if (assets.open && layout.libraryDock === 'chat') setAssetsOpen(false);
+  if (conversationAction?.projectId === request.projectId) conversationAction.select(request.sessionId);
+  else pendingConversation = request; // a cold project may still be reading its on-disk chat
+}
+native.conversations.onSelect(selectConversation);
 let projectReady: Promise<void> = Promise.resolve();
 let projectRequest = 0;
 const projectId = () => /^\/projects\/([\w-]+)/.exec(location.pathname)?.[1] ?? null;
@@ -298,12 +322,31 @@ export const host: StudioHost = {
   version: 1,
   name: 'OpenFilm',
   projectChanged,
+  conversations: {
+    get: conversationList.get,
+    subscribe: conversationList.on,
+    list: async id => {
+      const current = conversationList.get();
+      return current?.projectId === id ? current : native.conversations.list(id);
+    },
+    open: async (id, sessionId) => {
+      if (id !== projectId()) return native.conversations.open(id, sessionId);
+      selectConversation({ projectId: id, sessionId });
+      return true;
+    },
+    edit: async (id, sessionId, change) => {
+      if (id === projectId() && conversationEditor?.projectId === id) return conversationEditor.edit(sessionId, change);
+      return native.conversations.edit(id, sessionId, change);
+    },
+    setTitleSlot: titleSlot.set,
+    setManagerSlot: managerSlot.set,
+  },
   workbenchChanged: workbench.set,
   ...(mac ? { titlebar: { get inset() { return fullScreen.get() ? 0 : INSET; }, onChange: (listener: Listener<number>) => { fullScreen.on((full) => listener(full ? 0 : INSET)); } } } : {}),
   ...(windows ? { titlebar: { inset: 0, insetRight: INSET_RIGHT } } : {}),
   /* in order, each with its picture: two pointed at quickly must not swap or share a screenshot */
   refer: (ref) => {
-    if (!layout.open) setChatOpen(true);
+    setChatOpen(true);
     pictured = pictured.then(() => withPicture(ref)).then((done) => refer.set(done));
   },
   /* after any reference still being pictured, so one closed at once is not put back after */
@@ -328,10 +371,12 @@ export const host: StudioHost = {
     setOpen: setChatOpen,
     setAssetsOpen,
     setWidth: (width, done) => setChatWidth(width, done === true),
-    setBounds(bounds) {
+    setBounds(bounds, left = 0) {
       if (bounds && !Object.values(bounds).every(value => Number.isFinite(value) && value >= 0)) return;
-      if (JSON.stringify(workspaceBounds) === JSON.stringify(bounds)) return;
+      if (!Number.isFinite(left) || left < 0) return;
+      if (workspaceLeft === left && JSON.stringify(workspaceBounds) === JSON.stringify(bounds)) return;
       workspaceBounds = bounds;
+      workspaceLeft = left;
       place();
     },
     setPlacement(placement) {
@@ -350,9 +395,9 @@ export const host: StudioHost = {
   update,
   folders: { pick: native.pickFolder, pathOf: native.pathForFile },
   tabs: native.tabs,
-  useSkill: (skill) => skillPicked.set(skill),
+  useSkill: (skill) => { setChatOpen(true); skillPicked.set(skill); },
   skills: { add: () => skillAdd.set(undefined) },
-  ask: (request) => { if (!layout.open) setChatOpen(true); asked.set(request); },
+  ask: (request) => { setChatOpen(true); asked.set(request); },
 };
 (window as unknown as { openfilmHost: StudioHost }).openfilmHost = host;
 
@@ -418,6 +463,26 @@ function commandFor(ref: StudioRef): StudioCommand {
   onTheme: theme.on,
   onLanguage: language.on,
   onProject: (listener: Listener<Project>) => project.on((p) => { if (p) listener(p); }),
+  publishConversations: conversationList.set,
+  conversationManagerSlot: managerSlot.get,
+  onConversationManagerSlot: managerSlot.on,
+  conversationTitleSlot: titleSlot.get,
+  onConversationTitleSlot: titleSlot.on,
+  onEditConversation: (projectId: string, change: (id: string, edit: HostConversationEdit) => boolean) => {
+    const editor = { projectId, edit: change };
+    conversationEditor = editor;
+    return () => { if (conversationEditor === editor) conversationEditor = null; };
+  },
+  onSelectConversation: (projectId: string, select: (id: string | null) => void) => {
+    const action = { projectId, select };
+    conversationAction = action;
+    if (pendingConversation?.projectId === projectId) {
+      const request = pendingConversation;
+      pendingConversation = null;
+      select(request.sessionId);
+    }
+    return () => { if (conversationAction === action) conversationAction = null; };
+  },
   workbench: workbench.get,
   onWorkbench: workbench.on,
   showWorkbench: (projectId: string, id: string) => command?.({ type: 'show-workbench', projectId, workbench: id }),

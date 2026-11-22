@@ -93,6 +93,14 @@ export const ja: Words = {
     desktop: 'デスクトップ版',
   },
   /* the projects the app window has open (ProjectSwitcher), a new tab's launcher, and the examples (ExamplesGallery) */
+  workspaceTabs: {
+    new: "新しいタブ", search: "プラグインとリソースを検索", noMatches: "該当する項目がありません", assets: "素材",
+    projectsNote: "映像プロジェクトを開いて管理",
+    communityNote: "プラグイン、スキル、共有素材を探す",
+    assetsNote: "映像に使うメディア素材を閲覧",
+  },
+  desktopNavigation: { newChat: "新しいチャット", searchProjects: "プロジェクトを検索", noMatches: "該当するプロジェクトがありません", loadChatsFailed: "チャットを読み込めませんでした", openChatFailed: "チャットを開けませんでした", pages: "ページ", myProjects: "マイプロジェクト", search: "検索", library: "ライブラリ", projectsNote: "あなたの映像。どれもこのコンピュータのフォルダです。", communityNote: "みんなが共有するプラグイン、スキル、素材、サンプルと、追加したもの。", libraryNote: "どの映像でも使う素材：あなたのフォルダと、このコンピュータや NAS からリンクしたフォルダ。", libraryCommunity: "OpenFilm とコミュニティの素材", libraryEmpty: "ライブラリのフォルダはまだありません。", more: "その他", rename: "名前を変更", removeFromList: "リストから削除", closeTab: "タブを閉じる", pin: "ピン留め", unpin: "ピン留めを外す", archive: "アーカイブ", archiveRunning: "実行中はアーカイブできません", renameFailed: "名前を変更できませんでした", editFailed: "チャットを変更できませんでした", currentStays: "開いているプロジェクトは削除できません", startTitle: "新しく作る", startBlank: "空のフィルム", startCanvas: "キャンバスから始める", startExample: "サンプルから始める", libImport: "読み込む", libDetails: "詳細", libKind: "種類", libSize: "サイズ", libDimensions: "寸法", libDuration: "長さ", libModified: "変更日", libWhere: "場所" },
+  searchPalette: { placeholder: "プロジェクト、チャット、操作を検索", all: "すべて", projects: "プロジェクト", chats: "チャット", actions: "操作", recent: "最近", results: "結果", none: "見つかりません", close: "閉じる", type: "種類を切り替え", open: "開く", newProject: "新規プロジェクト", inProject: "{name}" },
   projectTabs: {"label": "開いているプロジェクト", "new": "別のプロジェクトを開く", "closeNamed": "{name} を閉じる", "revealFailed": "プロジェクトフォルダーを開けませんでした。", "coverCurrent": "このタブに切り替えて、現在のフレームをカバーに設定します。"},
   switcher: { oneClip: '1 クリップ', clips: '{n} クリップ', label: 'プロジェクトを切り替え', open: 'ほかの開いているプロジェクト', all: 'すべてのプロジェクト…', close: '閉じる', working: '作業中', asking: '回答待ち', exporting: '書き出し中 {n}%', cover: '現在のフレームを表紙に', coverShort: "表紙に設定", reveal: 'フォルダを表示' },
   launcher: { projects: 'プロジェクト', examples: 'サンプル' },
@@ -215,6 +223,9 @@ export const ja: Words = {
   },
   /* the app's update, ready to install (Studio's top bar, in an app that has updates: lib/host.ts `update`) */
   update: {
+    cardTitle: "新しいバージョン {version}",
+    cardNote: "再起動で更新されます。終了時にも自動でインストールされます。",
+    later: "後で",
     restart: '再起動してアップデート',
     ready: 'OpenFilm {version} の準備ができました。今すぐ再起動して更新するか、終了時に自動でインストールされ、次に開くと新しいバージョンになります。',
     agentBusy: 'エージェントがまだ作業中です。終わってから再起動してください。',
@@ -2434,6 +2445,8 @@ export const ja: Words = {
     recent: '最近使用',
   },
   layout: {
+    expandWorkspace: "ワークスペースを広げる",
+    showConversation: "チャットを表示",
     resizeSplit: "レイアウトの分割を調整",
     viewer: "プレビュー",
     movePanel: "{name}を移動",
@@ -2524,6 +2537,14 @@ export const ja: Words = {
   canvas: {
     title: 'キャンバス',
     toEdit: '編集に切り替え',
+    openEditor: 'エディターを開く',
+    newWorkbenchTab: '新しいタブ',
+    newTabSearch: "エディタを検索",
+    newTabOpen: "開く",
+    newTabMore: "コミュニティでエディタを探す",
+    newTabCommunity: "コミュニティで「{query}」を検索",
+    newTabNoMatch: "一致するエディタがありません",
+    keepEditor: '少なくとも1つのエディターを開いておいてください',
     workspaceLabel: 'エディター',
     motionEmpty: 'アニメーションできる映像クリップがまだありません',
     motionMode: 'モード',
@@ -3217,6 +3238,10 @@ export const ja: Words = {
   /* the timeline's audio and editing tools: meters, solo, markers, loudness, freeze frame, replace, track heights */
   editorTools: {
     meters: "オーディオメーター",
+    metersHide: "オーディオメーターを非表示",
+    metersShow: "オーディオメーターを表示",
+    metersMoveToTimecode: "タイムコードの隣に移動",
+    metersMoveToRight: "タイムラインの右側に移動",
     metersClip: "クリップ：音が 0 dB に達しました。クリックでリセット",
     metersPeak: "直近の最大ピーク、dBFS",
     solo: "ソロ：このトラックだけを聴く（ここでのみ。⌥クリック：このトラックだけ）",

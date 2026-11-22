@@ -93,6 +93,14 @@ export const es: Words = {
     desktop: 'Escritorio',
   },
   /* the projects the app window has open (ProjectSwitcher), a new tab's launcher, and the examples (ExamplesGallery) */
+  workspaceTabs: {
+    new: "Nueva pestaña", search: "Buscar complementos y recursos", noMatches: "Sin coincidencias", assets: "Recursos",
+    projectsNote: "Abre y gestiona tus proyectos de vídeo",
+    communityNote: "Descubre complementos, habilidades y recursos compartidos",
+    assetsNote: "Explora los medios para tu vídeo",
+  },
+  desktopNavigation: { newChat: "Nuevo chat", searchProjects: "Buscar proyectos", noMatches: "No hay proyectos coincidentes", loadChatsFailed: "No se pudieron cargar los chats", openChatFailed: "No se pudo abrir el chat", pages: "Páginas", myProjects: "Mis proyectos", search: "Buscar", library: "Biblioteca", projectsNote: "Tus películas. Cada una es una carpeta en este ordenador.", communityNote: "Plugins, habilidades, recursos y ejemplos que comparte la gente, y lo que has añadido.", libraryNote: "Lo que guardas para todas tus películas: tus carpetas y las vinculadas desde este ordenador o un NAS.", libraryCommunity: "Recursos de OpenFilm y la Comunidad", libraryEmpty: "Aún no hay carpetas en la biblioteca.", more: "Más", rename: "Renombrar", removeFromList: "Quitar de la lista", closeTab: "Cerrar pestaña", pin: "Fijar", unpin: "No fijar", archive: "Archivar", archiveRunning: "No se puede archivar mientras trabaja", renameFailed: "No se pudo renombrar", editFailed: "No se pudo cambiar el chat", currentStays: "El proyecto abierto aquí sigue en la lista", startTitle: "Crear algo nuevo", startBlank: "Película en blanco", startCanvas: "Empezar en el lienzo", startExample: "Empezar con un ejemplo", libImport: "Importar", libDetails: "Detalles", libKind: "Tipo", libSize: "Tamaño", libDimensions: "Dimensiones", libDuration: "Duración", libModified: "Modificado", libWhere: "Ubicación" },
+  searchPalette: { placeholder: "Buscar proyectos, chats y acciones", all: "Todo", projects: "Proyectos", chats: "Chats", actions: "Acciones", recent: "Recientes", results: "Resultados", none: "Nada encontrado", close: "Cerrar", type: "Cambiar tipo", open: "Abrir", newProject: "Nuevo proyecto", inProject: "en {name}" },
   projectTabs: {"label": "Proyectos abiertos", "new": "Abrir otro proyecto", "closeNamed": "Cerrar {name}", "revealFailed": "No se pudo abrir la carpeta del proyecto.", "coverCurrent": "Cambia a esta pestaña para usar su fotograma actual como portada."},
   switcher: { oneClip: '1 clip', clips: '{n} clips', label: 'Cambiar de proyecto', open: 'Otros proyectos abiertos', all: 'Todos los proyectos…', close: 'Cerrar', working: 'Trabajando', asking: 'Esperando tu respuesta', exporting: 'Exportando {n}%', cover: 'Usar fotograma actual de portada', coverShort: "Usar portada", reveal: 'Mostrar carpeta' },
   launcher: { projects: 'Proyectos', examples: 'Ejemplos' },
@@ -215,6 +223,9 @@ export const es: Words = {
   },
   /* the app's update, ready to install (Studio's top bar, in an app that has updates: lib/host.ts `update`) */
   update: {
+    cardTitle: "Nueva versión {version}",
+    cardNote: "Reinicia para actualizar, o se instalará al salir.",
+    later: "Más tarde",
     restart: 'Reiniciar para actualizar',
     ready: 'OpenFilm {version} está listo. Reinicia para actualizar ahora, o se instalará al salir y la próxima vez se abrirá la nueva versión.',
     agentBusy: 'Un agente sigue trabajando. Reinicia cuando termine.',
@@ -2434,6 +2445,8 @@ export const es: Words = {
     recent: 'Recientes',
   },
   layout: {
+    expandWorkspace: "Ampliar el espacio de trabajo",
+    showConversation: "Mostrar conversación",
     resizeSplit: "Cambiar tamaño de la división",
     viewer: "Visor",
     movePanel: "Mover {name}",
@@ -2524,6 +2537,14 @@ export const es: Words = {
   canvas: {
     title: 'Lienzo',
     toEdit: 'Cambiar a la edición',
+    openEditor: 'Abrir un editor',
+    newWorkbenchTab: 'Nueva pestaña',
+    newTabSearch: "Buscar editores",
+    newTabOpen: "Abrir",
+    newTabMore: "Buscar más editores en la Comunidad",
+    newTabCommunity: "Buscar «{query}» en la Comunidad",
+    newTabNoMatch: "Ningún editor coincide",
+    keepEditor: 'Mantén al menos un editor abierto',
     workspaceLabel: 'Editores',
     motionEmpty: 'Aún no hay clips de imagen que animar',
     motionMode: 'Modo',
@@ -3217,6 +3238,10 @@ export const es: Words = {
   /* the timeline's audio and editing tools: meters, solo, markers, loudness, freeze frame, replace, track heights */
   editorTools: {
     meters: "Medidores de audio",
+    metersHide: "Ocultar medidores de audio",
+    metersShow: "Mostrar medidores de audio",
+    metersMoveToTimecode: "Mover junto al código de tiempo",
+    metersMoveToRight: "Mover a la derecha de la línea de tiempo",
     metersClip: "Saturado: el sonido llegó a 0 dB. Haz clic para reiniciar",
     metersPeak: "Pico más alto reciente, dBFS",
     solo: "Solo: escucha solo esta pista, solo aquí (⌥-clic: solo esta)",

@@ -98,6 +98,14 @@ export const en = {
     desktop: 'Desktop',
   },
   /* the projects the app window has open (ProjectSwitcher), a new tab's launcher, and the examples (ExamplesGallery) */
+  workspaceTabs: {
+    new: "New tab", search: "Search plugins and resources", noMatches: "No matches", assets: "Assets",
+    projectsNote: "Open and manage your film projects",
+    communityNote: "Find plugins, skills and shared assets",
+    assetsNote: "Browse media for your film",
+  },
+  desktopNavigation: { newChat: "New chat", searchProjects: "Search projects", noMatches: "No matching projects", loadChatsFailed: "Couldn’t load chats", openChatFailed: "Couldn’t open the chat", pages: "Pages", myProjects: "My projects", search: "Search", library: "Library", projectsNote: "Your films. Each one is a folder on this computer.", communityNote: "Plugins, skills, assets and examples people share, and what you have added.", libraryNote: "What you keep for every film: your folders, and folders linked from this computer or a NAS.", libraryCommunity: "OpenFilm and Community assets", libraryEmpty: "No library folder yet.", more: "More", rename: "Rename", removeFromList: "Remove from list", closeTab: "Close tab", pin: "Pin", unpin: "Unpin", archive: "Archive", archiveRunning: "Can’t archive while it is working", renameFailed: "Couldn’t rename", editFailed: "Couldn’t change the chat", currentStays: "The project open here stays on the list", startTitle: "Start something new", startBlank: "Blank film", startCanvas: "Start on the canvas", startExample: "Start from an example", libImport: "Import", libDetails: "Details", libKind: "Kind", libSize: "Size", libDimensions: "Dimensions", libDuration: "Length", libModified: "Modified", libWhere: "Where" },
+  searchPalette: { placeholder: "Search projects, chats and actions", all: "All", projects: "Projects", chats: "Chats", actions: "Actions", recent: "Recent", results: "Results", none: "Nothing found", close: "Close", type: "Change type", open: "Open", newProject: "New project", inProject: "in {name}" },
   projectTabs: {"label": "Open projects", "new": "Open another project", "closeNamed": "Close {name}", "revealFailed": "Could not open the project folder.", "coverCurrent": "Switch to this tab to use its current frame as the cover."},
   switcher: { oneClip: '1 clip', clips: '{n} clips', label: 'Switch project', open: 'Other open projects', all: 'All projects…', close: 'Close', working: 'Working', asking: 'Waiting for you', exporting: 'Exporting {n}%', cover: 'Set current frame as cover', coverShort: "Set cover", reveal: 'Show folder' },
   /** a provider's name where a language says it otherwise (its own name elsewhere) */
@@ -222,6 +230,9 @@ export const en = {
   },
   /* the app's update, ready to install (Studio's top bar, in an app that has updates: lib/host.ts `update`) */
   update: {
+    cardTitle: "New version {version}",
+    cardNote: "Restart to update, or it installs when you quit.",
+    later: "Later",
     restart: 'Restart to update',
     ready: 'OpenFilm {version} is ready. Restart to update now, or it installs when you quit and opens as the new version next time.',
     agentBusy: 'An agent is still working. Restart when it has finished.',
@@ -2449,6 +2460,8 @@ export const en = {
     recent: 'Recent',
   },
   layout: {
+    expandWorkspace: "Expand workspace",
+    showConversation: "Show conversation",
     resizeSplit: "Resize layout split",
     viewer: "Viewer",
     movePanel: "Move {name}",
@@ -2539,6 +2552,14 @@ export const en = {
   canvas: {
     title: 'Canvas',
     toEdit: 'Switch to the edit',
+    openEditor: 'Open an editor',
+    newWorkbenchTab: 'New tab',
+    newTabSearch: "Search editors",
+    newTabOpen: "Open",
+    newTabMore: "Find more editors in the Community",
+    newTabCommunity: "Search the Community for “{query}”",
+    newTabNoMatch: "No editor matches",
+    keepEditor: 'Keep at least one editor open',
     workspaceLabel: 'Editors',
     motionEmpty: 'No picture clips to animate yet',
     motionMode: 'Mode',
@@ -3232,6 +3253,10 @@ export const en = {
   /* the timeline's audio and editing tools: meters, solo, markers, loudness, freeze frame, replace, track heights */
   editorTools: {
     meters: "Audio meters",
+    metersHide: "Hide audio meters",
+    metersShow: "Show audio meters",
+    metersMoveToTimecode: "Move beside timecode",
+    metersMoveToRight: "Move to right of timeline",
     metersClip: "Clipped: the sound reached 0 dB. Click to reset",
     metersPeak: "Loudest peak of late, dBFS",
     solo: "Solo: hear this track alone, here only (⌥-click: only this one)",

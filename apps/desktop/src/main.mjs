@@ -27,6 +27,8 @@ import { appLanguage } from './i18n/language.mjs';
 import { PAGE_FAILURE_WORDS } from './i18n/page-failure.mjs';
 import { applicationMenuTemplate } from './menu.mjs';
 import { registerLocalAgentIpc } from './local-agents-ipc.mjs';
+import { readSessions, saveSessions } from './chat-store.mjs';
+import { navigationSessions } from './session-navigation.mjs';
 import { readPreferences, registerChatIpc } from './chat-ipc.mjs';
 import { registerSkillsIpc } from './skills-ipc.mjs';
 import { createConnectors, registerConnectorsIpc } from './connectors.mjs';
@@ -51,7 +53,7 @@ const here = (path) => fileURLToPath(new URL(path, import.meta.url));
 const mac = process.platform === 'darwin';
 const windows = process.platform === 'win32';
 /** Windows' window buttons over the top bar: the board's color, and the text's */
-const overlayColours = (t) => ({ color: t === 'dark' ? '#111114' : '#e9e9eb', symbolColor: t === 'dark' ? '#ebebed' : '#161619', height: 32 });
+const overlayColours = (t) => ({ color: t === 'dark' ? '#111114' : '#e9e9eb', symbolColor: t === 'dark' ? '#ebebed' : '#161619', height: 35 });
 
 /* HTML-in-Canvas in Studio's viewer, as in the renderer (the `openfilm` package's src/host.mjs) */
 app.commandLine.appendSwitch('enable-blink-features', 'CanvasDrawElement');
@@ -261,7 +263,7 @@ function tellTabs() {
 
 function presentation() {
   if (pagePresentation) return pagePresentation;
-  const frameOptions = id => ({ readySelector: id === HOME ? '[data-titlebar]' : `[data-project-tab="${id}"], [data-page-ready="error"]` });
+  const frameOptions = id => ({ readySelector: id === HOME ? '[data-titlebar]' : `[data-project-navigation-ready="${tabs?.get(id)?.projectId}"], [data-page-ready="error"]` });
   const stage = (id, v, paint) => {
     // Restoring a hidden NSView invalidates its old surface. Refresh it underneath the outgoing page first.
     win.contentView.addChildView(v, 0);
@@ -349,8 +351,9 @@ function showPage(id) {
 /** Bring a tab to the front. */
 function showTab(id) {
   if (!tabs || !tabs.activate(id)) return;
-  showPage(id);
+  const shown = showPage(id);
   tellTabs();
+  return shown;
 }
 
 /** A project's tab (in front if it is open already). */
@@ -800,6 +803,46 @@ async function start() {
   const tabHandle = (channel, fn) => ipcMain.handle(channel, (event, opts) => {
     if (!fromPage(event)) throw new Error('not the window\'s page');
     return fn(tabOf(event.sender), opts ?? {});
+  });
+  const navigationProject = async projectId => {
+    const { projects } = await studioApi('/api/projects');
+    const project = projects.find(p => p.id === projectId);
+    if (!project || projectGone(projects, projectId)) throw new Error('Project is unavailable.');
+    return project;
+  };
+  tabHandle('desktop:conversations:list', async (_self, { projectId }) => {
+    const project = await navigationProject(projectId);
+    const { sessions, last } = readSessions(project.path);
+    return navigationSessions(sessions, last);
+  });
+  /* a conversation changed from a sidebar: by the chat that holds it when its project is open in a tab, else on disk */
+  tabHandle('desktop:conversations:edit', async (_self, { projectId, sessionId, edit }) => {
+    if (typeof sessionId !== 'string' || !edit || typeof edit !== 'object') return false;
+    const change = {
+      ...(typeof edit.title === 'string' && edit.title.trim() ? { title: edit.title.trim().slice(0, 200) } : {}),
+      ...(typeof edit.pinned === 'boolean' ? { pinned: edit.pinned } : {}),
+      ...(typeof edit.archived === 'boolean' ? { archived: edit.archived } : {}),
+    };
+    if (!Object.keys(change).length) return false;
+    const project = await navigationProject(projectId);
+    const open = tabs?.list().find(tab => tab.projectId === project.id);
+    const view = open && views.get(open.id);
+    if (view && !view.webContents.isDestroyed()) {
+      view.webContents.send('desktop:conversations:edit', { projectId: project.id, sessionId, edit: change });
+      return true;
+    }
+    const kept = readSessions(project.path);
+    if (!kept.sessions.some(session => session.id === sessionId)) return false;
+    saveSessions(project.path, { last: kept.last, sessions: kept.sessions.map(session => session.id === sessionId ? { ...session, ...change } : session) });
+    return true;
+  });
+  tabHandle('desktop:conversations:open', async (_self, { projectId, sessionId }) => {
+    if (!tabs || (sessionId !== null && typeof sessionId !== 'string')) return false;
+    const project = await navigationProject(projectId);
+    const target = tabs.open({ projectId: project.id, title: project.name });
+    if (!await showTab(target.id) || tabs.activeId() !== target.id) return false;
+    views.get(target.id)?.webContents.send('desktop:conversations:select', { projectId, sessionId });
+    return true;
   });
   tabHandle('desktop:tabs:list', (self) => ({ self, tabs: tabs?.list() ?? [] }));
   tabHandle('desktop:tabs:new', (_self, { projectId }) => { newTab(projectId); return { ok: true }; });

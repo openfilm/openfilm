@@ -6,10 +6,12 @@
  * (lib/local-agent-run's saved turns).
  */
 import React from 'react';
+import { createPortal } from 'react-dom';
+import { navigationSessions } from '../../src/session-navigation.mjs';
 import { ArrowDown, AtSign, Blocks, ChevronLeft, Coins, CornerDownLeft, Folder, LibraryBig, Loader2, Paperclip, Play, Plus, Shapes, Square, X } from 'lucide-react';
 import { buildPromptDisplay, type Turn } from '@openfilm/shared';
 import { useT, useUiLocale } from '@/i18n';
-import { ConversationBar } from '@/components/ConversationSessionBar';
+import { ConversationManager, ConversationTitle } from '@/components/ConversationSessionBar';
 import { ProjectConversation, TurnUndoContext, primeStoredTranscript } from '@/components/ProjectConversation';
 import type { ProjectVersion } from '@/components/project-version';
 import { ProjectStarters } from '@/components/ProjectStarters';
@@ -75,6 +77,7 @@ import type { ProjectSessionItem } from '@/lib/project-sessions';
 import { conversationAgent, conversationPrefs, keptPrefs } from '@/lib/conversation-agent';
 import { AGENT_DEFINITIONS, isAgentId } from '../../src/agent-definitions.mjs';
 import type { TranscriptItem } from '@/lib/agent-transcript';
+import type { HostConversationEdit } from 'openfilm/studio-ui/lib/host.ts';
 import { app, type FfmpegState, type Project, type SkillListing, type StudioRef, type StudioSelection } from './app-bridge';
 import { Divider } from './components/Divider';
 import { draftRefs, linkOfRef, pillCard, refFromPill, refPill, sameStudioThing, selectionMoment, selectionRange, selectionRefs, studioReferencesText } from './studio-refs';
@@ -229,8 +232,10 @@ function ChatPane({ project, banners, selection, assetsOpen, assetsOverlay }: { 
   }, [projectKey]);
   const bench = React.useRef({ choice: sessions.find((session) => session.id === sessionId)?.workbench, switching: true, requested: false });
   const syncWorkbench = React.useCallback((state = app.workbench()) => {
-    if (state?.projectId !== project.id || !state.current) return;
+    if (state?.projectId !== project.id) return;
     const saved = bench.current;
+    // A new tab or a resource has no workbench. The user's next plugin choice must take precedence.
+    if (!state.current) { saved.switching = false; return; }
     if (saved.switching) {
       if (saved.choice && state.available.includes(saved.choice) && state.current !== saved.choice) {
         if (!saved.requested) {
@@ -1120,7 +1125,9 @@ function ChatPane({ project, banners, selection, assetsOpen, assetsOverlay }: { 
   const switchSession = (id: string, workbench?: string) => {
     if (id === shownSession.current) return;
     const text = latestDraft.current;
-    if (text) drafts.current.set(shownSession.current, { text, references: [...followUpRefs], studio: studioRefs, files: fileRefs, skills: skillRefs });
+    if (text || followUpRefs.length || studioRefs.size || fileRefs.length || skillRefs.length) {
+      drafts.current.set(shownSession.current, { text, references: [...followUpRefs], studio: studioRefs, files: fileRefs, skills: skillRefs });
+    }
     const draft = drafts.current.get(id);
     drafts.current.delete(id);
     shownSession.current = id;
@@ -1169,6 +1176,33 @@ function ChatPane({ project, banners, selection, assetsOpen, assetsOverlay }: { 
     () => (sessions.some((s) => s.id === sessionId) ? sessions : [{ ...newSession(), id: sessionId }, ...sessions]),
     [sessions, sessionId],
   );
+
+  const titleSlot = React.useSyncExternalStore(app.onConversationTitleSlot, app.conversationTitleSlot);
+  const managerSlot = React.useSyncExternalStore(app.onConversationManagerSlot, app.conversationManagerSlot);
+  const showManagedChat = () => {
+    app.setChatOpen(true);
+    if (assetsOverlay) app.setAssetsOpen(false);
+  };
+  React.useEffect(() => {
+    app.publishConversations({ projectId: project.id, ...navigationSessions(shownSessions, sessionId) });
+  }, [project.id, shownSessions, sessionId]);
+  React.useEffect(() => () => app.publishConversations(null), []);
+  const selectFromNavigation = React.useRef<(id: string | null) => void>(() => {});
+  selectFromNavigation.current = id => {
+    if (id === null) onNewSession();
+    else if (shownSessions.some(session => session.id === id && !session.archived)) onSelectSession(id);
+  };
+  React.useEffect(() => app.onSelectConversation(project.id, id => selectFromNavigation.current(id)), [project.id]);
+  /* the sidebar renames, pins or archives one of these conversations; one that is working is not archived */
+  const editFromNavigation = React.useRef<(id: string, edit: HostConversationEdit) => boolean>(() => false);
+  editFromNavigation.current = (id, edit) => {
+    if (edit.archived && running.has(id)) return false;
+    if (edit.title !== undefined) onRenameSession(id, edit.title);
+    if (edit.pinned !== undefined) onPinSession(id, edit.pinned);
+    if (edit.archived !== undefined) onArchiveSession(id, edit.archived);
+    return true;
+  };
+  React.useEffect(() => app.onEditConversation(project.id, (id, edit) => editFromNavigation.current(id, edit)), [project.id]);
 
   const agentName = agent === 'byok' ? t('composer.agentOwnKey') : la.roster?.find((a) => a.id === agent)?.name ?? agent;
   /* the last turn failed for the account of the person's own agent it ran on: Switch account, and whose it is */
@@ -1223,20 +1257,20 @@ function ChatPane({ project, banners, selection, assetsOpen, assetsOverlay }: { 
           attachFiles(filesFromTransfer(event.dataTransfer), { x: event.clientX, y: event.clientY });
         }}
         data-prompt-shell=""
-        className={`rounded-[12px] border bg-[var(--bg-raised)] shadow-[0_2px_8px_rgba(0,0,0,0.04)] transition-colors duration-200 ${
-          dropping ? 'border-[var(--accent)]' : 'border-[var(--border)] focus-within:border-[var(--text-faint)]'
+        className={`rounded-[14px] border bg-[var(--bg-raised)] transition-colors duration-150 dark:bg-[#303030] ${
+          dropping ? 'border-[var(--accent)]' : 'border-[var(--border)] focus-within:border-[var(--border-strong)]'
         }`}
       >
         {openedFile ? <AttachmentPreview item={openedFile} onClose={() => setOpenedFile(null)} /> : null}
-        <div className="flex items-end gap-1.5 py-2.5 pl-2 pr-2">
+        <div className="flex items-end gap-1.5 px-2 py-2.5">
           {/* Add, at the start of the line as in other agent apps: files and pictures for this message, and what
               OpenFilm can do more (the Community's plugins and skills) */}
           <Popover open={addOpen} onOpenChange={setAddOpen} placement="top" align="start" anchorRef={addButtonRef} bare
             trigger={(
               <Tooltip label={addOpen ? undefined : t('project.addMenu')}>
                 <button ref={addButtonRef} type="button" aria-haspopup="menu" aria-expanded={addOpen} onClick={() => setAddOpen(!addOpen)} aria-label={t('project.addMenu')}
-                  className={`-my-[3px] flex h-7 w-7 shrink-0 items-center justify-center rounded-[8px] text-[var(--text-muted)] transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[var(--text)] ${addOpen ? 'bg-[var(--bg-hover)] text-[var(--text)]' : ''}`}>
-                  <Plus size={18} strokeWidth={1.75} />
+                  className={`-my-0.5 flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-md text-[var(--text-muted)] transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[var(--text)] ${addOpen ? 'bg-[var(--bg-hover)] text-[var(--text)]' : ''}`}>
+                  <Plus size={16} strokeWidth={1.75} />
                 </button>
               </Tooltip>
             )}>
@@ -1263,7 +1297,7 @@ function ChatPane({ project, banners, selection, assetsOpen, assetsOverlay }: { 
               placeholder={t(blank ? 'project.composerPlaceholderBlank' : 'project.composerPlaceholder')}
               minHeight={22}
               maxHeight={158}
-              contentClassName="text-[14px] leading-[22px] text-[var(--text)]"
+              contentClassName="text-[13.5px] leading-[22px] text-[var(--text)]"
               onPasteFiles={(files) => attachFiles(files)}
               pillState={attachmentState}
               pillOpens={opensPill}
@@ -1338,30 +1372,37 @@ function ChatPane({ project, banners, selection, assetsOpen, assetsOverlay }: { 
                 runs on under it, fading out behind it so the words under the composer stay clear */}
             <aside className={`relative flex min-h-0 min-w-0 flex-col overflow-hidden ${assetsOverlay ? 'mt-auto shrink-0' : 'flex-1 bg-[var(--bg-panel)]'}`}>
               <div className={`relative min-h-0 min-w-0 flex-1 flex-col ${assetsOverlay ? 'hidden' : 'flex'}`}>
-                <ConversationBar
+                {titleSlot && createPortal(<ConversationTitle key={sessionId} sessionId={sessionId}
+                  title={shownSessions.find(item => item.id === sessionId)?.title.trim() || ''}
+                  pinned={Boolean(shownSessions.find(item => item.id === sessionId)?.pinned)} running={running.has(sessionId)}
+                  onRename={onRenameSession} onPin={onPinSession} onArchive={onArchiveSession}
+                  onNew={() => { onNewSession(); }} onReveal={() => { void app.chat.reveal(project.path); }} />, titleSlot)}
+                {managerSlot && createPortal(<ConversationManager dismissSidebar={managerSlot.dismissSidebar}
                   sessions={shownSessions}
                   currentSessionId={sessionId}
                   running={running}
-                  onSelectSession={onSelectSession}
-                  onNewSession={onNewSession}
+                  onSelectSession={id => { showManagedChat(); onSelectSession(id); }}
+                  onNewSession={() => { showManagedChat(); return onNewSession(); }}
                   onRenameSession={onRenameSession}
                   onPinSession={onPinSession}
                   onArchiveSession={onArchiveSession}
-                />
+                />, managerSlot.node)}
                 <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
                   {/* the first message well below the session bar, as a chat app opens a conversation; the last well above
                       the composer, room for the way back to it */}
                   <div
                     ref={thread.viewportRef}
+                    data-conversation-viewport
                     onScroll={(event) => setScrolled(event.currentTarget.scrollTop > 2)}
                     className={`flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto overflow-x-hidden [overflow-anchor:none] [scrollbar-gutter:stable] px-4${blank ? ' justify-center py-3.5' : ' pt-8 pb-24'}`}
                   >
+                    {/* the conversation keeps to a reading column, however wide the chat is made */}
                     {blank ? (
-                      <div ref={thread.contentRef}>
+                      <div ref={thread.contentRef} className="mx-auto w-full max-w-[var(--chat-column)]">
                         <ProjectStarters />
                       </div>
                     ) : (
-                      <div ref={thread.contentRef} className="min-w-0 shrink-0">
+                      <div ref={thread.contentRef} className="mx-auto w-full min-w-0 max-w-[var(--chat-column)] shrink-0">
                         <PromptPillRevealContext.Provider value={sentPills}>
                           <TurnUndoContext.Provider value={onUndo}>
                           <ProjectFolderContext.Provider value={projectFolder}>
@@ -1397,7 +1438,7 @@ function ChatPane({ project, banners, selection, assetsOpen, assetsOverlay }: { 
               </div>
 
               {/* Measure the whole footer so the drawer keeps its controls clear of the return action and composer. */}
-              <div ref={composerBlockRef} className={`relative flex shrink-0 flex-col px-4 pb-1.5 ${assetsOverlay ? 'bg-[linear-gradient(to_bottom,transparent_var(--back-row,0px),var(--bg-panel)_var(--back-row,0px))]' : ''}`}>
+              <div ref={composerBlockRef} className={`relative flex shrink-0 flex-col px-4 pb-1.5 [&>*]:mx-auto [&>*]:w-full [&>*]:max-w-[var(--chat-column)] ${assetsOverlay ? 'bg-[linear-gradient(to_bottom,transparent_var(--back-row,0px),var(--bg-panel)_var(--back-row,0px))]' : ''}`}>
                 {assetsOverlay ? (
                   /* 4 px over the button, 8 under it: the drawer's foot beside it is set to meet its middle (Studio LibraryDrawer footInset) */
                   <div ref={backRowRef} className="flex justify-center pb-2 pt-1">

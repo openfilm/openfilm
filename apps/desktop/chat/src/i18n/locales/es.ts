@@ -273,6 +273,10 @@ export const es: Words = {
     untitledSession: 'Nuevo chat',
   },
   projectMenu: {
+    revealChat: 'Mostrar archivos del chat',
+    archiveBusy: 'No se puede archivar mientras trabaja',
+    more: 'Más',
+    manageSessions: 'Gestionar chats',
     archive: 'Archivar',
     archived: 'Archivados',
     asking: 'Esperando tu respuesta',

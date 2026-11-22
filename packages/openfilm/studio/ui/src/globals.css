@@ -54,6 +54,7 @@
   --bg-viewer: #fbfbfc;
   /* the one-pixel lines between the panes and under the top bar (the board under them showing through) */
   --dock-line: #d2d2d8;
+  --frame-line: var(--dock-line);
   --bg-field: rgba(16, 16, 24, 0.055);
   --bg-hover: rgba(16, 16, 24, 0.05);
   --bg-pressed: rgba(16, 16, 24, 0.09);
@@ -140,7 +141,9 @@
   --dialog-side: var(--bg-panel);
   --dialog-main: var(--bg-raised);
   --bg-viewer: #191919;
-  --dock-line: #000000;
+  --dock-line: #2b2b2b;
+  /* the lines of the window's own frame (the sidebar's edge, the title bar's, the chat's): not the panes' gaps */
+  --frame-line: #353535;
   --bg-field: rgba(255, 255, 255, 0.08);
   --bg-hover: rgba(255, 255, 255, 0.06);
   --bg-pressed: rgba(255, 255, 255, 0.12);
@@ -384,38 +387,12 @@ html[data-focus-nav='tab'] :where(a, button, [role='button'], select, summary):f
 
 /* ── Timeline ── */
 
-/* Only the range bar under the tracks scrolls sideways; the lanes hide their horizontal scrollbar. */
+/* The tracks still scroll with the wheel or trackpad. Only the bottom range bar is visible. */
 .tl-scroll {
-  scrollbar-width: thin;
-  scrollbar-color: var(--text-faint) transparent;
+  scrollbar-width: none;
 }
 .tl-scroll::-webkit-scrollbar {
-  width: 8px;
-  height: 0;
-}
-.tl-scroll::-webkit-scrollbar:horizontal {
-  width: 0;
-  height: 0;
   display: none;
-}
-.tl-scroll::-webkit-scrollbar:vertical {
-  width: 8px;
-}
-.tl-scroll::-webkit-scrollbar-track {
-  background: transparent;
-}
-.tl-scroll::-webkit-scrollbar-thumb {
-  background: var(--text-faint);
-  border: 2px solid transparent;
-  border-radius: 4px;
-  background-clip: content-box;
-}
-.tl-scroll::-webkit-scrollbar-thumb:hover {
-  background: var(--text-muted);
-  background-clip: content-box;
-}
-.tl-scroll::-webkit-scrollbar-corner {
-  background: transparent;
 }
 
 /*

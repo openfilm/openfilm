@@ -9,16 +9,26 @@
  * the switch, what it knows of the film for the project's card, and the picture at the playhead made the cover.
  * Without it the bar has the page's parts alone, the card says what the project says of itself, and no cover is made
  * from a frame. Any plugin's element puts buttons of its own there too, as a list the bar draws (openfilm/studio
- * `topBar`), after the edit's. The layout's menu (shell/layout) is the page's: it is the first of the buttons on the right.
+ * `topBar`), after the edit's. The desktop project navigator opens from the corner of the title bar.
  */
 import * as React from 'react';
-import { MonitorDown, Puzzle } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { MonitorDown, Puzzle, SquarePen } from 'lucide-react';
 import { api, ApiError, type ProjectFilm } from '@/api';
 import { useT } from '@/i18n';
+import { PROJECT_SIDEBAR_WIDTH } from '@/lib/hover-open';
+import { DESKTOP_TITLEBAR_HEIGHT } from '@/lib/workspaces';
 import { readCanvasDoc } from '@/lib/canvas';
-import { studioHost } from '@/lib/host';
+import { HOST_PANEL_WIDTH, studioHost, type StudioHost } from '@/lib/host';
 import { leaveProject, openProject } from '@/lib/navigate';
+import { setSidePageHost, useSidePageHost } from '@/lib/side-page';
+import { closePlugins, openPlugins, usePluginsWindow } from '@/lib/plugins-window';
 import { AppMenu } from '@/components/AppMenu';
+import { DesktopWorkbenchTabs } from '@/components/DesktopWorkbenchTabs';
+import { ProjectNavigator, type SidePage } from '@/components/DesktopNavigation';
+import { LibraryPage } from '@/components/LibraryPage';
+import { SearchPalette } from '@/components/SearchPalette';
+import { readLastSubtitleStyle } from '@/lib/subtitles';
 import { DesktopDialog } from '@/components/DesktopDialog';
 import { PLUGIN_ICONS } from '@/components/library/PluginsPane';
 import { ModeSwitcher } from '@/components/ModeSwitcher';
@@ -117,26 +127,44 @@ function Bar({ frame, loaded }: { frame: ReturnType<typeof useProjectFrame>; loa
       return false;
     }
   };
+  const navigation = studioHost?.conversations;
   const projectTitle = <ProjectTitle tab={Boolean(studioHost?.tabs)} name={title} editing={renaming} draft={titleDraft} onDraft={setTitleDraft}
     onRename={startRename} onCommit={() => void commitTitle()} onCancel={() => setRenaming(false)}
     facts={{ project: loaded.project, ...(bar ? { film: bar.film } : {}) }}
     actions={{ onRename: startRename, onCoverFromFrame: coverFromFrame, onReveal: () => reveal('') }}
     onAll={() => setProjectsOpen(true)} />;
-  /* The desktop's tabs share the left edge; a browser keeps the project title centered. */
-  return (<>
-    <div data-titlebar className="relative flex h-8 min-w-0 items-center gap-1 bg-[var(--bg-titlebar)] px-[6px]" style={{ gridArea: 'bar', ...(studioHost?.tabs ? { gap: 0 } : {}) }} onContextMenu={event => event.preventDefault()}>
-      {/* The title and arrow open the same project card on click. */}
-      {!studioHost?.tabs ? <div className="pointer-events-none absolute inset-0 flex min-w-0 items-center justify-center">
-        <div className="pointer-events-auto flex min-w-0 max-w-full items-center">
-          {projectTitle}
+  const appButton = <AppMenu onSettings={setSettingsOpen} />;
+  const dialogs = <>
+    {history.over}
+    <WorkbenchGuide plugin={guide.plugin} benches={navigation || pickBench ? benchPlugins.length : 0} onClose={guide.close} />
+  </>;
+  if (navigation) {
+    const picking = frame.newWorkbenchTab === 'active';
+    return <>
+      <DesktopHeader frame={frame} navigation={navigation} menu={bar?.menu}>
+        {nowShown && <DesktopWorkbenchTabs key={projectId} projectId={projectId} now={nowShown} plugins={benchPlugins}
+          onPick={showWorkbench} newTab={frame.newWorkbenchTab} onOpenNewTab={frame.openNewWorkbenchTab}
+          onCloseNewTab={frame.closeNewWorkbenchTab} disabled={layoutEditing} />}
+        <div data-workbench-actions className="ml-auto flex shrink-0 items-center gap-1">
+          {!picking && <LayoutMenu frame={frame} className={TOP_BTN} />}
+          {/* the app's update is the sidebar's card (UpdateNotice), above the account */}
+          {history.button}
+          {!picking && <>{bar?.tools}<PluginTools /></>}
         </div>
-      </div> : null}
-      {/* a menu of the workbench's own, kept in the bar */}
+      </DesktopHeader>
+      {dialogs}
+    </>;
+  }
+  const desktopTabs = Boolean(studioHost?.tabs);
+  return (<>
+    <div data-titlebar className="relative flex h-8 min-w-0 items-center gap-1 bg-[var(--bg-titlebar)] px-[6px]" style={{ gridArea: 'bar', gap: desktopTabs ? 0 : undefined }} onContextMenu={event => event.preventDefault()}>
       {bar?.menu}
-      {/* the window's controls over this, then the app menu */}
-      <div aria-hidden className={studioHost?.tabs ? tabStyles.windowSpace : 'shrink-0 self-stretch'} style={{ width: 'var(--titlebar-logo-x)' }} />
-      <div className={studioHost?.tabs ? tabStyles.system : 'pointer-events-auto relative flex min-w-0 items-center'}><AppMenu onSettings={setSettingsOpen} /></div>
-      {studioHost?.tabs ? <ProjectTabs current={projectTitle} onProjects={() => setProjectsOpen(true)} onRenameCurrent={startRename} onCoverCurrent={coverFromFrame} /> : null}
+      {!desktopTabs && <div className="pointer-events-none absolute inset-0 flex min-w-0 items-center justify-center">
+        <div className="pointer-events-auto flex min-w-0 max-w-full items-center">{projectTitle}</div>
+      </div>}
+      <div aria-hidden className={desktopTabs ? tabStyles.windowSpace : 'shrink-0 self-stretch'} style={{ width: 'var(--titlebar-logo-x)' }} />
+      <div className={desktopTabs ? tabStyles.system : 'pointer-events-auto relative flex min-w-0 items-center'}>{appButton}</div>
+      {desktopTabs && <ProjectTabs current={projectTitle} onProjects={() => setProjectsOpen(true)} onRenameCurrent={startRename} onCoverCurrent={coverFromFrame} />}
       <div className="pointer-events-auto relative flex min-w-0 items-center gap-1">
         <UpdateButton />
         <WebUpdateButton />
@@ -170,8 +198,7 @@ function Bar({ frame, loaded }: { frame: ReturnType<typeof useProjectFrame>; loa
       <div aria-hidden className="shrink-0 self-stretch" style={{ width: 'var(--titlebar-right-x)' }} />
     </div>
     {/* the version history's window, put over the page (on the document's body) */}
-    {history.over}
-    <WorkbenchGuide plugin={guide.plugin} benches={pickBench ? benchPlugins.length : 0} onClose={guide.close} />
+    {dialogs}
   </>);
 }
 
@@ -193,16 +220,161 @@ function PluginTools() {
   }));
 }
 
+/** how far the docked sidebar's button starts from the sidebar's right edge: its 26px and 10px of margin */
+const DOCKED_CORNER_INSET = 36;
+
+/** The project navigator previews over the workspace and can dock beside it. */
+function DesktopHeader({ frame, navigation, menu, children }: {
+  frame: ReturnType<typeof useProjectFrame>;
+  navigation: NonNullable<StudioHost['conversations']>;
+  menu?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  const t = useT();
+  const { projectSidebar: sidebar, workspaceLeft } = frame;
+  const id = React.useId();
+  const { open, docked, dismissPreview } = sidebar;
+  const chatOpen = Boolean(frame.chat?.open);
+
+  /* The sidebar's pages, right of it in place of the chat and the editor: the projects or the Community, one at a time. */
+  const community = usePluginsWindow().open;
+  const [library, setLibrary] = React.useState(false);
+  const page: SidePage | null = community ? 'community' : frame.projectsOpen !== false ? 'projects' : library ? 'library' : null;
+  const { setProjectsOpen, setLoaded } = frame;
+  React.useEffect(() => { if (community) { setProjectsOpen(false); setLibrary(false); } }, [community, setProjectsOpen]);
+  React.useEffect(() => { if (frame.projectsOpen !== false) { closePlugins(); setLibrary(false); } }, [frame.projectsOpen]);
+  const showPage = (next: SidePage | null) => {
+    if (next === 'community') openPlugins(); else closePlugins();
+    setProjectsOpen(next === 'projects');
+    setLibrary(next === 'library');
+  };
+  /* the search, over the page: the sidebar's Search, or ⌘K anywhere in the window */
+  const [searching, setSearching] = React.useState(false);
+  React.useEffect(() => {
+    const press = (event: KeyboardEvent) => {
+      if (event.key.toLowerCase() !== 'k' || !(event.metaKey || event.ctrlKey) || event.shiftKey || event.altKey || event.defaultPrevented) return;
+      event.preventDefault();
+      setSearching(open => !open);
+    };
+    window.addEventListener('keydown', press);
+    return () => window.removeEventListener('keydown', press);
+  }, []);
+  const newChat = () => { showPage(null); void navigation.open(frame.projectId, null); };
+  const newProject = async () => {
+    try {
+      const project = await api.newProject(t('project.untitled'), readLastSubtitleStyle() ?? undefined);
+      showPage(null);
+      openProject(project.id);
+    } catch {
+      frame.toast.showError(t('projects.localProjectFailed'));
+    }
+  };
+  /* a project renamed from the sidebar: the one open here through its page's own state, so its title and folder follow */
+  const renameProject = async (id: string, name: string) => {
+    const project = await api.rename(id, name);
+    if (id === frame.projectId) setLoaded(l => (l ? { ...l, project } : l));
+    return project;
+  };
+
+  React.useEffect(() => {
+    if (frame.layoutEditing || page || frame.settingsOpen !== null) dismissPreview();
+  }, [frame.layoutEditing, page, frame.settingsOpen, dismissPreview]);
+
+  React.useEffect(() => { dismissPreview(); }, [frame.projectId, dismissPreview]);
+
+  const geometry = frame.freeGeometry;
+  const box = geometry?.panels.chat;
+  const rightChat = chatOpen && (geometry
+    ? box && box.left > geometry.root.left && box.left + box.width === geometry.root.left + geometry.root.width
+    : frame.workspacePrefs.chatSide === 'right');
+  const sideColumn = !geometry || (box && box.width < geometry.root.width && (box.left === geometry.root.left || rightChat));
+  const joinsChat = chatOpen && (!geometry || box?.top === geometry.root.top);
+  /* Docked, the button sits at the sidebar's top right, never over the window's controls. */
+  const cornerPlace = docked ? { left: `max(calc(var(--titlebar-logo-x) + 6px), ${workspaceLeft - DOCKED_CORNER_INSET}px)` } : undefined;
+  /* the corner's button docks the sidebar and puts it away: a click, never a pointer passing over it */
+  const corner = <div ref={sidebar.corner} className={tabStyles.sidebarCorner} data-docked={docked || undefined} style={cornerPlace}>
+    <div aria-hidden className={tabStyles.windowInset} />
+    <button ref={sidebar.trigger} type="button" data-project-sidebar-trigger aria-controls={open ? id : undefined}
+      aria-label={t('projectBrowser.sidebar')} title={t('projectBrowser.sidebar')} aria-expanded={open}
+      disabled={frame.layoutEditing} className={tabStyles.cornerButton}
+      onClick={event => { sidebar.toggle(); if (!docked && event.detail === 0) sidebar.focusFirst(); }}
+      onKeyDown={event => {
+        if (event.key !== 'ArrowDown') return;
+        event.preventDefault();
+        sidebar.showPreview();
+        sidebar.focusFirst();
+      }}>
+      <span className={tabStyles.cornerIcon} aria-hidden />
+    </button>
+  </div>;
+  const header = <header data-titlebar data-project-navigation-ready={frame.projectId} data-chat-right={rightChat || undefined}
+    data-nav-first={!chatOpen || rightChat || page !== null || undefined} data-sidebar-docked={docked || undefined} data-side-page={page ?? undefined}
+    className={tabStyles.header} style={{ height: DESKTOP_TITLEBAR_HEIGHT, paddingLeft: workspaceLeft || undefined }}
+    onContextMenu={event => event.preventDefault()}>
+    {corner}
+    {menu}
+    <div data-chat-header className={tabStyles.chatHeader} data-split={chatOpen || undefined} data-joined={joinsChat || undefined}
+      data-edge={chatOpen && sideColumn ? (box ? 'outer' : 'inner') : undefined}
+      style={chatOpen ? { width: box ? box.width : HOST_PANEL_WIDTH } : undefined}>
+      {chatOpen && <div className={tabStyles.chatTitle}>
+      {/* the sidebar put away: a new conversation from the chat's own corner */}
+      {!docked && <button type="button" className={tabStyles.chatNew} data-chat-new aria-label={t('desktopNavigation.newChat')}
+        title={t('desktopNavigation.newChat')} onClick={newChat}><SquarePen size={15} strokeWidth={1.8} aria-hidden /></button>}
+      <div ref={navigation.setTitleSlot} className={tabStyles.titleSlot} />
+    </div>}
+    </div>
+    <div className={tabStyles.editorHeader}>{children}</div>
+    {open && <aside id={id} ref={sidebar.drawer} data-project-sidebar data-docked={docked || undefined}
+      data-studio-host-panel aria-label={t('projectBrowser.sidebar')} className={tabStyles.sidebar}
+      style={{ paddingTop: DESKTOP_TITLEBAR_HEIGHT, width: docked ? workspaceLeft : PROJECT_SIDEBAR_WIDTH }}>
+      <ProjectNavigator projectId={frame.projectId} onDismiss={dismissPreview} page={page}
+        onPage={next => { dismissPreview(); showPage(next); }} onRename={renameProject} onSearch={() => setSearching(true)}
+        footer={<AppMenu sidebar onSettings={frame.setSettingsOpen} />} />
+      {/* the sidebar's top drags the window, as the rest of the bar does */}
+      <div aria-hidden className={tabStyles.sidebarDrag} style={{ height: DESKTOP_TITLEBAR_HEIGHT }} />
+    </aside>}
+    {/* Every strip above inherits the header's drag, and Electron applies regions in DOM order: the chat strip (under
+        the corner while the chat is on the left) and the sidebar's top would cover the corner's no-drag again, so this
+        hole over the corner comes last. */}
+    <div aria-hidden className={tabStyles.cornerHole} data-docked={docked || undefined} style={cornerPlace} />
+  </header>;
+  /* where the page is drawn (lib/side-page): from the window's top, right of the docked sidebar, over the chat and the editor;
+     Esc not taken in the page closes it */
+  const pageHost = <div ref={setSidePageHost} data-side-page-host={page ?? undefined} aria-hidden={!page || undefined}
+    className="fixed bottom-0 right-0 z-50 flex min-h-0 min-w-0 flex-col bg-[var(--dialog-main)]"
+    style={{ left: workspaceLeft, top: 0, display: page ? undefined : 'none' }}
+    onKeyDown={event => {
+      if (event.key !== 'Escape' || event.defaultPrevented) return;
+      const target = event.target as HTMLElement;
+      if (target.closest('input, textarea, select, [contenteditable="true"], [role="dialog"], [role="menu"]')) return;
+      event.preventDefault();
+      showPage(null);
+    }}>{page === 'library' && <LibraryPage />}</div>;
+  return <>
+    <div aria-hidden style={{ gridArea: 'bar', height: DESKTOP_TITLEBAR_HEIGHT }} />
+    {createPortal(<>{pageHost}{header}</>, document.body)}
+    <SearchPalette open={searching} projectId={frame.projectId} onClose={() => setSearching(false)}
+      onOpenProject={id => { showPage(null); if (id !== frame.projectId) openProject(id); }}
+      onOpenChat={(id, session) => { showPage(null); void navigation.open(id, session); }}
+      onNewChat={newChat} onNewProject={() => void newProject()} onPage={showPage} />
+  </>;
+}
+
 /** The projects window and Settings: over the page, before the library's pane. */
 export function PageWindows({ frame }: { frame: ReturnType<typeof useProjectFrame> }) {
   const t = useT();
+  const topBar = useWiring('topBar')?.topBar;
   const { projectId, loaded, failure, toast, projectsOpen, setProjectsOpen, settingsOpen, setSettingsOpen, setCanvasOpen } = frame;
+  /* the desktop window shows the projects as a page right of its sidebar (lib/side-page) */
+  const host = useSidePageHost();
   if (!loaded || failure) return null;
-  return (
-    <>
-      <ProjectsPopover open={projectsOpen !== false} currentProjectId={projectId}
+  const projects = (
+      <ProjectsPopover coverFromFrame={topBar?.coverFromFrame} open={projectsOpen !== false} currentProjectId={projectId} embedded={Boolean(host)}
         {...(typeof projectsOpen === 'object' ? { examples: projectsOpen } : {})}
-        onOpen={(id) => { if (!studioHost?.tabs) setProjectsOpen(false); openProject(id); }} onCurrentRemoved={leaveProject} onClose={() => setProjectsOpen(false)}
+        onOpen={(id) => {
+          if (!studioHost?.tabs || host) setProjectsOpen(false);
+          if (id !== projectId) openProject(id);
+        }} onCurrentRemoved={leaveProject} onClose={() => setProjectsOpen(false)}
         onUseCanvas={(example) => {
           setProjectsOpen(false);
           void api.exampleCanvasInto(projectId, example.id).then((raw) => {
@@ -211,6 +383,10 @@ export function PageWindows({ frame }: { frame: ReturnType<typeof useProjectFram
             toast.show(t('canvas.exampleCopied').replace('{folder}', `assets/examples/${example.id}/`));
           }, (e: unknown) => toast.showError(e instanceof Error ? e.message : String(e)));
         }} />
+  );
+  return (
+    <>
+      {host ? createPortal(projects, host) : projects}
       <SettingsModal open={settingsOpen !== null} section={settingsOpen ?? undefined} onClose={() => setSettingsOpen(null)} />
     </>
   );

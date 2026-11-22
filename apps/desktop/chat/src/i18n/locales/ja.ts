@@ -273,6 +273,10 @@ export const ja: Words = {
     untitledSession: '新しいチャット',
   },
   projectMenu: {
+    revealChat: 'チャットのファイルを表示',
+    archiveBusy: '実行中はアーカイブできません',
+    more: 'その他',
+    manageSessions: 'チャットを管理',
     archive: 'アーカイブ',
     archived: 'アーカイブ済み',
     asking: '回答待ち',
