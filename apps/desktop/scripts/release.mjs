@@ -48,6 +48,7 @@ import { fetchNode, nodeSignedByItsMakers } from './bundled-node.mjs';
 import { programFiles, unlistedProgramFiles } from './installer-files.mjs';
 import { NODE_ENTRIES, nodeProgramFiles, unpackPatterns } from './node-programs.mjs';
 import { lockedOverrides, versionsOffLock } from './locked-versions.mjs';
+import { USAGE, strictTransport } from './mac-info.mjs';
 
 const require = createRequire(import.meta.url);
 const desktop = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -147,7 +148,12 @@ await builder.build({
   ...(win ? { win: ['nsis'] } : { mac: ['dmg', 'zip'] }),
   [arch]: true,
   config: {
-    afterPack: win ? async (context) => { await windowsResources(context); requireListedProgramFiles(context); } : unsigned ? undefined : (context) => signNode(context),
+    /* a Mac app: its system connections encrypted but to this computer, after electron-builder opened them to any
+       (mac-info.mjs), then its Node signed apart (signNode); both before the app is signed */
+    afterPack: win ? async (context) => { await windowsResources(context); requireListedProgramFiles(context); } : (context) => {
+      strictTransport(join(context.appOutDir, `${NAME}.app`, 'Contents/Info.plist'));
+      if (!unsigned) signNode(context);
+    },
     /* unsigned on a Mac: signed ad hoc, whole, before the .dmg and .zip are made. Electron's fuses are written into
        its framework after the linker signed it, and an Apple chip kills a program whose pages no longer match its
        signature ("Code Signature Invalid") the moment it starts */
@@ -211,12 +217,8 @@ await builder.build({
       entitlementsInherit: join(desktop, 'build/entitlements.mac.plist'),
       /* the app's Node is signed apart, with less (signNode) */
       signIgnore: ['/Contents/Resources/runtime/node/node$'],
-      /* what macOS says when the app first asks for the microphone (Studio's record button, or a site the person
-         allowed in the browser) and for the camera (such a site only); the entitlements above let it */
-      extendInfo: {
-        NSMicrophoneUsageDescription: 'OpenFilm records sound from the microphone when you press Record, and uses it for sites you allow in its browser.',
-        NSCameraUsageDescription: 'OpenFilm uses the camera only for sites you allow in its browser.',
-      },
+      /* what macOS says when the app first asks for the microphone, the camera, and what it does not use (mac-info.mjs) */
+      extendInfo: { ...USAGE },
       ...(unsigned ? { identity: null } : { identity: IDENTITY, notarize: true }),
     },
     /* the downloads keep one name from version to version: the website links the latest release's by it */
