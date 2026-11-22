@@ -412,7 +412,7 @@ test('Antigravity version is read from agy --version; an older copy is detected 
 test('Antigravity desktop alone needs its separate ACP CLI; the official CLI is found off PATH', () => {
   const home = mkdtempSync(join(tmpdir(), 'of-antigravity-'));
   const apps = join(home, 'Applications');
-  const opts = { home, applicationDirs: [apps], win: false, env: { PATH: '' } };
+  const opts = { home, applicationDirs: [apps], pathDirs: [join(home, '.local', 'bin')], win: false, env: { PATH: '' } };
   const app = join(apps, 'Antigravity.app');
   put(join(app, 'Contents', 'MacOS', 'Antigravity'), '#!/bin/sh\n', 0o755);
   assert.equal(desktopApp('antigravity', opts), 'Antigravity');
