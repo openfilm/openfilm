@@ -33,6 +33,7 @@ import { startStudio, vaultSealer } from 'openfilm/studio';
 import { desktopAccount } from 'openfilm/desktop-account';
 import { launch } from 'openfilm/host';
 import { recordProblem } from 'openfilm/problems';
+import { nodeProgram } from 'openfilm/node-program';
 
 process.on('uncaughtExceptionMonitor', (error, origin) => {
   recordProblem({ area: 'studio', step: origin, what: `${error?.name ?? 'Error'}: ${error?.message ?? String(error)}`, code: error?.code });
@@ -153,7 +154,8 @@ try {
     send({ type: 'browser', state: 'downloading' });
     const openfilm = dirname(createRequire(import.meta.url).resolve('openfilm/package.json'));
     const cli = join(dirname(createRequire(join(openfilm, 'package.json')).resolve('playwright-core/package.json')), 'cli.js');
-    const child = spawn(process.execPath, [cli, 'install', 'chromium-headless-shell'], { env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' }, stdio: 'ignore', windowsHide: true });
+    const node = nodeProgram();
+    const child = spawn(node.command, [node.file(cli), 'install', 'chromium-headless-shell'], { env: node.env, stdio: 'ignore', windowsHide: true });
     child.once('exit', (code) => send(code === 0 ? { type: 'browser', state: 'ready' } : { type: 'browser', state: 'failed', message: `the download stopped (${code})` }));
     child.once('error', (error) => send({ type: 'browser', state: 'failed', message: error.message }));
   }

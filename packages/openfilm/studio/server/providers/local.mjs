@@ -10,7 +10,8 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { modelEntry, modelOn, modelReady, nodeEnv } from '../../../src/local-models.mjs';
+import { modelEntry, modelOn, modelReady } from '../../../src/local-models.mjs';
+import { nodeProgram } from '../../../src/node-program.mjs';
 import { ffmpeg } from '../../../src/shared.mjs';
 import { landing, madePicture, needed, round } from './common.mjs';
 
@@ -36,10 +37,11 @@ const kinds = (models) => /** @type {Verb[]} */ (Object.keys(models).filter((ver
 
 const RUN = fileURLToPath(new URL('../../../src/local-run.mjs', import.meta.url));
 
-/** A model run (local-run.mjs), stopped with `signal`; what it printed, or a sentence saying why it failed. */
+/** A model run (local-run.mjs, on OpenFilm's Node), stopped with `signal`; what it printed, or a sentence saying why it failed. */
 function runLocal(/** @type {string[]} */ args, /** @type {AbortSignal} */ signal) {
+  const node = nodeProgram();
   return new Promise((done, fail) => {
-    execFile(process.execPath, [RUN, ...args], { signal, maxBuffer: 64 << 20, windowsHide: true, env: nodeEnv() }, (e, stdout) => {
+    execFile(node.command, [node.file(RUN), ...args], { signal, maxBuffer: 64 << 20, windowsHide: true, env: node.env }, (e, stdout) => {
       const line = String(stdout).trim().split('\n').at(-1) ?? '';
       let out = null;
       try { out = JSON.parse(line); } catch { /* it died before it said */ }

@@ -7,12 +7,20 @@ import { join } from 'node:path';
 import { claudeEnvFile, commandScript, commandScriptWindows, installOpenfilmCommand, openfilmCommand } from './openfilm-command.mjs';
 
 test("the openfilm command alone has the app's ffmpeg first and its browser; the agent's PATH is left as it is", () => {
-  const sh = commandScript('/app/node', '/app/openfilm.mjs', { ffmpeg: '/app/ffmpeg', env: { PLAYWRIGHT_BROWSERS_PATH: '/app/pw' } });
+  const node = { command: '/app/node', env: {} };
+  const sh = commandScript(node, '/app/openfilm.mjs', { ffmpeg: '/app/ffmpeg', env: { PLAYWRIGHT_BROWSERS_PATH: '/app/pw' } });
   assert.match(sh, /^#!\/bin\/sh\n/);
-  assert.match(sh, /PLAYWRIGHT_BROWSERS_PATH='\/app\/pw' PATH='\/app\/ffmpeg':"\$PATH" ELECTRON_RUN_AS_NODE=1 OPENFILM_NO_UPDATE_CHECK=1 exec '\/app\/node' '\/app\/openfilm.mjs' "\$@"\n$/);
-  assert.doesNotMatch(commandScript('/n', '/c'), /PATH=/);
-  const cmd = commandScriptWindows('C:\\app\\node.exe', 'C:\\app\\openfilm.mjs', { ffmpeg: 'C:\\app\\ffmpeg', env: { PLAYWRIGHT_BROWSERS_PATH: 'C:\\pw' } });
-  assert.match(cmd, /setlocal\r\nset "PLAYWRIGHT_BROWSERS_PATH=C:\\pw"\r\nset "PATH=C:\\app\\ffmpeg;%PATH%"\r\n/);
+  assert.match(sh, /PLAYWRIGHT_BROWSERS_PATH='\/app\/pw' PATH='\/app\/ffmpeg':"\$PATH" OPENFILM_NO_UPDATE_CHECK=1 exec '\/app\/node' '\/app\/openfilm.mjs' "\$@"\n$/);
+  assert.doesNotMatch(commandScript(node, '/c'), /PATH=/);
+  const cmd = commandScriptWindows({ command: 'C:\\app\\node.exe', env: {} }, 'C:\\app\\openfilm.mjs', { ffmpeg: 'C:\\app\\ffmpeg', env: { PLAYWRIGHT_BROWSERS_PATH: 'C:\\pw' } });
+  assert.match(cmd, /setlocal\r\nset "PLAYWRIGHT_BROWSERS_PATH=C:\\pw"\r\nset "PATH=C:\\app\\ffmpeg;%PATH%"\r\nset OPENFILM_NO_UPDATE_CHECK=1\r\n"C:\\app\\node.exe" /);
+});
+
+test("the installed app's command runs on its own Node, never on the app run as Node; from source, on Electron as Node", () => {
+  assert.doesNotMatch(commandScript({ command: '/OpenFilm.app/Contents/Resources/runtime/node/node', env: {} }, '/c'), /ELECTRON_RUN_AS_NODE/);
+  assert.doesNotMatch(commandScriptWindows({ command: 'C:\\OpenFilm\\resources\\runtime\\node\\node.exe', env: {} }, 'C:\\c'), /ELECTRON_RUN_AS_NODE/);
+  assert.match(commandScript({ command: '/Electron Helper', env: { ELECTRON_RUN_AS_NODE: '1' } }, '/c'), /ELECTRON_RUN_AS_NODE='1' OPENFILM_NO_UPDATE_CHECK=1 exec '\/Electron Helper' '\/c' "\$@"\n$/);
+  assert.match(commandScriptWindows({ command: 'C:\\electron.exe', env: { ELECTRON_RUN_AS_NODE: '1' } }, 'C:\\c'), /set "ELECTRON_RUN_AS_NODE=1"\r\nset OPENFILM_NO_UPDATE_CHECK=1\r\n/);
 });
 
 test('the installed command prints itself as the agent types it (OPENFILM_RUN, set by its session), and runs by its whole path, a space in it too', { skip: process.platform === 'win32' }, () => {
@@ -22,7 +30,7 @@ test('the installed command prints itself as the agent types it (OPENFILM_RUN, s
     const node = join(dir, 'node');
     writeFileSync(node, '#!/bin/sh\nprintf %s "$OPENFILM_RUN"\n');
     chmodSync(node, 0o755);
-    const bin = installOpenfilmCommand(dir, { node });
+    const bin = installOpenfilmCommand(dir, { node: { command: node, env: {} } });
     const env = (run) => ({ ...process.env, OPENFILM_RUN: run });
     assert.equal(execFileSync(join(bin, 'openfilm'), { encoding: 'utf8', env: env('openfilm') }), 'openfilm', 'by its name, for an agent whose PATH has it first');
     assert.equal(execFileSync('/bin/sh', ['-c', `${openfilmCommand(bin)} --version`], { encoding: 'utf8', env: env(openfilmCommand(bin)) }), openfilmCommand(bin), 'runs as the agent types it');
@@ -55,7 +63,7 @@ test('a script run after as-node.mjs is the main module, with its arguments, and
 });
 
 test('a Windows command doubles % and leaves & alone in env, ffmpeg and the node and CLI paths', () => {
-  const cmd = commandScriptWindows('C:\\R&D%\\node.exe', 'C:\\R&D%\\openfilm.mjs', {
+  const cmd = commandScriptWindows({ command: 'C:\\R&D%\\node.exe', env: {} }, 'C:\\R&D%\\openfilm.mjs', {
     ffmpeg: 'C:\\R&D\\ffmpeg',
     env: { PLAYWRIGHT_BROWSERS_PATH: 'C:\\OpenFilm\\R&D%\\pw' },
   });
@@ -71,7 +79,7 @@ test('the generated .cmd keeps % and & literal when cmd.exe runs it', { skip: pr
     const show = join(dir, 'show.cmd');
     writeFileSync(show, '@echo off\r\nset PLAYWRIGHT_BROWSERS_PATH\r\nset PATH\r\n');
     const script = join(dir, 'openfilm.cmd');
-    writeFileSync(script, commandScriptWindows(show, join(dir, 'openfilm.mjs'), {
+    writeFileSync(script, commandScriptWindows({ command: show, env: {} }, join(dir, 'openfilm.mjs'), {
       ffmpeg: 'C:\\R&D\\ffmpeg',
       env: { PLAYWRIGHT_BROWSERS_PATH: 'C:\\OpenFilm\\R&D%\\pw' },
     }));

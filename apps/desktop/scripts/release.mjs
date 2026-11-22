@@ -16,10 +16,13 @@
  *      The staged `openfilm` package gets the build's product.json;
  *   2b. the programs the app needs that are not node modules, for the platform and chip built for, in the app's
  *      resources (runtime/; src/main.mjs puts them to use): ffmpeg and ffprobe with their license (src/ffmpeg-runtime.mjs),
- *      and the headless browser Studio and `openfilm` draw pages in (Playwright's, the revision the staged
- *      playwright-core takes). People never download either: on a slow or blocked connection the first start used to
- *      fail there;
- *   3. electron-builder makes the .dmg (to download) and the .zip (for updates), signed with the Developer ID
+ *      the headless browser Studio and `openfilm` draw pages in (Playwright's, the revision the staged
+ *      playwright-core takes), and the Node the app's own Node programs run on (scripts/bundled-node.mjs,
+ *      src/node-runtime.mjs). People never download any of them: on a slow or blocked connection the first start used
+ *      to fail there;
+ *   3. electron-builder makes the .dmg (to download) and the .zip (for updates), with Electron's RunAsNode fuse off
+ *      (no program on the computer can run code as OpenFilm, so none can use what the person let OpenFilm use: the
+ *      microphone, the camera), signed with the Developer ID
  *      OPENFILM_SIGN_IDENTITY ("Name (TEAMID)") and notarized (APPLE_TEAM_ID, the `openfilm-notary` keychain profile or
  *      OPENFILM_NOTARY_PROFILE), with the update feed written in (none without one). Without OPENFILM_SIGN_IDENTITY
  *      and APPLE_TEAM_ID the build is unsigned, as with --unsigned.
@@ -41,7 +44,9 @@ import { createRequire } from 'node:module';
 import { createHash } from 'node:crypto';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fetchNode, nodeSignedByItsMakers } from './bundled-node.mjs';
 import { programFiles, unlistedProgramFiles } from './installer-files.mjs';
+import { NODE_ENTRIES, nodeProgramFiles, unpackPatterns } from './node-programs.mjs';
 import { lockedOverrides, versionsOffLock } from './locked-versions.mjs';
 
 const require = createRequire(import.meta.url);
@@ -116,7 +121,7 @@ if (offLock.length) {
 /* the build's product file */
 cpSync(productFile, join(stage, 'node_modules/openfilm/product.json'));
 
-/* 2b. ffmpeg and the headless browser, for the platform and chip built for */
+/* 2b. ffmpeg, the headless browser and Node, for the platform and chip built for */
 const runtime = join(work, 'runtime');
 const { ffmpegDownloadable, fetchFfmpeg } = await import(pathToFileURL(join(desktop, 'src/ffmpeg-runtime.mjs')).href);
 const platform = win ? 'win32' : 'darwin';
@@ -125,9 +130,14 @@ else console.warn(`No ffmpeg build for ${platform}-${arch}: this app downloads n
 run(process.execPath, [join(stage, 'node_modules/playwright-core/cli.js'), 'install', 'chromium-headless-shell'], {
   env: { ...process.env, PLAYWRIGHT_BROWSERS_PATH: join(runtime, 'ms-playwright'), PLAYWRIGHT_HOST_PLATFORM_OVERRIDE: win ? 'win64' : arch === 'arm64' ? 'mac15-arm64' : 'mac15' },
 });
+const node = await fetchNode(join(runtime, 'node'), { platform, arch });
+if (!win && !nodeSignedByItsMakers(node)) throw new Error(`${node} is not the Node the Node.js Foundation signed.`);
+/* what that Node runs, which it reads only outside the archive */
+const unpacked = nodeProgramFiles(stage, NODE_ENTRIES);
 
 /* 3. the app */
 const builder = require('electron-builder');
+const appId = preview ? 'dev.openfilm.desktop.preview' : 'dev.openfilm.desktop';
 const electronVersion = require('electron/package.json').version;
 const env = unsigned || win ? { CSC_IDENTITY_AUTO_DISCOVERY: 'false' } : { APPLE_KEYCHAIN_PROFILE: NOTARY_PROFILE, APPLE_TEAM_ID: TEAM_ID };
 Object.assign(process.env, env);
@@ -137,7 +147,7 @@ await builder.build({
   ...(win ? { win: ['nsis'] } : { mac: ['dmg', 'zip'] }),
   [arch]: true,
   config: {
-    afterPack: win ? async (context) => { await windowsResources(context); requireListedProgramFiles(context); } : undefined,
+    afterPack: win ? async (context) => { await windowsResources(context); requireListedProgramFiles(context); } : unsigned ? undefined : (context) => signNode(context),
     /* unsigned on a Mac: signed ad hoc, whole, before the .dmg and .zip are made. Electron's fuses are written into
        its framework after the linker signed it, and an Apple chip kills a program whose pages no longer match its
        signature ("Code Signature Invalid") the moment it starts */
@@ -163,21 +173,23 @@ await builder.build({
       deleteAppDataOnUninstall: false,
       artifactName: `${NAME.replace(' ', '-')}-Setup-\${arch}.\${ext}`,
     },
-    appId: preview ? 'dev.openfilm.desktop.preview' : 'dev.openfilm.desktop',
+    appId,
     /* openfilm:// links: a page of openfilm.dev opens the app on what it names (src/deep-links.mjs) */
     protocols: [{ name: 'OpenFilm', schemes: ['openfilm'] }],
     productName: NAME,
     copyright: 'Copyright © 2026 OpenFilm',
     electronVersion,
     asar: true,
-    /* run by Electron as Node from outside the archive: the CLI the agents run, the agents' adapters */
-    asarUnpack: ['node_modules/openfilm/**', 'node_modules/@agentclientprotocol/**', 'node_modules/playwright-core/**'],
+    /* what the app's own Node runs (2b): the CLI the agents run, the agents' adapters, OpenFilm's own agent, what Studio
+       starts, and every package they need. The rest (the main process's own code, the updater) stays in the archive */
+    asarUnpack: unpackPatterns(unpacked),
     files: ['src/**/*', 'shell/dist/**/*', 'package.json', 'node_modules/**/*'],
-    /* ffmpeg and the headless browser (2b), as files of their own beside the archive: they run as programs */
+    /* ffmpeg, the headless browser and Node (2b), as files of their own beside the archive: they run as programs */
     extraResources: [{ from: runtime, to: 'runtime' }],
     directories: { output: out, buildResources: join(desktop, 'build') },
     electronFuses: {
-      runAsNode: true,
+      /* the app never runs as Node: its Node programs have a Node of their own (2b, src/node-runtime.mjs) */
+      runAsNode: false,
       enableCookieEncryption: true,
       enableNodeOptionsEnvironmentVariable: false,
       enableNodeCliInspectArguments: false,
@@ -197,6 +209,8 @@ await builder.build({
       gatekeeperAssess: false,
       entitlements: join(desktop, 'build/entitlements.mac.plist'),
       entitlementsInherit: join(desktop, 'build/entitlements.mac.plist'),
+      /* the app's Node is signed apart, with less (signNode) */
+      signIgnore: ['/Contents/Resources/runtime/node/node$'],
       /* what macOS says when the app first asks for the microphone (Studio's record button, or a site the person
          allowed in the browser) and for the camera (such a site only); the entitlements above let it */
       extendInfo: {
@@ -231,6 +245,17 @@ if (!unsigned && !win && FEED) {
 console.log(`\n${readdirSync(out).filter((f) => /\.(dmg|zip|exe|yml)$/.test(f)).map((f) => join(out, f)).join('\n')}`);
 console.log(`feed: ${FEED ?? 'none (a build of this source: it never looks for updates)'}`);
 if (FEED && !existsSync(join(out, win ? 'latest.yml' : 'latest-mac.yml'))) process.exitCode = 1;
+
+/**
+ * The app's Node, signed as OpenFilm's before electron-builder signs the rest (which leaves it be: mac.signIgnore),
+ * with only what Node needs (build/entitlements.node.plist): not the app's camera and microphone, which every other
+ * program in the app is signed with. @param {{ appOutDir: string }} context
+ */
+function signNode(context) {
+  const program = join(context.appOutDir, `${NAME}.app`, 'Contents/Resources/runtime/node/node');
+  execFileSync('/usr/bin/codesign', ['--force', '--sign', `Developer ID Application: ${IDENTITY}`, '--options', 'runtime', '--timestamp',
+    '--identifier', `${appId}.node`, '--entitlements', join(desktop, 'build/entitlements.node.plist'), program], { stdio: 'inherit' });
+}
 
 /** An unsigned Mac app signed ad hoc (no identity), all of it, so it starts. @param {{ appOutDir: string }} context */
 function adHocSign(context) {

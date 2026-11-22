@@ -166,7 +166,7 @@ export function unzipEntry(zip, name) {
 }
 
 /** One file's bytes; one that stops coming for `stallMs` is an error. */
-async function download(url, fetchImpl, stallMs, onSize = () => {}, onBytes = () => {}) {
+export async function download(url, fetchImpl, stallMs, onSize = () => {}, onBytes = () => {}) {
   const stop = new AbortController();
   let timer = setTimeout(() => stop.abort(), stallMs);
   const alive = () => { clearTimeout(timer); timer = setTimeout(() => stop.abort(), stallMs); };
@@ -189,7 +189,8 @@ async function download(url, fetchImpl, stallMs, onSize = () => {}, onBytes = ()
   }
 }
 
-async function retried(attempt) {
+/** An attempt, made again when it fails, TRIES times in all. */
+export async function retried(attempt) {
   for (let i = 1; ; i++) {
     try { return await attempt(); } catch (e) { if (i >= TRIES) throw e; }
   }
