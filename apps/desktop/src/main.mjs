@@ -14,6 +14,7 @@ import { appendFileSync, existsSync, mkdirSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { problemLine, problemsFile, recentProblems, recordProblem } from 'openfilm/problems';
+import { engineFeatures, engineSwitches } from 'openfilm/engine';
 import { FLAVOR, IDENTITY, PRODUCT_NAME } from './flavor.mjs';
 import { folderDialogOptions, programDialogOptions } from './folder-dialog.mjs';
 import { childEnvironment, lastPathSource, loginShellEnvironment } from './environment.mjs';
@@ -59,28 +60,21 @@ const windows = process.platform === 'win32';
 /** Windows' window buttons over the top bar: the board's color, and the text's */
 const overlayColours = (t) => ({ color: t === 'dark' ? '#111114' : '#e9e9eb', symbolColor: t === 'dark' ? '#ebebed' : '#161619', height: 35 });
 
-/* HTML-in-Canvas in Studio's viewer, as in the renderer (the `openfilm` package's src/host.mjs) */
-app.commandLine.appendSwitch('enable-blink-features', 'CanvasDrawElement');
+/* The engine's switches, the same as exports draw with (the `openfilm` package's src/engine.mjs, used by host.mjs
+   launch): HTML-in-Canvas, pages rastered on the GPU, and on a Mac Skia Graphite with a 2D canvas flushed in small
+   batches. Chromium keeps only the last `--enable-features`, so the engine's join any given before. */
+for (const [name, value] of engineSwitches()) app.commandLine.appendSwitch(name, value);
+if (engineFeatures().length) {
+  const features = app.commandLine.getSwitchValue('enable-features');
+  app.commandLine.appendSwitch('enable-features', [features, ...engineFeatures()].filter(Boolean).join(','));
+}
 /* The preview is drawn, and its videos decoded, by the graphics chip: on a computer with two (a laptop's own beside a
-   stronger one) the stronger one, as an editor asks of it, where Chromium by itself takes the one that saves power;
-   and pages are rastered on the chip wherever there is one that can. A chip Chromium knows to be faulty is still left
-   out (its blocklist stays). */
+   stronger one) the stronger one, as an editor asks of it, where Chromium by itself takes the one that saves power. A
+   chip Chromium knows to be faulty is still left out (its blocklist stays). */
 app.commandLine.appendSwitch('force_high_performance_gpu');
-app.commandLine.appendSwitch('enable-gpu-rasterization');
 /* Some Windows networks/drivers fail Chromium's HTTP/3 requests in the main process. Use TCP for downloads
    and update checks as well as the window's requests, before any network session is created. */
 app.commandLine.appendSwitch('disable-quic');
-if (mac) {
-  /* Flush small Canvas2D batches: blur on hundreds of strokes otherwise queues gigabytes of intermediate
-     textures. Keep GPU canvas-to-WebGL uploads fast without changing the rest of Graphite's batching. */
-  const features = app.commandLine.getSwitchValue('enable-features');
-  app.commandLine.appendSwitch('enable-features', [
-    features,
-    'Canvas2DAutoFlushParams:max_recorded_op_graphite_kb/4',
-  ].filter(Boolean).join(','));
-} else {
-  app.commandLine.appendSwitch('disable-skia-graphite');
-}
 
 /* each flavour its own name, data folder and single-instance lock (flavor.mjs) */
 app.setName(PRODUCT_NAME);

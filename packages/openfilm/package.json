@@ -28,6 +28,7 @@
   "exports": {
     "./film-doc": "./src/film-doc.mjs",
     "./host": "./src/host.mjs",
+    "./engine": "./src/engine.mjs",
     "./shared": "./src/shared.mjs",
     "./look": "./src/look.mjs",
     "./render": "./src/render.mjs",
@@ -80,7 +81,7 @@
   "dependencies": {
     "@mediapipe/tasks-vision": "1.2.2",
     "onnxruntime-web": "1.31.1",
-    "playwright-core": "1.61.1"
+    "playwright-core": "1.64.1"
   },
   "scripts": {
     "dev": "node scripts/dev.mjs",

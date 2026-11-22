@@ -10,6 +10,7 @@ import { chromium } from 'playwright-core';
 import { DEFAULT_STAGE, FILM_FILE, readFilmFile } from './film-doc.mjs';
 import { readableLink, referenceSource } from './media-links.mjs';
 import { guard } from './browser-memory.mjs';
+import { engineArgs } from './engine.mjs';
 import { serveVision } from './vision-assets.mjs';
 
 // Media seeks that land inside the frame they name. A plain `video.currentTime = t` at a frame boundary otherwise
@@ -393,9 +394,10 @@ export function injectFirst(html, tag) {
  * takes more ends it.
  */
 export async function launch({ headed = false, channel = headed ? 'chromium' : null, args: extra = [], env } = {}) {
-  /* CanvasDrawElement: HTML-in-Canvas (drawElementImage, texElementImage2D), so a page can draw its own DOM into 2D or WebGL.
-     No Skia Graphite: with it, a 2D canvas drawing hundreds of strokes each through `ctx.filter = 'blur(…)'` had the
-     GPU process take 7 to 9 GB for one frame (two such browsers froze a 16 GB Mac); without it, 400 MB, as fast.
+  /* The engine's switches, the desktop preview's too (engine.mjs): HTML-in-Canvas, pages rastered on the GPU, and on a
+     Mac Skia Graphite with a 2D canvas flushed in small batches. Playwright starts the browser with
+     `--enable-features=CDPScreenshotNewSurface` (screenshots from a new surface) ahead of these, and Chromium keeps
+     only the last `--enable-features`: that one is said again with the engine's, and with any the caller passes.
      2D canvases stay on the GPU. Drawn there, the same draw calls can give edges a few levels apart from one run to
      the next (Skia's caches in the GPU process are shared by every canvas and emptied by the clock), and
      `--disable-accelerated-2d-canvas` ends that for every film. It was measured and left out (Chromium 149, Apple M5,
@@ -404,7 +406,10 @@ export async function launch({ headed = false, channel = headed ? 'chromium' : n
      0.2), the one-prompt example takes 1.4 times as long to export, with one browser or five, and every frame of
      every such page changes once. A canvas that must repeat exactly asks for the CPU itself:
      `getContext('2d', { willReadFrequently: true })`, the same pixels as the switch gives */
-  const args = ['--ignore-gpu-blocklist', '--enable-gpu-rasterization', '--disable-skia-graphite', '--autoplay-policy=no-user-gesture-required', '--hide-scrollbars', '--enable-blink-features=CanvasDrawElement', ...extra];
+  const featuresOf = (/** @type {string} */ a) => (a.startsWith('--enable-features=') ? a.slice('--enable-features='.length).split(',').filter(Boolean) : []);
+  const features = [...(process.env.PLAYWRIGHT_LEGACY_SCREENSHOT ? [] : ['CDPScreenshotNewSurface']), ...extra.flatMap(featuresOf)];
+  const args = ['--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required', '--hide-scrollbars',
+    ...engineArgs(process.platform, { features }), ...extra.filter((a) => !featuresOf(a).length)];
   const open = async (/** @type {string[]} */ angle) => {
     /* a switch of no meaning to Chromium, so its process (and every one it starts) is found to be watched */
     const marker = `--openfilm-browser=${randomUUID()}`;
@@ -412,8 +417,9 @@ export async function launch({ headed = false, channel = headed ? 'chromium' : n
     guard(browser, marker);
     return browser;
   };
+  /* a Mac's GPU through Metal (without it, SwiftShader on the CPU), the stronger one on a Mac with two, as the preview asks */
   const browser = extra.some((a) => a.startsWith('--use-angle')) ? await open([])
-    : process.platform === 'darwin' ? await open(['--use-angle=metal'])
+    : process.platform === 'darwin' ? await open(['--use-angle=metal', '--force_high_performance_gpu'])
     : process.platform === 'win32' ? await onWindows(open)
     : await open([]);
   LIVE.add(browser);
