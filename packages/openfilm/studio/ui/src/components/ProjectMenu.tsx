@@ -1,5 +1,5 @@
 import React from 'react';
-import { Copy, FolderInput, FolderOpen, FolderSearch, Image, ImageOff, ImagePlus, ListX, MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
+import { Copy, FolderInput, FolderOpen, FolderSearch, Image, ImageOff, ImagePlus, ListX, MoreHorizontal, Pencil, Trash2, Upload } from 'lucide-react';
 import { ContextMenu, type ContextMenuEntry } from './ContextMenu';
 import { Tooltip } from './Tooltip';
 import { useT } from '@/i18n';
@@ -76,6 +76,8 @@ export interface ProjectMenuActions {
   onRestoreCover?: () => void;
   /** The film as the viewer shows it now made the project's cover. */
   onCoverFromFrame?: () => void;
+  /** Share it with the Community as a film others open as their own. */
+  onShare?: () => void;
   /** Show the project's folder in Finder / Explorer. */
   onReveal?: () => void;
   /** Pick the folder a project whose folder is gone is in now. */
@@ -87,7 +89,7 @@ export interface ProjectMenuActions {
 
 /** The menu's items, in their fixed order: for the "…" button, and for a right click on the editor's title. */
 export function projectMenuItems(t: ReturnType<typeof useT>, actions: ProjectMenuActions): ContextMenuEntry[] {
-  const { onOpen, onRename, onDuplicate, onMoveToFolder, onChangeCover, onRestoreCover, onCoverFromFrame, onReveal, onLocate, onRemove, onDelete } = actions;
+  const { onOpen, onRename, onDuplicate, onMoveToFolder, onChangeCover, onRestoreCover, onCoverFromFrame, onShare, onReveal, onLocate, onRemove, onDelete } = actions;
   const entries: ContextMenuEntry[] = [];
   const add = (id: string, icon: React.ReactNode, label: string, run: (() => void) | undefined) => {
     if (run) entries.push({ id, icon, label, onSelect: run });
@@ -99,6 +101,7 @@ export function projectMenuItems(t: ReturnType<typeof useT>, actions: ProjectMen
   add('cover', <ImagePlus size={15} />, t('projects.changeCover'), onChangeCover);
   add('coverFrame', <Image size={15} />, t('projects.coverFromFrame'), onCoverFromFrame);
   add('coverReset', <ImageOff size={15} />, t('projects.restoreCover'), onRestoreCover);
+  add('share', <Upload size={15} />, t('assetDrawer.shareFilm'), onShare);
   add('reveal', <FolderOpen size={15} />, t('projects.revealFolder'), onReveal);
   add('locate', <FolderSearch size={15} />, t('projects.locate'), onLocate);
   add('remove', <ListX size={15} />, t('projects.removeFromList'), onRemove);

@@ -1,13 +1,14 @@
 /**
  * The Community: everything that can be added to OpenFilm and shared, in a large window of its own (components/
  * LargeDialog, as Settings is), laid out as an app store is. Its side: the search; Mine (the person's plugins and
- * skills, managed as Settings lists things); the Community's plugins, skills, things for the library and examples (whole
- * projects), each a store page of its own; and at its foot Publish and Add (import a folder or a link, or another catalog to read). A thing added goes back to where it is used (the top right, the conversation, the
+ * skills, managed as Settings lists things); Featured, where it opens (the shelves a maintainer picked, then some of
+ * each kind); the Community's plugins, skills, things for the library and examples (whole projects), each a store page
+ * of its own; and at its foot Publish and Add (import a folder or a link, or another catalog to read). A thing added goes back to where it is used (the top right, the conversation, the
  * agent, the library drawer). Opened from the chat's Community button, the OpenFilm menu and links (lib/plugins-window).
  */
 import React from 'react';
 import { createPortal } from 'react-dom';
-import { Blocks, CircleUserRound, Clapperboard, BookOpenText, Import, LibraryBig, Plus, Rss, Upload } from 'lucide-react';
+import { Blocks, CircleUserRound, Clapperboard, BookOpenText, Import, LibraryBig, Plus, Rss, Sparkles, Upload } from 'lucide-react';
 import { useT } from '@/i18n';
 import { studioHost } from '@/lib/host';
 import type { Plugin } from '@/lib/plugins';
@@ -55,6 +56,7 @@ export function PluginsWindow({ projectId, onWorkbenchOn }: { projectId: string 
         onEscape={() => { if (!page) return false; showPluginsPage(null); return true; }}>
         <SidePage layout="store" bare={Boolean(page)} title={t('assetDrawer.pluginsWindow')} note={t('desktopNavigation.communityNote')}
           places={[
+            { id: 'featured', label: t('assetDrawer.place_featured') },
             { id: 'plugins', label: t('assetDrawer.tab_plugins') }, { id: 'skills', label: t('assetDrawer.tab_skills') },
             { id: 'assets', label: t('assetDrawer.tab_assets') }, { id: 'examples', label: t('assetDrawer.tab_examples') },
             { id: 'mine', label: t('assetDrawer.place_mine') }, { id: 'publish', label: t('assetDrawer.place_publish') },
@@ -82,8 +84,9 @@ export function PluginsWindow({ projectId, onWorkbenchOn }: { projectId: string 
           <LargeDialogGroup>
             {place('mine', <CircleUserRound {...ICON} />, t('assetDrawer.place_mine'))}
           </LargeDialogGroup>
-          {/* the Community: its plugins, its skills, its things for the library (a kind each on that page) */}
+          {/* the Community: what it puts forward, then its plugins, its skills, its things for the library (a kind each on that page) */}
           <LargeDialogGroup title={t('assetDrawer.pluginsWindow')}>
+            {place('featured', <Sparkles {...ICON} />, t('assetDrawer.place_featured'))}
             {place('plugins', <Blocks {...ICON} />, t('assetDrawer.tab_plugins'))}
             {place('skills', <BookOpenText {...ICON} />, t('assetDrawer.tab_skills'))}
             {place('assets', <LibraryBig {...ICON} />, t('assetDrawer.tab_assets'), line === 'assets' || line.startsWith('kind:'))}

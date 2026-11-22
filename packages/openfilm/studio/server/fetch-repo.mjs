@@ -16,6 +16,7 @@ import { lstat, mkdir, readdir, rename, rm, stat, writeFile } from 'node:fs/prom
 import { join } from 'node:path';
 import { FILM_FILE } from '../../src/film-doc.mjs';
 import { requireOutsideInstallation } from '../../src/locations.mjs';
+import { fetchHostedFilm, parseHosted } from './fetch-hosted.mjs';
 import { SKILL_FILE, holdsSkills } from '../../src/skills.mjs';
 import { FetchError } from './fetch-error.mjs';
 import { downloadFiles, listFiles, resolveCommit } from './fetch-github.mjs';
@@ -379,17 +380,22 @@ export function createFetches({ library, open, maxBytes, timeoutMs }) {
   return {
     /** Start fetching `url` (refused at once when it is not an address Studio fetches). */
     start(/** @type {unknown} */ url) {
-      const source = parseRepoUrl(url);
+      /* a film shared in the Community from OpenFilm is in no repository: OpenFilm's service has its files (fetch-hosted.mjs) */
+      const hosted = parseHosted(url);
+      const source = hosted ? null : parseRepoUrl(url);
       const id = randomBytes(8).toString('base64url');
       const control = new AbortController();
-      const label = [source.web.replace(/^https:\/\/[^/]+\//, ''), ...(source.tree ?? []).slice(1)].join(' / ');
+      const label = hosted ? `${hosted.owner} / ${hosted.name}` : source ? [source.web.replace(/^https:\/\/[^/]+\//, ''), ...(source.tree ?? []).slice(1)].join(' / ') : '';
       /** @type {FetchJob} */
       const job = { id, url: String(url).trim(), label, state: 'running', phase: 'lookup', percent: null, bytes: 0, total: null };
       jobs.set(id, { job, control });
-      void fetchFilm(source, {
-        library: library(), signal: control.signal, ...(maxBytes ? { maxBytes } : {}), ...(timeoutMs ? { timeoutMs } : {}),
-        onProgress: (p) => Object.assign(job, p),
-      })
+      const fetched = hosted
+        ? fetchHostedFilm(hosted, { library: library(), signal: control.signal, ...(maxBytes ? { maxBytes } : {}), onProgress: (p) => Object.assign(job, p) })
+        : fetchFilm(/** @type {RepoSource} */ (source), {
+          library: library(), signal: control.signal, ...(maxBytes ? { maxBytes } : {}), ...(timeoutMs ? { timeoutMs } : {}),
+          onProgress: (p) => Object.assign(job, p),
+        });
+      void fetched
         .then(open)
         .then((project) => Object.assign(job, { state: 'done', project }))
         .catch((e) => Object.assign(job, { state: 'failed', error: e instanceof Error ? e.message : String(e), code: e instanceof FetchError ? e.code : 'failed' }))

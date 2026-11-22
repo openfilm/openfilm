@@ -7,10 +7,12 @@
  *   POST /api/projects { path, create: false } → { project }, or 409 code 'no-film' (ask before starting one there)
  *   POST /api/projects/fetch { url } → { job }; GET / DELETE /api/projects/fetch/:id
  *   GET  /api/examples              → { examples } (none when the index cannot be read)
+ *   GET  /api/community/featured    → { featured } (the shelves the Community opens on; none when it has none)
  *   GET  /api/skills?project=<id>   → { skills } (the project's, the person's own, the official ones)
  *   POST /api/projects/:id/locate { path } → { project }
  */
 import { refreshPlugins, type PluginTab, type Profile } from './plugins.ts';
+import type { Featured } from './community-featured.ts';
 import type { BlockDecl } from '../../../../src/plugin-blocks.mjs';
 
 export type BrowseFolder = { name: string; path: string; film: boolean };
@@ -124,6 +126,8 @@ export type Example = {
   category: string | null; segments: ExampleSegment[];
   /** its publisher in the Community (`openfilm`: OpenFilm's own) */
   owner?: string;
+  /** someone shared it from OpenFilm: `owner` is their name in the Community, not a GitHub login */
+  shared?: true;
 };
 /** The Community's news (studio/server/examples.mjs readNews): its words by language, English always there. */
 export type News = {
@@ -154,12 +158,14 @@ async function call<T>(path: string, method = 'GET', json?: unknown, timeout?: n
 }
 
 /* what the galleries read last: shown at once when one opens, and asked for again behind it */
-const seen: { examples: Example[] | null; skills: Map<string, SkillEntry[]>; catalog: string | null } = { examples: null, skills: new Map(), catalog: null };
+const seen: { examples: Example[] | null; featured: Featured | null; skills: Map<string, SkillEntry[]>; catalog: string | null } = { examples: null, featured: null, skills: new Map(), catalog: null };
 const skillReads = new Map<string, number>();
 /* the read of each list started last: one overtaken by a later read answers with that one's, never with what was seen before */
 const skillReading = new Map<string, Promise<SkillEntry[]>>();
 /** The examples read last, or null. */
 export const seenExamples = (): Example[] | null => seen.examples;
+/** The Community's shelves read last, or null. */
+export const seenFeatured = (): Featured | null => seen.featured;
 /** When Discover's index was last read (ISO time), as the skills read last say; null: never. */
 export const seenCatalog = (): string | null => seen.catalog;
 /** The skills read last for a project (else for no project: the official ones and the person's own), or null. */
@@ -191,6 +197,8 @@ export const sourcesApi = {
   cancelFetch: (id: string) => call<object>(`projects/fetch/${encodeURIComponent(id)}`, 'DELETE'),
   news: () => call<{ news: News[] }>('news').then((r) => r.news, () => [] as News[]),
   examples: () => call<{ examples: Example[] }>('examples').then((r) => (seen.examples = r.examples), () => seen.examples ?? []),
+  /** the shelves the Community opens on and the makers it puts forward (studio/server/examples.mjs listFeatured) */
+  featured: () => call<{ featured: Featured }>('community/featured').then((r) => (seen.featured = r.featured), () => seen.featured ?? { shelves: [], makers: [] }),
   /** an example's folder on this computer, fetched when needed (for an agent to read how it is made) */
   exampleFolder: (id: string) => call<{ folder: string }>(`examples/${encodeURIComponent(id)}/folder`, 'POST').then((r) => r.folder),
   /** an example's canvas, the steps it was made with (null: it has none), fetched with its folder */
@@ -282,7 +290,7 @@ export const sourcesApi = {
     window.dispatchEvent(new Event(SKILLS_CHANGED));
   },
   /** asked as Studio opens, so a gallery opened later shows its examples and skills at once */
-  preload: () => { void sourcesApi.examples(); void sourcesApi.skills(null); },
+  preload: () => { void sourcesApi.examples(); void sourcesApi.featured(); void sourcesApi.skills(null); },
   locate: (id: string, path: string) => call<{ project: { id: string } }>(`projects/${encodeURIComponent(id)}/locate`, 'POST', { path }).then((r) => r.project),
 };
 

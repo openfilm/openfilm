@@ -4,6 +4,9 @@
  * also shows outside it is a plugin (lib/project-plugins isPlugin). People look for what OpenFilm can do, not for which
  * of the two it is, so both are here, each in the one category of what it helps make (lib/plugin-profile).
  *
+ * Featured, where the window opens: the shelves a maintainer picked (lib/community-featured), the makers put forward,
+ * then some of each kind with the way to all of it.
+ *
  * Mine: the person's workbenches as tiles in their order (dragged to change it), their skills as lines, what an agent
  * brings of its own folded; each with its switch (a plugin: on, its workbench or its tab of the library is shown and
  * agents are given its skills; a skill: on, agents take it up when it fits; off, neither, and a film made with it
@@ -16,7 +19,7 @@
  */
 import React from 'react';
 import {
-  ArrowLeft, ArrowUpRight, AudioLines, BadgeCheck, Check, ChevronLeft, ChevronRight, Clapperboard, Github, Globe, BookOpenText, Loader2, Music, Power, Puzzle, RefreshCw, SquareTerminal, Trash2, Unplug, Plug, Upload, X, type LucideIcon,
+  ArrowLeft, ArrowUpRight, AudioLines, BadgeCheck, Check, ChevronLeft, ChevronRight, Clapperboard, Flag, Github, Globe, BookOpenText, Loader2, Music, Power, Puzzle, RefreshCw, SquareTerminal, Trash2, Unplug, Plug, Upload, X, type LucideIcon,
 } from 'lucide-react';
 import { useLanguage, useT } from '@/i18n';
 import { studioHost, type HostAgentId, type HostConnector } from '@/lib/host';
@@ -25,7 +28,8 @@ import { MAC, useKeyHint } from '@/lib/keymap-store';
 import type { ActionId } from '@/lib/keymap';
 import { openExample, showPluginsLine, type PluginsLine } from '@/lib/plugins-window';
 import { isPlugin, pluginOfSkill } from '@/lib/project-plugins';
-import { communityOf, fetchErrorKey, forgetSeenSkills, makerOf, ownerOf, seenCatalog, seenExamples, seenSkills, sourcesApi, SourceError, watchSkills, type Example, type PublishCheck, type PublishVerify, type SkillEntry } from '@/lib/project-sources';
+import { communityOf, fetchErrorKey, forgetSeenSkills, makerOf, ownerOf, seenCatalog, seenExamples, seenFeatured, seenSkills, sourcesApi, SourceError, watchSkills, type Example, type PublishCheck, type PublishVerify, type SkillEntry } from '@/lib/project-sources';
+import { makersShown, shelvesShown, type Featured, type ShelfThing } from '@/lib/community-featured';
 import { ConfirmDialog } from '../ConfirmDialog';
 import { Publisher } from '../ExamplesGallery';
 import type { ContextMenuEntry } from '../ContextMenu';
@@ -53,7 +57,9 @@ import { WorkbenchMark } from '../WorkbenchMark';
 import { AppIcon } from '../AppIcon';
 import { ConnectorActions, ConnectorBody, ConnectorMark, connectConnector, useConnectorStates } from './ConnectorPanel';
 import { CallOut, COVER_GRID, DetailShell, Facts, ManageButton, PageButton, StateMark, STORE_GRID, StoreCardSkeleton, StoreChips, StoreCard, StoreSection } from './Store';
-import { AddButton, ASSET_GRID, AssetCover, KindCover, AssetTile, Badge, BenchGrid, GroupList, FoldedGroup, GradientCover, PackTile, packGrid, Shelf, shapeOf, type BenchTileItem, type GroupItem } from './CommunityViews';
+import { AuthorHead, FilmShareFlow, MyProfileRow, MySubmissions, reportHref, ShareFlow } from './CommunityShare';
+import { askShareFilm, useAskedShare } from '@/lib/community-share';
+import { AddButton, ASSET_GRID, AssetCover, KindCover, AssetTile, Badge, BenchGrid, GroupList, FoldedGroup, GradientCover, InMark, PackTile, packGrid, Shelf, shapeOf, type BenchTileItem, type GroupItem } from './CommunityViews';
 
 /** A plugin as people see it: its title and summary in the language shown, else its id. */
 export function usePluginWords() {
@@ -112,6 +118,10 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
   const words = useSkillWords();
   const pluginWords = usePluginWords();
   const own = usePlugins();
+  /* library files a menu asked to share (Publish shows them being shared), and how many shares ended here (the list of
+     submissions is read again after each) */
+  const [sharing, endSharing] = useAskedShare();
+  const [shared, setShared] = React.useState(0);
   /* the connectors' sign-ins (the desktop app's; none in a browser) */
   const connectorStates = useConnectorStates();
   const [skills, setSkills] = React.useState<SkillEntry[]>(() => seenSkills(projectId) ?? []);
@@ -141,6 +151,18 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
     );
     return () => { live = false; };
   }, [line, retry]);
+
+  /* the Community's first page: the shelves a maintainer picked. The examples are read for it and for an author's
+     page (their films); what was read last shows at once */
+  const [featured, setFeatured] = React.useState<Featured | null>(() => seenFeatured());
+  const [examples, setExamples] = React.useState<Example[]>(() => seenExamples() ?? []);
+  React.useEffect(() => {
+    if (line !== 'featured' && !line.startsWith('author:')) return undefined;
+    let live = true;
+    void sourcesApi.examples().then((list) => { if (live) setExamples(list); });
+    if (line === 'featured') void sourcesApi.featured().then((read) => { if (live) setFeatured(read); });
+    return () => { live = false; };
+  }, [line]);
 
   const agents = useAgentExtras(line === 'plugins' || line === 'skills');
   /* how many use each community item (anonymous counts; none when unknown) */
@@ -284,13 +306,28 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
   /* a plugin, not a skill: it brings an editor (a workbench, a tab) or connects the agent to a service */
   const ownBench = (p: Plugin) => Boolean(p.workbench || p.tab || p.mcpServers);
 
-  /* Publish: one's own, published to the community from here (PublishFlow); the other ways; the community's other
-     indexes are under Sources (from Added's foot) */
+  /* Publish: library files a menu asked to share are shared here, with the person's OpenFilm account (ShareFlow);
+     else what they shared so far with how each review went, then one's own plugins and skills published from here
+     (PublishFlow) and the other ways. The community's other indexes are under Sources (from Added's foot) */
   if (line === 'publish') {
     return (
       <PluginsPage title={t('assetDrawer.publishTitle')} note={t('assetDrawer.note_publish')} badge={t('assetDrawer.communityEarly')}>
-        <p className="mb-8 rounded-[10px] bg-[var(--bg-field)] px-4 py-3 text-[14px] leading-relaxed text-[var(--text-muted)]">{t('assetDrawer.publishEarly')}</p>
-        <PublishPanel skills={skills.filter((k) => k.source === 'mine' && !k.core)} words={words} />
+        {sharing && 'film' in sharing ? <FilmShareFlow key={sharing.film} projectId={sharing.film} onDone={() => { endSharing(); setShared((n) => n + 1); }} />
+          : sharing ? <ShareFlow key={sharing.paths.join('\n')} paths={sharing.paths} onDone={() => { endSharing(); setShared((n) => n + 1); }} /> : (
+          <>
+            <p className="mb-8 rounded-[10px] bg-[var(--bg-field)] px-4 py-3 text-[14px] leading-relaxed text-[var(--text-muted)]">{t('assetDrawer.publishEarly')}</p>
+            <MyProfileRow stamp={shared} onOpen={(name) => showPluginsLine(`author:${name}`)} />
+            {/* the project open now, shared as a film others open as their own */}
+            {projectId ? (
+              <SettingsGroup>
+                <PluginRow mark={<KindMark kind="plugins" icon={Clapperboard} />} title={t('assetDrawer.shareFilmRow')} summary={t('assetDrawer.shareFilmRowNote')}
+                  control={<SettingsButton onClick={() => askShareFilm(projectId)}><Upload size={14} aria-hidden />{t('assetDrawer.shareAction')}</SettingsButton>} />
+              </SettingsGroup>
+            ) : null}
+            <MySubmissions stamp={shared} />
+            <PublishPanel skills={skills.filter((k) => k.source === 'mine' && !k.core)} words={words} />
+          </>
+        )}
       </PluginsPage>
     );
   }
@@ -329,15 +366,19 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
         : got ? <StateMark off={!p.on} />
           : <AddButton label={t('assetDrawer.getNamed').replace('{name}', title)} onClick={() => turnPlugin(p, true)} />} />;
   };
-  /* a plugin or a skill of the catalog (OpenFilm's or the community's): Get installs it, asked first when it brings scripts */
-  const catalogCard = (k: SkillEntry) => (
+  /* a plugin or a skill of the catalog (OpenFilm's or the community's): Get installs it, asked first when it brings
+     scripts. `onShelf`: among other kinds of things on a picked shelf, where each has a picture (a plugin its mark
+     large) and says what kind of thing it is */
+  const skillCard = (k: SkillEntry, onShelf: boolean) => (
     <StoreCard key={k.uid} icon={isPlugin(k) ? <WorkbenchMark plugin={pluginOfSkill(k)} size={44} /> : <SkillMark skill={k} size={44} />}
-      cover={isPlugin(k) ? undefined : (hover) => <SkillCover skill={k} title={words(k).title} playing={hover} />}
+      cover={!isPlugin(k) ? (hover) => <SkillCover skill={k} title={words(k).title} playing={hover} />
+        : onShelf ? () => <span className="absolute inset-0 grid place-items-center bg-[var(--bg-field)]"><WorkbenchMark plugin={pluginOfSkill(k)} size={64} /></span> : undefined}
       title={words(k).title} summary={words(k).summary} onOpen={() => open(k.uid)} by={publisher(k)} dim={installedOf(k) && Boolean(k.off)}
-      meta={metaOf(stats[k.uid]?.installs, t(`assetDrawer.skillCat_${categoryOfSkill(k)}`))}
+      meta={onShelf ? t(isPlugin(k) ? 'assetDrawer.featuredKind_plugin' : 'assetDrawer.featuredKind_skill') : metaOf(stats[k.uid]?.installs, t(`assetDrawer.skillCat_${categoryOfSkill(k)}`))}
       action={installedOf(k) ? <StateMark off={Boolean(k.off)} />
         : <AddButton label={t('assetDrawer.getNamed').replace('{name}', words(k).title)} busy={installing === k.uid} disabled={installing != null} onClick={() => consent.ask(k, () => install(k))} />} />
   );
+  const catalogCard = (k: SkillEntry) => skillCard(k, false);
   /* how many a pack holds, in its kind's words (12 sounds, 9 tracks) */
   const packCount = (cat: string, n: number) => {
     const key = `assetDrawer.packCount_${cat}`;
@@ -387,6 +428,29 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
       action={<AddButton label={t('assetDrawer.publishAction')} text={t('assetDrawer.publishAction')} onClick={() => showPluginsLine('publish')} />} />
   );
   const kindName = (kind: FeatureKind) => t(isCodeKind(kind) ? `assetDrawer.view_${kind}` : `assetDrawer.cat_${kind}`);
+  /* the kind of film an example is, in words (none: Other) */
+  const exampleKind = (c: string | null) => { if (!c) return t('assetDrawer.examplesOther'); const key = `gallery.cat.${c}`; const said = t(key); return said === key ? c : said; };
+  /* a thing on a picked shelf (the Community's featured.json), whatever its kind: its picture, its name, what kind of
+     thing it is and whose; a click opens it as its own page does (an example in the projects window, a thing of the
+     library large over the page) */
+  const shelfCard = (thing: ShelfThing<SkillEntry, Example, LibraryPack, LibraryItem>) => {
+    if (thing.kind === 'skill') return skillCard(thing.skill, true);
+    if (thing.kind === 'example') {
+      const e = thing.example;
+      return <StoreCard key={thing.key} icon={null} cover={(hover) => <ExampleCover example={e} playing={hover} />} title={e.title} summary={e.description || exampleKind(e.category)}
+        by={<Publisher owner={e.owner} />} meta={[t('assetDrawer.featuredKind_example'), lengthOf(e.duration)].filter(Boolean).join(' · ')} onOpen={() => openExample(e.id)} />;
+    }
+    if (thing.kind === 'pack') {
+      const p = thing.pack;
+      const name = nameOf(p.name, lang);
+      return <StoreCard key={thing.key} icon={null} cover={() => <PackCover pack={p} first={packItems(library, p)[0]} lang={lang} />} title={name} summary={p.about ?? ''}
+        by={p.by ? makerName(p.by) : undefined} meta={packCount(p.cats[0] ?? '', p.count)} onOpen={() => open(`${PACK_PAGE}${p.id}`)}
+        action={packIn(p) ? <InMark label={t('assetDrawer.stateGot')} /> : <AddButton label={t('assetDrawer.getNamed').replace('{name}', name)} onClick={() => addPack(p)} />} />;
+    }
+    const it = thing.asset;
+    return <StoreCard key={thing.key} icon={null} cover={() => <AssetCover item={it} lang={lang} />} title={nameOf(it.name, lang)} summary={(it.tags ?? []).slice(0, 4).join(' · ')}
+      by={it.by ? makerName(it.by) : undefined} meta={kindName(it.cat as FeatureKind)} onOpen={() => setPreview({ items: [it], at: 0 })} />;
+  };
 
   /* a pack: what it holds, each seen or heard large; got whole, removed, or got again when the Community has a newer one (`pack:<id>`) */
   const packPage = opened?.startsWith(PACK_PAGE) ? library?.packs?.find((p) => p.id === opened.slice(PACK_PAGE.length)) : undefined;
@@ -408,9 +472,13 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
     const who = line.slice('author:'.length);
     const theirs = found.filter((k) => communityOf(k) && ownerOf(k) === who);
     const theirThings = (library?.items ?? []).filter((it) => it.by?.toLowerCase() === who && matches(nameOf(it.name, lang), ...(it.tags ?? [])));
+    /* the films they shared as examples */
+    const theirFilms = examples.filter((e) => e.owner?.toLowerCase() === who && matches(e.title, e.description));
     return (
-      <PluginsPage key={line} title={who} note={t('assetDrawer.note_author').replace('{n}', String(theirs.length + theirThings.length))}>
+      <PluginsPage key={line} title={who} note={t('assetDrawer.note_author').replace('{n}', String(theirs.length + theirFilms.length + theirThings.length))}>
         {consent.dialog}
+        <AuthorHead name={who} />
+        {theirFilms.length ? <div className={`mb-10 ${EXAMPLE_GRID}`}>{theirFilms.map((e) => <ExampleTile key={e.id} example={e} kind={exampleKind(e.category)} />)}</div> : null}
         {theirs.length ? <div className={`mb-10 ${STORE_GRID}`}>{theirs.map(catalogCard)}</div> : null}
         {theirThings.length ? <div className={ASSET_GRID.video}>{theirThings.map(assetTile)}</div> : null}
         {lightbox}
@@ -567,9 +635,77 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
     );
   }
 
+  /* Featured: the Community's first page. The shelves a maintainer picked (the Community's featured.json), each thing
+     by its picture whatever its kind; the makers put forward; then some of each kind there is, less what a shelf
+     above shows already, each with the way to all of it: the page stands with no shelf picked at all. Searched: what
+     matches, of every kind */
+  if (line === 'featured') {
+    const communityPacks = (library?.packs ?? []).filter((p) => !p.official);
+    const picked = q ? [] : shelvesShown(featured, { skills: offered, examples, packs: communityPacks, assets: library?.items ?? [] });
+    const onShelf = new Set(picked.flatMap((x) => x.things.map((thing) => thing.key)));
+    /* how many things of theirs are here: their plugins and skills, their films, their packs and the things listed alone */
+    const makers = q ? [] : makersShown(featured, [...offered.map(ownerOf), ...examples.map((e) => e.owner?.toLowerCase() ?? ''), ...communityPacks.map((p) => p.by?.toLowerCase() ?? '')]);
+    const moreExamples = examples.filter((e) => !onShelf.has(`example:${e.id}`) && matches(e.title, e.description, exampleKind(e.category)));
+    const moreSkills = byInstalls(catalogSkills).filter((k) => !onShelf.has(`skill:${k.uid}`));
+    const morePlugins = [...ownPlugins.filter((p) => !p.soon).map(pluginCard), ...byInstalls(catalogPlugins).filter((k) => !onShelf.has(`skill:${k.uid}`)).map(catalogCard)];
+    const morePacks = packsOf(null).filter((p) => !p.lone && !onShelf.has(`pack:${p.id}`));
+    const nothing = !picked.length && !moreExamples.length && !moreSkills.length && !morePlugins.length && !morePacks.length;
+    return (
+      <PluginsPage key={line} title={t('assetDrawer.place_featured')} note={q ? undefined : t('assetDrawer.note_featured')}>
+        {consent.dialog}
+        {error ? <p role="alert" className="mb-4 text-[13.5px] text-[var(--warn)]">{error}</p> : null}
+        {picked.map(({ shelf, things }) => (
+          <StoreSection key={shelf.id} title={inLanguage(shelf.title, lang) ?? shelf.id} note={inLanguage(shelf.text, lang)}>
+            <div className={COVER_GRID} data-featured-shelf={shelf.id}>{things.map(shelfCard)}</div>
+          </StoreSection>
+        ))}
+        {makers.length ? (
+          <StoreSection title={t('assetDrawer.featuredMakers')} note={t('assetDrawer.featuredMakersNote')}>
+            <div className="flex flex-wrap gap-3">
+              {makers.map((m) => (
+                <button key={m.name} type="button" onClick={() => showPluginsLine(`author:${m.name}`)} data-featured-maker={m.name}
+                  className="flex min-w-[210px] max-w-full items-center gap-3 rounded-[14px] border border-[var(--border)] px-4 py-3 text-left outline-none transition hover:border-[var(--border-strong)] hover:bg-[var(--bg-hover)] focus-visible:shadow-[inset_0_0_0_1.5px_var(--accent)]">
+                  <span aria-hidden className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[var(--bg-field)] text-[15px] font-semibold uppercase text-[var(--text-muted)]">{makerName(m.name).slice(0, 1)}</span>
+                  <span className="min-w-0">
+                    <span className="flex items-center gap-1 text-[14px] font-semibold tracking-[-0.01em] text-[var(--text)]"><span className="truncate">{makerName(m.name)}</span>{byOpenFilm(m.name) ? <BadgeCheck size={13} strokeWidth={2} aria-hidden className="shrink-0 text-[var(--text-muted)]" /> : null}</span>
+                    {m.count ? <span className="block text-[12px] tabular-nums text-[var(--text-faint)]">{t('assetDrawer.featuredMakerCount').replace('{n}', m.count.toLocaleString())}</span> : null}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </StoreSection>
+        ) : null}
+        {moreExamples.length ? (
+          <StoreSection title={t('assetDrawer.tab_examples')} all={() => showPluginsLine('examples')}>
+            <div className="@container"><div className={EXAMPLE_ROW}>{moreExamples.slice(0, 4).map((e) => <ExampleTile key={e.id} example={e} kind={exampleKind(e.category)} />)}</div></div>
+          </StoreSection>
+        ) : null}
+        {moreSkills.length ? (
+          <StoreSection title={t('assetDrawer.tab_skills')} all={() => showPluginsLine('skills')}>
+            <div className="@container"><div className={COVER_ROW}>{moreSkills.slice(0, 4).map(catalogCard)}</div></div>
+          </StoreSection>
+        ) : null}
+        {morePlugins.length ? (
+          <StoreSection title={t('assetDrawer.tab_plugins')} all={() => showPluginsLine('plugins')}>
+            <div className={STORE_GRID}>{morePlugins.slice(0, 6)}</div>
+          </StoreSection>
+        ) : null}
+        {morePacks.length ? (
+          <StoreSection title={t('assetDrawer.tab_assets')} all={() => showPluginsLine('assets')}>
+            {/* packs of every kind side by side: each by a picture of one shape, as on a picked shelf */}
+            <div className="@container"><div className={COVER_ROW}>{morePacks.slice(0, 4).map((p) => shelfCard({ kind: 'pack', key: `pack:${p.id}`, pack: p }))}</div></div>
+          </StoreSection>
+        ) : null}
+        {nothing ? <Empty text={t('assetDrawer.featuredNone')} /> : null}
+        {q ? null : publishCall(t('assetDrawer.publishCall'))}
+        {lightbox}
+      </PluginsPage>
+    );
+  }
+
   /* Plugins: a banner of what is put forward, OpenFilm's own (turned on here), the catalog's (installed here), each
      on a shelf */
-  if (line === 'examples') return <ExamplesStore query={q} />;
+  if (line === 'examples') return <ExamplesStore query={q} projectId={projectId} />;
   /* Plugins: what each kind is (editors: a way of working on the film; connectors: a service the agent reaches), each
      a grid of cards; OpenFilm's own first, then the catalog's, then the community's. Get, then it is the person's */
   if (line === 'plugins') {
@@ -696,15 +832,13 @@ export function PluginsPane({ line, query, projectId, opened, onOpen, onWorkbenc
   );
 }
 
-/** Where examples are made and sent from. */
-const EXAMPLES_REPO = 'https://github.com/openfilm/community#list-an-example';
-
 /**
  * Examples: whole projects made with OpenFilm, to start from or learn from (the projects window copies one into a new
  * project). A grid for each kind of film, each film by its poster (its preview playing under the pointer); one opened
- * is its page in the projects window. Anyone can send one; the foot says how.
+ * is its page in the projects window. Anyone can share one: the foot shares the film open now (`projectId`), or with
+ * none open leads to Publish.
  */
-function ExamplesStore({ query }: { query: string }) {
+function ExamplesStore({ query, projectId }: { query: string; projectId: string | null }) {
   const t = useT();
   const [examples, setExamples] = React.useState<Example[] | null>(() => seenExamples());
   React.useEffect(() => { let live = true; void sourcesApi.examples().then((list) => { if (live) setExamples(list); }); return () => { live = false; }; }, []);
@@ -729,7 +863,8 @@ function ExamplesStore({ query }: { query: string }) {
       {examples && !list.length ? <Empty text={query ? t('assetDrawer.noSkillsFound') : t('gallery.empty')} /> : null}
       {query ? null : (
         <CallOut icon={<Clapperboard size={18} strokeWidth={1.7} aria-hidden />} text={t('assetDrawer.examplesCall')}
-          action={<AddButton label={t('assetDrawer.examplesSend')} text={t('assetDrawer.examplesSend')} onClick={() => { window.open(EXAMPLES_REPO, '_blank', 'noreferrer'); }} />} />
+          /* the film open now is shared from here; with none open, Publish says how */
+          action={<AddButton label={t('assetDrawer.examplesSend')} text={t('assetDrawer.examplesSend')} onClick={() => { if (projectId) askShareFilm(projectId); else showPluginsLine('publish'); }} />} />
       )}
     </PluginsPage>
   );
@@ -738,14 +873,12 @@ function ExamplesStore({ query }: { query: string }) {
 /** An example on a shelf: its poster (its preview playing under the pointer), its title, its kind and length. */
 function ExampleTile({ example, kind }: { example: Example; kind: string }) {
   const [hover, setHover] = React.useState(false);
-  const length = example.duration ? `${Math.floor(example.duration / 60)}:${String(Math.floor(example.duration % 60)).padStart(2, '0')}` : null;
+  const length = lengthOf(example.duration);
   return (
     <button type="button" onClick={() => openExample(example.id)} onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
       className="group flex w-full flex-col text-left outline-none" data-community-example={example.id}>
       <span className="relative block aspect-video w-full overflow-hidden rounded-[12px] bg-[var(--bg-field)] ring-1 ring-inset ring-[var(--border)] transition group-hover:ring-[var(--border-strong)] group-focus-visible:ring-2 group-focus-visible:ring-[var(--text-muted)]">
-        {example.poster ? <img src={example.poster} alt="" loading="lazy" draggable={false} className="absolute inset-0 h-full w-full object-cover" />
-          : <span className="absolute inset-0 grid place-items-center text-[var(--text-faint)]"><Clapperboard size={24} strokeWidth={1.5} /></span>}
-        {hover && example.video ? <video src={example.video} autoPlay muted loop playsInline className="absolute inset-0 h-full w-full object-cover" /> : null}
+        <ExampleCover example={example} playing={hover} />
         {length ? <span className="absolute bottom-2 right-2 rounded-[5px] bg-black/60 px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-white backdrop-blur-sm">{length}</span> : null}
       </span>
       <span className="mt-3 line-clamp-1 text-[14.5px] font-semibold tracking-[-0.01em] text-[var(--text)]">{example.title}</span>
@@ -755,8 +888,30 @@ function ExampleTile({ example, kind }: { example: Example; kind: string }) {
   );
 }
 
+/** How long a film is, as m:ss (none: not known). */
+const lengthOf = (seconds: number | null): string | null => (seconds ? `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, '0')}` : null);
+
+/** An example's picture, filling its frame: its poster, its preview playing over it while pointed at. */
+function ExampleCover({ example, playing }: { example: Example; playing: boolean }) {
+  return (
+    <>
+      {example.poster ? <img src={example.poster} alt="" loading="lazy" draggable={false} className="absolute inset-0 h-full w-full object-cover" />
+        : <span className="absolute inset-0 grid place-items-center text-[var(--text-faint)]"><Clapperboard size={24} strokeWidth={1.5} /></span>}
+      {playing && example.video ? <video src={example.video} autoPlay muted loop playsInline className="absolute inset-0 h-full w-full object-cover" /> : null}
+    </>
+  );
+}
+
 /** Examples side by side, as wide as the window allows. */
 const EXAMPLE_GRID = 'grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-x-6 gap-y-8';
+/*
+ * One row of a grid, for a shelf that shows some of a kind and leads to all of it: of four things, those that would
+ * start a second row are left out (three columns fit: the fourth; two: the third too). Each width is the least at
+ * which its grid has one more column (that many of its columns' least width, and the gaps between them), and below it
+ * the thing is left out; the row sits in a `@container`.
+ */
+const EXAMPLE_ROW = `${EXAMPLE_GRID} @max-[1112px]:[&>*:nth-child(n+4)]:hidden @max-[828px]:[&>*:nth-child(n+3)]:hidden`;
+const COVER_ROW = `${COVER_GRID} @max-[912px]:[&>*:nth-child(n+4)]:hidden @max-[678px]:[&>*:nth-child(n+3)]:hidden`;
 
 /**
  * One of OpenFilm's own plugins on its page, as an editor's extension page: its mark, name, whose and what it is for;
@@ -1012,6 +1167,12 @@ function PackPage({ pack, items, view, lang, here, newer, onBack, onAdd, onRemov
       )}>
       {here ? <p className="mb-5 text-[13.5px] leading-[20px] text-[var(--text-faint)]">{t(pack.official ? 'assetDrawer.packOfficialNote' : 'assetDrawer.packSyncNote')}</p> : null}
       {view}
+      {/* the quiet end: reporting one from the community, in a letter to OpenFilm that names it */}
+      {pack.official ? null : (
+        <a href={reportHref(`the pack ${pack.id}`)} data-pack-report="" className="mt-8 inline-flex items-center gap-1.5 text-[13px] text-[var(--text-faint)] transition hover:text-[var(--text)]">
+          <Flag size={13} aria-hidden />{t('gallery.report')}
+        </a>
+      )}
     </DetailShell>
   );
 }

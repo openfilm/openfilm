@@ -1,7 +1,7 @@
 // @ts-check
 /**
- * The example films the Projects window and the Community offer, and the Community's news: both read from the
- * Community's index (openfilm/community's index.json, its `examples` and `news`), or from OPENFILM_EXAMPLES_INDEX
+ * The example films the Projects window and the Community offer, the Community's news and the shelves it opens on:
+ * all read from the Community's index (openfilm/community's index.json, its `examples`, `news` and `featured`), or from OPENFILM_EXAMPLES_INDEX
  * (another address, or a file on this computer, to try a new index). An example is a whole project kept in its
  * publisher's own repository (OpenFilm's own in openfilm/examples), listed in the Community like anything else it
  * shares, and opened with the same fetch as "Get from GitHub". Unreachable, or not an index: no examples, and the
@@ -10,7 +10,9 @@
  *   { "examples": [{ "name": "one-prompt", "owner": "openfilm", "repo": "https://github.com/openfilm/examples",
  *       "path": "one-prompt", "commit": "<sha>", "title": "…", "description": "…", "poster": "look.jpg", "duration": "1:31" }],
  *     "news": [{ "id": "2026-11-17-examples", "title": { "en": "…" }, "text": { "en": "…" }, "link": "openfilm://community/examples",
- *       "from": "2026-11-17", "until": "2026-12-31" }] }
+ *       "from": "2026-11-17", "until": "2026-12-31" }],
+ *     "featured": { "shelves": [{ "id": "start-here", "title": { "en": "…" }, "text": { "en": "…" },
+ *       "items": ["example:openfilm/one-prompt", "skill:openfilm/replicate"] }], "makers": ["mira"] } }
  *
  * An example's `poster` (and `video`, a short preview played under the pointer) is an address, or a path in its folder,
  * read at the commit it is listed at. Its folder is fetched from the repository's `main` (the fetch takes branches,
@@ -29,6 +31,7 @@
  * a short word such as "launch" or "explainer"), `segments` (its parts, so one can be pointed at:
  * `[{ "title": "S2-Hook", "from": 12, "to": 30 }]`).
  */
+import { hostedAddress } from './fetch-hosted.mjs';
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { mkdir, mkdtemp, readFile, rename, rm } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
@@ -49,9 +52,15 @@ const savedIndex = (/** @type {string} */ home) => join(home, 'cache', 'examples
 /**
  * @typedef {{ title: string, from: number, to: number }} ExampleSegment
  * @typedef {{ id: string, title: string, description: string, poster: string | null, video: string | null,
- *   duration: number | null, url: string, category: string | null, segments: ExampleSegment[], owner: string }} Example
+ *   duration: number | null, url: string, category: string | null, segments: ExampleSegment[], owner: string, shared?: true }} Example
+ *   `shared`: someone shared it from OpenFilm (its `owner` is their name in the Community, not a GitHub login)
  * @typedef {{ id: string, title: Record<string, string>, text: Record<string, string>, image: string | null,
  *   link: string | null, from: string, until: string | null }} News
+ * @typedef {{ kind: 'skill' | 'example' | 'pack' | 'asset', id: string }} FeaturedItem
+ *   `id` as OpenFilm knows the thing: a skill's `owner/name`, an example's id here, a pack's `by/slug`, an asset's
+ *   `category/slug`
+ * @typedef {{ id: string, title: Record<string, string>, text: Record<string, string>, items: FeaturedItem[] }} FeaturedShelf
+ * @typedef {{ shelves: FeaturedShelf[], makers: string[] }} Featured
  */
 
 /** "1:29" or 89 → 89; anything else → null. @param {unknown} value */
@@ -86,6 +95,29 @@ export function readExamples(raw, source = EXAMPLES_INDEX) {
   const bundled = source === EXAMPLES_INDEX ? (/** @type {string} */ v) => existsSync(join(BUNDLED_INDEX, ...v.split('/'))) : () => false;
   for (const entry of index.examples.slice(0, 50)) {
     if (!entry || typeof entry !== 'object' || typeof entry.title !== 'string' || !entry.title.trim()) continue;
+    /* a film someone shared from OpenFilm: in no repository, its files with OpenFilm's service (fetch-hosted.mjs),
+       which is asked for them with the digest the index says they have. Its id is its account and its name, as two
+       accounts may each have a film of one name */
+    if (entry.via === 'openfilm') {
+      const { owner, name } = entry;
+      const manifest = entry.hosted?.manifest;
+      if (typeof owner !== 'string' || !/^[a-z0-9][a-z0-9-]{1,28}[a-z0-9]$/.test(owner) || typeof name !== 'string' || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(name) || name.length > 40
+        || typeof manifest !== 'string' || !/^[a-f0-9]{64}$/.test(manifest)) continue;
+      out.push({
+        id: `${owner}.${name}`,
+        title: entry.title.trim().slice(0, 80),
+        description: typeof entry.description === 'string' ? entry.description.trim().slice(0, 300) : '',
+        poster: `${hostedAddress(owner, name)}/poster`,
+        video: null,
+        duration: exampleSeconds(entry.duration),
+        url: hostedAddress(owner, name, manifest),
+        category: typeof entry.category === 'string' && /^[\w-]{1,30}$/.test(entry.category) ? entry.category : null,
+        segments: [],
+        owner,
+        shared: true,
+      });
+      continue;
+    }
     /* the Community's listing: its own repository, folder and commit; else the older shape's folder of one repository */
     const listed = typeof entry.name === 'string' && typeof entry.repo === 'string';
     const own = listed ? /^https:\/\/github\.com\/([\w.-]+)\/([\w.-]+?)(?:\.git)?\/?$/.exec(entry.repo) : null;
@@ -169,7 +201,47 @@ export function readNews(raw, today = new Date().toLocaleDateString('sv')) {
   return out.sort((a, b) => b.from.localeCompare(a.from));
 }
 
-/** What an index gives: its examples and its news. @typedef {{ examples: Example[], news: unknown }} Read */
+/* a thing on a shelf, as the Community's featured.json names it: its kind, then its owner (or category) and its name */
+const FEATURED_ITEM = /^(skill|example|pack|asset):([a-z0-9][\w.-]{0,99})\/([a-z0-9][\w.-]{0,99})$/;
+const NO_SHELVES = () => /** @type {Featured} */ ({ shelves: [], makers: [] });
+
+/**
+ * The shelves an index puts forward (its `featured`: what a maintainer picked, in their order) and the makers it
+ * names: each shelf a title, a line and its things, each thing by its kind and the id OpenFilm knows it by. Shelves
+ * and things that are not well formed are left out; an index without any is no shelves. Whether a thing named is
+ * still there to show is for whoever shows it: the things are read elsewhere (the skills, the library).
+ * @param {unknown} raw
+ * @returns {Featured}
+ */
+export function readFeatured(raw) {
+  const index = /** @type {any} */ (raw);
+  const out = NO_SHELVES();
+  const list = index?.featured?.shelves;
+  if (!Array.isArray(list)) return out;
+  /* an example's id here: `<account>.<name>` for one shared from OpenFilm, its name for any other (readExamples) */
+  const shared = new Set((Array.isArray(index.examples) ? index.examples : []).filter((/** @type {any} */ e) => e?.via === 'openfilm').map((/** @type {any} */ e) => `${e.owner}/${e.name}`));
+  for (const shelf of list.slice(0, 8)) {
+    const title = words(shelf?.title, 60);
+    if (!title || typeof shelf.id !== 'string' || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(shelf.id) || shelf.id.length > 40 || !Array.isArray(shelf.items)) continue;
+    if (out.shelves.some((x) => x.id === shelf.id)) continue;
+    /** @type {FeaturedItem[]} */
+    const items = [];
+    for (const item of shelf.items.slice(0, 12)) {
+      const at = typeof item === 'string' ? FEATURED_ITEM.exec(item) : null;
+      if (!at) continue;
+      const kind = /** @type {FeaturedItem['kind']} */ (at[1]);
+      const id = kind !== 'example' ? `${at[2]}/${at[3]}` : shared.has(`${at[2]}/${at[3]}`) ? `${at[2]}.${at[3]}` : at[3];
+      if (!items.some((x) => x.kind === kind && x.id === id)) items.push({ kind, id });
+    }
+    if (items.length) out.shelves.push({ id: shelf.id, title, text: words(shelf.text, 140) ?? {}, items });
+  }
+  for (const maker of Array.isArray(index.featured.makers) ? index.featured.makers.slice(0, 12) : []) {
+    if (typeof maker === 'string' && /^[a-z0-9](?:[a-z0-9-]{0,37}[a-z0-9])?$/.test(maker) && !out.makers.includes(maker)) out.makers.push(maker);
+  }
+  return out;
+}
+
+/** What an index gives: its examples, its news and its shelves. @typedef {{ examples: Example[], news: unknown, featured: Featured }} Read */
 
 /** @type {Map<string, { at: number, ok: boolean, read: Read }>} */
 const cache = new Map();
@@ -182,7 +254,7 @@ function indexAt(file) {
   try {
     const raw = JSON.parse(readFileSync(file, 'utf8'));
     const examples = readExamples(raw, EXAMPLES_INDEX);
-    return examples.length ? { examples, news: raw?.news ?? null } : null;
+    return examples.length ? { examples, news: raw?.news ?? null, featured: readFeatured(raw) } : null;
   } catch { return null; }
 }
 
@@ -224,6 +296,15 @@ export async function listNews(options = {}) {
   return readNews({ news: (await listed(options)).news }, options.today);
 }
 
+/**
+ * The shelves the Community opens on and the makers it puts forward, read from the same index. Never fails: none when
+ * the index has none or cannot be read.
+ * @param {{ source?: string, fetchImpl?: typeof fetch, home?: string }} [options]
+ */
+export async function listFeatured(options = {}) {
+  return (await listed(options)).featured;
+}
+
 /** The index read now (one read at a time), kept here and, read from GitHub, in Studio's home. */
 function readIndex(/** @type {string} */ source, /** @type {typeof fetch} */ fetchImpl, /** @type {string} */ home) {
   if (!reading.has(source)) {
@@ -234,22 +315,23 @@ function readIndex(/** @type {string} */ source, /** @type {typeof fetch} */ fet
 
 async function fetchIndex(/** @type {string} */ source, /** @type {typeof fetch} */ fetchImpl, /** @type {string} */ home) {
   /** @type {Read} */
-  let read = { examples: [], news: null };
+  let read = { examples: [], news: null, featured: NO_SHELVES() };
   let ok = false;
   try {
     const raw = /^https?:\/\//.test(source)
       ? await fetchImpl(source, { signal: AbortSignal.timeout(5000) }).then((res) => (res.ok ? res.json() : null))
       : JSON.parse(await readFile(source, 'utf8'));
-    read = { examples: readExamples(raw, source), news: raw?.news ?? null };
+    read = { examples: readExamples(raw, source), news: raw?.news ?? null, featured: readFeatured(raw) };
     ok = raw != null;
     if (ok && source === EXAMPLES_INDEX && read.examples.length) {
       try { mkdirSync(dirname(savedIndex(home)), { recursive: true }); writeFileSync(savedIndex(home), JSON.stringify(raw)); } catch { /* kept here only */ }
     }
   } catch { /* offline, private, or not an index: none */ }
-  /* GitHub's index unread, or listing no examples yet: the examples shown so far stay (its news, when it has some) */
+  /* GitHub's index unread, or listing no examples yet: the examples shown so far stay (its news, when it has some;
+     its shelves, when it was read) */
   if (source === EXAMPLES_INDEX && !read.examples.length) {
     const before = cache.get(source)?.read ?? keptIndex(home);
-    if (before) read = { examples: before.examples, news: read.news ?? before.news };
+    if (before) read = { examples: before.examples, news: read.news ?? before.news, featured: ok ? read.featured : before.featured };
   }
   /* a failed read keeps the last good one */
   const kept = cache.get(source);

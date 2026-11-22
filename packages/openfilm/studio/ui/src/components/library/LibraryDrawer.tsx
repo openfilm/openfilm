@@ -25,6 +25,7 @@ import {
   inLibrary, makerName, savePack, useLibraryAdded, useLibraryFavorites, useLibraryHere, useLibraryIndex, type HereState, type LibraryCategory, type LibraryItem,
 } from '@/lib/library';
 import { openPlugins } from '@/lib/plugins-window';
+import { askShare } from '@/lib/community-share';
 import { COMMUNITY_ICON as Community, FEATURE_KINDS } from '../feature-kinds';
 import { ConfirmDialog } from '../ConfirmDialog';
 import { ContextMenu, type ContextMenuItem } from '../ContextMenu';
@@ -606,7 +607,8 @@ export function LibraryDrawer({ media, mediaScope, onMediaScope, onUpload, onKee
   const lineMenu = (line: Line): ContextMenuItem[] => line.kind === 'folder' ? [
     { id: 'rename', label: t('assets.rename'), icon: <Pencil size={14} />, onSelect: () => setRenaming(line.key) },
     { id: 'reveal', label: t('projects.revealFolder'), icon: <FolderOpen size={14} />, onSelect: () => savedActions.reveal(line.key, Boolean(line.link)) },
-    { id: 'publish', label: t('assetDrawer.contribute'), icon: <Upload size={14} />, onSelect: () => openPlugins({ line: 'publish' }) },
+    /* a folder of the person's own: its media files, shared with the Community as a pack */
+    { id: 'publish', label: t('assetDrawer.shareToCommunity'), icon: <Upload size={14} />, onSelect: () => askShare([line.key]) },
     { id: 'delete', label: t(line.link ? 'resourceCenter.removeLink' : 'assets.delete'), icon: <Trash2 size={14} />, danger: true, onSelect: () => setGone(line) },
   ] : line.kind === 'pack' ? [
     /* the Community's packs only: OpenFilm's own are not in the Community (they are its 官方) */

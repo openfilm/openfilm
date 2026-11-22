@@ -24,6 +24,7 @@ import {
   X,
 } from 'lucide-react';
 import type { Example } from '@/lib/project-sources';
+import { askShareFilm } from '@/lib/community-share';
 import { ExamplesSection } from './ProjectSources';
 import { useLanguage, useT, type Language } from '@/i18n';
 import { limitTitleWidth, TITLE_MAX_WIDTH } from '@/lib/title';
@@ -347,6 +348,7 @@ export function ProjectsView({
                 onChangeCover: cover ? () => cover.change(project) : undefined,
                 onCoverFromFrame: coverFromFrame?.projectId === project.id ? coverFromFrame.run : undefined,
                 onRestoreCover: cover && project.cover ? () => cover.restore(project) : undefined,
+                onShare: () => askShareFilm(project.id),
                 onReveal: () => void api.revealProject(project.id).catch(() => {}),
                 onRemove: () => onRemoveFromList([project.id]),
                 onDelete: () => remove(picked),
