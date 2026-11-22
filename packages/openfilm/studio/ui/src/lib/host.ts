@@ -1,5 +1,5 @@
 import React from 'react';
-import { DESKTOP_TITLEBAR_HEIGHT } from './workspaces';
+import { DESKTOP_TITLEBAR_HEIGHT } from './workspaces.ts';
 
 /**
  * The app Studio is embedded in, when there is one. An app that shows Studio in its own window (rather than a browser
