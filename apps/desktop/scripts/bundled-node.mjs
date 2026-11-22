@@ -1,7 +1,7 @@
 /**
  * The Node the installer brings (scripts/release.mjs puts it in the app's resources, `runtime/node`): what the app's
  * own Node programs run on (src/node-runtime.mjs), so that Electron never has to run as Node and the release can turn
- * its RunAsNode fuse off. The same Node as the Electron the app is built on (Electron 44 has Node 24.22), at its
+ * its RunAsNode fuse off. The same Node as the Electron the app is built on (Electron 45: Node 24.22.3), at its
  * latest release, from nodejs.org, each archive checked against the sha256 pinned here (from the release's
  * SHASUMS256.txt). Only the program and its license are kept.
  *

@@ -1,0 +1,2812 @@
+{
+  "label": "electron-44",
+  "date": "2026-11-22T21:56:04.696Z",
+  "machine": "darwin-arm64",
+  "electron": "44.9.3 (Chromium 152.0.7977.167)",
+  "runs": [
+    {
+      "error": "Error: timed out waiting for Studio ready: {\"path\":\"/projects/wIboTGgFfsmC\",\"timeline\":false,\"play\":\"<button type=\\\"button\\\" aria-disabled=\\\"true\\\" class=\\\"flex shrink-0 items-center justify-center gap-1 rounded-[6px] px-1 tex\",\"cover\":\"Drawing the first frame\"}\n    at ready (file:///Users/river/Desktop/code/openfilm/openfilm/.claude/worktrees/great-snyder-211c69/apps/desktop/bench/scenarios.mjs:77:11)\n    at async benchRun (file:///Users/river/Desktop/code/openfilm/openfilm/.claude/worktrees/great-snyder-211c69/apps/desktop/bench/scenarios.mjs:224:40)\n    at async file:///Users/river/Desktop/code/openfilm/openfilm/.claude/worktrees/great-snyder-211c69/apps/desktop/bench/run.mjs:29:23"
+    },
+    {
+      "idle": {
+        "memory": {
+          "totalMB": 1526,
+          "processes": 16,
+          "byKind": {
+            "main": 157,
+            "helpers": 360,
+            "studioBrowser": 608,
+            "agents": 17,
+            "pages": 384
+          }
+        }
+      },
+      "play": {
+        "studio": {
+          "fps": 60,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 17.5,
+            "p99": 17.6,
+            "max": 17.7
+          },
+          "droppedFrames": 0,
+          "droppedPct": 0,
+          "lateFrames": 0,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          }
+        },
+        "film": {
+          "fps": 60,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 17.5,
+            "p99": 17.7,
+            "max": 17.7
+          },
+          "droppedFrames": 0,
+          "droppedPct": 0,
+          "lateFrames": 0,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          },
+          "video": {
+            "decoded": 630,
+            "dropped": 6
+          }
+        },
+        "chat": {
+          "fps": 60,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 17.5,
+            "p99": 17.6,
+            "max": 17.7
+          },
+          "droppedFrames": 0,
+          "droppedPct": 0,
+          "lateFrames": 0,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          }
+        }
+      },
+      "scrub": {
+        "studio": {
+          "fps": 60,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 17.4,
+            "p99": 17.7,
+            "max": 17.7
+          },
+          "droppedFrames": 0,
+          "droppedPct": 0,
+          "lateFrames": 0,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          }
+        },
+        "film": {
+          "fps": 60,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 17.5,
+            "p99": 17.7,
+            "max": 17.8
+          },
+          "droppedFrames": 0,
+          "droppedPct": 0,
+          "lateFrames": 0,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          },
+          "video": {
+            "decoded": 708,
+            "dropped": -5
+          }
+        },
+        "chat": {
+          "fps": 60,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 17.4,
+            "p99": 17.7,
+            "max": 17.7
+          },
+          "droppedFrames": 0,
+          "droppedPct": 0,
+          "lateFrames": 0,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          }
+        },
+        "scrub": {
+          "positions": 241,
+          "framesShown": 194
+        }
+      },
+      "divider": {
+        "studio": {
+          "fps": 60,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 17.3,
+            "p99": 17.4,
+            "max": 17.4
+          },
+          "droppedFrames": 0,
+          "droppedPct": 0,
+          "lateFrames": 0,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          }
+        },
+        "film": {
+          "fps": 60,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 17.2,
+            "p99": 17.3,
+            "max": 17.3
+          },
+          "droppedFrames": 0,
+          "droppedPct": 0,
+          "lateFrames": 0,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          }
+        },
+        "chat": {
+          "fps": 60,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 17.3,
+            "p99": 17.4,
+            "max": 17.4
+          },
+          "droppedFrames": 0,
+          "droppedPct": 0,
+          "lateFrames": 0,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          }
+        },
+        "resize": {
+          "steps": 61,
+          "lagMs": {
+            "p50": 3,
+            "p95": 4,
+            "max": 7
+          }
+        }
+      },
+      "stream": {
+        "studio": {
+          "fps": 60,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 17.5,
+            "p99": 17.7,
+            "max": 17.7
+          },
+          "droppedFrames": 0,
+          "droppedPct": 0,
+          "lateFrames": 0,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          }
+        },
+        "film": {
+          "fps": 60,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 17.5,
+            "p99": 17.7,
+            "max": 17.8
+          },
+          "droppedFrames": 0,
+          "droppedPct": 0,
+          "lateFrames": 0,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          },
+          "video": {
+            "decoded": 629,
+            "dropped": 5
+          }
+        },
+        "chat": {
+          "fps": 60,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 17.5,
+            "p99": 17.7,
+            "max": 17.7
+          },
+          "droppedFrames": 0,
+          "droppedPct": 0,
+          "lateFrames": 0,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          }
+        },
+        "model": {
+          "requests": 7,
+          "turns": 1,
+          "steps": 5
+        },
+        "memory": {
+          "totalMB": 1661,
+          "processes": 17,
+          "byKind": {
+            "main": 169,
+            "helpers": 477,
+            "studioBrowser": 486,
+            "agents": 40,
+            "pages": 490
+          }
+        }
+      },
+      "start": {
+        "readyMs": 1366,
+        "pagesMs": 899,
+        "processMs": 259
+      }
+    },
+    {
+      "idle": {
+        "memory": {
+          "totalMB": 1963,
+          "processes": 15,
+          "byKind": {
+            "main": 193,
+            "helpers": 513,
+            "studioBrowser": 671,
+            "pages": 589
+          }
+        }
+      },
+      "play": {
+        "studio": {
+          "fps": 60,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 17.6,
+            "p99": 17.6,
+            "max": 17.7
+          },
+          "droppedFrames": 0,
+          "droppedPct": 0,
+          "lateFrames": 0,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          }
+        },
+        "film": {
+          "fps": 60,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 17.6,
+            "p99": 17.6,
+            "max": 17.7
+          },
+          "droppedFrames": 0,
+          "droppedPct": 0,
+          "lateFrames": 0,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          },
+          "video": {
+            "decoded": 627,
+            "dropped": 6
+          }
+        },
+        "chat": {
+          "fps": 60,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 17.6,
+            "p99": 17.6,
+            "max": 17.7
+          },
+          "droppedFrames": 0,
+          "droppedPct": 0,
+          "lateFrames": 0,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          }
+        }
+      },
+      "scrub": {
+        "studio": {
+          "fps": 60,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 17.4,
+            "p99": 17.6,
+            "max": 17.7
+          },
+          "droppedFrames": 0,
+          "droppedPct": 0,
+          "lateFrames": 0,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          }
+        },
+        "film": {
+          "fps": 60,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 17.4,
+            "p99": 17.6,
+            "max": 17.7
+          },
+          "droppedFrames": 0,
+          "droppedPct": 0,
+          "lateFrames": 0,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          },
+          "video": {
+            "decoded": 710,
+            "dropped": -5
+          }
+        },
+        "chat": {
+          "fps": 60,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 17.4,
+            "p99": 17.6,
+            "max": 17.7
+          },
+          "droppedFrames": 0,
+          "droppedPct": 0,
+          "lateFrames": 0,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          }
+        },
+        "scrub": {
+          "positions": 241,
+          "framesShown": 194
+        }
+      },
+      "divider": {
+        "studio": {
+          "fps": 60,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 17.5,
+            "p99": 17.5,
+            "max": 17.5
+          },
+          "droppedFrames": 0,
+          "droppedPct": 0,
+          "lateFrames": 0,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          }
+        },
+        "film": {
+          "fps": 60,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 17.5,
+            "p99": 17.6,
+            "max": 17.6
+          },
+          "droppedFrames": 0,
+          "droppedPct": 0,
+          "lateFrames": 0,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          }
+        },
+        "chat": {
+          "fps": 60,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 17.5,
+            "p99": 17.5,
+            "max": 17.5
+          },
+          "droppedFrames": 0,
+          "droppedPct": 0,
+          "lateFrames": 0,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          }
+        },
+        "resize": {
+          "steps": 61,
+          "lagMs": {
+            "p50": 3,
+            "p95": 4,
+            "max": 5
+          }
+        }
+      },
+      "stream": {
+        "studio": {
+          "fps": 60,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 17.5,
+            "p99": 17.7,
+            "max": 17.7
+          },
+          "droppedFrames": 0,
+          "droppedPct": 0,
+          "lateFrames": 0,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          }
+        },
+        "film": {
+          "fps": 60,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 17.5,
+            "p99": 17.7,
+            "max": 17.8
+          },
+          "droppedFrames": 0,
+          "droppedPct": 0,
+          "lateFrames": 0,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          },
+          "video": {
+            "decoded": 629,
+            "dropped": 18
+          }
+        },
+        "chat": {
+          "fps": 60,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 17.5,
+            "p99": 17.7,
+            "max": 17.7
+          },
+          "droppedFrames": 0,
+          "droppedPct": 0,
+          "lateFrames": 0,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          }
+        },
+        "model": {
+          "requests": 7,
+          "turns": 1,
+          "steps": 5
+        },
+        "memory": {
+          "totalMB": 1817,
+          "processes": 15,
+          "byKind": {
+            "main": 179,
+            "helpers": 523,
+            "studioBrowser": 426,
+            "pages": 689
+          }
+        }
+      },
+      "start": {
+        "readyMs": 1494,
+        "pagesMs": 958,
+        "processMs": 307
+      }
+    },
+    {
+      "error": "Error: timed out waiting for Studio ready: {\"path\":\"/projects/d8Iq2WZS47Qp\",\"timeline\":false,\"play\":\"<button type=\\\"button\\\" aria-disabled=\\\"true\\\" class=\\\"flex shrink-0 items-center justify-center gap-1 rounded-[6px] px-1 tex\",\"cover\":\"Drawing the first frame\"}\n    at ready (file:///Users/river/Desktop/code/openfilm/openfilm/.claude/worktrees/great-snyder-211c69/apps/desktop/bench/scenarios.mjs:77:11)\n    at async benchRun (file:///Users/river/Desktop/code/openfilm/openfilm/.claude/worktrees/great-snyder-211c69/apps/desktop/bench/scenarios.mjs:224:40)\n    at async file:///Users/river/Desktop/code/openfilm/openfilm/.claude/worktrees/great-snyder-211c69/apps/desktop/bench/run.mjs:29:23"
+    },
+    {
+      "error": "Error: timed out waiting for Studio ready: {\"path\":\"/projects/je_cYlmH26sr\",\"timeline\":false,\"play\":\"<button type=\\\"button\\\" aria-disabled=\\\"true\\\" class=\\\"flex shrink-0 items-center justify-center gap-1 rounded-[6px] px-1 tex\",\"cover\":\"Drawing the first frame\"}\n    at ready (file:///Users/river/Desktop/code/openfilm/openfilm/.claude/worktrees/great-snyder-211c69/apps/desktop/bench/scenarios.mjs:77:11)\n    at async benchRun (file:///Users/river/Desktop/code/openfilm/openfilm/.claude/worktrees/great-snyder-211c69/apps/desktop/bench/scenarios.mjs:224:40)\n    at async file:///Users/river/Desktop/code/openfilm/openfilm/.claude/worktrees/great-snyder-211c69/apps/desktop/bench/run.mjs:29:23"
+    },
+    {
+      "idle": {
+        "memory": {
+          "totalMB": 1868,
+          "processes": 16,
+          "byKind": {
+            "main": 171,
+            "helpers": 457,
+            "studioBrowser": 665,
+            "agents": 22,
+            "pages": 552
+          }
+        }
+      },
+      "play": {
+        "studio": {
+          "fps": 60,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 17.4,
+            "p99": 17.7,
+            "max": 17.8
+          },
+          "droppedFrames": 0,
+          "droppedPct": 0,
+          "lateFrames": 0,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          }
+        },
+        "film": {
+          "fps": 60,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 17.4,
+            "p99": 17.6,
+            "max": 17.7
+          },
+          "droppedFrames": 0,
+          "droppedPct": 0,
+          "lateFrames": 0,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          },
+          "video": {
+            "decoded": 628,
+            "dropped": 7
+          }
+        },
+        "chat": {
+          "fps": 60,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 17.4,
+            "p99": 17.7,
+            "max": 17.8
+          },
+          "droppedFrames": 0,
+          "droppedPct": 0,
+          "lateFrames": 0,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          }
+        }
+      },
+      "scrub": {
+        "studio": {
+          "fps": 60,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 17.3,
+            "p99": 17.6,
+            "max": 17.7
+          },
+          "droppedFrames": 0,
+          "droppedPct": 0,
+          "lateFrames": 0,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          }
+        },
+        "film": {
+          "fps": 60,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 17.3,
+            "p99": 17.6,
+            "max": 17.7
+          },
+          "droppedFrames": 0,
+          "droppedPct": 0,
+          "lateFrames": 0,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          },
+          "video": {
+            "decoded": 708,
+            "dropped": -6
+          }
+        },
+        "chat": {
+          "fps": 60,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 17.3,
+            "p99": 17.6,
+            "max": 17.7
+          },
+          "droppedFrames": 0,
+          "droppedPct": 0,
+          "lateFrames": 0,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          }
+        },
+        "scrub": {
+          "positions": 241,
+          "framesShown": 194
+        }
+      },
+      "divider": {
+        "studio": {
+          "fps": 60,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 17.4,
+            "p99": 17.7,
+            "max": 17.7
+          },
+          "droppedFrames": 0,
+          "droppedPct": 0,
+          "lateFrames": 0,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          }
+        },
+        "film": {
+          "fps": 60,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 17.3,
+            "p99": 17.7,
+            "max": 17.7
+          },
+          "droppedFrames": 0,
+          "droppedPct": 0,
+          "lateFrames": 0,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          }
+        },
+        "chat": {
+          "fps": 60,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 17.4,
+            "p99": 17.7,
+            "max": 17.7
+          },
+          "droppedFrames": 0,
+          "droppedPct": 0,
+          "lateFrames": 0,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          }
+        },
+        "resize": {
+          "steps": 61,
+          "lagMs": {
+            "p50": 3,
+            "p95": 5,
+            "max": 9
+          }
+        }
+      },
+      "stream": {
+        "studio": {
+          "fps": 60,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 17.5,
+            "p99": 17.7,
+            "max": 17.7
+          },
+          "droppedFrames": 0,
+          "droppedPct": 0,
+          "lateFrames": 0,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          }
+        },
+        "film": {
+          "fps": 60,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 17.5,
+            "p99": 17.7,
+            "max": 17.8
+          },
+          "droppedFrames": 0,
+          "droppedPct": 0,
+          "lateFrames": 0,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          },
+          "video": {
+            "decoded": 628,
+            "dropped": 6
+          }
+        },
+        "chat": {
+          "fps": 60,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 17.5,
+            "p99": 17.7,
+            "max": 17.7
+          },
+          "droppedFrames": 0,
+          "droppedPct": 0,
+          "lateFrames": 0,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          }
+        },
+        "model": {
+          "requests": 7,
+          "turns": 1,
+          "steps": 5
+        },
+        "memory": {
+          "totalMB": 2353,
+          "processes": 16,
+          "byKind": {
+            "main": 191,
+            "helpers": 652,
+            "studioBrowser": 679,
+            "pages": 831
+          }
+        }
+      },
+      "start": {
+        "readyMs": 1345,
+        "pagesMs": 938,
+        "processMs": 289
+      }
+    },
+    {
+      "idle": {
+        "memory": {
+          "totalMB": 1983,
+          "processes": 16,
+          "byKind": {
+            "main": 177,
+            "helpers": 511,
+            "studioBrowser": 717,
+            "agents": 3,
+            "pages": 576
+          }
+        }
+      },
+      "play": {
+        "studio": {
+          "fps": 60,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 17.5,
+            "p99": 17.6,
+            "max": 17.7
+          },
+          "droppedFrames": 0,
+          "droppedPct": 0,
+          "lateFrames": 0,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          }
+        },
+        "film": {
+          "fps": 60,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 17.5,
+            "p99": 17.7,
+            "max": 17.8
+          },
+          "droppedFrames": 0,
+          "droppedPct": 0,
+          "lateFrames": 0,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          },
+          "video": {
+            "decoded": 628,
+            "dropped": 7
+          }
+        },
+        "chat": {
+          "fps": 60,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 17.5,
+            "p99": 17.6,
+            "max": 17.7
+          },
+          "droppedFrames": 0,
+          "droppedPct": 0,
+          "lateFrames": 0,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          }
+        }
+      },
+      "scrub": {
+        "studio": {
+          "fps": 60,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 17.3,
+            "p99": 17.6,
+            "max": 17.8
+          },
+          "droppedFrames": 0,
+          "droppedPct": 0,
+          "lateFrames": 0,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          }
+        },
+        "film": {
+          "fps": 60,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 17.3,
+            "p99": 17.6,
+            "max": 17.7
+          },
+          "droppedFrames": 0,
+          "droppedPct": 0,
+          "lateFrames": 0,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          },
+          "video": {
+            "decoded": 708,
+            "dropped": -5
+          }
+        },
+        "chat": {
+          "fps": 60,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 17.3,
+            "p99": 17.6,
+            "max": 17.8
+          },
+          "droppedFrames": 0,
+          "droppedPct": 0,
+          "lateFrames": 0,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          }
+        },
+        "scrub": {
+          "positions": 241,
+          "framesShown": 194
+        }
+      },
+      "divider": {
+        "studio": {
+          "fps": 60,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 17.3,
+            "p99": 17.7,
+            "max": 17.7
+          },
+          "droppedFrames": 0,
+          "droppedPct": 0,
+          "lateFrames": 0,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          }
+        },
+        "film": {
+          "fps": 60,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 17.4,
+            "p99": 17.6,
+            "max": 17.6
+          },
+          "droppedFrames": 0,
+          "droppedPct": 0,
+          "lateFrames": 0,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          }
+        },
+        "chat": {
+          "fps": 60,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 17.3,
+            "p99": 17.7,
+            "max": 17.7
+          },
+          "droppedFrames": 0,
+          "droppedPct": 0,
+          "lateFrames": 0,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          }
+        },
+        "resize": {
+          "steps": 61,
+          "lagMs": {
+            "p50": 3,
+            "p95": 4,
+            "max": 4
+          }
+        }
+      },
+      "stream": {
+        "studio": {
+          "fps": 60,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 17.5,
+            "p99": 17.7,
+            "max": 17.8
+          },
+          "droppedFrames": 0,
+          "droppedPct": 0,
+          "lateFrames": 0,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          }
+        },
+        "film": {
+          "fps": 60,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 17.5,
+            "p99": 17.7,
+            "max": 17.7
+          },
+          "droppedFrames": 0,
+          "droppedPct": 0,
+          "lateFrames": 0,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          },
+          "video": {
+            "decoded": 628,
+            "dropped": 7
+          }
+        },
+        "chat": {
+          "fps": 60,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 17.5,
+            "p99": 17.7,
+            "max": 17.8
+          },
+          "droppedFrames": 0,
+          "droppedPct": 0,
+          "lateFrames": 0,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          }
+        },
+        "model": {
+          "requests": 7,
+          "turns": 1,
+          "steps": 5
+        },
+        "memory": {
+          "totalMB": 2171,
+          "processes": 16,
+          "byKind": {
+            "main": 192,
+            "helpers": 607,
+            "studioBrowser": 640,
+            "pages": 733
+          }
+        }
+      },
+      "start": {
+        "readyMs": 1395,
+        "pagesMs": 974,
+        "processMs": 320
+      }
+    },
+    {
+      "idle": {
+        "memory": {
+          "totalMB": 1950,
+          "processes": 15,
+          "byKind": {
+            "main": 178,
+            "helpers": 510,
+            "studioBrowser": 681,
+            "pages": 580
+          }
+        }
+      },
+      "play": {
+        "studio": {
+          "fps": 60,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 17.6,
+            "p99": 17.7,
+            "max": 17.7
+          },
+          "droppedFrames": 0,
+          "droppedPct": 0,
+          "lateFrames": 0,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          }
+        },
+        "film": {
+          "fps": 60,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 17.6,
+            "p99": 17.7,
+            "max": 17.7
+          },
+          "droppedFrames": 0,
+          "droppedPct": 0,
+          "lateFrames": 0,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          },
+          "video": {
+            "decoded": 628,
+            "dropped": 7
+          }
+        },
+        "chat": {
+          "fps": 60,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 17.6,
+            "p99": 17.7,
+            "max": 17.7
+          },
+          "droppedFrames": 0,
+          "droppedPct": 0,
+          "lateFrames": 0,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          }
+        }
+      },
+      "scrub": {
+        "studio": {
+          "fps": 60,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 17.6,
+            "p99": 17.7,
+            "max": 17.7
+          },
+          "droppedFrames": 0,
+          "droppedPct": 0,
+          "lateFrames": 0,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          }
+        },
+        "film": {
+          "fps": 60,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 17.6,
+            "p99": 17.7,
+            "max": 17.7
+          },
+          "droppedFrames": 0,
+          "droppedPct": 0,
+          "lateFrames": 0,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          },
+          "video": {
+            "decoded": 708,
+            "dropped": -6
+          }
+        },
+        "chat": {
+          "fps": 60,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 17.6,
+            "p99": 17.7,
+            "max": 17.7
+          },
+          "droppedFrames": 0,
+          "droppedPct": 0,
+          "lateFrames": 0,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          }
+        },
+        "scrub": {
+          "positions": 241,
+          "framesShown": 194
+        }
+      },
+      "divider": {
+        "studio": {
+          "fps": 60,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 17.1,
+            "p99": 17.3,
+            "max": 17.3
+          },
+          "droppedFrames": 0,
+          "droppedPct": 0,
+          "lateFrames": 0,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          }
+        },
+        "film": {
+          "fps": 60,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 17.1,
+            "p99": 17.3,
+            "max": 17.3
+          },
+          "droppedFrames": 0,
+          "droppedPct": 0,
+          "lateFrames": 0,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          }
+        },
+        "chat": {
+          "fps": 60,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 17.1,
+            "p99": 17.3,
+            "max": 17.3
+          },
+          "droppedFrames": 0,
+          "droppedPct": 0,
+          "lateFrames": 0,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          }
+        },
+        "resize": {
+          "steps": 61,
+          "lagMs": {
+            "p50": 3,
+            "p95": 4,
+            "max": 8
+          }
+        }
+      },
+      "stream": {
+        "studio": {
+          "fps": 60,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 17.7,
+            "p99": 18.5,
+            "max": 18.7
+          },
+          "droppedFrames": 0,
+          "droppedPct": 0,
+          "lateFrames": 0,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          }
+        },
+        "film": {
+          "fps": 60,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 17.6,
+            "p99": 18.5,
+            "max": 18.6
+          },
+          "droppedFrames": 0,
+          "droppedPct": 0,
+          "lateFrames": 0,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          },
+          "video": {
+            "decoded": 628,
+            "dropped": 6
+          }
+        },
+        "chat": {
+          "fps": 60,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 17.7,
+            "p99": 18.5,
+            "max": 18.7
+          },
+          "droppedFrames": 0,
+          "droppedPct": 0,
+          "lateFrames": 0,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          }
+        },
+        "model": {
+          "requests": 7,
+          "turns": 1,
+          "steps": 5
+        },
+        "memory": {
+          "totalMB": 2164,
+          "processes": 17,
+          "byKind": {
+            "main": 190,
+            "helpers": 595,
+            "studioBrowser": 640,
+            "agents": 52,
+            "pages": 686
+          }
+        }
+      },
+      "start": {
+        "readyMs": 1442,
+        "pagesMs": 1010,
+        "processMs": 298
+      }
+    },
+    {
+      "idle": {
+        "memory": {
+          "totalMB": 2033,
+          "processes": 15,
+          "byKind": {
+            "main": 184,
+            "helpers": 510,
+            "studioBrowser": 723,
+            "pages": 616
+          }
+        }
+      },
+      "play": {
+        "studio": {
+          "fps": 60,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 18.6,
+            "p99": 18.6,
+            "max": 18.7
+          },
+          "droppedFrames": 0,
+          "droppedPct": 0,
+          "lateFrames": 0,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          }
+        },
+        "film": {
+          "fps": 60,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 18.5,
+            "p99": 18.6,
+            "max": 18.7
+          },
+          "droppedFrames": 0,
+          "droppedPct": 0,
+          "lateFrames": 0,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          },
+          "video": {
+            "decoded": 628,
+            "dropped": 8
+          }
+        },
+        "chat": {
+          "fps": 60,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 18.6,
+            "p99": 18.6,
+            "max": 18.7
+          },
+          "droppedFrames": 0,
+          "droppedPct": 0,
+          "lateFrames": 0,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          }
+        }
+      },
+      "scrub": {
+        "studio": {
+          "fps": 52.3,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 18.6,
+            "p99": 83.4,
+            "max": 449.6
+          },
+          "droppedFrames": 72,
+          "droppedPct": 12.9,
+          "lateFrames": 18,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          }
+        },
+        "film": {
+          "fps": 52.9,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 18.6,
+            "p99": 83.4,
+            "max": 449.7
+          },
+          "droppedFrames": 66,
+          "droppedPct": 11.8,
+          "lateFrames": 14,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          },
+          "video": {
+            "decoded": 605,
+            "dropped": 0
+          }
+        },
+        "chat": {
+          "fps": 52.3,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 18.6,
+            "p99": 83.4,
+            "max": 449.6
+          },
+          "droppedFrames": 72,
+          "droppedPct": 12.9,
+          "lateFrames": 18,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          }
+        },
+        "scrub": {
+          "positions": 241,
+          "framesShown": 162
+        }
+      },
+      "divider": {
+        "studio": {
+          "fps": 6.6,
+          "displayHz": 8,
+          "frameMs": {
+            "p50": 131.5,
+            "p95": 432.6,
+            "p99": 550.1,
+            "max": 550.1
+          },
+          "droppedFrames": 20,
+          "droppedPct": 25,
+          "lateFrames": 14,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          }
+        },
+        "film": null,
+        "chat": {
+          "fps": 6.6,
+          "displayHz": 8,
+          "frameMs": {
+            "p50": 131.5,
+            "p95": 432.6,
+            "p99": 550.1,
+            "max": 550.1
+          },
+          "droppedFrames": 20,
+          "droppedPct": 25,
+          "lateFrames": 14,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          }
+        },
+        "resize": {
+          "steps": 61,
+          "lagMs": {
+            "p50": 4,
+            "p95": 7,
+            "max": 8
+          }
+        }
+      },
+      "stream": {
+        "studio": {
+          "fps": 26.5,
+          "displayHz": 57,
+          "frameMs": {
+            "p50": 17.4,
+            "p95": 117,
+            "p99": 181.7,
+            "max": 215.6
+          },
+          "droppedFrames": 332,
+          "droppedPct": 55.7,
+          "lateFrames": 95,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          }
+        },
+        "film": {
+          "fps": 30.9,
+          "displayHz": 59,
+          "frameMs": {
+            "p50": 17,
+            "p95": 101.7,
+            "p99": 166.2,
+            "max": 200.2
+          },
+          "droppedFrames": 290,
+          "droppedPct": 48.5,
+          "lateFrames": 85,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          },
+          "video": {
+            "decoded": 619,
+            "dropped": 326
+          }
+        },
+        "chat": {
+          "fps": 26.5,
+          "displayHz": 57,
+          "frameMs": {
+            "p50": 17.4,
+            "p95": 117,
+            "p99": 181.7,
+            "max": 215.6
+          },
+          "droppedFrames": 332,
+          "droppedPct": 55.7,
+          "lateFrames": 95,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          }
+        },
+        "model": {
+          "requests": 7,
+          "turns": 1,
+          "steps": 5
+        },
+        "memory": {
+          "totalMB": 1503,
+          "processes": 17,
+          "byKind": {
+            "main": 129,
+            "helpers": 460,
+            "studioBrowser": 362,
+            "agents": 53,
+            "pages": 501
+          }
+        }
+      },
+      "start": {
+        "readyMs": 3903,
+        "pagesMs": 1408,
+        "processMs": 500
+      }
+    },
+    {
+      "idle": {
+        "memory": {
+          "totalMB": 2039,
+          "processes": 15,
+          "byKind": {
+            "main": 185,
+            "helpers": 530,
+            "studioBrowser": 678,
+            "pages": 647
+          }
+        }
+      },
+      "play": {
+        "studio": {
+          "fps": 60,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 18.5,
+            "p99": 18.7,
+            "max": 18.7
+          },
+          "droppedFrames": 0,
+          "droppedPct": 0,
+          "lateFrames": 0,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          }
+        },
+        "film": {
+          "fps": 60,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 18.4,
+            "p99": 18.6,
+            "max": 18.7
+          },
+          "droppedFrames": 0,
+          "droppedPct": 0,
+          "lateFrames": 0,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          },
+          "video": {
+            "decoded": 628,
+            "dropped": 6
+          }
+        },
+        "chat": {
+          "fps": 60,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 18.5,
+            "p99": 18.7,
+            "max": 18.7
+          },
+          "droppedFrames": 0,
+          "droppedPct": 0,
+          "lateFrames": 0,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          }
+        }
+      },
+      "scrub": {
+        "studio": {
+          "fps": 60,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 18.2,
+            "p99": 18.5,
+            "max": 18.8
+          },
+          "droppedFrames": 0,
+          "droppedPct": 0,
+          "lateFrames": 0,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          }
+        },
+        "film": {
+          "fps": 60,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 18.3,
+            "p99": 18.6,
+            "max": 18.7
+          },
+          "droppedFrames": 0,
+          "droppedPct": 0,
+          "lateFrames": 0,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          },
+          "video": {
+            "decoded": 709,
+            "dropped": -5
+          }
+        },
+        "chat": {
+          "fps": 60,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 18.2,
+            "p99": 18.5,
+            "max": 18.8
+          },
+          "droppedFrames": 0,
+          "droppedPct": 0,
+          "lateFrames": 0,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          }
+        },
+        "scrub": {
+          "positions": 241,
+          "framesShown": 194
+        }
+      },
+      "divider": {
+        "studio": {
+          "fps": 60,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 18.3,
+            "p99": 18.4,
+            "max": 18.4
+          },
+          "droppedFrames": 0,
+          "droppedPct": 0,
+          "lateFrames": 0,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          }
+        },
+        "film": {
+          "fps": 60,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 18.3,
+            "p99": 18.4,
+            "max": 18.4
+          },
+          "droppedFrames": 0,
+          "droppedPct": 0,
+          "lateFrames": 0,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          }
+        },
+        "chat": {
+          "fps": 60,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 18.3,
+            "p99": 18.4,
+            "max": 18.4
+          },
+          "droppedFrames": 0,
+          "droppedPct": 0,
+          "lateFrames": 0,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          }
+        },
+        "resize": {
+          "steps": 61,
+          "lagMs": {
+            "p50": 4,
+            "p95": 5,
+            "max": 6
+          }
+        }
+      },
+      "stream": {
+        "studio": {
+          "fps": 60,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 18.3,
+            "p99": 18.6,
+            "max": 18.7
+          },
+          "droppedFrames": 0,
+          "droppedPct": 0,
+          "lateFrames": 0,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          }
+        },
+        "film": {
+          "fps": 60,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 18.4,
+            "p99": 18.6,
+            "max": 18.7
+          },
+          "droppedFrames": 0,
+          "droppedPct": 0,
+          "lateFrames": 0,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          },
+          "video": {
+            "decoded": 632,
+            "dropped": 9
+          }
+        },
+        "chat": {
+          "fps": 60,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 18.3,
+            "p99": 18.6,
+            "max": 18.7
+          },
+          "droppedFrames": 0,
+          "droppedPct": 0,
+          "lateFrames": 0,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          }
+        },
+        "model": {
+          "requests": 7,
+          "turns": 1,
+          "steps": 5
+        },
+        "memory": {
+          "totalMB": 2323,
+          "processes": 17,
+          "byKind": {
+            "main": 192,
+            "helpers": 637,
+            "studioBrowser": 646,
+            "agents": 52,
+            "pages": 796
+          }
+        }
+      },
+      "start": {
+        "readyMs": 1371,
+        "pagesMs": 897,
+        "processMs": 265
+      }
+    },
+    {
+      "idle": {
+        "memory": {
+          "totalMB": 1770,
+          "processes": 16,
+          "byKind": {
+            "main": 180,
+            "helpers": 434,
+            "studioBrowser": 615,
+            "agents": 36,
+            "pages": 504
+          }
+        }
+      },
+      "play": {
+        "studio": {
+          "fps": 44.4,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 50.4,
+            "p99": 83.2,
+            "max": 817.7
+          },
+          "droppedFrames": 156,
+          "droppedPct": 26,
+          "lateFrames": 47,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          }
+        },
+        "film": {
+          "fps": 47.3,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 35.3,
+            "p99": 68,
+            "max": 817.6
+          },
+          "droppedFrames": 127,
+          "droppedPct": 21.2,
+          "lateFrames": 42,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          },
+          "video": {
+            "decoded": 625,
+            "dropped": 144
+          }
+        },
+        "chat": {
+          "fps": 44.4,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 50.4,
+            "p99": 83.2,
+            "max": 817.7
+          },
+          "droppedFrames": 156,
+          "droppedPct": 26,
+          "lateFrames": 47,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          }
+        }
+      },
+      "scrub": {
+        "studio": {
+          "fps": 34,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.8,
+            "p95": 101,
+            "p99": 249.4,
+            "max": 449.5
+          },
+          "droppedFrames": 402,
+          "droppedPct": 43.4,
+          "lateFrames": 92,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          }
+        },
+        "film": {
+          "fps": 38.4,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 84.2,
+            "p99": 232.9,
+            "max": 432.5
+          },
+          "droppedFrames": 333,
+          "droppedPct": 35.9,
+          "lateFrames": 79,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          },
+          "video": {
+            "decoded": 375,
+            "dropped": 0
+          }
+        },
+        "chat": {
+          "fps": 34,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.8,
+            "p95": 101,
+            "p99": 249.4,
+            "max": 449.5
+          },
+          "droppedFrames": 402,
+          "droppedPct": 43.4,
+          "lateFrames": 92,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          }
+        },
+        "scrub": {
+          "positions": 241,
+          "framesShown": 91
+        }
+      },
+      "divider": {
+        "studio": {
+          "fps": 11.8,
+          "displayHz": 15,
+          "frameMs": {
+            "p50": 66.5,
+            "p95": 200.5,
+            "p99": 233.4,
+            "max": 233.4
+          },
+          "droppedFrames": 32,
+          "droppedPct": 34.8,
+          "lateFrames": 21,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          }
+        },
+        "film": null,
+        "chat": {
+          "fps": 11.8,
+          "displayHz": 15,
+          "frameMs": {
+            "p50": 66.5,
+            "p95": 200.5,
+            "p99": 233.4,
+            "max": 233.4
+          },
+          "droppedFrames": 32,
+          "droppedPct": 34.8,
+          "lateFrames": 21,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          }
+        },
+        "resize": {
+          "steps": 61,
+          "lagMs": {
+            "p50": 4,
+            "p95": 6,
+            "max": 8
+          }
+        }
+      },
+      "stream": {
+        "studio": {
+          "fps": 41,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 66.5,
+            "p99": 133.2,
+            "max": 151.1
+          },
+          "droppedFrames": 190,
+          "droppedPct": 31.7,
+          "lateFrames": 78,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          }
+        },
+        "film": {
+          "fps": 45.4,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 51.3,
+            "p99": 133.3,
+            "max": 151
+          },
+          "droppedFrames": 146,
+          "droppedPct": 24.3,
+          "lateFrames": 59,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          },
+          "video": {
+            "decoded": 626,
+            "dropped": 187
+          }
+        },
+        "chat": {
+          "fps": 41,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 66.5,
+            "p99": 133.2,
+            "max": 151.1
+          },
+          "droppedFrames": 190,
+          "droppedPct": 31.7,
+          "lateFrames": 78,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          }
+        },
+        "model": {
+          "requests": 7,
+          "turns": 1,
+          "steps": 5
+        },
+        "memory": {
+          "totalMB": 1848,
+          "processes": 16,
+          "byKind": {
+            "main": 150,
+            "helpers": 535,
+            "studioBrowser": 418,
+            "pages": 746
+          }
+        }
+      },
+      "start": {
+        "readyMs": 1744,
+        "pagesMs": 1290,
+        "processMs": 411
+      }
+    },
+    {
+      "idle": {
+        "memory": {
+          "totalMB": 2028,
+          "processes": 16,
+          "byKind": {
+            "main": 178,
+            "helpers": 518,
+            "studioBrowser": 709,
+            "agents": 46,
+            "pages": 579
+          }
+        }
+      },
+      "play": {
+        "studio": {
+          "fps": 60,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 18.3,
+            "p99": 18.7,
+            "max": 18.7
+          },
+          "droppedFrames": 0,
+          "droppedPct": 0,
+          "lateFrames": 0,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          }
+        },
+        "film": {
+          "fps": 60,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 18.3,
+            "p99": 18.6,
+            "max": 18.7
+          },
+          "droppedFrames": 0,
+          "droppedPct": 0,
+          "lateFrames": 0,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          },
+          "video": {
+            "decoded": 629,
+            "dropped": 8
+          }
+        },
+        "chat": {
+          "fps": 60,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 18.3,
+            "p99": 18.7,
+            "max": 18.7
+          },
+          "droppedFrames": 0,
+          "droppedPct": 0,
+          "lateFrames": 0,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          }
+        }
+      },
+      "scrub": {
+        "studio": {
+          "fps": 60,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 18.2,
+            "p99": 18.6,
+            "max": 18.7
+          },
+          "droppedFrames": 0,
+          "droppedPct": 0,
+          "lateFrames": 0,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          }
+        },
+        "film": {
+          "fps": 60,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 18.2,
+            "p99": 18.6,
+            "max": 18.7
+          },
+          "droppedFrames": 0,
+          "droppedPct": 0,
+          "lateFrames": 0,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          },
+          "video": {
+            "decoded": 709,
+            "dropped": -6
+          }
+        },
+        "chat": {
+          "fps": 60,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 18.2,
+            "p99": 18.6,
+            "max": 18.7
+          },
+          "droppedFrames": 0,
+          "droppedPct": 0,
+          "lateFrames": 0,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          }
+        },
+        "scrub": {
+          "positions": 241,
+          "framesShown": 194
+        }
+      },
+      "divider": {
+        "studio": {
+          "fps": 59.9,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 18.7,
+            "p99": 18.7,
+            "max": 18.7
+          },
+          "droppedFrames": 0,
+          "droppedPct": 0,
+          "lateFrames": 0,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          }
+        },
+        "film": {
+          "fps": 59.9,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 18.6,
+            "p99": 18.7,
+            "max": 18.7
+          },
+          "droppedFrames": 0,
+          "droppedPct": 0,
+          "lateFrames": 0,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          }
+        },
+        "chat": {
+          "fps": 59.9,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 18.7,
+            "p99": 18.7,
+            "max": 18.7
+          },
+          "droppedFrames": 0,
+          "droppedPct": 0,
+          "lateFrames": 0,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          }
+        },
+        "resize": {
+          "steps": 61,
+          "lagMs": {
+            "p50": 4,
+            "p95": 4,
+            "max": 6
+          }
+        }
+      },
+      "stream": {
+        "studio": {
+          "fps": 60,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 18.4,
+            "p99": 18.6,
+            "max": 18.7
+          },
+          "droppedFrames": 0,
+          "droppedPct": 0,
+          "lateFrames": 0,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          }
+        },
+        "film": {
+          "fps": 60,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 18.4,
+            "p99": 18.6,
+            "max": 18.7
+          },
+          "droppedFrames": 0,
+          "droppedPct": 0,
+          "lateFrames": 0,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          },
+          "video": {
+            "decoded": 628,
+            "dropped": 9
+          }
+        },
+        "chat": {
+          "fps": 60,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 18.4,
+            "p99": 18.6,
+            "max": 18.7
+          },
+          "droppedFrames": 0,
+          "droppedPct": 0,
+          "lateFrames": 0,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          }
+        },
+        "model": {
+          "requests": 7,
+          "turns": 1,
+          "steps": 5
+        },
+        "memory": {
+          "totalMB": 2095,
+          "processes": 16,
+          "byKind": {
+            "main": 188,
+            "helpers": 591,
+            "studioBrowser": 635,
+            "pages": 682
+          }
+        }
+      },
+      "start": {
+        "readyMs": 1577,
+        "pagesMs": 957,
+        "processMs": 320
+      }
+    },
+    {
+      "idle": {
+        "memory": {
+          "totalMB": 1941,
+          "processes": 15,
+          "byKind": {
+            "main": 177,
+            "helpers": 507,
+            "studioBrowser": 674,
+            "pages": 583
+          }
+        }
+      },
+      "play": {
+        "studio": {
+          "fps": 60,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 18.4,
+            "p99": 18.7,
+            "max": 18.7
+          },
+          "droppedFrames": 0,
+          "droppedPct": 0,
+          "lateFrames": 0,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          }
+        },
+        "film": {
+          "fps": 60,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 18.4,
+            "p99": 18.7,
+            "max": 18.8
+          },
+          "droppedFrames": 0,
+          "droppedPct": 0,
+          "lateFrames": 0,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          },
+          "video": {
+            "decoded": 628,
+            "dropped": 7
+          }
+        },
+        "chat": {
+          "fps": 60,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 18.4,
+            "p99": 18.7,
+            "max": 18.7
+          },
+          "droppedFrames": 0,
+          "droppedPct": 0,
+          "lateFrames": 0,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          }
+        }
+      },
+      "scrub": {
+        "studio": {
+          "fps": 60,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 18.3,
+            "p99": 18.6,
+            "max": 18.7
+          },
+          "droppedFrames": 0,
+          "droppedPct": 0,
+          "lateFrames": 0,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          }
+        },
+        "film": {
+          "fps": 60,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 18.3,
+            "p99": 18.7,
+            "max": 18.7
+          },
+          "droppedFrames": 0,
+          "droppedPct": 0,
+          "lateFrames": 0,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          },
+          "video": {
+            "decoded": 708,
+            "dropped": -5
+          }
+        },
+        "chat": {
+          "fps": 60,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 18.3,
+            "p99": 18.6,
+            "max": 18.7
+          },
+          "droppedFrames": 0,
+          "droppedPct": 0,
+          "lateFrames": 0,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          }
+        },
+        "scrub": {
+          "positions": 241,
+          "framesShown": 194
+        }
+      },
+      "divider": {
+        "studio": {
+          "fps": 59.9,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 18.3,
+            "p99": 18.6,
+            "max": 18.6
+          },
+          "droppedFrames": 0,
+          "droppedPct": 0,
+          "lateFrames": 0,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          }
+        },
+        "film": {
+          "fps": 59.9,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 18.2,
+            "p99": 18.6,
+            "max": 18.6
+          },
+          "droppedFrames": 0,
+          "droppedPct": 0,
+          "lateFrames": 0,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          }
+        },
+        "chat": {
+          "fps": 59.9,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 18.3,
+            "p99": 18.6,
+            "max": 18.6
+          },
+          "droppedFrames": 0,
+          "droppedPct": 0,
+          "lateFrames": 0,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          }
+        },
+        "resize": {
+          "steps": 61,
+          "lagMs": {
+            "p50": 3,
+            "p95": 5,
+            "max": 6
+          }
+        }
+      },
+      "stream": {
+        "studio": {
+          "fps": 60,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 18.4,
+            "p99": 18.7,
+            "max": 18.7
+          },
+          "droppedFrames": 0,
+          "droppedPct": 0,
+          "lateFrames": 0,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          }
+        },
+        "film": {
+          "fps": 60,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 18.4,
+            "p99": 18.7,
+            "max": 18.7
+          },
+          "droppedFrames": 0,
+          "droppedPct": 0,
+          "lateFrames": 0,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          },
+          "video": {
+            "decoded": 628,
+            "dropped": 6
+          }
+        },
+        "chat": {
+          "fps": 60,
+          "displayHz": 60,
+          "frameMs": {
+            "p50": 16.7,
+            "p95": 18.4,
+            "p99": 18.7,
+            "max": 18.7
+          },
+          "droppedFrames": 0,
+          "droppedPct": 0,
+          "lateFrames": 0,
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0,
+            "maxMs": 0
+          }
+        },
+        "model": {
+          "requests": 7,
+          "turns": 1,
+          "steps": 5
+        },
+        "memory": {
+          "totalMB": 2157,
+          "processes": 16,
+          "byKind": {
+            "main": 190,
+            "helpers": 598,
+            "studioBrowser": 632,
+            "pages": 735
+          }
+        }
+      },
+      "start": {
+        "readyMs": 1448,
+        "pagesMs": 1024,
+        "processMs": 299
+      }
+    }
+  ]
+}
