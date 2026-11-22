@@ -41,7 +41,7 @@ import { AGENT_PROGRAMS, HOME_BIN_CANDIDATES, antigravityVersion, chosenProgram,
 import { logSwitches } from './agent-logs.mjs';
 import { afterFirstReading, firstWindowsApps, refreshWindowsApps } from './windows-apps.mjs';
 import { mergeConfig, sessionSkills } from './agent-skills.mjs';
-import { nodeBinary } from './node-runtime.mjs';
+import { nodeRuntime, onDisk } from './node-runtime.mjs';
 import { claudeEnvFile, openfilmCommand } from './openfilm-command.mjs';
 import { outOfBalance } from './pi-config.mjs';
 import { AGENT_DEFINITIONS } from './agent-definitions.mjs';
@@ -351,9 +351,9 @@ function run(cmd, args, timeoutMs = 10_000, { cwd, env, options } = {}) {
  */
 export const winArg = (a) => (/^[\w.:\\/=+@-]+$/.test(a) ? a : `"${String(a).replace(/"/g, '""').replace(/%/g, '"^%"')}"`);
 
-/** The app's own Node running a script, through as-node.mjs: what the script starts does not run Electron as Node. */
-const AS_NODE = fileURLToPath(new URL('./as-node.mjs', import.meta.url));
-/** The words before a script that start it on the app's own Node: as-node.mjs first, the script as the main module. */
+/** The app's own Node (node-runtime.mjs) running a script, through as-node.mjs: what the script starts does not run Electron as Node, and on Windows opens no console window. */
+const AS_NODE = onDisk(fileURLToPath(new URL('./as-node.mjs', import.meta.url)));
+/** The words after the app's own Node that start a script on it: as-node.mjs first, the script as the main module. */
 const asNode = (/** @type {string} */ script) => ['--import', pathToFileURL(AS_NODE).href, script];
 
 /**
@@ -361,7 +361,10 @@ const asNode = (/** @type {string} */ script) => ['--import', pathToFileURL(AS_N
  * a `.cmd` shim whose target could not be told, through cmd.exe. `options` go to spawn.
  */
 function starting(cliPath, args) {
-  if (/\.(?:c|m)?js$/i.test(cliPath)) return { cmd: nodeBinary(), args: [...asNode(cliPath), ...args], env: { ELECTRON_RUN_AS_NODE: '1' }, options: {} };
+  if (/\.(?:c|m)?js$/i.test(cliPath)) {
+    const node = nodeRuntime();
+    return { cmd: node.command, args: [...asNode(cliPath), ...args], env: node.env, options: {} };
+  }
   if (windows && /\.(?:cmd|bat)$/i.test(cliPath)) {
     return { cmd: process.env.ComSpec || 'cmd.exe', args: ['/d', '/s', '/c', `"${[cliPath, ...args].map(winArg).join(' ')}"`], env: {}, options: { windowsVerbatimArguments: true } };
   }
@@ -850,29 +853,23 @@ export function ownSignIn(spec, status) {
   return spec.login === null && status.signedIn === false ? { ...status, signedIn: null } : status;
 }
 
-/** The adapter's command line (its package's `bin`), run with Electron's own Node. */
+/** The adapter's command line (its package's `bin`), as the app's own Node reads it (unpacked beside app.asar). */
 function adapterScript(pkg) {
   const manifest = require.resolve(`${pkg}/package.json`);
   const json = JSON.parse(readFileSync(manifest, 'utf8'));
   const bin = typeof json.bin === 'string' ? json.bin : Object.values(json.bin ?? {})[0];
-  return join(dirname(manifest), bin ?? json.main ?? 'index.js');
+  return onDisk(join(dirname(manifest), bin ?? json.main ?? 'index.js'));
 }
 
-/** How an agent's adapter starts: the app's Node running its script (on Electron, through as-node.mjs), told where the person's program is. */
+/** How an agent's adapter starts: the app's Node running its script through as-node.mjs, told where the person's program is. */
 function adapterLaunch(id, cliPath) {
   const spec = AGENTS[id];
   const node = nodeRuntime();
   return {
     cmd: node.command,
-    args: node.env.ELECTRON_RUN_AS_NODE ? asNode(adapterScript(spec.adapter)) : [adapterScript(spec.adapter)],
+    args: asNode(adapterScript(spec.adapter)),
     env: { ...node.env, ...spec.env(cliPath) },
   };
-}
-
-function nodeRuntime() {
-  return process.versions.electron
-    ? { command: nodeBinary(), env: { ELECTRON_RUN_AS_NODE: '1' } }
-    : { command: process.execPath, env: {} };
 }
 
 /* ── the agents' own questions to the person (ACP form elicitation) ──
@@ -1355,10 +1352,10 @@ export class AgentSession {
     /* the others have no place for it: the session's first message carries it */
     this.instructions = harness || this.spec.systemPrompt ? null : instructions;
 
-    const script = harness ? fileURLToPath(new URL('./pi-agent.mjs', import.meta.url)) : native ? null : adapterScript(this.spec.adapter);
+    const script = harness ? onDisk(fileURLToPath(new URL('./pi-agent.mjs', import.meta.url))) : native ? null : adapterScript(this.spec.adapter);
     this.child = native
       ? spawn(native.cmd, native.args, { ...native.options, ...OWN_GROUP, cwd: this.opts.cwd, env, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true })
-      : spawn(node.command, node.env.ELECTRON_RUN_AS_NODE ? asNode(script) : [script], { ...OWN_GROUP, cwd: this.opts.cwd, env, stdio: ['pipe', 'pipe', 'pipe', ...(harness ? ['pipe'] : [])], windowsHide: true });
+      : spawn(node.command, asNode(/** @type {string} */ (script)), { ...OWN_GROUP, cwd: this.opts.cwd, env, stdio: ['pipe', 'pipe', 'pipe', ...(harness ? ['pipe'] : [])], windowsHide: true });
     if (harness) this.child.stdio[KEYS_FD]?.end(JSON.stringify(harness.env ?? {}));
     this.child.stderr.on('data', (d) => { this.stderr = (this.stderr + String(d)).slice(-16_000); });
     LIVE.add(this);
@@ -1460,7 +1457,7 @@ export class AgentSession {
     this.opened = {
       program: harness ? 'pi' : cli.path,
       /* the command line the agent's process was started with: its own program, or the app's Node running its adapter (or Pi) */
-      command: native ? [native.cmd, ...native.args] : [node.command, ...(node.env.ELECTRON_RUN_AS_NODE ? asNode(script) : [script])],
+      command: native ? [native.cmd, ...native.args] : [node.command, ...asNode(/** @type {string} */ (script))],
       adapter: this.spec.adapter ?? null,
       env: Object.fromEntries(Object.entries(extra).map(([k, v]) => [k, /KEY|TOKEN|SECRET|PASSWORD/i.test(k) ? '(hidden)' : k === 'OPENFILM_PI' ? JSON.parse(v) : v])),
       ...(env.CODEX_CONFIG ? { codexConfig: JSON.parse(env.CODEX_CONFIG) } : {}),

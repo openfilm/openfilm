@@ -44,6 +44,7 @@
   !insertmacro ${DO} "resources\app.asar.unpacked"
   !insertmacro ${DO} "resources\runtime\ffmpeg"
   !insertmacro ${DO} "resources\runtime\ms-playwright"
+  !insertmacro ${DO} "resources\runtime\node"
 !macroend
 
 !ifdef BUILD_UNINSTALLER

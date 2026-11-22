@@ -39,6 +39,7 @@ import { createAgentUpdates } from './agent-updates.mjs';
 import { AGENTS, checkAgentProgram, closeEverySession, diagnoseAgent, forgetAgentStatus, listAgents, localAgent, openAgentInstaller, openAgentUpdate, openAgentSignIn, setChosenPaths, signOutAgent } from './agents.mjs';
 import { agentUsage, forgetAgentUsage } from './agent-usage.mjs';
 import { installOpenfilmCommand } from './openfilm-command.mjs';
+import { nodeRuntime } from './node-runtime.mjs';
 import { startUpdates } from './updates.mjs';
 import { stepAside } from './update-launch.mjs';
 import { ensureFfmpeg, ffmpegDir, ffmpegDownloadable, ffmpegIn, ffmpegOnPath } from './ffmpeg-runtime.mjs';
@@ -713,6 +714,7 @@ async function start() {
   if (windows) void firstWindowsApps();
 
   const shellEnv = await loginShellEnvironment();
+  const appNode = nodeRuntime();
   const env = childEnvironment({
     shell: shellEnv,
     extra: {
@@ -733,6 +735,9 @@ async function start() {
       ...(process.env.OPENFILM_COMMUNITY_LIBRARY_URL ? { OPENFILM_COMMUNITY_LIBRARY_URL: process.env.OPENFILM_COMMUNITY_LIBRARY_URL } : {}),
       /* another OpenFilm service (a local one, to develop it), passed through when run from source */
       ...(process.env.OPENFILM_API_URL ? { OPENFILM_API_URL: process.env.OPENFILM_API_URL } : {}),
+      /* the Node the installed app brings, for the Node programs Studio starts: the app itself never runs as Node
+         (node-runtime.mjs). From source none is named, and Electron runs as Node */
+      ...(appNode.env.ELECTRON_RUN_AS_NODE ? {} : { OPENFILM_NODE: appNode.command }),
     },
   });
 

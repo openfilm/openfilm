@@ -13,7 +13,7 @@ test('the installer script names OpenFilm\'s program files, and a packaged file 
   for (const file of ['openfilm.exe', 'ffmpeg.dll', 'resources.pak', 'resources\\app.asar', 'resources\\app-update.yml', 'resources\\elevate.exe']) {
     assert.ok(lists.files.includes(file), file);
   }
-  assert.deepEqual(lists.folders, ['locales', 'resources\\app.asar.unpacked', 'resources\\runtime\\ffmpeg', 'resources\\runtime\\ms-playwright']);
+  assert.deepEqual(lists.folders, ['locales', 'resources\\app.asar.unpacked', 'resources\\runtime\\ffmpeg', 'resources\\runtime\\ms-playwright', 'resources\\runtime\\node']);
 
   /* a packaged app with every listed file, as electron-builder lays it out */
   const app = await mkdtemp(join(tmpdir(), 'of-installer-files-'));
