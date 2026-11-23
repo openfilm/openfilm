@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { ownSize } from './nle.mjs';
+import { pictureRect } from '../../src/film-doc.mjs';
 
 /*
  * A clip whose style places it with left/top/width but no height takes its height from the picture's own
@@ -13,7 +14,7 @@ import { ownSize } from './nle.mjs';
  *    stretched to the stage's height — letterboxed, and pushed off the stage entirely where it sat low;
  *
  *  - ffprobe reads a file's picture size even when it reads no length of it, and the size was thrown away with the
- *    length, so a clip whose file has no duration was placed as if it were the stage's shape.
+ *    length, so a clip whose file had no duration was placed as if it were the stage's shape.
  */
 
 const stage = { w: 1080, h: 1920 };
@@ -39,14 +40,48 @@ test('the browser\'s size of the clip is taken when it is a size of its own', ()
   assert.deepEqual(ownSize({}, { w: 1280, h: 720 }, stage), { w: 1280, h: 720 });
 });
 
-test('a clip placed with a width but no height is not stretched to the stage\'s shape', () => {
-  /* what the export would place: the picture's own proportions, so a 16:9 clip on a 1080-wide box is 602.4 high */
-  const box = { x: 10, y: 407, w: 1071 };
-  const height = (box.w * landscape.h) / landscape.w;
-  assert.equal(Math.round(height), 602);
-  /* the stage's shape instead: letterboxed, and off the stage where it sat low */
-  const wrong = (box.w * stage.h) / stage.w;
-  assert.equal(Math.round(wrong), 1904);
-  assert.ok(407 + wrong > stage.h, 'past the stage');
-  assert.ok(862 + wrong > stage.h, 'and past it for the clip that sat lower');
+/*
+ * The export's own path, planned the way the export plans it: the size the export takes for the picture (ownSize),
+ * and then the rectangle it draws in (pictureRect). A clip placed with a width but no height takes its height from
+ * the picture's own proportions — so a landscape clip 1071 wide on a portrait stage is 602 high, where the stage's
+ * shape would have made it 1904 high: letterboxed, and off the stage where it sat low.
+ *
+ * This is what the export does with a width-only clip, not an arithmetic check of the numbers.
+ */
+const planned = (/** @type {{ w: number, h: number } | null} */ probed, /** @type {{ w: number, h: number } | null} */ seen) => {
+  /* the export's own size for the picture (exports.mjs) */
+  const f = { ...(probed ?? {}), ...(ownSize(probed, seen, stage) ?? {}) };
+  /* the rectangle the export draws the picture in, for a clip placed with a width but no height */
+  const rect = pictureRect('video', { w: f.w, h: f.h }, stage, { x: 10, y: 407, w: 1071 });
+  return { f, rect };
+};
+
+test('a clip placed with a width but no height is planned from the picture\'s own proportions', () => {
+  /* the file is probed: 1920×1080. The browser could not read it, so it reported the stage's shape. */
+  const { f, rect } = planned({ w: 1920, h: 1080 }, { w: stage.w, h: stage.h });
+  assert.deepEqual(f, { w: 1920, h: 1080 }, 'the picture\'s own size is the probed one');
+  assert.equal(rect.w, 1071, 'the clip is as wide as its box says');
+  assert.equal(Math.round(rect.h), 602, 'and as high as the picture\'s own proportions say');
+  assert.ok(rect.y + rect.h <= stage.h, 'and it stays on the stage');
+});
+
+test('a clip placed with a width but no height is not planned to the stage\'s shape', () => {
+  /* nothing was probed, and the browser says the stage's shape: the picture's own size is not known, so the
+     export must not fall back to the stage's shape for it */
+  const { f, rect } = planned({}, { w: stage.w, h: stage.h });
+  assert.deepEqual(f, {}, 'the picture\'s own size stays unknown');
+  assert.equal(Math.round(rect.h), 1904, 'so the clip is not placed as if it were the stage\'s shape');
+  assert.ok(rect.y + rect.h > stage.h, 'which would put it past the stage');
+});
+
+test('a clip placed low on the stage is planned to stay on it', () => {
+  /* the same clip, placed lower: with the picture's own proportions it stays on the stage */
+  const { rect } = planned({ w: 1920, h: 1080 }, { w: stage.w, h: stage.h });
+  const low = pictureRect('video', { w: 1920, h: 1080 }, stage, { x: 10, y: 862, w: 1071 });
+  assert.equal(Math.round(low.h), 602);
+  assert.ok(low.y + low.h <= stage.h, 'the clip that sat lower is on the stage');
+  /* with the stage's shape instead, it was drawn off the stage altogether */
+  const wrong = pictureRect('video', { w: stage.w, h: stage.h }, stage, { x: 10, y: 862, w: 1071 });
+  assert.ok(wrong.y + wrong.h > stage.h, 'the stage\'s shape would have put it past the stage');
+  assert.ok(rect.y + rect.h <= stage.h);
 });
