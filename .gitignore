@@ -20,3 +20,5 @@ dist/
 # OS and editors
 .DS_Store
 *.log
+# the engine suite's vendored libraries keep their npm layout, dist/ folders included (test/engine/vendor/vendor.json)
+!packages/openfilm/test/engine/vendor/*/dist/
