@@ -1,0 +1,87 @@
+{
+  "three": {
+    "version": "0.187.0",
+    "license": "MIT",
+    "tarball": "https://registry.npmjs.org/three/-/three-0.187.0.tgz",
+    "integrity": "sha512-Qiu7R+Cmh8CstZsY1uJOSWnVlfo7ZtNLV7mF8Jltk3LB3AtDu9cRZlcnRKkAk8Y4z6KKw35z7Y7Urd7jWY8etA==",
+    "files": {
+      "LICENSE": "8b378ebe60e2fe500158cb0ac71cb5e8b7d92953c2abcc63a0eb90499653b5bc",
+      "build/three.core.js": "613e370f76638fdef83926642bf256dc9615684922de1ce1f63a8583e5d78578",
+      "build/three.module.js": "104f56145899722094556490d787aae0617cc2fc3382f31df02d724ea1aee341",
+      "build/three.webgpu.js": "eafead3154ec06093f3108bddceab360f048a6fcebd7c085d5aae0ab5404bd25",
+      "build/three.tsl.js": "d8f3cdb8b85b799a5631bd9a8d77e185d88ce1eb1bb051f48b332728a5423e3f",
+      "examples/jsm/environments/RoomEnvironment.js": "55f466192cc84298755a424c5e040345006b2ee1455589b3b54126c2ea4123f4",
+      "examples/jsm/postprocessing/EffectComposer.js": "4e079a5886152d7e529a59aef644e968ab4d32c6a33ce016b36bf29b2eac26f7",
+      "examples/jsm/postprocessing/RenderPass.js": "817f6c3cdcd0fd41515d112359ea0532568eefb5aabd3b33903957ebca1b8a6a",
+      "examples/jsm/postprocessing/UnrealBloomPass.js": "ba8f2fcadfa6588384c9473498f974d81d120f02f0e63a0e59c265202a006b5a",
+      "examples/jsm/postprocessing/OutputPass.js": "02e4a261af34de71338185e9e87f0cbe5cba9115608d984363e1269dec1d2272",
+      "examples/jsm/postprocessing/Pass.js": "444b409c235ead986893c472e720da1b779a56985c7d10b279c7944b52bd61c5",
+      "examples/jsm/postprocessing/ShaderPass.js": "e2500a5913b26bbf5148ceaae644c6edcff06a18b01494ee37bf856353d2ab9d",
+      "examples/jsm/postprocessing/MaskPass.js": "7cd08eee9d5d6f5578beaddbdcbe9c384f6873810af27f22ab7db3ceeb127aa3",
+      "examples/jsm/shaders/CopyShader.js": "a33057d5ac91c43304c186ac0e8816e62bb2ed471d3a00ff3018dfd5c0389718",
+      "examples/jsm/shaders/LuminosityHighPassShader.js": "5044f780b6e6cf863947f64c36fe1587132f7fbe395ada863cd1e5f0388dcf1e",
+      "examples/jsm/shaders/OutputShader.js": "353479f77a8d7e2629d49ccac9fc2f5dbfdda5442e0adf867b00377a2fcb0cb2",
+      "examples/jsm/geometries/RoundedBoxGeometry.js": "c5feab96123858ed8823c889b238dc8734adab7e760e3cfd21e7f3f2f3e348e3"
+    }
+  },
+  "p5": {
+    "version": "1.11.3",
+    "license": "LGPL-2.1",
+    "tarball": "https://registry.npmjs.org/p5/-/p5-1.11.3.tgz",
+    "integrity": "sha512-5eiyuZ3Pvo6ucr3nr8AzD+qwpoleiIEF2a2HmiO6PJM1tnbD0LmLlckZyYGJATs0tdmRjc37Muh6KPS4d1FHHg==",
+    "files": {
+      "license.txt": "eb2f25f8f165d5f20682c1ce7e99ce69144ecfd80fbed8c17dfd327ecd8b6cb6",
+      "lib/p5.min.js": "af51e6211e061b5ae463fbc5c3c1c272e5ca67fa560ed3513fde17325d837506"
+    }
+  },
+  "lottie-web": {
+    "version": "5.12.2",
+    "license": "MIT",
+    "tarball": "https://registry.npmjs.org/lottie-web/-/lottie-web-5.12.2.tgz",
+    "integrity": "sha512-uvhvYPC8kGPjXT3MyKMrL3JitEAmDMp30lVkuq/590Mw9ok6pWcFCwXJveo0t5uqYw1UREQHofD+jVpdjBv8wg==",
+    "files": {
+      "LICENSE.md": "4750849de81eeee983513f7e66c419abf4656146a23283e8e93532075e2c242b",
+      "build/player/lottie.min.js": "a0757321f974527bda3cc2593bf56cc7ffe4578421249ced6ae49ffb1c529f90"
+    }
+  },
+  "pixi.js": {
+    "version": "8.9.2",
+    "license": "MIT",
+    "tarball": "https://registry.npmjs.org/pixi.js/-/pixi.js-8.9.2.tgz",
+    "integrity": "sha512-oLFBkOOA/O6OpT5T8o05AxgZB9x9yWNzEQ+WTNZZFoCvfU2GdT4sFTjpVFuHQzgZPmAm/1IFhKdNiXVnlL8PRw==",
+    "files": {
+      "LICENSE": "5ce7447bc57f7349ffc48338782fbcabe613696e00712b20d66bc58e780f9473",
+      "dist/pixi.min.js": "06457df66f800f6110133a9f03deddc4bd9865d4117667891c28712fec70ed9b"
+    }
+  },
+  "matter-js": {
+    "version": "0.20.0",
+    "license": "MIT",
+    "tarball": "https://registry.npmjs.org/matter-js/-/matter-js-0.20.0.tgz",
+    "integrity": "sha512-iC9fYR7zVT3HppNnsFsp9XOoQdQN2tUyfaKg4CHLH8bN+j6GT4Gw7IH2rP0tflAebrHFw730RR3DkVSZRX8hwA==",
+    "files": {
+      "LICENSE": "ed182087be5b26734aa6d4789743de3a97417950e8c1e3ff2e3d19c6462720d3",
+      "build/matter.min.js": "72d30be0f579eb02ce1e0b6f9d359a4f392e6837e5a26ba8be5dbee7f88e24ae"
+    }
+  },
+  "three-mesh-bvh": {
+    "version": "0.9.18",
+    "license": "MIT",
+    "tarball": "https://registry.npmjs.org/three-mesh-bvh/-/three-mesh-bvh-0.9.18.tgz",
+    "integrity": "sha512-S76hOBnsSG4jsuEyCu98K63klONG4NwJANabPY1LUD5l7oUgu2xtKC0IwnX/XyPzo4YZ1D7ZU+gHVA479UdQmA==",
+    "files": {
+      "LICENSE": "b106ef6198a9862ed2b5b873e944ecf3583c631a84a7462d400ecc1910ce7fee",
+      "build/index.module.js": "bdfb3f6f69fd1a33a6c02e4ea3e24977c402335d9aba86d1b8f2853fafa7df1f"
+    }
+  },
+  "three-gpu-pathtracer": {
+    "version": "0.0.28",
+    "license": "MIT",
+    "tarball": "https://registry.npmjs.org/three-gpu-pathtracer/-/three-gpu-pathtracer-0.0.28.tgz",
+    "integrity": "sha512-Ybfa6qpRIU2QP4EXQJaawYZzVN4raSFqsr9qhXXVSiCi59fjef0pyyXztYYWqAnX7bweKmD70p2xMEWehl019A==",
+    "files": {
+      "LICENSE": "2df239f3787d174fbd6ead7bc4c748bee526564aa2e67315afcae47e15552e00",
+      "build/index.module.js": "58dfa7b7504eb76094336382da6ff73a839b4a4d2cdb475b630b8001302da6dd"
+    }
+  }
+}

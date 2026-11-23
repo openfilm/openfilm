@@ -1,0 +1,7 @@
+<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;width:900px;height:506px;background:#123;overflow:hidden}</style></head>
+<body><canvas id="c" width="900" height="506"></canvas><script>
+// The page inside the adjustment layer's iframe: drawn by its parent for each t.
+const ctx = document.getElementById('c').getContext('2d', { willReadFrequently: true });
+window.draw = (t) => { ctx.fillStyle = '#123'; ctx.fillRect(0, 0, 900, 506); ctx.save(); ctx.translate(450, 253); ctx.rotate(t * 1.5);
+  ctx.fillStyle = '#ffc43b'; ctx.fillRect(-120, -120, 240, 240); ctx.restore(); ctx.fillStyle = '#fff'; ctx.font = '40px sans-serif'; ctx.fillText('iframe t=' + t.toFixed(2), 30, 60); };
+</script></body></html>

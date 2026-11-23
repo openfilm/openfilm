@@ -1,0 +1,26 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=1920, height=1080">
+<style>body{margin:0;width:1920px;height:1080px;overflow:hidden;background:#000}</style>
+<script src="/vendor/p5/lib/p5.min.js"></script></head>
+<body><script type="module">
+// p5.js on a 2D canvas: noLoop, redraw per frame, seeded random and noise; a flow field of 1400 lines whose length
+// is a function of t only.
+import { label } from './label.js';
+let T = 0, inst;
+const ready = new Promise((res) => {
+  inst = new p5((p) => {
+    p.setup = () => { p.createCanvas(1920, 1080); p.pixelDensity(1); p.noLoop(); res(); };
+    p.draw = () => {
+      p.randomSeed(7); p.noiseSeed(7); p.background(12, 12, 18); p.strokeWeight(1.4); p.noFill();
+      const steps = Math.floor(10 + T * 60);
+      for (let i = 0; i < 1400; i++) {
+        let x = p.random(1920), y = p.random(1080);
+        p.stroke(120 + p.random(120), 160 + p.random(80), 255, 90);
+        p.beginShape();
+        for (let s = 0; s < steps; s++) { p.vertex(x, y); const a = p.noise(x * 0.0016, y * 0.0016) * p.TWO_PI * 2.2; x += Math.cos(a) * 3; y += Math.sin(a) * 3; }
+        p.endShape();
+      }
+    };
+  });
+});
+window.film = { duration: 2, ready, frame(t) { T = t; inst.redraw(); label(`p5.js ${p5.prototype.VERSION || ''}: noLoop + redraw, seeded`); } };
+</script></body></html>

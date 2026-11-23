@@ -1,0 +1,10 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=1920, height=1080">
+<style>body{margin:0;width:1920px;height:1080px;overflow:hidden;background:#141414}</style></head>
+<body><svg id="s" width="1920" height="1080"><circle cx="220" cy="540" r="80" fill="#3cf0d2"><animate attributeName="cx" from="220" to="1520" dur="2s" repeatCount="indefinite"/></circle>
+<rect x="900" y="200" width="120" height="120" fill="#ff5b45"><animateTransform attributeName="transform" type="rotate" from="0 960 260" to="360 960 260" dur="2s" repeatCount="indefinite"/></rect></svg>
+<script type="module">
+// SVG SMIL: the page pauses its own animations and sets their time to t (the host does not move SMIL).
+import { label } from './label.js';
+const svg = document.getElementById('s'); svg.pauseAnimations();
+window.film = { duration: 2, frame(t) { svg.setCurrentTime(t); label('SVG SMIL: pauseAnimations() + setCurrentTime(t)'); } };
+</script></body></html>

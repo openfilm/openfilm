@@ -1,0 +1,22 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=1920, height=1080">
+<style>body{margin:0;width:1920px;height:1080px;overflow:hidden;background:#f2eee4;font-family:Georgia,serif}
+#title{position:absolute;left:150px;top:360px;margin:0;font-size:170px;font-weight:700;letter-spacing:-.03em;color:#121212}
+#bar{position:absolute;left:156px;top:620px;width:1300px;height:14px;background:#2340ff;transform-origin:0 50%;transform:scaleX(0)}</style>
+<!-- GSAP is not copied into this repository (its license is not an open-source one): the suite serves the copy npm
+     installed (packages/openfilm devDependencies) at this path -->
+<script src="/vendor/gsap/dist/gsap.min.js"></script>
+<script src="/vendor/gsap/dist/SplitText.min.js"></script></head>
+<body><h1 id="title">Seekable timelines</h1><div id="bar"></div>
+<script type="module">
+// GSAP with SplitText: a paused timeline, seek(t) per frame; tweens written as fromTo so nothing is read from the screen.
+import { label } from './label.js';
+gsap.registerPlugin(SplitText);
+let tl;
+const ready = document.fonts.ready.then(() => {
+  const split = SplitText.create('#title', { type: 'chars' });
+  tl = gsap.timeline({ paused: true })
+    .fromTo(split.chars, { yPercent: 110, rotate: 10, opacity: 0 }, { yPercent: 0, rotate: 0, opacity: 1, stagger: 0.025, duration: 0.7, ease: 'expo.out' })
+    .fromTo('#bar', { scaleX: 0 }, { scaleX: 1, duration: 0.9, ease: 'power3.inOut' }, 0.35);
+});
+window.film = { duration: 2, ready, frame(t) { tl.seek(t, false); label(`GSAP ${gsap.version} + SplitText: timeline paused, seek(t)`); } };
+</script></body></html>

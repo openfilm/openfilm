@@ -1,0 +1,57 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=1920, height=1080">
+<style>body{margin:0;width:1920px;height:1080px;overflow:hidden;background:#000}</style>
+<script type="importmap">{"imports":{
+ "three":"/vendor/three/build/three.module.js",
+ "three/webgpu":"/vendor/three/build/three.webgpu.js",
+ "three/tsl":"/vendor/three/build/three.tsl.js",
+ "three/examples/jsm/":"/vendor/three/examples/jsm/",
+ "three/addons/":"/vendor/three/examples/jsm/",
+ "three-mesh-bvh":"/vendor/three-mesh-bvh/build/index.module.js",
+ "three-gpu-pathtracer":"/vendor/three-gpu-pathtracer/build/index.module.js"}}</script></head>
+<body><script type="module">
+// Path tracing in the browser (three-gpu-pathtracer): one sample per call, its noise a function of t, so the same t
+// gives the same picture and `render --blur --samples N` averages N different ones into a clean frame.
+import * as THREE from 'three';
+import { WebGLPathTracer, GradientEquirectTexture } from 'three-gpu-pathtracer';
+import { label } from './label.js';
+const renderer = new THREE.WebGLRenderer({ antialias: false, preserveDrawingBuffer: true });
+renderer.setSize(1920, 1080); renderer.setPixelRatio(1); renderer.toneMapping = THREE.AgXToneMapping;
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+const sky = new GradientEquirectTexture(); sky.topColor.set(0xdfe8ff); sky.bottomColor.set(0x1a1c22); sky.update();
+scene.environment = sky; scene.background = sky; scene.environmentIntensity = 1.2;
+const light = new THREE.DirectionalLight(0xffffff, 3); light.position.set(3, 5, 2); scene.add(light);
+const cam = new THREE.PerspectiveCamera(30, 1920 / 1080, 0.1, 100);
+const knot = new THREE.Mesh(new THREE.TorusKnotGeometry(1, 0.32, 300, 48), new THREE.MeshPhysicalMaterial({ color: 0xf2efe8, roughness: 0.35, clearcoat: 1, clearcoatRoughness: 0.05 }));
+knot.rotation.set(0.4, 0.9, 0); scene.add(knot);
+const ball = new THREE.Mesh(new THREE.SphereGeometry(0.7, 64, 32), new THREE.MeshPhysicalMaterial({ color: 0xffa040, metalness: 1, roughness: 0.2 }));
+ball.position.set(2.2, -0.65, -0.8); scene.add(ball);
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(40, 40), new THREE.MeshStandardMaterial({ color: 0x9aa0aa, roughness: 0.5 }));
+floor.rotation.x = -Math.PI / 2; floor.position.y = -1.35; scene.add(floor);
+const pt = new WebGLPathTracer(renderer); pt.tiles.set(1, 1); pt.renderDelay = 0; pt.fadeDuration = 0; pt.minSamples = 0;
+// the sampler draws from the library's own generator, seeded from t in every frame, not from Math.random: a page's
+// first frame takes random numbers of its own (three.js names the objects it makes then), and the noise of the same
+// t would differ between a page drawing its first frame and one drawing its tenth
+pt.stableNoise = true;
+async function setup() {
+  pt.setScene(scene, cam);
+  // one stratum: every call is an independent random sample (stratified sampling restarts at sample 0 on every reset)
+  const m = pt._pathTracer.material, st = m.stratifiedTexture; st.strata = 1; st.sampler = null; st.init(20, m.bounces + m.transmissiveBounces + 5);
+  // the shaders compile while loading, not in the first frame
+  for (let i = 0; i < 4000 && (pt.isCompiling || pt.samples < 1); i++) { pt.renderSample(); await new Promise((r) => setTimeout(r, 25)); }
+}
+window.film = { duration: 2,
+  ready: setup(),
+  async frame(t) {
+    const a = 0.6 + t * 0.25; cam.position.set(Math.sin(a) * 7, 1.6, Math.cos(a) * 7); cam.lookAt(0.3, -0.2, 0); cam.updateMatrixWorld();
+    pt.updateCamera(); pt.reset();
+    // reset() put the seeds at 0 (stable noise): each is set from t at microsecond precision, the same for the same t
+    // and different for every sub-frame of `render --blur`, whose average then gathers that many samples
+    const seed = Math.floor(t * 1e6), m = pt._pathTracer.material;
+    m.seed = seed % 1000003;
+    m.stratifiedTexture.generator.seed = seed % 0x80000000;
+    pt.renderSample();
+    renderer.getContext().finish();
+    label(`three-gpu-pathtracer 0.0.28: one sample at t=${t.toFixed(3)}`);
+  } };
+</script></body></html>

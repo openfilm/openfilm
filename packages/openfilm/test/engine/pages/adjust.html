@@ -1,0 +1,57 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=1920, height=1080">
+<style>body{margin:0;width:1920px;height:1080px;overflow:hidden;background:#000;color:#fff}
+canvas.h{position:absolute;left:0;width:1920px;height:540px}#c2{top:0}#cg{top:540px}
+.box{width:900px;height:506px;display:block;border:0}#stack{position:relative;width:1920px;height:540px;background:#222}
+#stack video{position:absolute;left:0;top:17px;width:900px;height:506px}#stack iframe{position:absolute;left:960px;top:17px;width:900px;height:506px;border:0}
+#stack h2{position:absolute;left:40px;top:10px;margin:0;font:700 60px Georgia,serif;color:#fff;text-shadow:0 2px 8px #000}</style></head>
+<body>
+<canvas id="c2" class="h" width="1920" height="540" layoutsubtree content="drawable"><video id="vA" class="box" src="media/clip.mp4" muted preload="auto"></video><iframe id="fA" class="box" src="inner.html"></iframe></canvas>
+<canvas id="cg" class="h" width="1920" height="540" layoutsubtree content="drawable"><div id="stack"><video id="vB" src="media/clip.mp4" muted preload="auto"></video><iframe id="fB" src="inner.html"></iframe><h2>a DOM title over both</h2></div></canvas>
+<script type="module">
+// An adjustment layer: a page reads a <video>, a same-origin <iframe> and DOM as pixels (drawElementImage in 2D,
+// texElementImage2D in WebGL) and runs them through a shader. Whether the <video> itself is drawn is reported: in
+// Chromium 149 it came out black.
+import { label } from './label.js';
+const $ = (id) => document.getElementById(id);
+const c2 = $('c2'), cg = $('cg');
+const ctx = c2.getContext('2d', { willReadFrequently: true });
+const gl = cg.getContext('webgl2', { preserveDrawingBuffer: true });
+const painted = (c) => new Promise((res) => { c.addEventListener('paint', res, { once: true }); c.requestPaint?.(); });
+const vs = `#version 300 es
+in vec2 p; out vec2 uv; void main(){ uv = p * .5 + .5; uv.y = 1. - uv.y; gl_Position = vec4(p, 0., 1.); }`;
+const fs = `#version 300 es
+precision highp float; in vec2 uv; out vec4 o; uniform sampler2D tex; uniform float t;
+void main(){ vec2 q = uv; q.x += .006 * sin(q.y * 80. + t * 6.);
+  float r = texture(tex, q + vec2(.004, 0.)).r, g = texture(tex, q).g, b = texture(tex, q - vec2(.004, 0.)).b;
+  vec3 c = vec3(r, g, b); c += smoothstep(.75, 1., max(c.r, max(c.g, c.b))) * .35; o = vec4(c * vec3(1.05, .98, 1.1), 1.); }`;
+const sh = (type, src) => { const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s); if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s)); return s; };
+const prog = gl.createProgram(); gl.attachShader(prog, sh(gl.VERTEX_SHADER, vs)); gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, fs)); gl.linkProgram(prog); gl.useProgram(prog);
+gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer()); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+const loc = gl.getAttribLocation(prog, 'p'); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+const tex = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, tex);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+const seek = (v, t) => new Promise((res) => { if (Math.abs(v.currentTime - t) < 1e-4 && v.readyState >= 2) return res(); v.addEventListener('seeked', () => res(), { once: true }); v.currentTime = t; });
+const loaded = (f) => new Promise((res) => (f.contentWindow?.draw ? res() : f.addEventListener('load', () => res(), { once: true })));
+window.film = { duration: 2,
+  ready: Promise.all([loaded($('fA')), loaded($('fB'))]).then(() => Promise.all([painted(c2), painted(cg)])),
+  async frame(t) {
+    await Promise.all([seek($('vA'), t), seek($('vB'), t)]);
+    $('fA').contentWindow.draw(t); $('fB').contentWindow.draw(t);
+    await Promise.all([painted(c2), painted(cg)]);
+    const errors = [];
+    ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, 1920, 540);
+    try { ctx.drawElementImage($('vA'), 0, 17, 900, 506); } catch (e) { errors.push('2D <video>: ' + e.message); }
+    try { ctx.drawElementImage($('fA'), 960, 17, 900, 506); } catch (e) { errors.push('2D <iframe>: ' + e.message); }
+    // the clip is a test pattern, never black: is the video drawn, or left black?
+    const v = ctx.getImageData(450, 270, 1, 1).data;
+    const videoDrawn = v[0] + v[1] + v[2] > 30;
+    try {
+      gl.bindTexture(gl.TEXTURE_2D, tex);
+      // (target, level, internalformat, format, type, element) until Chromium 155; (target, internalformat, element) from 156
+      if (gl.texElementImage2D.length >= 6) gl.texElementImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, $('stack'));
+      else gl.texElementImage2D(gl.TEXTURE_2D, gl.RGBA8, $('stack'));
+      gl.viewport(0, 0, 1920, 540); gl.uniform1f(gl.getUniformLocation(prog, 't'), t); gl.drawArrays(gl.TRIANGLES, 0, 3);
+    } catch (e) { errors.push('WebGL texElementImage2D: ' + e.message); }
+    label(`adjustment layer: <video>, <iframe> and DOM read as pixels${errors.length ? '\n' + errors.join('\n') : ''}`, !errors.length, { videoDrawn, errors });
+  } };
+</script></body></html>

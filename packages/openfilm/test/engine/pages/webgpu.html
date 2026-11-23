@@ -1,0 +1,26 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=1920, height=1080">
+<style>body{margin:0;width:1920px;height:1080px;overflow:hidden;background:#000}</style>
+<script type="importmap">{"imports":{"three":"/vendor/three/build/three.webgpu.js","three/webgpu":"/vendor/three/build/three.webgpu.js","three/tsl":"/vendor/three/build/three.tsl.js"}}</script></head>
+<body><script type="module">
+// three.js WebGPURenderer with a TSL displacement material: ok only on the WebGPU backend (not its WebGL2 fallback).
+import * as THREE from 'three/webgpu';
+import { color, positionLocal, sin, uniform, mix, normalWorld } from 'three/tsl';
+import { label } from './label.js';
+let backend = '';
+const r = new THREE.WebGPURenderer({ antialias: true });
+r.setSize(1920, 1080); r.setPixelRatio(1); document.body.appendChild(r.domElement);
+const scene = new THREE.Scene(); scene.background = new THREE.Color(0x0a0a10);
+const cam = new THREE.PerspectiveCamera(35, 1920 / 1080, 0.1, 50); cam.position.set(0, 0, 6);
+const T = uniform(0);
+const mat = new THREE.MeshStandardNodeMaterial({ roughness: 0.3, metalness: 0.2 });
+mat.positionNode = positionLocal.add(normalWorld.mul(sin(positionLocal.y.mul(6).add(T.mul(3))).mul(0.12)));
+mat.colorNode = mix(color(0x3cf0d2), color(0x8a6bff), sin(positionLocal.x.mul(2).add(T)).mul(0.5).add(0.5));
+const m = new THREE.Mesh(new THREE.IcosahedronGeometry(1.6, 64), mat); scene.add(m);
+scene.add(new THREE.HemisphereLight(0xffffff, 0x223344, 2)); const d = new THREE.DirectionalLight(0xffffff, 2); d.position.set(3, 4, 5); scene.add(d);
+window.film = { duration: 2,
+  ready: r.init().then(() => { backend = r.backend.isWebGPUBackend ? 'WebGPU' : 'WebGL2'; }),
+  async frame(t) {
+    T.value = t; m.rotation.y = t * 0.6; await r.renderAsync(scene, cam);
+    label(`three.js r${THREE.REVISION} WebGPURenderer + TSL: ${backend} backend`, backend === 'WebGPU', { backend });
+  } };
+</script></body></html>

@@ -1,0 +1,51 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=1920, height=1080">
+<style>body{margin:0;width:1920px;height:1080px;overflow:hidden;background:#000}
+#ui{position:absolute;left:0;top:0;width:780px;height:1688px}
+#app{width:780px;height:1688px;box-sizing:border-box;padding:120px 56px;font-family:-apple-system,Helvetica,sans-serif;color:#fff;
+ background:linear-gradient(180deg,#1d3a8a 0%,#4a76d1 55%,#f0a46a 100%)}
+#app .place{font-size:44px;font-weight:500;opacity:.9}#app .temp{font-size:300px;font-weight:200;line-height:1;margin-top:20px;letter-spacing:-.04em}
+#app .cond{font-size:46px;margin-top:10px}#app .card{margin-top:80px;padding:40px;border-radius:44px;background:rgba(255,255,255,.18)}
+#app .head{font-size:40px;font-weight:600}#app .bars{display:flex;align-items:flex-end;gap:5px;height:220px;margin-top:36px}
+#app .bars i{flex:1;background:#fff;border-radius:4px 4px 0 0}</style>
+<script type="importmap">{"imports":{"three":"/vendor/three/build/three.module.js","three/addons/":"/vendor/three/examples/jsm/"}}</script></head>
+<body>
+<canvas id="ui" width="780" height="1688" layoutsubtree content="drawable"><div id="app"><div class="place">San Francisco</div><div class="temp" id="temp">18°</div><div class="cond">Light rain in 12 min</div>
+<div class="card"><div class="head">Next hour</div><div class="bars" id="bars"></div></div></div></canvas>
+<script type="module">
+// A live DOM interface, changed every frame, drawn with drawElementImage once it has painted, and used as the
+// screen of a phone in three.js (a CanvasTexture).
+import * as THREE from 'three';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+import { label } from './label.js';
+const ui = document.getElementById('ui'); const uctx = ui.getContext('2d');
+const bars = Array.from({ length: 40 }, () => document.getElementById('bars').appendChild(document.createElement('i')));
+const painted = () => new Promise((res) => { ui.addEventListener('paint', res, { once: true }); ui.requestPaint?.(); });
+const r = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+r.setSize(1920, 1080); r.setPixelRatio(1); r.toneMapping = THREE.AgXToneMapping; r.shadowMap.enabled = true;
+r.domElement.style.cssText = 'position:absolute;left:0;top:0'; document.body.appendChild(r.domElement);
+const scene = new THREE.Scene(); scene.background = new THREE.Color(0x0d0f14);
+scene.environment = new THREE.PMREMGenerator(r).fromScene(new RoomEnvironment(), 0.03).texture;
+const cam = new THREE.PerspectiveCamera(24, 1920 / 1080, 0.1, 100);
+const tex = new THREE.CanvasTexture(ui); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
+const phone = new THREE.Group(); scene.add(phone);
+const body = new THREE.Mesh(new RoundedBoxGeometry(0.78, 1.62, 0.08, 8, 0.1), new THREE.MeshPhysicalMaterial({ color: 0x2a2c31, metalness: 1, roughness: 0.32, clearcoat: 0.6 }));
+body.castShadow = true; phone.add(body);
+const screen = new THREE.Mesh(new THREE.PlaneGeometry(0.72, 1.56), new THREE.MeshBasicMaterial({ map: tex, toneMapped: false }));
+screen.position.z = 0.0405; phone.add(screen);
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(20, 20), new THREE.ShadowMaterial({ opacity: 0.35 })); floor.rotation.x = -Math.PI / 2; floor.position.y = -0.9; floor.receiveShadow = true; scene.add(floor);
+const key = new THREE.DirectionalLight(0xffffff, 2.5); key.position.set(2, 4, 3); key.castShadow = true; key.shadow.mapSize.set(2048, 2048); scene.add(key);
+window.film = { duration: 2, ready: painted(), async frame(t) {
+  document.getElementById('temp').textContent = `${Math.round(18 - t)}°`;
+  bars.forEach((b, i) => { const v = Math.max(0.04, Math.sin(Math.PI * Math.min(1, Math.max(0, (i - 8) / 24))) * Math.min(1, t / 2)); b.style.height = `${(v * 100).toFixed(2)}%`; });
+  await painted();
+  let ok = true, msg = '';
+  try { uctx.setTransform(1, 0, 0, 1, 0, 0); uctx.clearRect(0, 0, 780, 1688); uctx.drawElementImage(document.getElementById('app'), 0, 0); }
+  catch (e) { ok = false; msg = e.message; }
+  tex.needsUpdate = true;
+  phone.rotation.set(-0.08, -0.55 + t * 0.32, 0.02); phone.position.y = 0.02 * Math.sin(t * 1.3);
+  cam.position.set(0.35, 0.25, 4.2 - t * 0.25); cam.lookAt(0, 0, 0);
+  r.render(scene, cam);
+  label(ok ? 'live HTML interface -> drawElementImage -> three.js screen texture' : 'error: ' + msg, ok);
+} };
+</script></body></html>

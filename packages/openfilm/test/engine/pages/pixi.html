@@ -1,0 +1,18 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=1920, height=1080">
+<style>body{margin:0;width:1920px;height:1080px;overflow:hidden;background:#000}</style>
+<script src="/vendor/pixi.js/dist/pixi.min.js"></script></head>
+<body><script type="module">
+// PixiJS on WebGL: ticker stopped, render() per frame, 2000 dots placed as a function of t, a filter on the stage.
+import { label } from './label.js';
+const app = new PIXI.Application();
+const dots = [];
+const ready = app.init({ width: 1920, height: 1080, background: '#0c0f1a', antialias: true, preserveDrawingBuffer: true, autoStart: false, resolution: 1, preference: 'webgl' }).then(() => {
+  document.body.appendChild(app.canvas); app.ticker.stop();
+  for (let i = 0; i < 2000; i++) { const g = new PIXI.Graphics().circle(0, 0, 3 + (i % 5)).fill({ color: i % 3 ? 0x3cf0d2 : 0xffc43b, alpha: 0.8 }); app.stage.addChild(g); dots.push(g); }
+  app.stage.filters = [new PIXI.BlurFilter({ strength: 0 })];
+});
+window.film = { duration: 2, ready, frame(t) {
+  dots.forEach((g, i) => { const a = i * 0.618 * Math.PI * 2 + t * (0.3 + (i % 7) * 0.05); const rr = 40 + (i % 400) * 1.2; g.position.set(960 + Math.cos(a) * rr * 1.6, 540 + Math.sin(a) * rr * 0.8); });
+  app.renderer.render(app.stage); label(`PixiJS ${PIXI.VERSION} (${app.renderer.name ?? 'WebGL'}): ticker stopped, render() per frame`);
+} };
+</script></body></html>

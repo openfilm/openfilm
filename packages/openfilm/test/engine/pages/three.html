@@ -1,0 +1,39 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=1920, height=1080">
+<style>body{margin:0;width:1920px;height:1080px;overflow:hidden;background:#000}</style>
+<script type="importmap">{"imports":{"three":"/vendor/three/build/three.module.js","three/addons/":"/vendor/three/examples/jsm/"}}</script></head>
+<body><script type="module">
+// three.js on WebGL2: physical glass (transmission, dispersion, iridescence), anisotropic metal, VSM shadows, bloom, AgX.
+import * as THREE from 'three';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { label } from './label.js';
+const r = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+r.setSize(1920, 1080); r.setPixelRatio(1); r.toneMapping = THREE.AgXToneMapping; r.shadowMap.enabled = true; r.shadowMap.type = THREE.VSMShadowMap;
+document.body.appendChild(r.domElement);
+const scene = new THREE.Scene(); scene.background = new THREE.Color(0x0b0d12);
+scene.environment = new THREE.PMREMGenerator(r).fromScene(new RoomEnvironment(), 0.04).texture;
+const cam = new THREE.PerspectiveCamera(30, 1920 / 1080, 0.1, 100);
+const knot = new THREE.Mesh(new THREE.TorusKnotGeometry(1, 0.32, 400, 64), new THREE.MeshPhysicalMaterial({ color: 0xffffff, roughness: 0.08, transmission: 1, thickness: 1.2, ior: 1.5, iridescence: 0.7, clearcoat: 1, dispersion: 4 }));
+knot.castShadow = true; scene.add(knot);
+const ball = new THREE.Mesh(new THREE.SphereGeometry(0.7, 96, 48), new THREE.MeshPhysicalMaterial({ color: 0xffa040, metalness: 1, roughness: 0.25, anisotropy: 0.8 }));
+ball.position.set(2.2, -0.6, -0.8); ball.castShadow = true; scene.add(ball);
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(40, 40), new THREE.MeshStandardMaterial({ color: 0x15171c, roughness: 0.6 }));
+floor.rotation.x = -Math.PI / 2; floor.position.y = -1.35; floor.receiveShadow = true; scene.add(floor);
+const key = new THREE.DirectionalLight(0xffffff, 2.2); key.position.set(4, 6, 3); key.castShadow = true; key.shadow.mapSize.set(2048, 2048); key.shadow.radius = 8; scene.add(key);
+const glow = new THREE.Mesh(new THREE.SphereGeometry(0.12, 32, 16), new THREE.MeshBasicMaterial({ color: new THREE.Color(6, 3, 1.2) }));
+glow.position.set(-1.8, 0.9, 0.6); scene.add(glow);
+const comp = new EffectComposer(r); comp.addPass(new RenderPass(scene, cam));
+comp.addPass(new UnrealBloomPass(new THREE.Vector2(1920, 1080), 0.6, 0.5, 0.9)); comp.addPass(new OutputPass());
+const gl = r.getContext();
+const ext = gl.getExtension('WEBGL_debug_renderer_info');
+const renderer = ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : '';
+window.film = { duration: 2, frame(t) {
+  knot.rotation.set(t * 0.4, t * 0.9, 0); ball.rotation.y = t;
+  const a = 0.6 + t * 0.25; cam.position.set(Math.sin(a) * 7, 1.6, Math.cos(a) * 7); cam.lookAt(0.3, -0.2, 0);
+  comp.render();
+  label(`three.js r${THREE.REVISION} WebGL2: physical glass, bloom, VSM shadows`, true, { renderer });
+} };
+</script></body></html>

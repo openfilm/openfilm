@@ -1,0 +1,39 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=1920, height=1080">
+<style>body{margin:0;width:1920px;height:1080px;overflow:hidden;background:#000}</style>
+<script type="importmap">{"imports":{"three":"/vendor/three/build/three.webgpu.js","three/webgpu":"/vendor/three/build/three.webgpu.js","three/tsl":"/vendor/three/build/three.tsl.js"}}</script></head>
+<body><script type="module">
+// A million particles placed by a WebGPU compute shader every frame, each a function of its index and t (no
+// integration from frame to frame), drawn as additive sprites.
+import * as THREE from 'three/webgpu';
+import { Fn, instancedArray, instanceIndex, uniform, vec3, float, sin, cos, hash, mix, color, pow } from 'three/tsl';
+import { label } from './label.js';
+const COUNT = 1_000_000;
+const r = new THREE.WebGPURenderer({ antialias: false }); r.setSize(1920, 1080); r.setPixelRatio(1); document.body.appendChild(r.domElement);
+const scene = new THREE.Scene(); scene.background = new THREE.Color(0x020208);
+const cam = new THREE.PerspectiveCamera(40, 1920 / 1080, 0.1, 100);
+const T = uniform(0);
+const pos = instancedArray(COUNT, 'vec3');
+const col = instancedArray(COUNT, 'vec3');
+const update = Fn(() => {
+  const i = instanceIndex;
+  const h1 = hash(i), h2 = hash(i.add(7919)), h3 = hash(i.add(104729));
+  const rad = pow(h1, float(0.55)).mul(4.2);
+  const arm = h2.mul(2).floor().mul(3.14159);
+  const a = arm.add(rad.mul(1.6)).add(h3.sub(0.5).mul(0.9)).add(T.mul(float(0.9).div(rad.add(0.35))));
+  const y = h3.sub(0.5).mul(0.25).div(rad.add(0.6));
+  pos.element(i).assign(vec3(cos(a).mul(rad), y, sin(a).mul(rad)));
+  col.element(i).assign(mix(color(0xffd9a0), color(0x5a7dff), rad.div(4.2).clamp()));
+})().compute(COUNT);
+const mat = new THREE.SpriteNodeMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
+mat.positionNode = pos.element(instanceIndex); mat.colorNode = col.element(instanceIndex).mul(0.045); mat.scaleNode = float(0.016);
+const sprites = new THREE.Sprite(mat); sprites.count = COUNT; sprites.frustumCulled = false; scene.add(sprites);
+let backend = '';
+window.film = { duration: 2,
+  ready: r.init().then(() => { backend = r.backend.isWebGPUBackend ? 'WebGPU' : 'WebGL2'; }),
+  async frame(t) {
+    T.value = t; await r.computeAsync(update);
+    cam.position.set(0, 3.2 - t * 0.4, 7.5 - t * 0.6); cam.lookAt(0, 0, 0);
+    await r.renderAsync(scene, cam);
+    label(`1,000,000 particles computed on the GPU each frame (three.js TSL compute, ${backend})`, backend === 'WebGPU', { backend });
+  } };
+</script></body></html>

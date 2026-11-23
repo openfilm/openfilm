@@ -1,0 +1,28 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=1920, height=1080">
+<style>body{margin:0;width:1920px;height:1080px;overflow:hidden;background:#f2eee4}</style>
+<script src="/vendor/matter-js/build/matter.min.js"></script></head>
+<body><canvas id="c" width="1920" height="1080"></canvas><script type="module">
+// Matter.js: physics is a function of t only when the world is rebuilt and stepped from 0 with a fixed step every frame.
+import { label } from './label.js';
+const { Engine, Bodies, Composite } = Matter;
+const ctx = document.getElementById('c').getContext('2d', { willReadFrequently: true });
+const HZ = 120;
+function world() {
+  const e = Engine.create({ gravity: { y: 1.2 } });
+  const ground = Bodies.rectangle(960, 1060, 2200, 80, { isStatic: true });
+  const bodies = [];
+  for (let i = 0; i < 90; i++) {
+    const x = 500 + (i % 15) * 62 + (i % 2) * 20, y = -100 - Math.floor(i / 15) * 90;
+    bodies.push(i % 3 ? Bodies.circle(x, y, 24 + (i % 4) * 6, { restitution: 0.5 }) : Bodies.rectangle(x, y, 60, 60, { chamfer: { radius: 12 }, restitution: 0.3 }));
+  }
+  Composite.add(e.world, [ground, ...bodies]);
+  return { e, bodies };
+}
+window.film = { duration: 2, frame(t) {
+  const { e, bodies } = world();
+  for (let s = 0; s < Math.round(t * HZ); s++) Engine.update(e, 1000 / HZ);
+  ctx.fillStyle = '#f2eee4'; ctx.fillRect(0, 0, 1920, 1080);
+  bodies.forEach((b, i) => { ctx.beginPath(); b.vertices.forEach((v, k) => (k ? ctx.lineTo(v.x, v.y) : ctx.moveTo(v.x, v.y))); ctx.closePath(); ctx.fillStyle = ['#2340ff', '#ff5b45', '#121212'][i % 3]; ctx.fill(); });
+  label(`Matter.js ${Matter.version}: rebuilt and stepped from 0 at ${HZ} Hz every frame`);
+} };
+</script></body></html>

@@ -15,3 +15,7 @@ regexes = ['''0123456789|12345678|123456|abcdef1234|ABCDEFGH9876''', '''^dGhlIHN
 [[allowlists]]
 description = "the library's ids in the order of its vectors, and numbers: nothing else is in the file (the emoji keycap-… reads as a key)"
 paths = ['''(^|/)packages/openfilm/library/vectors\.json$''']
+
+[[allowlists]]
+description = "the libraries the engine suite vendors byte for byte from npm (test/engine/vendor, each file's sha256 in vendor.json, checked by src/engine.test.mjs): minified code whose identifiers read as keys"
+paths = ['''(^|/)packages/openfilm/test/engine/vendor/[\w.-]+/(build|dist|lib)/[\w.-]+\.js$''']

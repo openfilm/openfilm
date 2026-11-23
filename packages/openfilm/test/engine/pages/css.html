@@ -1,0 +1,21 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=1920, height=1080">
+<style>body{margin:0;width:1920px;height:1080px;overflow:hidden;background:#141414;color:#fff;font:28px ui-monospace,Menlo,monospace}
+@keyframes slide{from{transform:translateX(0)}to{transform:translateX(1300px)}}
+@keyframes hue{from{filter:hue-rotate(0deg) blur(0px)}to{filter:hue-rotate(300deg) blur(6px)}}
+.row{position:absolute;left:160px;width:180px;height:120px;border-radius:24px}
+#a{top:230px;background:#ff5b45;animation:slide 2s linear infinite}
+#b{top:430px;background:#ffc43b}
+#c{top:630px;background:linear-gradient(90deg,#3cf0d2,#8a6bff);animation:slide 2s cubic-bezier(.2,.8,.2,1) infinite,hue 2s linear infinite}
+.cap{position:absolute;left:160px;font-size:24px;color:#aaa}</style></head>
+<body><div class="cap" style="top:190px">CSS @keyframes, left running</div><div class="row" id="a"></div>
+<div class="cap" style="top:390px">element.animate(), left running</div><div class="row" id="b"></div>
+<div class="cap" style="top:590px">CSS @keyframes with a filter, eased</div><div class="row" id="c"></div>
+<script type="module">
+// CSS animations and Web Animations the page leaves running: the host's clock stands them at t (FILM_CLOCK settle).
+import { label } from './label.js';
+document.getElementById('b').animate([{ transform: 'translateX(0)' }, { transform: 'translateX(1300px)' }], { duration: 2000, iterations: Infinity });
+window.film = { duration: 2, frame() {
+  const x = new DOMMatrix(getComputedStyle(document.getElementById('a')).transform).m41;
+  label('CSS @keyframes and element.animate() left running', true, { x });
+} };
+</script></body></html>

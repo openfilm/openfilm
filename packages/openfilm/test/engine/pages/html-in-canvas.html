@@ -1,0 +1,27 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=1920, height=1080">
+<style>body{margin:0;width:1920px;height:1080px;overflow:hidden;background:#0b0d12;color:#fff;font-family:Georgia,serif}
+#card{width:900px;padding:60px;border-radius:40px;background:linear-gradient(135deg,#2340ff,#8a6bff);font-size:72px;line-height:1.1}</style></head>
+<!-- Both names of the attribute that lets a canvas draw its children: `layoutsubtree` until Chrome 149, `content="drawable"`
+     from 150. A page written for both draws in either engine. -->
+<body><canvas id="c" width="1920" height="1080" layoutsubtree content="drawable"><div id="card">HTML drawn into a canvas, then bent by code</div></canvas>
+<script type="module">
+// HTML-in-Canvas in 2D: the card is drawn five times, turned by t. Its subtree must have painted before it can be
+// drawn: on "no cached paint record", wait for the canvas's paint event (requestPaint asks for one) and draw again.
+import { label } from './label.js';
+const c = document.getElementById('c'); const ctx = c.getContext('2d');
+const painted = () => new Promise((res) => { c.addEventListener('paint', res, { once: true }); c.requestPaint?.(); });
+let waits = 0;
+function drawAll(t) {
+  const card = document.getElementById('card');
+  ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1; ctx.clearRect(0, 0, 1920, 1080);
+  for (let k = 0; k < 5; k++) { ctx.save(); ctx.globalAlpha = 1 - k * 0.18; ctx.translate(500 + k * 60, 200 + k * 70); ctx.rotate((t - 1) * 0.15 * (k + 1)); ctx.drawElementImage(card, 0, 0); ctx.restore(); }
+}
+window.film = { duration: 2, async frame(t) {
+  if (!ctx.drawElementImage) { label('HTML-in-Canvas: drawElementImage is not in this engine', false); return; }
+  try { drawAll(t); } catch (e) {
+    if (!/paint record/i.test(e.message)) { label('HTML-in-Canvas error: ' + e.message, false); return; }
+    await painted(); waits += 1; drawAll(t);
+  }
+  label('HTML-in-Canvas: ctx.drawElementImage() of a card, five times', true, { paintWaits: waits });
+} };
+</script></body></html>
