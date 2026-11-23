@@ -94,15 +94,29 @@ export function captionText(t, umWord = umIsWord(t)) {
   return /[\p{L}\p{N}]/u.test(out) ? out : '';
 }
 
+/**
+ * Which of a line's timed words start inside [fromMs, untilMs) (source ms): the first and the last, as places in its
+ * `marks`; all of them when the line is inside it, null when none is.
+ * @param {SpokenLine} line @param {number} fromMs @param {number} untilMs @returns {[number, number] | null}
+ */
+function wordsInWindow(line, fromMs, untilMs) {
+  const marks = line.marks ?? [];
+  if (!marks.length) return null;
+  if (line.startMs >= fromMs - SLACK_MS && line.endMs <= untilMs + SLACK_MS) return [0, marks.length - 1];
+  const first = marks.findIndex((m) => m.startMs >= fromMs - SLACK_MS);
+  if (first < 0) return null;
+  let last = marks.length - 1;
+  while (last >= first && marks[last].startMs >= untilMs - SLACK_MS) last -= 1;
+  return last < first ? null : [first, last];
+}
+
 /** The part of a line whose words start inside [fromMs, untilMs) (source ms). @param {SpokenLine} line @param {number} fromMs @param {number} untilMs */
 export function trimToWindow(line, fromMs, untilMs) {
   const marks = line.marks;
   if (!marks?.length || (line.startMs >= fromMs - SLACK_MS && line.endMs <= untilMs + SLACK_MS)) return line.text;
-  const first = marks.findIndex((m) => m.startMs >= fromMs - SLACK_MS);
-  if (first < 0) return '';
-  let last = marks.length - 1;
-  while (last >= first && marks[last].startMs >= untilMs - SLACK_MS) last -= 1;
-  if (last < first) return '';
+  const kept = wordsInWindow(line, fromMs, untilMs);
+  if (!kept) return '';
+  const [first, last] = kept;
   const begin = first === 0 ? 0 : marks[first].index;
   const end = last === marks.length - 1 ? line.text.length : marks[last + 1].index;
   return line.text.slice(begin, end).replace(EDGE_PUNCT, '');
@@ -169,15 +183,19 @@ export function clipCues(lines, span, extra = {}) {
       /* what a trim leaves of a piece can be a scrap; a piece itself is as long as segmentLine made it */
       const cut = from > piece.startMs || to < piece.endMs;
       if (!mine || !said || to <= from || (cut && (to - from) / speed < MIN_CAPTION_MS)) continue;
-      /* the words shown, each from its mark to the next (the last to the piece's end), on the film; the last one ends as
-         the subtitle does (no trailing comma in Chinese) */
-      const shown = (piece.marks ?? []).filter((m) => m.startMs >= from - SLACK_MS && m.startMs < to);
-      const words = shown.map((m, i) => {
-        const next = shown[i + 1];
-        const startMs = Math.max(from, m.startMs);
-        const endMs = next ? next.startMs : to;
+      /* the words shown: those the trim left in the text (trimToWindow), each from its mark to the next (the last to
+         the piece's end, or to where the trim cuts it), on the film; the last one ends as the subtitle does (no
+         trailing comma in Chinese, nor the comma a trim leaves it on) */
+      const marks = piece.marks ?? [];
+      const [first, last] = wordsInWindow(piece, span.fromMs, until) ?? [0, -1];
+      const words = marks.slice(first, last + 1).map((m, i) => {
+        /* the word after it in the line, shown or cut away: where this one's letters end */
+        const next = marks[first + i + 1];
+        const more = first + i < last;
+        const startMs = Math.min(to, Math.max(from, m.startMs));
+        const endMs = more ? Math.min(to, next.startMs) : to;
         const text = piece.text.slice(m.index, next ? next.index : undefined).trim();
-        return { text: next ? text : subtitleEnd(text), startMs: film(startMs), durMs: Math.max(1, Math.round((endMs - startMs) / speed)) };
+        return { text: more ? text : subtitleEnd(next ? text.replace(EDGE_PUNCT, '') : text), startMs: film(startMs), durMs: Math.max(1, Math.round((endMs - startMs) / speed)) };
       }).filter((w) => w.text);
       const alt = Object.fromEntries(alts.map(([language, parts]) => [language, subtitleEnd(parts[piece.part].text)]).filter(([, text]) => text));
       out.push({

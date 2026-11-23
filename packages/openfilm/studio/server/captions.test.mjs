@@ -11,6 +11,8 @@ import {
 import { FILM_SUBTITLE_DEFAULT, filmSubtitleShown, filmSubtitleSrt, filmSubtitleVtt } from './film-subtitle.mjs';
 import { HttpError, json } from './http.mjs';
 import { readTranscript, vttOf } from './transcripts.mjs';
+import { subtitlesVtt } from './caption-tracks.mjs';
+import { cuePlain, readVtt } from '../../src/captions.mjs';
 import { filmHtml } from '../../src/film-doc.mjs';
 
 /* "One two three. Four five six.", said in 2.5 s of a 3 s file */
@@ -159,6 +161,21 @@ test('a trim keeps only the words inside it, and speed scales the times', async 
   /* source 1.6 s → 3 s at double speed: 0.7 s on the film from 5 s; "Four" starts before the trim */
   const root = project([{ clips: [{ id: 'vo', src: 'assets/vo.mp3', at: 5, time: [1.6, 3], speed: 2 }] }], { 'assets/vo.vtt': VTT });
   assert.deepEqual(shown((await filmCaptions(root, noProbe)).cues), [{ startMs: 5000, durMs: 700, text: 'five six.', clip: 'vo' }]);
+});
+
+test('a subtitle a trim cuts short has the words left in it, not the rest of its line in the last one', async () => {
+  const cuesOf = async (time, vtt = VTT) => (await filmCaptions(project([{ clips: [{ id: 'vo', src: 'assets/vo.mp3', time }] }], { 'assets/vo.vtt': vtt }), noProbe)).cues;
+  /* the clip ends inside "One two three.": "three." starts after the cut */
+  const cut = await cuesOf([0, 0.55]);
+  assert.deepEqual(cut.map((c) => [c.text, c.words]), [['One two', [{ text: 'One', startMs: 0, durMs: 300 }, { text: 'two', startMs: 300, durMs: 250 }]]]);
+  /* "three." starts 30 ms before the cut: the text leaves it to the clip after, and so do the words */
+  const near = await cuesOf([0, 0.63]);
+  assert.deepEqual(near.map((c) => [c.text, c.words.map((w) => w.text)]), [['One two', ['One', 'two']]]);
+  /* the comma the cut leaves the last word on goes with it, as it does in the text */
+  const comma = await cuesOf([0, 0.55], vttOf(spokenLines('One two, three.', WORDS.slice(0, 3).map((w, i) => (i === 1 ? { ...w, token: 'two,' } : w)), 3000)));
+  assert.deepEqual(comma.map((c) => [c.text, c.words.map((w) => w.text)]), [['One two', ['One', 'two']]]);
+  /* a caption track made of what is said says the same */
+  for (const cues of [cut, near, comma]) assert.equal(cuePlain(readVtt(subtitlesVtt(cues, FILM_SUBTITLE_DEFAULT)).cues[0].text), 'One two');
 });
 
 test('the same source cut in two places says each part once', async () => {
