@@ -732,10 +732,14 @@ async function encode({ film, a, b, file }, { fps, rate, samples, shutter, alpha
   const even = 'crop=trunc(iw/2)*2:trunc(ih/2)*2:0:0,';
   const blur = samples > 1 ? `tmix=frames=${samples},select='eq(mod(n\\,${samples})\\,${samples - 1})',setpts=N/((${ffmpegRate(rate)})*TB),` : '';
   /* Chromium omits PNG's alpha plane for an entirely opaque frame. Reinitializing on that format change resets
-     tmix and select's frame index, losing samples or even every frame of a short transparent export. */
+     tmix and select's frame index, losing samples or even every frame of a short transparent export. So the graph is
+     kept, and `scale` takes the frames first: it converts a frame whose format is not the one the graph was set up
+     with. Since ffmpeg 9.1 every other filter refuses such a frame ("Frame size or format changed without filter
+     graph reinitialization"), and the export ended with nothing written. */
+  const oneGraph = alpha && samples > 1;
   const enc = ffmpeg(['-f', 'image2pipe', '-framerate', ffmpegRate(rate, samples), '-c:v', still === 'png' ? 'png' : 'mjpeg',
-    ...(alpha && samples > 1 ? ['-reinit_filter', '0'] : []), '-i', '-',
-    '-vf', even + (alpha && samples > 1 ? `${alphaCompositeFilter(blur.slice(0, -1))},` : blur) + format.pix, '-r', ffmpegRate(rate), ...format.video, file], { input: true });
+    ...(oneGraph ? ['-reinit_filter', '0'] : []), '-i', '-',
+    '-vf', (oneGraph ? 'scale,' : '') + even + (oneGraph ? `${alphaCompositeFilter(blur.slice(0, -1))},` : blur) + format.pix, '-r', ffmpegRate(rate), ...format.video, file], { input: true });
   /* a page drawn opaque: its alpha read beside the encoder, every frame */
   const watch = opaque ? alphaWatch() : null;
   /* a cancelled render stops its encoder at once: the frames ffmpeg still holds are thrown away, not encoded (a 4K
