@@ -12,6 +12,7 @@ ${[
   ...(IN_APP ? [] : ['  openfilm open    [folder | url]      start or open a project; Studio shows it to the person']),
   '  openfilm look    [what] [t | a-b]    check the film and draw it: a contact sheet with its sound and loudness',
   '  openfilm render  [a-b]               the MP4, saved beside film.html',
+  '  openfilm restore <copy>              put film.html back as a copy of it has it, when the person asks',
   '  openfilm get     [what] [--options]  media: the person\'s own, OpenFilm\'s free library (music, sound effects, stickers), else a connected service',
   '  openfilm skills                      the skills installed for this film; `openfilm skill <name>` prints one',
   '  openfilm publish [folder]            check a workbench or a skill as the community\'s review will, before you publish it',
@@ -103,6 +104,13 @@ openfilm skill remove <name>
                   person picks another), true peaks under -1 dBTP; the picture is not touched. Write it
                   with = so the minus sign is read as the value. Without it, the sound as mixed, its peaks
                   caught so it never clips`,
+  restore: `openfilm restore <copy>
+
+  Put the project's film.html back as <copy> has it (a backup, a copy kept elsewhere), when the person asks for it.
+  With Studio open on the project, a film.html written over from outside is taken for an older copy, and the edits the
+  person made in Studio since are kept over it. Through this command none are: the copy is the film, as when a version
+  is restored in Studio's Version history. What Studio had is kept aside in the project's history. A copy that is not
+  a film is refused, and nothing changes.`,
 };
 
 /* `openfilm` alone: the system prompt (src/system-prompt.mjs) and OpenFilm's own skills, each in a line. `get` takes any options its verb has,
@@ -147,7 +155,7 @@ const keptNotice = async (/** @type {string} */ from = '.') => {
 };
 /* a command a plugin brings (src/plugin-commands.mjs): every word after its name is its own, as typed. OpenFilm's own
    commands are never a plugin's */
-const OWN = ['open', 'look', 'render', 'get', 'skills', 'skill', 'update', 'doctor'];
+const OWN = ['open', 'look', 'render', 'restore', 'get', 'skills', 'skill', 'update', 'doctor'];
 const ofPlugin = RAW[0] && !RAW[0].startsWith('-') && !OWN.includes(RAW[0])
   ? await (await import('../src/plugin-commands.mjs')).runPluginCommand(RAW, RUN) : null;
 if (ofPlugin != null) {
@@ -208,6 +216,7 @@ if (ofPlugin != null) {
         return m.render(args, opts);
       }));
     },
+    restore: () => import('../studio/client.mjs').then((m) => m.restoreCommand(args)),
     update: () => import('../studio/client.mjs').then((m) => m.updateOpenfilm((line) => console.error(line))),
     skills: () => import('../src/skills-cli.mjs').then((m) => m.skillsCommand(RUN)),
     skill: () => import('../src/skills-cli.mjs').then((m) => m.skillCommand(args, RUN)),

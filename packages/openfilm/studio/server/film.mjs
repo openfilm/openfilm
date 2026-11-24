@@ -17,7 +17,8 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { FILM_FILE, filmHtml, readFilm, readFilmFile } from '../../src/film-doc.mjs';
 import { EditError, applyOps } from './ops.mjs';
-import { filmMerged, filmToMerge, filmWritten, keepAside, mergeFilmWrite, replaceIfStill } from './person-edits.mjs';
+import { writeAtomic } from './atomic.mjs';
+import { filmMerged, filmReplaced, filmToMerge, filmWritten, keepAside, mergeFilmWrite, replaceIfStill } from './person-edits.mjs';
 
 export { EditError };
 
@@ -128,6 +129,26 @@ async function settle(/** @type {string} */ root, stable = false, tries = 0) {
   const { doc, problems } = readFilm(merge.value);
   /* the merged value is what the file reads as (it is written from it): not read again, which takes long in a long film */
   return { text, rev, value: /** @type {typeof current.value} */ (/** @type {unknown} */ (merge.value)), doc, problems };
+}
+
+/**
+ * Put film.html back as `text` has it, a copy kept elsewhere (`openfilm restore`): taken as it is, with none of the
+ * person's edits merged over it, as a version restored in Studio is. A write from outside is otherwise taken for an
+ * agent's from an older copy, and the person's edits made since are kept over it (settleProjectFilm). What the folder
+ * had is kept aside in the project's history first, so the restore can be undone by hand. Throws EditError `invalid`
+ * when `text` is not a film.
+ * @param {string} root @param {string} text @returns {ReturnType<typeof readProjectFilm>}
+ */
+export function replaceProjectFilm(root, text) {
+  return serial(root, async () => {
+    const { doc, problems } = text.trim() ? readFilmFile(text) : { doc: null, problems: [`${FILM_FILE} is empty`] };
+    if (!doc) throw new EditError(problems.join('\n'), 'invalid');
+    const before = await readFile(join(root, FILM_FILE), 'utf8').catch(() => '');
+    if (before !== text) await keepAside(root, { 'studio.html': before, 'restored.html': text }, 'Put film.html back as a copy had it, over what Studio had');
+    filmReplaced(root);
+    await writeAtomic(join(root, FILM_FILE), text);
+    return settle(root);
+  });
 }
 
 /**

@@ -24,7 +24,7 @@ import { pipeline } from 'node:stream';
 import { mkdir, readFile, symlink } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { spawn } from 'node:child_process';
-import { EditError, editProjectFilm, pageClipLook, readProjectFilm, settleProjectFilm } from './film.mjs';
+import { EditError, editProjectFilm, pageClipLook, readProjectFilm, replaceProjectFilm, settleProjectFilm } from './film.mjs';
 import { compoundOuter, readPartFilm, writePartFilm } from './parts.mjs';
 import { COVERS, PARTS, compoundFolder, srcInto } from './compound.mjs';
 import { CoverFilmError, coverFolder, coverFrame, coverLook, coverLooks, coverPicture, discardCover, drawCovers, listCovers, mainCover, madeCoverPictures, makeCover, restoreCover, setMainCover } from './covers.mjs';
@@ -493,6 +493,17 @@ export async function startStudio({ port = 4747, key, openBrowser = systemBrowse
     if (parts[0] === 'kept' && parts[1] === 'said' && parts.length === 2 && req.method === 'POST') {
       const { id } = /** @type {{ id?: unknown }} */ (await readJson(req));
       return json(res, 200, { ok: typeof id === 'string' && personEdits.noteSaid(id) });
+    }
+    /* `openfilm restore <copy>`: the project's film.html put back as a copy had it, none of the person's edits kept over
+       it (film.mjs replaceProjectFilm); pages showing it read it as any write. { folder, text } → { ok, rev } */
+    if (parts[0] === 'restore' && parts.length === 1 && req.method === 'POST') {
+      const { folder, text } = /** @type {{ folder?: unknown, text?: unknown }} */ (await readJson(req) ?? {});
+      if (typeof folder !== 'string' || !isAbsolute(folder) || typeof text !== 'string') throw new HttpError(400, 'a project folder and the film to put back, please');
+      let root = resolve(folder);
+      try { root = realpathSync(root); } catch { /* as given */ }
+      if (!existsSync(join(root, 'film.html'))) throw new HttpError(400, `${root} is not a project`);
+      try { return json(res, 200, { ok: true, rev: (await replaceProjectFilm(root, text)).rev }); }
+      catch (e) { if (e instanceof EditError) throw new HttpError(400, e.message); throw e; }
     }
     /* ── `openfilm get`: media from a provider, landed in the project; spending is asked here first (see get.mjs) ── */
     if (parts[0] === 'get') {

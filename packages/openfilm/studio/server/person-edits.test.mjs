@@ -131,6 +131,46 @@ test('a chat turn undone: the film goes back as the turn found it, with what the
   assert.equal(readFileSync(join(made.path, 'film.html'), 'utf8'), found, 'the file itself, not merged and written again');
 });
 
+test('a copy put back with `openfilm restore` stays as it is, where one copied over film.html gets the person\'s edits merged back (#509)', { timeout: 30_000 }, async () => {
+  const { project: made } = await (await api('/api/projects', { method: 'POST', body: { path: join(scratch, 'Restored') } })).json();
+  const backup = filmHtml(F([page('title')]));
+  writeFileSync(join(made.path, 'film.html'), backup);
+  const shown = watch(made.id);
+  await new Promise((r) => { shown.onopen = r; });
+  await pause(300);
+  /* the person adds a clip in Studio */
+  const now = await (await api(`/api/projects/${made.id}`)).json();
+  const added = await api(`/api/projects/${made.id}/edit`, { method: 'POST', body: { base: now.rev, ops: [{ op: 'props', edits: [{ clip: 'title', prop: 'at', value: 3 }] }] } });
+  assert.equal(added.status, 200);
+  await pause(300);
+
+  /* copied over film.html, the backup is taken for an older copy: the person's edit is merged back */
+  writeFileSync(join(made.path, 'film.html'), backup);
+  await until(() => clips(made.path)[0]?.at === 3);
+
+  /* put back through Studio: the backup as it is, and it stays */
+  const refused = await api('/api/restore', { method: 'POST', body: { folder: made.path, text: '<p>not a film' } });
+  assert.equal(refused.status, 400, 'a copy that is not a film is refused');
+  assert.equal(clips(made.path)[0]?.at, 3, 'and nothing changes');
+  const restored = await api('/api/restore', { method: 'POST', body: { folder: made.path, text: backup } });
+  assert.equal(restored.status, 200);
+  await pause(600);
+  assert.equal(readFileSync(join(made.path, 'film.html'), 'utf8'), backup, 'the backup itself, not merged and written again');
+  assert.equal(clips(made.path)[0]?.at, undefined);
+
+  /* what Studio had is kept aside in the history, to take back by hand */
+  const git = (...args) => execFileSync('git', ['--git-dir', join(made.path, '.film', 'history'), ...args], { encoding: 'utf8' });
+  const refs = git('for-each-ref', '--sort=-refname', '--format=%(refname)', 'refs/openfilm/merges/').trim().split('\n');
+  assert.equal(git('show', `${refs[0]}:restored.html`), backup);
+  assert.equal(readFilmFile(git('show', `${refs[0]}:studio.html`)).value.tracks[0].clips[0].at, 3);
+
+  /* the person's next edit is merged as before */
+  const after = await (await api(`/api/projects/${made.id}`)).json();
+  assert.equal((await api(`/api/projects/${made.id}/edit`, { method: 'POST', body: { base: after.rev, ops: [{ op: 'props', edits: [{ clip: 'title', prop: 'at', value: 5 }] }] } })).status, 200);
+  assert.equal(clips(made.path)[0]?.at, 5);
+  shown.close();
+});
+
 test('A, B: a clip the agent renamed is not doubled; one the person changed and an older copy lacks stays, and the agent is told', async () => {
   const root = await project(F([page('c1', { at: 0 }), page('b', { at: 5 }), page('c', { at: 9 })]));
   write(root, F([{ ...page('title', { at: 0 }), src: 'c1.html' }, page('b', { at: 5 }), page('c', { at: 9 })]));

@@ -318,6 +318,38 @@ export async function keptNote(from = '.') {
 }
 
 /**
+ * `openfilm restore <copy>`: the project's film.html put back as a copy of it has it. With Studio open on the
+ * project, a write from outside is taken for an agent's from an older copy and the person's edits made since are
+ * kept over it; through Studio (POST /api/restore) none are, and what it had is kept aside in the project's history.
+ * With no Studio running there is nothing to keep, and the copy is written as it is.
+ * @param {string[]} args @returns {Promise<{ ok: boolean, usage?: boolean, lines: string[] }>}
+ */
+export async function restoreCommand(args) {
+  const [given] = args;
+  const folder = projectAround('.');
+  if (!folder) return { ok: false, usage: true, lines: [`openfilm restore: ${resolve('.')} is not in a project`] };
+  if (!given || args.length > 1) return { ok: false, usage: true, lines: ['openfilm restore: the copy of film.html to put back, e.g. `openfilm restore backup/film.html`'] };
+  const from = resolve(given);
+  if (from === join(folder, 'film.html')) return { ok: false, usage: true, lines: ['openfilm restore: name the copy to put back, not the project\'s own film.html'] };
+  let text;
+  try { text = readFileSync(from, 'utf8'); }
+  catch (e) { return { ok: false, usage: true, lines: [`openfilm restore: ${/** @type {Error} */ (e).message}`] }; }
+  const { readFilmFile } = await import('../src/film-doc.mjs');
+  const { doc, problems } = text.trim() ? readFilmFile(text) : { doc: null, problems: [`${given} is empty`] };
+  if (!doc) return { ok: false, lines: [`openfilm restore: ${given} is not a film, so nothing was put back:`, ...problems] };
+  const run = await running().catch(() => null);
+  if (!run) {
+    const { writeAtomic } = await import('./server/atomic.mjs');
+    await writeAtomic(join(folder, 'film.html'), text);
+    return { ok: true, lines: [`film.html is ${given} as it is.`] };
+  }
+  const answer = await post(run, '/api/restore', { folder, text });
+  if (!answer?.ok) return { ok: false, lines: [`openfilm restore: ${answer?.error ?? 'Studio did not say how it went'}`] };
+  return { ok: true, lines: [`film.html is ${given} as it is: Studio kept none of the person's edits over it, and shows it now.`,
+    'What Studio had is kept aside in the project\'s history, to take back by hand.'] };
+}
+
+/**
  * Whose a node `openfilm canvas` adds is, as the board shows it: the agent by its name (OPENFILM_AGENT_NAME, which the
  * desktop app sets; else OPENFILM_AGENT) and its conversation (OPENFILM_SESSION, else the app's `app:<conversation>`).
  * None outside an agent. @param {Record<string, string | undefined>} [env]
