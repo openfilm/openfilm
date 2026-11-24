@@ -4035,7 +4035,7 @@ export const zhCN: Words = {
     providers: {
       included: '支持',
       about: {
-        dashscope: '阿里云百炼提供千问语音转写，支持词级时间戳。',
+        dashscope: '阿里云百炼提供千问语音转写，支持词级时间戳。选择 Filetrans 会将音频上传至阿里云私有临时存储，临时链接有效期为 48 小时。',
         openfilm: 'OpenFilm 自己的服务。连接一次 OpenFilm 账号，就能用领先的模型生成配音、音乐、音效、文字稿、图片和视频，从 OpenFilm 余额扣费，不需要别的账号或 key。',
         openai: 'ChatGPT 的开发者。它的 API 能用 GPT Image 生成图片，用自己的音色配音，并逐词转写语音。',
         google: 'Google 的 Gemini API（来自 Google AI Studio）：Gemini 配音与转写、Nano Banana 图片和 Veo 视频，一个 key 全部搞定。',

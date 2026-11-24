@@ -4036,7 +4036,7 @@ export const en = {
     providers: {
       included: 'Available',
       about: {
-        dashscope: 'Alibaba Cloud Model Studio provides Qwen Audio transcription with word timestamps.',
+        dashscope: 'Alibaba Cloud Model Studio provides Qwen Audio transcription with word timestamps. Filetrans uploads audio to private temporary Alibaba Cloud storage. Its upload link is valid for 48 hours.',
         openfilm: 'OpenFilm\'s own service. Connect your OpenFilm account once and make voice-over, music, sound, transcripts, pictures and video with leading models, paid from your OpenFilm balance: no other accounts or keys.',
         openai: 'The maker of ChatGPT. Its API makes pictures with GPT Image, speaks in its own voices and transcribes speech word by word.',
         google: 'Google\'s Gemini API, from Google AI Studio: Gemini voices and transcription, Nano Banana pictures and Veo video, with one key.',

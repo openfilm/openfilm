@@ -3999,7 +3999,7 @@ export const ja: Words = {
     providers: {
       included: '対応',
       about: {
-        dashscope: "Alibaba Cloud Model Studio の Qwen Audio が単語単位のタイムスタンプ付きで音声を文字に起こします。",
+        dashscope: "Alibaba Cloud Model Studio の Qwen Audio が単語単位のタイムスタンプ付きで音声を文字に起こします。 Filetrans は音声を Alibaba Cloud の非公開一時ストレージにアップロードします。一時リンクは 48 時間有効です。",
         openfilm: 'OpenFilm 自身のサービス。OpenFilm アカウントを一度接続するだけで、ナレーション、音楽、効果音、書き起こし、画像、ビデオを主要なモデルで作れます。支払いは OpenFilm の残高から。ほかのアカウントやキーは不要です。',
         openai: 'ChatGPT の開発元。API で GPT Image による画像生成、独自の音声によるナレーション、単語単位の書き起こしができます。',
         google: 'Google AI Studio の Gemini API：Gemini の音声と書き起こし、Nano Banana の画像、Veo のビデオを一つのキーで。',

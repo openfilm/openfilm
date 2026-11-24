@@ -3999,7 +3999,7 @@ export const es: Words = {
     providers: {
       included: 'Disponible',
       about: {
-        dashscope: "Qwen Audio de Alibaba Cloud Model Studio transcribe audio con marcas de tiempo por palabra.",
+        dashscope: "Qwen Audio de Alibaba Cloud Model Studio transcribe audio con marcas de tiempo por palabra. Filetrans carga el audio en almacenamiento temporal privado de Alibaba Cloud. El enlace temporal tiene una validez de 48 horas.",
         openfilm: 'El servicio propio de OpenFilm. Conecta tu cuenta de OpenFilm una vez y crea voz en off, música, sonido, transcripciones, imágenes y vídeo con modelos de primera, pagando con tu saldo de OpenFilm: sin otras cuentas ni claves.',
         openai: 'Los creadores de ChatGPT. Su API crea imágenes con GPT Image, habla con sus propias voces y transcribe palabra por palabra.',
         google: 'La API de Gemini de Google, desde Google AI Studio: voces y transcripción de Gemini, imágenes de Nano Banana y vídeo de Veo, con una sola clave.',

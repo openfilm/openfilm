@@ -50,14 +50,14 @@ test('DashScope offsets word timings and keeps overlap words in only one core', 
   });
 
   const { receipt, index } = await dashscope.run('asr', { src }, {
-    root: dir, key: 'example.cn-beijing.maas.aliyuncs.com:test-token',
+    root: dir, key: 'example.cn-beijing.maas.aliyuncs.com:test-token', model: 'qwen-audio-3.0-asr-flash',
     read: async path => new Uint8Array(await readFile(join(dir, path))), signal: AbortSignal.timeout(20_000), say() {},
   });
   assert.equal(send.mock.callCount(), 2);
   for (const request of received) {
     assert.equal(request.path, '/api/v1/services/aigc/multimodal-generation/generation');
     assert.equal(request.headers.authorization, 'Bearer test-token');
-    assert.equal(request.payload.model, 'qwen-audio-3.1-asr-flash');
+    assert.equal(request.payload.model, 'qwen-audio-3.0-asr-flash');
     assert.match(request.payload.input.messages[0].content[0].input_audio.data, /^data:audio\/mpeg;base64,/);
   }
   assert.equal(receipt.text, 'Before After. End.');
@@ -70,4 +70,12 @@ test('DashScope rejects a lookalike host before loading speech or sending the ke
   await assert.rejects(dashscope.run('asr', { src: 'sample.mp3' }, {
     key: 'example.cn-beijing.maas.aliyuncs.com.invalid:test-token', read,
   }), /DashScope HTTPS API host/);
+});
+
+
+test('DashScope offers the tested timestamp models with the synchronous 3.1 model first', () => {
+  assert.deepEqual(dashscope.models.asr.map(model => model.id), [
+    'qwen-audio-3.1-asr-flash', 'qwen-audio-3.0-asr-flash',
+    'qwen-audio-3.1-asr-flash-filetrans', 'qwen-audio-3.0-asr-flash-filetrans', 'qwen3-asr-flash-filetrans',
+  ]);
 });

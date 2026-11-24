@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { billedBy, mediaSeconds, modelOf, needed, serviceUrl } from './common.mjs';
+import { fileTranscription } from './dashscope-filetrans.mjs';
 
 /** @typedef {import('./contract.mjs').Provider} Provider */
 /** @typedef {{ token: string, start: number, end: number }} Word */
@@ -15,7 +16,13 @@ import { billedBy, mediaSeconds, modelOf, needed, serviceUrl } from './common.mj
 /** @typedef {{ code?: string, output?: { text?: string, sentence?: Sentence, sentences?: Sentence[] } }} Event */
 
 const NAME = 'Alibaba Cloud Model Studio';
-const MODELS = { asr: [{ id: 'qwen-audio-3.1-asr-flash', name: 'Qwen Audio 3.1 ASR Flash' }] };
+const MODELS = { asr: [
+  { id: 'qwen-audio-3.1-asr-flash', name: 'Qwen Audio 3.1 ASR Flash' },
+  { id: 'qwen-audio-3.0-asr-flash', name: 'Qwen Audio 3.0 ASR Flash' },
+  { id: 'qwen-audio-3.1-asr-flash-filetrans', name: 'Qwen Audio 3.1 ASR Flash Filetrans' },
+  { id: 'qwen-audio-3.0-asr-flash-filetrans', name: 'Qwen Audio 3.0 ASR Flash Filetrans' },
+  { id: 'qwen3-asr-flash-filetrans', name: 'Qwen3 ASR Flash Filetrans' },
+] };
 const API_LIMIT_SECONDS = 300;
 const CORE_SECONDS = 285;
 const OVERLAP_SECONDS = 2;
@@ -109,6 +116,16 @@ function joinWords(/** @type {Word[]} */ words) {
     .replace(/ (?=[.!?,;:，。！？、：；])/g, '');
 }
 
+/** @param {string} src @param {string} model @param {number|null} dur @param {string} text @param {Word[]} words */
+function transcript(src, model, dur, text, words) {
+  return {
+    files: [],
+    index: [{ src, dur, text, words, transcribed: true }],
+    receipt: { provider: 'dashscope', model, src, dur, text, words: words.length },
+    cost: billedBy(NAME),
+  };
+}
+
 /** @type {Provider} */
 export default {
   id: 'dashscope',
@@ -126,6 +143,10 @@ export default {
     const src = needed(args, 'src');
     const model = modelOf(MODELS, 'asr', ctx);
     const auth = credentials(ctx.key);
+    if (model.endsWith('-filetrans')) {
+      const { dur, text, words } = await fileTranscription(auth, model, src, ctx);
+      return transcript(src, model, dur, text, words);
+    }
     const audio = await ctx.read(src);
     const dir = await mkdtemp(join(tmpdir(), 'openfilm-dashscope-'));
     try {
@@ -151,12 +172,7 @@ export default {
       }
       words.sort((a, b) => a.start - b.start);
       if (windows.length > 1 || !text) text = joinWords(words);
-      return {
-        files: [],
-        index: [{ src, dur, text, words, transcribed: true }],
-        receipt: { provider: 'dashscope', model, src, dur, text, words: words.length },
-        cost: billedBy(NAME),
-      };
+      return transcript(src, model, dur, text, words);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
