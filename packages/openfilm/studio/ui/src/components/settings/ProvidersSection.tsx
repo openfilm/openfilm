@@ -16,7 +16,7 @@ import React from 'react';
 import { createPortal } from 'react-dom';
 import { AudioWaveform, Captions, ChevronRight, Clapperboard, createLucideIcon, ExternalLink, Globe, Image, Mic, Music, Plus, ScanSearch, Scissors } from 'lucide-react';
 import { useT } from '@/i18n';
-import { AZURE_SERVICES, PROVIDER_SITES, SERVICE_VERBS, azureKey, providerOrder, type OwnProvider, type ProviderVerb, type ProvidersHook } from '@/lib/providers';
+import { AZURE_SERVICES, PROVIDER_SITES, SERVICE_VERBS, azureKey, dashscopeKey, providerOrder, type OwnProvider, type ProviderVerb, type ProvidersHook } from '@/lib/providers';
 import { customProblem } from './CustomServices';
 import { ProviderMark } from './ProviderMark';
 import { DialogClose, DialogIdentity } from './DialogIdentity';
@@ -185,17 +185,18 @@ function Connection({ provider, hook, header }: {
   const [draft, setDraft] = React.useState('');
   const [region, setRegion] = React.useState('');
   const azure = provider.id === 'azure';
+  const dashscope = provider.id === 'dashscope';
   const busy = hook.busy === provider.id;
   const signing = hook.state?.signingIn;
   const waiting = signing?.provider === provider.id;
   const signIn = provider.signIn && provider.source !== 'env';
   /* a key can be pasted while there is none: not connected, or a keyless one connected without one */
   const keyWanted = !signIn && !provider.noKey && (!provider.source || (Boolean(provider.keyless) && !provider.last4));
-  const key = azure ? azureKey(region, draft) : draft.trim() ? draft : null;
+  const key = azure ? azureKey(region, draft) : dashscope ? dashscopeKey(region, draft) : draft.trim() ? draft : null;
   const close = () => { setAdding(false); setDraft(''); setRegion(''); };
   const save = async () => { if (key && !busy && await hook.saveKey(provider.id, key)) close(); };
   const problem = (hook.problemFor === provider.id ? hook.problem : null) ?? (signing?.errorFor === provider.id ? signing.error : null) ?? provider.connectionError;
-  const pasteLabel = azure ? t('settings.providers.key') : t('settings.providers.pasteKey').replaceAll('{name}', provider.name);
+  const pasteLabel = azure || dashscope ? t('settings.providers.key') : t('settings.providers.pasteKey').replaceAll('{name}', provider.name);
   const escape = (e: React.KeyboardEvent) => { if (e.key === 'Escape') { e.preventDefault(); close(); } };
 
   /* one line, never broken: the dot, Connected, and as whom (an account's email, or a key's last four); cut short when
@@ -233,6 +234,10 @@ function Connection({ provider, hook, header }: {
           {azure ? (
             <p className="text-[13.5px] leading-relaxed text-[var(--text-faint)]"><span className="font-medium text-[var(--text)]">{AZURE_SERVICES[0]!.name}</span> · {t('settings.providers.azureNote')}</p>
           ) : null}
+          {dashscope ? (
+            <SettingsField autoFocus autoComplete="off" spellCheck={false} value={region} onChange={(e) => setRegion(e.target.value)} onKeyDown={escape}
+              placeholder={t('settings.providers.dashscopeHost')} aria-label={t('settings.providers.dashscopeHost')} className="font-mono placeholder:font-sans" />
+          ) : null}
           <div className="flex items-center gap-2">
             {azure ? (
               <div className="w-[150px] shrink-0">
@@ -240,7 +245,7 @@ function Connection({ provider, hook, header }: {
                   placeholder={t('settings.providers.region')} aria-label={t('settings.providers.region')} className="font-mono placeholder:font-sans" />
               </div>
             ) : null}
-            <SettingsField type="password" autoFocus={!azure} autoComplete="off" spellCheck={false} value={draft} onChange={(e) => setDraft(e.target.value)} onKeyDown={escape}
+            <SettingsField type="password" autoFocus={!azure && !dashscope} autoComplete="off" spellCheck={false} value={draft} onChange={(e) => setDraft(e.target.value)} onKeyDown={escape}
               placeholder={pasteLabel} aria-label={pasteLabel} className="flex-1 font-mono placeholder:font-sans" />
             <SettingsButton variant="quiet" onClick={close}>{t('settings.providers.cancel')}</SettingsButton>
             <SettingsButton type="submit" variant="primary" disabled={!key || busy}>{t('settings.providers.save')}</SettingsButton>

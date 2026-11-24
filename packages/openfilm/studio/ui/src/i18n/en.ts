@@ -4036,6 +4036,7 @@ export const en = {
     providers: {
       included: 'Available',
       about: {
+        dashscope: 'Alibaba Cloud Model Studio provides Qwen Audio transcription with word timestamps.',
         openfilm: 'OpenFilm\'s own service. Connect your OpenFilm account once and make voice-over, music, sound, transcripts, pictures and video with leading models, paid from your OpenFilm balance: no other accounts or keys.',
         openai: 'The maker of ChatGPT. Its API makes pictures with GPT Image, speaks in its own voices and transcribes speech word by word.',
         google: 'Google\'s Gemini API, from Google AI Studio: Gemini voices and transcription, Nano Banana pictures and Veo video, with one key.',
@@ -4076,6 +4077,7 @@ export const en = {
       getKey: 'Get your {name} key',
       key: 'Key',
       region: 'Region (eastus, …)',
+      dashscopeHost: 'DashScope workspace host or native API address (optional)',
       azureNote: "Voice-over. Each Azure service has its own key, and the region of the resource it is in: both are on the resource's Keys and Endpoint page.",
       pasteKey: 'Paste your {name} API key',
       save: 'Save',

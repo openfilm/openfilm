@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { azureKey, offered, providerOrder, type OwnProvider, type ProviderVerb, type ProvidersState } from './providers.ts';
+import { azureKey, dashscopeKey, offered, providerOrder, type OwnProvider, type ProviderVerb, type ProvidersState } from './providers.ts';
 
 const own = (id: string, name: string, verbs: ProviderVerb[], source: OwnProvider['source'] = null): OwnProvider =>
   ({ id, name, verbs, models: {}, keysUrl: '', pricingUrl: '', env: '', source, last4: null });
@@ -28,4 +28,15 @@ test("an Azure service's region and key go to the server as <region>:<key>, once
   assert.equal(azureKey('', 'a1b2c3d4e5'), null);
   assert.equal(azureKey('east us', 'a1b2c3d4e5'), null);
   assert.equal(azureKey('eastus', '  '), null);
+});
+
+
+test('DashScope accepts a native workspace host and keeps the key last', () => {
+  assert.equal(dashscopeKey('example.cn-beijing.maas.aliyuncs.com', ' test-token '),
+    'example.cn-beijing.maas.aliyuncs.com:test-token');
+  assert.equal(dashscopeKey('https://example.cn-beijing.maas.aliyuncs.com/api/v1/', 'test-token'),
+    'example.cn-beijing.maas.aliyuncs.com:test-token');
+  assert.equal(dashscopeKey('', 'test-token'), 'test-token');
+  assert.equal(dashscopeKey('https://example.cn-beijing.maas.aliyuncs.com/compatible-mode/v1', 'test-token'), null);
+  assert.equal(dashscopeKey('http://example.cn-beijing.maas.aliyuncs.com', 'test-token'), null);
 });

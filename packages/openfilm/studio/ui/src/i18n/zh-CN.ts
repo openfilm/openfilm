@@ -4035,6 +4035,7 @@ export const zhCN: Words = {
     providers: {
       included: '支持',
       about: {
+        dashscope: '阿里云百炼提供千问语音转写，支持词级时间戳。',
         openfilm: 'OpenFilm 自己的服务。连接一次 OpenFilm 账号，就能用领先的模型生成配音、音乐、音效、文字稿、图片和视频，从 OpenFilm 余额扣费，不需要别的账号或 key。',
         openai: 'ChatGPT 的开发者。它的 API 能用 GPT Image 生成图片，用自己的音色配音，并逐词转写语音。',
         google: 'Google 的 Gemini API（来自 Google AI Studio）：Gemini 配音与转写、Nano Banana 图片和 Veo 视频，一个 key 全部搞定。',
@@ -4075,6 +4076,7 @@ export const zhCN: Words = {
       getKey: '获取 {name} 密钥',
       key: '密钥',
       region: '区域（如 eastus）',
+      dashscopeHost: 'DashScope 工作空间域名或原生 API 地址（可选）',
       azureNote: "配音。Azure 的每项服务各有自己的密钥和资源所在区域，两者都在资源的“密钥和终结点”页面里。",
       pasteKey: '粘贴你的 {name} API 密钥',
       save: '保存',
