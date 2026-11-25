@@ -45,7 +45,9 @@ import { addedDir } from './providers/added.mjs';
 import { isOutputName, mediaSeconds, translatedLines, translationAsk } from './providers/common.mjs';
 import { CALL_TIMEOUT_SEC, callService, servicesHelp } from './custom-services.mjs';
 import { privateVoiceForSpeech, SAMPLE_INPUT } from './voices.mjs';
-import { voiceFolder } from './voice-store.mjs';
+import { voiceAssets, voiceFolder } from './voice-store.mjs';
+import { libraryVoices } from './library.mjs';
+import { privateVoiceAlias, routeVoice } from './voice-route.mjs';
 import { mediaInput } from './media-input.mjs';
 
 /**
@@ -332,6 +334,10 @@ export async function runGet(root, verb, given, { via, model, yes = false, ask, 
   if (audio && settings.use[verb] === '' && !recoverOnly) {
     throw new GetError(`Generating ${WORDS[verb]} is off in Settings → Services. Use the project's existing audio or the free library. Only the person can turn generation back on.`);
   }
+  /* one voice given once is that voice; a private one may be named as Studio showed it, by its uid or by its name */
+  if (verb === 'tts' && Array.isArray(args.voice) && args.voice.length === 1) args.voice = args.voice[0];
+  if (verb === 'tts' && typeof args.voice === 'string' && args['voice-sample'] === undefined) args.voice = privateVoiceAlias(args.voice, voiceAssets());
+  const privateVoice = verb === 'tts' && typeof args.voice === 'string' && args.voice.startsWith('my:');
   /* a voice of OpenFilm's service is its recording, sent with the run under SAMPLE_INPUT; --voice keeps its name */
   let sampleOf = '';
   if (verb === 'tts' && typeof args.voice === 'string' && args.voice.startsWith('my:')) {
@@ -345,7 +351,7 @@ export async function runGet(root, verb, given, { via, model, yes = false, ask, 
     args.language = voice.language;
   }
   /* `--via` names one: when it cannot, it says why (no such provider, not this verb, no key) */
-  const provider = await chooseProvider(/** @type {Verb} */ (verb), { via: via ?? null, settings, recoverOnly }).catch((e) => {
+  let provider = await chooseProvider(/** @type {Verb} */ (verb), { via: via ?? null, settings, recoverOnly }).catch((e) => {
     throw usage(audio ? `${e.message} Stop and tell the person before using another service.` : e.message);
   });
   if (!provider) {
@@ -355,7 +361,7 @@ export async function runGet(root, verb, given, { via, model, yes = false, ask, 
 
   /* the model named for this run: one the provider has for this kind of media */
   const kind = /** @type {Verb} */ (kindOf(verb));
-  const offered = provider.models?.[kind] ?? [];
+  let offered = provider.models?.[kind] ?? [];
   if (model !== undefined && !offered.some((m) => m.id === model)) {
     throw usage(offered.length ? `--model is one of ${offered.map((m) => m.id).join(', ')} with ${provider.name}` : `${provider.name} names no models for ${verb}`);
   }
@@ -375,6 +381,29 @@ export async function runGet(root, verb, given, { via, model, yes = false, ask, 
       runModel = single.id;
     }
   }
+  /* one voice is spoken by a model that has it: another service's voice goes to that service's model, a name or an id
+     cut short becomes the voice's id, and a voice no model here can speak stops the run before it is sent */
+  let voiceNote = '';
+  if (verb === 'tts' && !privateVoice && typeof args.voice === 'string' && !args.voice.includes('+') && args['voice-sample'] === undefined) {
+    const voices = /** @type {{ voices: import('./voice-route.mjs').LibraryVoice[] }} */ (libraryVoices()).voices;
+    let routed = routeVoice({ voice: args.voice, provider, model: runModel, named: model !== undefined, offered, chosen: settings.model.tts, voices });
+    /* another service's voice, with neither --via nor --model named: that service, when the person has connected it */
+    if ('refuse' in routed && routed.service && via === undefined && model === undefined) {
+      const other = await chooseProvider(/** @type {Verb} */ (verb), { via: routed.service, settings, recoverOnly }).catch(() => null);
+      const speaks = other?.models?.[kind] ?? [];
+      const to = speaks.find((m) => !m.dialogue && /** @type {{ clones?: string }} */ (m).clones !== 'only')?.id;
+      const again = other && to ? routeVoice({ voice: args.voice, provider: other, model: to, named: false, offered: speaks, voices }) : null;
+      if (other && again && !('refuse' in again)) {
+        routed = { ...again, note: `--voice ${args.voice} is ${routed.called}, which ${provider.name} cannot speak: spoken by ${to} with ${other.name}, connected in Settings.` };
+        provider = other;
+        offered = speaks;
+      }
+    }
+    if ('refuse' in routed) throw usage(routed.refuse);
+    args.voice = routed.voice;
+    runModel = routed.model ?? runModel;
+    voiceNote = routed.note ?? '';
+  }
   if (verb === 'video') {
     const videoSpec = (offered.find((m) => m.id === runModel) ?? offered[0])?.spec;
     for (const [flag, count] of /** @type {const} */ ([['video', videoSpec?.clip], ['voice', videoSpec?.voice]])) {
@@ -385,7 +414,7 @@ export async function runGet(root, verb, given, { via, model, yes = false, ask, 
   }
 
   const spec = VERBS[verb];
-  const said = /** @type {string[]} */ ([]);
+  const said = /** @type {string[]} */ (voiceNote ? [voiceNote] : []);
   /* OpenFilm's service may run a job up to 21 minutes, and its result is fetched after: wait longer than it can take */
   const waitSec = provider.id === 'openfilm' ? 50 * 60 : spec.timeoutSec + 60;
   const clock = deadline(waitSec, signal);
