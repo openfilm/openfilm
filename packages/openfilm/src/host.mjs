@@ -388,6 +388,7 @@ export async function launch({ headed = false, channel = headed ? 'chromium' : n
   const browser = extra.some((a) => a.startsWith('--use-angle')) ? await open([])
     : process.platform === 'darwin' ? await open(['--use-angle=metal'])
     : process.platform === 'win32' ? await onWindows(open)
+    : process.platform === 'linux' ? await onLinux(open)
     : await open([]);
   LIVE.add(browser);
   browser.on('disconnected', () => LIVE.delete(browser));
@@ -560,6 +561,40 @@ export function vulkanFirst(renderer = rendererOf, presents = presentsVideo) {
   return pick;
 }
 const onWindows = vulkanFirst();
+
+/**
+ * Linux: Chromium's own GPU setup can fail as a headless browser starts (an NVIDIA GPU with a Vulkan driver: the GPU
+ * process logs "Creation of StagingBuffer's SharedImage failed"). Every WebGL context made in its first second is then
+ * lost, back a second later on SwiftShader or never when the page does not handle the event, so `look` shows white
+ * canvases and a render has white frames (#458). So Vulkan is tried first, as on Windows: the first browser reads its
+ * renderer once, and Vulkan is kept when that is a GPU. Else SwiftShader is asked for by name (no Vulkan driver, or a
+ * sandbox with no GPU device nodes), for every later browser too. Videos are not checked as on Windows: nothing has
+ * shown Vulkan failing to show them here.
+ * @param {(browser: import('playwright-core').Browser) => Promise<string>} [renderer]
+ */
+export function vulkanElseSwiftShader(renderer = rendererOf) {
+  /** @type {Promise<string[]> | null} what every browser after the first is opened with */
+  let chosen = null;
+  /** @param {(angle: string[]) => Promise<import('playwright-core').Browser>} open */
+  return async (open) => {
+    if (chosen) return open(await chosen);
+    /** @type {(angle: string[]) => void} */
+    let choose = () => {};
+    chosen = new Promise((r) => { choose = r; });
+    const vulkan = ['--use-angle=vulkan'];
+    const swiftShader = ['--use-angle=swiftshader'];
+    const browser = await open(vulkan).catch(() => null);
+    const gpu = browser ? await inTime(renderer(browser), 30_000, 'no renderer').catch(() => 'none') : 'none';
+    if (browser && gpu !== 'none' && !SOFTWARE_GL.test(gpu)) {
+      choose(vulkan);
+      return browser;
+    }
+    await browser?.close().catch(() => {});
+    choose(swiftShader);
+    return open(swiftShader);
+  };
+}
+const onLinux = vulkanElseSwiftShader();
 
 /** A film's video frames were never seen (FilmPage.seek): on Windows, browsers opened from now on show video another way. */
 export const videoNotShown = () => (process.platform === 'win32' ? onWindows.videoNotShown() : Promise.resolve(false));
