@@ -7,7 +7,7 @@ import { get } from 'node:http';
 import { syncBuiltinESMExports } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { FilmPage, launch, listenLocal, presentsVideo, serve, vulkanElseSwiftShader, vulkanFirst } from './host.mjs';
+import { FilmPage, launch, listenLocal, presentsVideo, serve, vulkanFirst } from './host.mjs';
 import { locate } from './shared.mjs';
 
 test('analysis fingerprints distinguish replaced media even when its name, size and modified date match', async () => {
@@ -243,9 +243,10 @@ test('Windows: Vulkan when its renderer is a GPU, read once; otherwise Direct3D 
   assert.deepEqual(opened, [vulkan, d3d11, []]);
 });
 
-test('Linux: Vulkan when its renderer is a GPU, read once; otherwise SwiftShader by name, never the default (#458)', async () => {
+test('Linux: Vulkan when its renderer is a GPU and shows videos, read once; else Vulkan decoding on the CPU; else the default, never Direct3D (#458)', async () => {
   const vulkan = ['--use-angle=vulkan'];
-  const swiftShader = ['--use-angle=swiftshader'];
+  const decoded = [...vulkan, '--disable-accelerated-video-decode'];
+  const linux = { direct: false };
   /** A launcher that records what each browser was opened with; `fails` makes a Vulkan launch throw. */
   const launcher = (fails = false) => {
     const opened = /** @type {string[][]} */ ([]), closed = /** @type {string[][]} */ ([]);
@@ -260,15 +261,17 @@ test('Linux: Vulkan when its renderer is a GPU, read once; otherwise SwiftShader
     let count = 0;
     return { renderer: async () => { count++; return said(); }, get count() { return count; } };
   };
+  const always = async () => true;
 
   const gpu = reads(async () => 'ANGLE (NVIDIA, Vulkan 1.4.312 (NVIDIA NVIDIA GeForce RTX 2070 (0x00001F07)), NVIDIA)');
-  let l = launcher(), pick = vulkanElseSwiftShader(gpu.renderer);
+  let l = launcher(), pick = vulkanFirst(gpu.renderer, always, linux);
   const browsers = await Promise.all([pick(l.open), pick(l.open), pick(l.open)]);
   assert.deepEqual(browsers.map((b) => b.angle), [vulkan, vulkan, vulkan]);
   assert.equal(gpu.count, 1);
   assert.deepEqual(l.closed, []);
 
-  /* llvmpipe is Mesa's software rasteriser: a machine with no GPU driver reads it */
+  /* no GPU (a CI runner, a server; llvmpipe is Mesa's software rasteriser): the default, which draws 2D canvases on
+     the CPU, not SwiftShader by name */
   for (const said of [
     async () => 'ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)',
     async () => 'ANGLE (Mesa, Vulkan 1.3.255 (llvmpipe (LLVM 15.0.7, 256 bits) (0x00000000)), llvmpipe)',
@@ -276,21 +279,29 @@ test('Linux: Vulkan when its renderer is a GPU, read once; otherwise SwiftShader
     async () => { throw new Error('page crashed'); },
   ]) {
     const software = reads(said);
-    l = launcher(); pick = vulkanElseSwiftShader(software.renderer);
+    l = launcher(); pick = vulkanFirst(software.renderer, always, linux);
     const [first, second] = await Promise.all([pick(l.open), pick(l.open)]);
-    assert.deepEqual([first.angle, second.angle], [swiftShader, swiftShader]);
-    assert.deepEqual(l.opened, [vulkan, swiftShader, swiftShader]);
+    assert.deepEqual([first.angle, second.angle], [[], []]);
+    assert.deepEqual(l.opened, [vulkan, [], []]);
     assert.deepEqual(l.closed, [vulkan]);
     assert.equal(software.count, 1);
   }
 
   /* no Vulkan device at all (a sandbox with no GPU device nodes): the launch itself fails */
   const never = reads(async () => 'unused');
-  l = launcher(true); pick = vulkanElseSwiftShader(never.renderer);
-  assert.deepEqual((await pick(l.open)).angle, swiftShader);
-  assert.deepEqual((await pick(l.open)).angle, swiftShader);
-  assert.deepEqual(l.opened, [vulkan, swiftShader, swiftShader]);
+  l = launcher(true); pick = vulkanFirst(never.renderer, always, linux);
+  assert.deepEqual((await pick(l.open)).angle, []);
+  assert.deepEqual((await pick(l.open)).angle, []);
+  assert.deepEqual(l.opened, [vulkan, [], []]);
   assert.equal(never.count, 0);
+
+  /* Vulkan on a GPU that never shows a video's frames: decoding on the CPU when that shows them, else the default */
+  for (const [shown, way] of /** @type {[string[] | null, string[]][]} */ ([[decoded, decoded], [null, []]])) {
+    l = launcher();
+    pick = vulkanFirst(gpu.renderer, async (/** @type {any} */ b) => shown != null && b.angle.join() === shown.join(), linux);
+    assert.deepEqual((await pick(l.open)).angle, way);
+    assert.deepEqual(l.opened, shown ? [vulkan, decoded] : [vulkan, decoded, []]);
+  }
 });
 
 test('Windows: when Vulkan never shows a video frame, Direct3D on the same GPU, else Vulkan decoding on the CPU, else Direct3D on the other GPU, else the default', async () => {
