@@ -642,6 +642,13 @@ export async function cloneTo(from, to, folder) {
   await drop(to);
 }
 
+/**
+ * Whether `e` is Windows refusing to make a link: a file link without Developer Mode or admin rights, or a share that
+ * takes no reparse points. @param {string} platform @param {unknown} e
+ */
+const linkRefused = (platform, e) => platform === 'win32'
+  && ['UNKNOWN', 'EPERM', 'EACCES', 'ENOTSUP', 'EOPNOTSUPP', 'EINVAL', 'ENOSYS', 'EXDEV'].includes(/** @type {NodeJS.ErrnoException} */ (e)?.code ?? '');
+
 /** From this size on, media that cannot come in without taking room is left where it is kept (`auto`). */
 export const LEAVE_IN_PLACE = 100 * 1024 * 1024;
 
@@ -670,7 +677,8 @@ async function atLeast(/** @type {string} */ path, /** @type {number} */ limit) 
  * a second copy of something big. A clone where the disk makes one (the project has its own file, and the disk no
  * less room). Else, on the same disk, a second name for the same file (it takes no room, and stays when the first
  * name is deleted). Else it is on another disk, or a disk that does neither: big media ({@link LEAVE_IN_PLACE}) is
- * linked where it is kept, and `onLinked` hears where it landed; the rest is copied.
+ * linked where it is kept, and `onLinked` hears where it landed; the rest is copied, and so is big media Windows
+ * makes no link to outside assets/.
  *
  * Returns where each landed. `anywhere`: into any folder of `root` ('' its top), not only assets/ (the Saved library,
  * saved.mjs, whose folder is all media).
@@ -701,8 +709,7 @@ export async function bringIn(root, into, paths, mode, { anywhere = false, platf
       const rel = posix(relative(root, at));
       try { await makeLink(from, at, info.isDirectory() ? 'dir' : 'file'); }
       catch (e) {
-        const code = /** @type {NodeJS.ErrnoException} */ (e).code;
-        if (platform !== 'win32' || !rel.startsWith('assets/') || !['UNKNOWN', 'EPERM', 'EACCES', 'ENOTSUP', 'EOPNOTSUPP', 'EINVAL', 'ENOSYS', 'EXDEV'].includes(code ?? '')) throw e;
+        if (!rel.startsWith('assets/') || !linkRefused(platform, e)) throw e;
         changeMediaReferences(root, (entries) => [...entries, { name: rel, to: from, directory: info.isDirectory(), added: Date.now() }]);
       }
       return rel;
@@ -728,10 +735,13 @@ export async function bringIn(root, into, paths, mode, { anywhere = false, platf
           if (!info.isDirectory()) { try { await sameFile(from, part); free = true; } catch { /* another disk, or one with no second names */ } }
         }
         if (!free && await atLeast(from, big)) {
-          const rel = await linkIn(from, info, name);
-          landed.push(rel);
-          onLinked?.(rel);
-          continue;
+          /* outside assets/ (Saved, the library) there is no reference to keep when Windows makes no link: it is copied */
+          const rel = await linkIn(from, info, name).catch((e) => { if (linkRefused(platform, e)) return null; throw e; });
+          if (rel) {
+            landed.push(rel);
+            onLinked?.(rel);
+            continue;
+          }
         }
       } else {
         /* a copy was asked for: a clone is one, where the disk makes it */
@@ -809,8 +819,7 @@ export async function linkAt(root, rel, to, { platform = process.platform, makeL
     addLinkedPlaces([from]);
     try { await makeLink(from, abs, 'file'); }
     catch (e) {
-      const code = /** @type {NodeJS.ErrnoException} */ (e).code;
-      if (platform !== 'win32' || !['UNKNOWN', 'EPERM', 'EACCES', 'ENOTSUP', 'EOPNOTSUPP', 'EINVAL', 'ENOSYS', 'EXDEV'].includes(code ?? '')) throw e;
+      if (!linkRefused(platform, e)) throw e;
       changeMediaReferences(root, (entries) => [...entries, { name: rel, to: from, directory: false, added: Date.now() }]);
     }
     return rel;

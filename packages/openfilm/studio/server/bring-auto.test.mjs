@@ -118,3 +118,19 @@ test('a folder cloned on a Mac\'s own disk is the project\'s own, without its hi
   assert.equal(lstatSync(join(root, 'assets', 'shoot', '.DS_Store'), { throwIfNoEntry: false }), undefined);
   assert.equal(lstatSync(join(root, 'assets', 'shoot', 'day1', '.hidden.mp4'), { throwIfNoEntry: false }), undefined);
 });
+
+test('big media from another disk into Saved, where Windows makes no link to a file without Developer Mode: copied, not refused', async () => {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), 'of-bring-library-')));
+  const from = file(join(outside(), 'footage.mp4'), 5000);
+  const noLink = async () => { throw Object.assign(new Error('operation not permitted, symlink'), { code: 'EPERM' }); };
+  const linked = [];
+  const landed = await bringIn(root, 'saved', [from], 'auto', { anywhere: true, platform: 'win32', makeLink: noLink, big: 1000, clone: noClone, sameFile: otherDisk, onLinked: (rel) => linked.push(rel) });
+  assert.deepEqual([landed, linked], [['saved/footage.mp4'], []]);
+  const copy = lstatSync(join(root, 'saved', 'footage.mp4'));
+  assert.deepEqual([copy.isFile(), copy.size], [true, 5000]);
+  /* into assets/ the link is still kept as a reference, as before */
+  const other = project();
+  assert.deepEqual(await bringIn(other, 'assets', [from], 'auto', { platform: 'win32', makeLink: noLink, big: 1000, clone: noClone, sameFile: otherDisk, onLinked: (rel) => linked.push(rel) }), ['assets/footage.mp4']);
+  assert.deepEqual(linked, ['assets/footage.mp4']);
+  assert.equal(lstatSync(join(other, 'assets', 'footage.mp4'), { throwIfNoEntry: false }), undefined);
+});
