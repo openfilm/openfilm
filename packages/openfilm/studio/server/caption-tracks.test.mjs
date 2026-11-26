@@ -61,6 +61,22 @@ test('subtitles become cues c1, c2… on the film\'s time, words timed, a speake
   assert.equal(marked.cues[0].text, '<00:00:00.000>Comfortable, <00:00:00.500>right?');
 });
 
+test('captions of what is said read as its subtitles do: a filler they leave out is not timed back in', async () => {
+  /* "uh," is heard, and the line's subtitle does not print it (captions.mjs captionText) */
+  const root = project([{ clips: [{ id: 'vo', src: 'assets/vo.mp3' }] }], {
+    'assets/vo.mp3': 'x',
+    'assets/vo.vtt': 'WEBVTT\n\n00:00:00.000 --> 00:00:03.000\nSo, <00:00:00.400>uh, <00:00:00.800>we <00:00:01.200>start <00:00:01.600>at <00:00:02.000>eight.\n',
+  });
+  const { base, close } = await serve(root);
+  try {
+    const { text } = await (await fetch(`${base}/caption-tracks/speech`)).json();
+    assert.equal(readVtt(text).cues[0].text, '<00:00:00.000>So, <00:00:00.800>we <00:00:01.200>start <00:00:01.600>at <00:00:02.000>eight.');
+  } finally { close(); }
+  /* a word the line writes another way is passed over the same way: the line stays as it reads */
+  const other = readVtt(subtitlesVtt([{ startMs: 0, durMs: 1000, text: 'the cat sat', words: [{ text: 'th-', startMs: 0, durMs: 200 }, { text: 'the', startMs: 200, durMs: 200 }, { text: 'cat', startMs: 400, durMs: 300 }, { text: 'sat', startMs: 700, durMs: 300 }] }], FILM_SUBTITLE_DEFAULT));
+  assert.equal(other.cues[0].text, '<00:00:00.200>the <00:00:00.400>cat <00:00:00.700>sat');
+});
+
 test('the routes: a caption track\'s file read and written whole, inside the project only; the subtitles made into one', async () => {
   const root = project([{ clips: [{ id: 'vo', src: 'assets/vo.mp3' }] }], {
     'assets/vo.mp3': 'x',

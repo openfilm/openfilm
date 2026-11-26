@@ -38,10 +38,7 @@ function captionFile(/** @type {string} */ root, /** @type {unknown} */ src) {
 export function subtitlesVtt(cues, style, clips = null) {
   const look = subtitleStyleVtt(style);
   const text = (/** @type {import('./film-subtitle.mjs').FilmSubtitleCue} */ c) => {
-    const said = (c.words?.length && timedWords(c.text, c.words))
-      || (c.words?.length
-        ? c.words.map((w) => `<${vttTime(w.startMs / 1000)}>${cueEscape(w.text)}`).join(/[A-Za-z0-9]$/.test(c.words[0]?.text ?? '') ? ' ' : '')
-        : cueEscape(c.text));
+    const said = c.words?.length ? timedWords(c.text, c.words) : cueEscape(c.text);
     return c.speaker ? `<v ${c.speaker.replace(/>/g, '')}>${said}</v>` : said;
   };
   const out = cues.map((c, i) => ({ id: `c${i + 1}`, start: c.startMs / 1000, end: (c.startMs + c.durMs) / 1000, settings: `region:main align:${look.align}`, text: text(c) }));
@@ -49,8 +46,9 @@ export function subtitlesVtt(cues, style, clips = null) {
 }
 
 /**
- * A cue's words with each word's time before it, the line's own spaces and marks kept between them (`Comfortable,
- * right?`, not `Comfortable,right?`); null when a word is not found in the line as it reads.
+ * A cue's line with each word's time before it, the line's own spaces and marks kept between them (`Comfortable,
+ * right?`, not `Comfortable,right?`). The line is what the subtitle prints: a word heard that is not in it as it reads
+ * (a filler, a false start: captions.mjs captionText) is passed over, and the words after it keep their times.
  * @param {string} line @param {readonly { text: string, startMs: number }[]} words
  */
 function timedWords(line, words) {
@@ -58,7 +56,7 @@ function timedWords(line, words) {
   let at = 0;
   for (const w of words) {
     const i = line.indexOf(w.text, at);
-    if (i < 0) return null;
+    if (i < 0) continue;
     out += `${cueEscape(line.slice(at, i))}<${vttTime(w.startMs / 1000)}>${cueEscape(w.text)}`;
     at = i + w.text.length;
   }

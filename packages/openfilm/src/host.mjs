@@ -388,6 +388,7 @@ export async function launch({ headed = false, channel = headed ? 'chromium' : n
   const browser = extra.some((a) => a.startsWith('--use-angle')) ? await open([])
     : process.platform === 'darwin' ? await open(['--use-angle=metal'])
     : process.platform === 'win32' ? await onWindows(open)
+    : process.platform === 'linux' ? await onLinux(open)
     : await open([]);
   LIVE.add(browser);
   browser.on('disconnected', () => LIVE.delete(browser));
@@ -479,10 +480,17 @@ const deviceOf = (/** @type {string} */ renderer) => {
  * Vulkan on a GPU may still never show a video's frames (presentsVideo). Then Direct3D is taken when it reaches the
  * same GPU (a computer with one), else Vulkan with videos decoded on the CPU, else Direct3D on the other GPU; each only
  * when it shows them. When none does, the default.
+ *
+ * Linux takes the same way without Direct3D (`direct: false`). There Chromium's own GPU setup can fail as a headless
+ * browser starts (an NVIDIA GPU with a Vulkan driver: the GPU process logs "Creation of StagingBuffer's SharedImage
+ * failed"), and every WebGL context made in its first second is lost, back a second later on SwiftShader or never when
+ * the page does not handle the event: `look` showed white canvases and a render white frames (#458). With no GPU the
+ * default stays: it draws 2D canvases on the CPU, where SwiftShader asked for by name draws them far slower.
  * @param {(browser: import('playwright-core').Browser) => Promise<string>} [renderer]
  * @param {(browser: import('playwright-core').Browser) => Promise<boolean>} [presents]
+ * @param {{ direct?: boolean }} [options] `direct`: whether Direct3D is tried (Windows only)
  */
-export function vulkanFirst(renderer = rendererOf, presents = presentsVideo) {
+export function vulkanFirst(renderer = rendererOf, presents = presentsVideo, { direct: hasDirect = true } = {}) {
   /** @type {Promise<string[]> | null} what every browser after the first is opened with */
   let chosen = null;
   /* false once a film's videos were never seen in Vulkan's browsers (videoNotShown): its check is not trusted again */
@@ -497,13 +505,14 @@ export function vulkanFirst(renderer = rendererOf, presents = presentsVideo) {
     const shows = (/** @type {import('playwright-core').Browser} */ b) => inTime(presents(b), 30_000, '').catch(() => true);
     const vulkan = ['--use-angle=vulkan'];
     const d3d11 = ['--use-angle=d3d11'];
+    const openDirect = async () => (hasDirect ? open(d3d11).catch(() => null) : null);
     const browser = await open(vulkan).catch(() => null);
     const gpu = browser ? await read(browser) : 'none';
     if (!browser || gpu === 'none' || SOFTWARE_GL.test(gpu)) {
       await browser?.close().catch(() => {});
       /* no Vulkan on a GPU (an older driver, or none for it): Direct3D reaches the GPU of most such computers, and is
          taken when it does and shows a video's frames; else the default, on the CPU */
-      const direct = await open(d3d11).catch(() => null);
+      const direct = await openDirect();
       const directGpu = direct ? await read(direct) : 'none';
       if (direct && directGpu !== 'none' && !SOFTWARE_GL.test(directGpu) && await shows(direct)) {
         choose(d3d11);
@@ -519,7 +528,7 @@ export function vulkanFirst(renderer = rendererOf, presents = presentsVideo) {
     }
     await browser.close().catch(() => {});
     /* Direct3D, asked for by name (the default is SwiftShader, on the CPU): first on the same GPU, a computer with one */
-    const direct = await open(d3d11).catch(() => null);
+    const direct = await openDirect();
     const directGpu = direct ? await read(direct) : 'none';
     /** @type {boolean | null} */
     let directShows = null;
@@ -560,9 +569,11 @@ export function vulkanFirst(renderer = rendererOf, presents = presentsVideo) {
   return pick;
 }
 const onWindows = vulkanFirst();
+const onLinux = vulkanFirst(rendererOf, presentsVideo, { direct: false });
 
-/** A film's video frames were never seen (FilmPage.seek): on Windows, browsers opened from now on show video another way. */
-export const videoNotShown = () => (process.platform === 'win32' ? onWindows.videoNotShown() : Promise.resolve(false));
+/** A film's video frames were never seen (FilmPage.seek): on Windows and Linux, browsers opened from now on show video another way. */
+export const videoNotShown = () => (process.platform === 'win32' ? onWindows.videoNotShown()
+  : process.platform === 'linux' ? onLinux.videoNotShown() : Promise.resolve(false));
 
 /** Every browser launch() opened and that is still open. */
 const LIVE = new Set();
