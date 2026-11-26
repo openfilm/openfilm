@@ -343,6 +343,37 @@ test('Windows shares that refuse links can reference both files and folders thro
   assert.equal((await listFiles(root)).links[moved], undefined);
 });
 
+test('outside assets/ (Saved), a link Windows refuses comes in as a file of its own, not as an error (#518)', async (t) => {
+  const drive = mkdtempSync(join(tmpdir(), 'of-other-drive-'));
+  t.after(() => rmSync(drive, { recursive: true, force: true }));
+  const footage = join(drive, 'footage.mp4');
+  const reel = join(drive, 'reel.mp4');
+  const folder = join(drive, 'Day 1');
+  writeFileSync(footage, 'big footage');
+  writeFileSync(reel, 'more footage');
+  mkdirSync(folder);
+  writeFileSync(join(folder, 'take.mp4'), 'a take');
+  /* Developer Mode off: no links for files; on another drive: no clone, no second name */
+  const refuse = async () => { throw Object.assign(new Error('operation not permitted, symlink'), { code: 'EPERM' }); };
+  const otherDrive = { anywhere: true, platform: 'win32', makeLink: refuse, big: 0,
+    clone: async () => { throw Object.assign(new Error('cross-device'), { code: 'EXDEV' }); }, sameFile: refuse };
+
+  assert.deepEqual(await bringIn(root, 'saved', [footage], 'auto', otherDrive), ['saved/footage.mp4'], 'big media from another drive');
+  assert.deepEqual(await bringIn(root, 'saved/Selected', [reel, folder], 'link', otherDrive), ['saved/Selected/reel.mp4', 'saved/Selected/Day 1']);
+  assert.equal(readFileSync(join(root, 'saved', 'footage.mp4'), 'utf8'), 'big footage');
+  assert.equal(readFileSync(join(root, 'saved', 'Selected', 'reel.mp4'), 'utf8'), 'more footage');
+  assert.equal(readFileSync(join(root, 'saved', 'Selected', 'Day 1', 'take.mp4'), 'utf8'), 'a take');
+  assert.ok(!lstatSync(join(root, 'saved', 'footage.mp4')).isSymbolicLink());
+  assert.ok(!existsSync(join(root, '.film', 'media-links.json')), 'no reference outside assets/');
+  assert.deepEqual(readdirSync(join(root, 'saved')).filter((n) => n.endsWith('.importing')), [], 'no half-imported files left');
+  assert.equal(readFileSync(footage, 'utf8'), 'big footage', 'the original stays where it is');
+
+  /* in a project's assets/ a refused link is still a reference to the file where it is kept */
+  assert.deepEqual(await bringIn(root, 'assets', [footage], 'auto', otherDrive), ['assets/footage.mp4']);
+  assert.ok(!existsSync(join(root, 'assets', 'footage.mp4')));
+  assert.equal(readFileSync(readable(root, 'assets/footage.mp4'), 'utf8'), 'big footage');
+});
+
 test('a link that leads nowhere (the NAS is off) is listed as missing, relinked, and collected into the project', links, async () => {
   const nas = mkdtempSync(join(tmpdir(), 'of-nas-'));
   writeFileSync(join(nas, 'a.png'), 'one');

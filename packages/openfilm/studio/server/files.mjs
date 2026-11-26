@@ -645,6 +645,9 @@ export async function cloneTo(from, to, folder) {
 /** From this size on, media that cannot come in without taking room is left where it is kept (`auto`). */
 export const LEAVE_IN_PLACE = 100 * 1024 * 1024;
 
+/** How Windows refuses a link: no Developer Mode or admin rights for a file's, a share that refuses reparse points. */
+const LINK_REFUSED = ['UNKNOWN', 'EPERM', 'EACCES', 'ENOTSUP', 'EOPNOTSUPP', 'EINVAL', 'ENOSYS', 'EXDEV'];
+
 /** Whether what is at `path` (a file, or a folder at any depth) is at least `limit` bytes; a folder is read only until it is. */
 async function atLeast(/** @type {string} */ path, /** @type {number} */ limit) {
   let left = limit;
@@ -702,7 +705,10 @@ export async function bringIn(root, into, paths, mode, { anywhere = false, platf
       try { await makeLink(from, at, info.isDirectory() ? 'dir' : 'file'); }
       catch (e) {
         const code = /** @type {NodeJS.ErrnoException} */ (e).code;
-        if (platform !== 'win32' || !rel.startsWith('assets/') || !['UNKNOWN', 'EPERM', 'EACCES', 'ENOTSUP', 'EOPNOTSUPP', 'EINVAL', 'ENOSYS', 'EXDEV'].includes(code ?? '')) throw e;
+        if (platform !== 'win32' || !LINK_REFUSED.includes(code ?? '')) throw e;
+        /* outside assets/ (Saved, whose listing reads what is on disk) a link can't be kept as a reference: null, and
+           it comes in as a file of its own instead */
+        if (!rel.startsWith('assets/')) return null;
         changeMediaReferences(root, (entries) => [...entries, { name: rel, to: from, directory: info.isDirectory(), added: Date.now() }]);
       }
       return rel;
@@ -715,20 +721,26 @@ export async function bringIn(root, into, paths, mode, { anywhere = false, platf
     const cleaned = cleanName(sourceName ? sourceName(path) : basename(from));
     const name = platform === 'win32' ? cleaned.replace(/[. ]+$/, '') : cleaned;
     if (!name || name.startsWith('.')) throw new FileError(`${basename(from)} can't be named here`);
-    if (mode === 'link') { landed.push(await linkIn(from, info, name)); continue; }
+    /* a link Windows refused where no reference can stand in for it: it comes in as `auto` brings what it can't link */
+    let refused = false;
+    if (mode === 'link') {
+      const rel = await linkIn(from, info, name);
+      if (rel) { landed.push(rel); continue; }
+      refused = true;
+    }
     /* under a hidden name until it is all there: the pane never shows half a file */
     const part = join(dir, `.${process.pid}.${Date.now()}${++imports}.importing`);
     try {
       /* whether it came in taking no room: its own date is then left alone (a second name shares it with the first) */
       let free = false;
-      if (mode === 'auto') {
+      if (mode !== 'copy') {
         try { await clone(from, part, info.isDirectory()); free = true; }
         catch {
           await removeFile(part, { recursive: true, force: true });
           if (!info.isDirectory()) { try { await sameFile(from, part); free = true; } catch { /* another disk, or one with no second names */ } }
         }
-        if (!free && await atLeast(from, big)) {
-          const rel = await linkIn(from, info, name);
+        const rel = !free && !refused && await atLeast(from, big) ? await linkIn(from, info, name) : null;
+        if (rel) {
           landed.push(rel);
           onLinked?.(rel);
           continue;
@@ -810,7 +822,7 @@ export async function linkAt(root, rel, to, { platform = process.platform, makeL
     try { await makeLink(from, abs, 'file'); }
     catch (e) {
       const code = /** @type {NodeJS.ErrnoException} */ (e).code;
-      if (platform !== 'win32' || !['UNKNOWN', 'EPERM', 'EACCES', 'ENOTSUP', 'EOPNOTSUPP', 'EINVAL', 'ENOSYS', 'EXDEV'].includes(code ?? '')) throw e;
+      if (platform !== 'win32' || !LINK_REFUSED.includes(code ?? '')) throw e;
       changeMediaReferences(root, (entries) => [...entries, { name: rel, to: from, directory: false, added: Date.now() }]);
     }
     return rel;
