@@ -3996,6 +3996,7 @@ export const ko: Words = {
     providers: {
       included: '지원',
       about: {
+        dashscope: "Alibaba Cloud Model Studio의 Qwen Audio는 단어별 타임스탬프와 함께 음성을 전사합니다. Filetrans는 오디오를 Alibaba Cloud의 비공개 임시 저장소에 업로드합니다. 임시 링크는 48시간 동안 유효합니다.",
         openfilm: 'OpenFilm 자체 서비스입니다. OpenFilm 계정을 한 번 연결하면 선도적인 모델로 내레이션, 음악, 효과음, 대본, 이미지, 비디오를 만들고 OpenFilm 잔액에서 결제합니다. 다른 계정이나 키가 필요 없습니다.',
         openai: 'ChatGPT를 만든 회사입니다. API로 GPT Image 이미지를 만들고, 자체 음성으로 내레이션하며, 음성을 단어 단위로 받아씁니다.',
         google: 'Google AI Studio의 Gemini API: Gemini 음성과 받아쓰기, Nano Banana 이미지, Veo 비디오를 키 하나로.',
@@ -4036,6 +4037,7 @@ export const ko: Words = {
       getKey: '{name} 키 받기',
       key: '키',
       region: '지역(eastus 등)',
+      dashscopeHost: "DashScope 워크스페이스 호스트 또는 네이티브 API 주소 (선택 사항)",
       azureNote: "내레이션. Azure의 각 서비스는 자체 키와 리소스가 있는 지역을 씁니다. 둘 다 리소스의 '키 및 엔드포인트' 페이지에 있습니다.",
       pasteKey: '{name} API 키 붙여넣기',
       save: '저장',
