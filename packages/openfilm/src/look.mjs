@@ -433,7 +433,7 @@ async function lookMedia(target, at, range, opts, moments = []) {
   const file = resolve(target);
   if (!existsSync(file) || !statSync(file).isFile()) throw new UsageError(`${target}: no such file`);
   const dir = outDir(homeFor(dirname(file)), 'look');
-  const probe = spawnSync('ffprobe', ['-v', 'error', '-show_entries', 'format=duration:stream=codec_type,codec_name,pix_fmt,width,height,avg_frame_rate,r_frame_rate:stream_tags=alpha_mode', '-of', 'json', file], { encoding: 'utf8', windowsHide: true });
+  const probe = spawnSync('ffprobe', ['-v', 'error', '-show_entries', 'format=duration:stream=codec_type,codec_name,pix_fmt,width,height,avg_frame_rate,r_frame_rate,duration,nb_frames:stream_tags=alpha_mode', '-of', 'json', file], { encoding: 'utf8', windowsHide: true });
   let info;
   try { info = JSON.parse(probe.stdout); } catch { return { ok: false, lines: [`✗ ${target}: ffprobe cannot read it`], files: [] }; }
   const video = (info.streams ?? []).find((x) => x.codec_type === 'video');
@@ -451,9 +451,20 @@ async function lookMedia(target, at, range, opts, moments = []) {
   const grab = (t, thumbnail = false) => {
     const out = join(dir, `.${name}-${fmt(t)}.png`);
     // Resize before base64 embedding: full-size high-bit-depth PNGs can exceed Node's string limit together. 8 bits, alpha kept.
-    const r = spawnSync('ffmpeg', ['-v', 'error', '-y', ...(still ? [] : ['-ss', String(t)]), ...decode, '-i', file,
+    const seek = (at) => spawnSync('ffmpeg', ['-v', 'error', '-y', ...(still ? [] : ['-ss', String(at)]), ...decode, '-i', file,
       ...(thumbnail ? ['-vf', `scale=${CELL_WIDTH}:-1,format=rgb24|rgba`] : []), '-frames:v', '1', out], { windowsHide: true });
-    if (r.status !== 0) throw new Error(`ffmpeg could not take a frame at ${fmt(t)}`);
+    /* ffmpeg can exit 0 and write no file when the seek lands past its last decodable frame.
+       A container's duration is often longer than its video track (an audio tail, an edit list,
+       the last frame's own time), and `dur - 2/fps` does not always clear that gap: a real 24 fps
+       file whose container said 21.177s had its last frame at 21.083s, so the sheet's own end
+       time found nothing to draw. Step back a frame at a time before giving up; otherwise the
+       readFileSync below throws a bare ENOENT naming a file the person cannot open. */
+    let at = t, r = seek(at);
+    for (let tries = 0; !still && r.status === 0 && !existsSync(out) && tries < 8; tries++) {
+      at = Math.max(0, at - (fps ? 1 / fps : 0.04));
+      r = seek(at);
+    }
+    if (r.status !== 0 || !existsSync(out)) throw new Error(`ffmpeg could not take a frame at ${fmt(t)}`);
     const png = readFileSync(out); rmSync(out, { force: true }); return png;
   };
   const files = [];
@@ -467,7 +478,11 @@ async function lookMedia(target, at, range, opts, moments = []) {
     writeFileSync(out, frame.data); files.push(out);
   } else {
     /* ffmpeg has no frame at the file's own end: the last one a sheet can draw is two frames before it */
-    const lastFrame = Math.max(0, dur - (fps ? 2 / fps : 0.04));
+    /* the sheet must stop inside the PICTURE, not inside the container: an audio tail or an edit
+       list can make format duration longer than the video track, and then `dur - 2/fps` still
+       lands past the last frame, where ffmpeg exits 0 having written nothing. */
+    const vdur = Math.max(0, Number(video?.duration ?? 0)) || dur;
+    const lastFrame = Math.max(0, Math.min(dur, vdur) - (fps ? 2 / fps : 0.04));
     /* several moments: each time once and each range MOMENT_FRAMES frames across it (--count frames), in their order */
     const picked = several ? momentTimes(moments, Math.max(1, Math.round(opts.count ?? MOMENT_FRAMES))).map((t) => Math.min(Math.max(0, t), lastFrame)) : [];
     const [from, to] = several ? [Math.min(...picked), Math.max(...picked, Math.min(...picked) + 0.04)]
