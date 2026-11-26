@@ -10,8 +10,8 @@ export interface LaunchOptions { headed?: boolean; channel?: string | null; args
 export declare function launch(opts?: LaunchOptions): Promise<Browser>;
 /** A renderer string that is not a GPU: WebGL drawn on the CPU. */
 export declare const SOFTWARE_GL: RegExp;
-/** Windows: open with Vulkan once, and keep it only when its renderer is a GPU and it shows videos; otherwise the GPU another way, or Chromium's default. */
-export declare function vulkanFirst(renderer?: (browser: Browser) => Promise<string>, presents?: (browser: Browser) => Promise<boolean>): ((open: (angle: string[]) => Promise<Browser>) => Promise<Browser>) & { videoNotShown(): Promise<boolean> };
+/** Windows and Linux: open with Vulkan once, and keep it only when its renderer is a GPU and it shows videos; otherwise the GPU another way (Direct3D only with `direct`, Windows), or Chromium's default. */
+export declare function vulkanFirst(renderer?: (browser: Browser) => Promise<string>, presents?: (browser: Browser) => Promise<boolean>, options?: { direct?: boolean }): ((open: (angle: string[]) => Promise<Browser>) => Promise<Browser>) & { videoNotShown(): Promise<boolean> };
 /** Whether the browser shows the frame a paused video is sought to, for H.264 and HEVC (some Windows computers with Vulkan do not). */
 export declare function presentsVideo(browser: Browser): Promise<boolean>;
 /** Close every browser launch() opened that is still open: what waits on one fails at once instead of never answering. */

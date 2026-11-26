@@ -1332,6 +1332,8 @@ function FilmStageSelectImpl({
   React.useEffect(() => {
     if (!picked) { keyHandler.current = null; return undefined; }
     const onKey = (e: KeyboardEvent) => {
+      /* A popover may already have consumed Escape and unmounted during capture; keep its selection. */
+      if (e.defaultPrevented) return;
       if (previewRef.current?.frame?.()?.closest('[inert]')) return;
       /* keys pressed in an app's own panel are the app's (typing-target.ts) */
       if (inHostPanel(e.target)) return;

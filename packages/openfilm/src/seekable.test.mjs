@@ -177,14 +177,15 @@ test('a render shows ProRes footage, which no browser decodes, through its copy'
     /* ProRes with the sound a camera records with it: a browser plays the sound, shows no picture and reports no error */
     execFileSync('ffmpeg', ['-v', 'error', '-y', '-f', 'lavfi', '-i', 'color=c=0x2060c0:size=320x180:rate=30', '-f', 'lavfi', '-i', 'sine=frequency=440:duration=1',
       '-t', '1', '-c:v', 'prores_ks', '-profile:v', '3', '-c:a', 'aac', '-shortest', join(dir, 'a.mov')]);
-    writeFileSync(join(dir, 'film.html'), filmHtml({ stage: { w: 320, h: 180 }, tracks: [{ clips: [{ id: 'v', src: 'a.mov', at: 0, time: [0, 1] }] }] }));
+    writeFileSync(join(dir, 'film.html'), filmHtml({ stage: { w: 180, h: 320 }, tracks: [{ clips: [{ id: 'v', src: 'a.mov', box: { x: 10, y: 20, w: 160 }, at: 0, time: [0, 1] }] }] }));
+    /* A width of 160 on this portrait stage gives the 16:9 footage a height of 90. */
     const started = Date.now();
     const done = await render([dir, '0-0.5'], { out: join(dir, 'out.mp4'), workers: 1, silent: true, onProgress() {} });
     assert.ok(Date.now() - started < 60_000, 'no frame waits on a video that never shows');
     const [made] = readdirSync(join(dir, '.film/cache/seek')).filter((f) => f.endsWith('.mp4') && !f.includes('.part'));
     assert.ok(made, 'the footage is drawn through its copy');
     assert.equal(soundStreams(join(dir, '.film/cache/seek', made)), '', 'the copy is the picture only');
-    const [r, g, b] = execFileSync('ffmpeg', ['-v', 'error', '-ss', '0.2', '-i', done.out, '-frames:v', '1', '-vf', 'crop=4:4:160:90,format=rgb24', '-f', 'rawvideo', '-']);
+    const [r, g, b] = execFileSync('ffmpeg', ['-v', 'error', '-ss', '0.2', '-i', done.out, '-frames:v', '1', '-vf', 'crop=4:4:90:40,format=rgb24', '-f', 'rawvideo', '-']);
     assert.ok(Math.abs(r - 0x20) < 16 && Math.abs(g - 0x60) < 16 && Math.abs(b - 0xc0) < 16, `the footage's colour: ${r},${g},${b}`);
   } finally {
     rmSync(dir, { recursive: true, force: true });
