@@ -1,0 +1,14 @@
+{
+  "name": "openfilm",
+  "owner": {
+    "name": "OpenFilm"
+  },
+  "description": "OpenFilm: the open source AI video agent for coding agents.",
+  "plugins": [
+    {
+      "name": "openfilm",
+      "source": "./",
+      "description": "Make films as web pages with OpenFilm skills."
+    }
+  ]
+}

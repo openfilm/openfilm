@@ -1,0 +1,19 @@
+{
+  "name": "openfilm",
+  "description": "The open source AI video agent: films as web pages, and skills that teach your coding agent to make them.",
+  "author": {
+    "name": "OpenFilm",
+    "url": "https://github.com/openfilm"
+  },
+  "homepage": "https://openfilm.dev",
+  "repository": "https://github.com/openfilm/openfilm",
+  "license": "MIT",
+  "keywords": [
+    "video",
+    "motion-graphics",
+    "agents",
+    "animation"
+  ],
+  "privacyPolicyUrl": "https://openfilm.dev/privacy/",
+  "termsOfServiceUrl": "https://openfilm.dev/terms/"
+}

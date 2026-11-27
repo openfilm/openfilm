@@ -74,6 +74,17 @@ npx skills add openfilm/openfilm
 
 > Make a 20-second launch video for my CLI, with music.
 
+### Install as an agent plugin
+
+From [`.agents/plugins/marketplace.json`](.agents/plugins/marketplace.json) (OpenFilm skills):
+
+```bash
+codex plugin marketplace add openfilm/openfilm
+codex plugin add openfilm@openfilm
+```
+
+Claude Code: `/plugin marketplace add openfilm/openfilm`, then `/plugin install openfilm`.
+
 ### Editors
 
 Each editor is a different way to work on the same film, and in every one you and the agent work together. OpenFilm
