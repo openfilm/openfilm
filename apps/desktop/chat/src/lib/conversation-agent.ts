@@ -6,8 +6,14 @@
  * conversation takes the agent picked last.
  */
 import type { LocalAgentId, RosterAgent } from './desktop-bridge';
+import type { ProjectSessionItem } from './project-sessions';
 
 type Prefs = Partial<Record<LocalAgentId, Record<string, unknown>>>;
+
+/** Gets the saved agent and options while the conversation still has turns. */
+export function conversationAgentOverrides(session: ProjectSessionItem | undefined): Pick<ProjectSessionItem, 'agent' | 'agentPrefs'> | undefined {
+  return session?.turns === 0 ? undefined : session;
+}
 
 /**
  * The agent a conversation goes on with: the one it `used` while that one is switched on and ready (or still being
@@ -42,4 +48,10 @@ export function conversationPrefs(picked: Prefs, own: Prefs | undefined): Prefs 
   const out: Prefs = { ...picked };
   for (const [agent, values] of Object.entries(own) as Array<[LocalAgentId, Record<string, unknown>]>) out[agent] = { ...picked[agent], ...values };
   return out;
+}
+
+/** Keeps the options from a turn alongside the options already used in the conversation. */
+export function conversationPrefsAfterTurn(session: ProjectSessionItem, agent: LocalAgentId, used: Record<string, unknown> | undefined): Prefs | undefined {
+  const own = conversationAgentOverrides(session)?.agentPrefs;
+  return used ? { ...own, [agent]: { ...own?.[agent], ...used } } : own;
 }

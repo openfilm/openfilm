@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { conversationAgent, conversationPrefs, keptPrefs } from '../chat/src/lib/conversation-agent.ts';
+import { conversationAgent, conversationAgentOverrides, conversationPrefs, conversationPrefsAfterTurn, keptPrefs } from '../chat/src/lib/conversation-agent.ts';
 
 const roster = (...agents) => agents.map(([id, status, shown = true]) => ({ id, name: id, shown, status }));
 
@@ -15,6 +15,37 @@ test('a conversation goes on with the agent it used, not the one picked last in 
 
 test('a new conversation, one that has said nothing yet, takes the agent picked last', () => {
   assert.deepEqual(conversationAgent(undefined, roster(['deepseek', 'ready'], ['codex', 'ready']), 'codex'), { agent: 'codex', was: null });
+});
+
+test('after undoing its only turn, a conversation follows the latest agent and model', () => {
+  const session = {
+    turns: 0, agent: 'codex', agentPrefs: { codex: { model: 'original' } },
+  };
+  const picked = { codex: { model: 'new' }, claude: { model: 'opus' } };
+  const overrides = conversationAgentOverrides(session);
+  assert.deepEqual(conversationAgent(overrides?.agent, roster(['codex', 'ready'], ['claude', 'ready']), 'claude'), { agent: 'claude', was: null });
+  assert.deepEqual(conversationPrefs(picked, overrides?.agentPrefs), picked);
+});
+
+test('after undoing a turn, a conversation with earlier turns keeps its agent and model', () => {
+  const session = {
+    turns: 1, agent: 'codex', agentPrefs: { codex: { model: 'original' } },
+  };
+  const picked = { codex: { model: 'new' }, claude: { model: 'opus' } };
+  const overrides = conversationAgentOverrides(session);
+  assert.deepEqual(conversationAgent(overrides?.agent, roster(['codex', 'ready'], ['claude', 'ready']), 'claude'), { agent: 'codex', was: null });
+  assert.deepEqual(conversationPrefs(picked, overrides?.agentPrefs), { codex: { model: 'original' }, claude: { model: 'opus' } });
+});
+
+test('the first turn after an undo to zero does not restore discarded model preferences', () => {
+  const session = { turns: 0, agentPrefs: { codex: { model: 'original' } } };
+  assert.deepEqual(conversationPrefsAfterTurn(session, 'claude', { model: 'opus' }), { claude: { model: 'opus' } });
+});
+
+test('a background turn keeps prior options only if the conversation still has turns', () => {
+  const agentPrefs = { codex: { model: 'original' } };
+  assert.equal(conversationPrefsAfterTurn({ turns: 1, agentPrefs }, 'claude', undefined), agentPrefs);
+  assert.equal(conversationPrefsAfterTurn({ turns: 0, agentPrefs }, 'claude', undefined), undefined);
 });
 
 test('the agent it used gone, signed out or switched off: the one picked last, and which one it used is said', () => {

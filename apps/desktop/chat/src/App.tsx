@@ -72,7 +72,7 @@ import { agentModelSummary, agentOptions, currentAgent, effectivePrefs, offeredO
 import { useLiveActivityFromStore } from '@/lib/live-activity';
 import { loadLastSession, loadSessions, newSession, saveLastSession, saveSessions } from '@/lib/local-sessions';
 import type { ProjectSessionItem } from '@/lib/project-sessions';
-import { conversationAgent, conversationPrefs, keptPrefs } from '@/lib/conversation-agent';
+import { conversationAgent, conversationAgentOverrides, conversationPrefs, conversationPrefsAfterTurn, keptPrefs } from '@/lib/conversation-agent';
 import { AGENT_DEFINITIONS, isAgentId } from '../../src/agent-definitions.mjs';
 import type { TranscriptItem } from '@/lib/agent-transcript';
 import { app, type FfmpegState, type Project, type SkillListing, type StudioRef, type StudioSelection } from './app-bridge';
@@ -355,10 +355,11 @@ function ChatPane({ project, banners, selection, assetsOpen, assetsOverlay }: { 
   /* the agent this conversation used and its options, whatever was picked since in another one; a new conversation
      takes the one picked last (lib/conversation-agent). A conversation from before they kept it: its last turn's agent */
   const shownSessionItem = sessions.find((s) => s.id === sessionId);
+  const overrides = conversationAgentOverrides(shownSessionItem);
   const lastTurnAgent = asset?.sessionId === sessionId ? asset.localAgent?.id : undefined;
-  const usedAgent = [shownSessionItem?.agent, lastTurnAgent].find((id): id is LocalAgentId => Boolean(id) && isAgentId(id));
+  const usedAgent = [overrides?.agent, lastTurnAgent].find((id): id is LocalAgentId => Boolean(id) && isAgentId(id));
   const { agent, was: agentWas } = conversationAgent(usedAgent, la.roster, currentAgent(la));
-  const agentPrefs = conversationPrefs(la.prefs, shownSessionItem?.agentPrefs);
+  const agentPrefs = conversationPrefs(la.prefs, overrides?.agentPrefs);
   /** the agent or an option changed in the menu: kept on this conversation, once it has said something (a new one
       takes the pick); not a use of it, so it keeps its place in the list */
   const keepOnSession = React.useCallback((patch: (s: ProjectSessionItem) => Partial<ProjectSessionItem>) => {
@@ -818,7 +819,7 @@ function ChatPane({ project, banners, selection, assetsOpen, assetsOverlay }: { 
     const turnNo = recovery ? Math.max(0, ordered.findIndex((entry) => entry.id === id)) : shown ? ordered.length : history.length;
     const turn = createLocalAgentTurn(id, agent, turnNo, prior);
     const agentStore = useLocalAgents.getState();
-    const own = sessions.find((s) => s.id === sessionId)?.agentPrefs;
+    const own = conversationAgentOverrides(sessions.find((s) => s.id === sessionId))?.agentPrefs;
     const picked = conversationPrefs(agentStore.prefs, own);
     const options = agentOptions({ ...agentStore, prefs: picked }, agent);
     const prefs = effectivePrefs(picked, agent, agentStore.roster, options);
@@ -853,7 +854,7 @@ function ChatPane({ project, banners, selection, assetsOpen, assetsOverlay }: { 
        A turn the agent started by itself keeps no options: the person chose none there */
     touchSession(sessionId, (s) => ({
       title: s.title || title, turns: s.turns + (recovery ? 0 : 1), agent,
-      ...(origin ? {} : { agentPrefs: { ...s.agentPrefs, [agent]: { ...s.agentPrefs?.[agent], ...keptPrefs(options, prefs) } } }),
+      agentPrefs: conversationPrefsAfterTurn(s, agent, origin ? undefined : keptPrefs(options, prefs)),
     }));
     const meta: LocalAgentTurnMeta = {
       turnId: id, projectId: projectKey, projectTitle: project.name, sessionId, agent, prompt: instruction,
