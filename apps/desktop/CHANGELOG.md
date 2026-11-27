@@ -1,5 +1,20 @@
 # @openfilm/desktop
 
+## 0.5.0
+
+### Patch Changes
+
+- [#542](https://github.com/openfilm/openfilm/pull/542) [`c386aeb`](https://github.com/openfilm/openfilm/commit/c386aeb789f32e065f988eeb47fb7615cee07619) Thanks [@iyuzhang](https://github.com/iyuzhang)! - Let the agent and model picker work after undoing a chat's only turn.
+
+- [#512](https://github.com/openfilm/openfilm/pull/512) [`43ee8ad`](https://github.com/openfilm/openfilm/commit/43ee8ade6124bf6f4aa05a1a818bc1d93ebefbcc) Thanks [@rick-mingyu-liu](https://github.com/rick-mingyu-liu)! - Closing an inspector popup with Escape keeps the selected clip and its controls available.
+
+- [#514](https://github.com/openfilm/openfilm/pull/514) [`ef85bb3`](https://github.com/openfilm/openfilm/commit/ef85bb3aacd212a55578799cfcbc37f592854a49) Thanks [@rick-mingyu-liu](https://github.com/rick-mingyu-liu)! - Videos played through a converted copy keep their source proportions when the clip specifies only its width or height.
+
+- [#532](https://github.com/openfilm/openfilm/pull/532) [`0a76889`](https://github.com/openfilm/openfilm/commit/0a76889e6d39dc243ddad661cbea7e3d25c3fb1f) Thanks [@amine-boutouil](https://github.com/amine-boutouil)! - On Windows without Developer Mode, footage of 100 MB or more brought into My library from another drive, or linked into another of its folders, no longer fails with EPERM. It comes in as a file of its own, as smaller media does, and the original stays where it is.
+
+- Updated dependencies [[`dcead56`](https://github.com/openfilm/openfilm/commit/dcead56fa00985d31a094603879b75037a213758), [`43ee8ad`](https://github.com/openfilm/openfilm/commit/43ee8ade6124bf6f4aa05a1a818bc1d93ebefbcc), [`1bd67d2`](https://github.com/openfilm/openfilm/commit/1bd67d23b32511b35680f7ae93c2054ceef89ee6), [`71d0351`](https://github.com/openfilm/openfilm/commit/71d0351e319584f4e08dc219d4a094d97fc86799), [`6948906`](https://github.com/openfilm/openfilm/commit/69489069aefb547e6bc9f8fd6a750f66aedd14a8), [`f27d12f`](https://github.com/openfilm/openfilm/commit/f27d12f3084807624bd9afbc277dd204e9fde540), [`45594a5`](https://github.com/openfilm/openfilm/commit/45594a56253b3c28ac6c91302fb5d2db17a1208f), [`b125a3d`](https://github.com/openfilm/openfilm/commit/b125a3d9cdcd44539ba2468eb520e9753b4d5aaa), [`ef85bb3`](https://github.com/openfilm/openfilm/commit/ef85bb3aacd212a55578799cfcbc37f592854a49), [`0a76889`](https://github.com/openfilm/openfilm/commit/0a76889e6d39dc243ddad661cbea7e3d25c3fb1f), [`e36b9d0`](https://github.com/openfilm/openfilm/commit/e36b9d061973dcb917d2e2cb72bcd46a5372a33b), [`28ea393`](https://github.com/openfilm/openfilm/commit/28ea393320522ed085332a22e3458dfe0de994ea), [`327ef4c`](https://github.com/openfilm/openfilm/commit/327ef4c86ceab07122a145c0d6d984045af7c295), [`137ab13`](https://github.com/openfilm/openfilm/commit/137ab13d4bcee77600e2386fdd77e3d030745fa8)]:
+  - openfilm@0.5.0
+
 ## 0.4.1
 
 ### Patch Changes
