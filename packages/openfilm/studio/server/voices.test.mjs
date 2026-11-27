@@ -204,3 +204,41 @@ test('two voices speak a dialogue: the same voice-over command, a turn a line, w
   const other = await call('get', 'POST', { folder: project.path, verb: 'tts', via: 'elevenlabs', args: { text: 'x', voice: 'a+b', out: 'other' } });
   assert.equal(other.ok, false); assert.match(other.text, /speaks no dialogue of two voices/);
 }));
+
+test('a voice-over in another service\'s voice is spoken by that service\'s model, or stops before anything is sent', () => fixture(async ({ call, calls }) => {
+  const { project } = await call('projects', 'POST', { name: 'Voices of services' });
+  const { voices } = libraryVoices();
+  const squash = (s) => s.toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
+  const elevenNames = new Set(voices.filter((v) => v.provider === 'elevenlabs').map((v) => squash(v.name)));
+  const inworld = voices.find((v) => v.provider === 'inworld' && !elevenNames.has(squash(v.name)) && !elevenNames.has(squash(v.id)));
+  const get = (args, more = {}) => call('get', 'POST', { folder: project.path, verb: 'tts', ...more, args: { text: 'Hello.', ...args } });
+
+  /* the person's own keys: ElevenLabs speaks voice-overs, Inworld is connected too, and an Inworld voice goes there */
+  const own = await get({ voice: inworld.id, out: 'own' });
+  assert.equal(own.ok, true, own.text);
+  const spoken = JSON.parse(calls.filter((c) => c.path === '/tts/v1/voice').at(-1).body);
+  assert.deepEqual([spoken.voiceId, spoken.modelId], [inworld.id, 'inworld-tts-2']);
+  assert.match(own.text, /which ElevenLabs cannot speak: spoken by inworld-tts-2 with Inworld, connected in Settings/);
+
+  /* through OpenFilm's service, whose first model is ElevenLabs': its Inworld model */
+  await call('providers/openfilm/key', 'PUT', { key: 'ofk_test_service_key' });
+  const runs = () => calls.filter((c) => c.path === '/v1/media/run').map((c) => JSON.parse(c.body));
+  const service = await get({ voice: inworld.id, out: 'service' }, { via: 'openfilm' });
+  assert.equal(service.ok, true, service.text);
+  assert.deepEqual([runs().at(-1).model, runs().at(-1).args.voice], ['inworld/inworld-tts-2', inworld.id]);
+
+  /* a name with its spaces left out is the ElevenLabs voice of that name */
+  const named = voices.find((v) => v.provider === 'elevenlabs' && v.name.includes(' ')
+    && voices.filter((w) => w.provider === 'elevenlabs' && squash(w.name) === squash(v.name)).length === 1);
+  const byName = await get({ voice: named.name.replaceAll(' ', ''), out: 'named' }, { via: 'openfilm' });
+  assert.equal(byName.ok, true, byName.text);
+  assert.deepEqual([runs().at(-1).model, runs().at(-1).args.voice], ['elevenlabs/eleven_v4', named.id]);
+
+  /* a Doubao voice with ElevenLabs' model named: nothing is sent */
+  const before = calls.length;
+  const doubao = voices.find((v) => v.provider === 'doubao' && !v.pair);
+  const refused = await get({ text: '你好。', voice: doubao.id, out: 'doubao' }, { via: 'openfilm', model: 'elevenlabs/eleven_v4' });
+  assert.equal(refused.ok, false);
+  assert.match(refused.text, /is the Doubao voice .* speaks only ElevenLabs voices\. Speak it with a model of Doubao \(--via doubao\).*Nothing was sent\./);
+  assert.deepEqual(calls.slice(before).filter((c) => c.path !== '/v1/media/models'), []);
+}));
