@@ -2815,7 +2815,7 @@ export function ProjectView({ projectId, onProject }: {
       soundEntries: (key) => [
         ...fileEntries(key, 'sound'),
         { id: 'sep-off', separator: true as const },
-        { id: 'remove', label: t('timeline.menuDelete'), danger: true, onSelect: () => { void rewrite([{ op: 'remove', clip: key }] as never, 'history.stepRemove'); } },
+        { id: 'remove', label: t('timeline.removeBlock'), danger: true, onSelect: () => { void rewrite([{ op: 'remove', clip: key }] as never, 'history.stepRemove'); } },
       ],
     };
   }, [listing, language, projectId, edit, toast, folder, t, pickReplacement, buildTemplateFilm]);

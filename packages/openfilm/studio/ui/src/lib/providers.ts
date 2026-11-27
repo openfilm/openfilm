@@ -106,6 +106,23 @@ export function azureKey(region: string, key: string): string | null {
   return /^[a-z0-9]+$/.test(place) && key.trim() ? `${place}:${key.trim()}` : null;
 }
 
+
+/** Pair a native DashScope HTTPS host with its key without changing how Studio stores credentials. */
+export function dashscopeKey(address: string, key: string): string | null {
+  const token = key.trim();
+  if (!token) return null;
+  const base = address.trim();
+  if (!base) return token;
+  try {
+    const url = new URL(base.includes('://') ? base : `https://${base}`);
+    if (url.protocol !== 'https:' || url.port || url.username || url.password || url.search || url.hash
+        || !['', '/api/v1'].includes(url.pathname.replace(/\/+$/, ''))) return null;
+    return `${url.hostname}:${token}`;
+  } catch {
+    return null;
+  }
+}
+
 /** Whether any provider here, connected or not, can make `verb`. */
 export const offered = (state: ProvidersState, verb: ProviderVerb) => state.providers.some((p) => p.verbs.includes(verb));
 
@@ -121,7 +138,7 @@ export const SERVICE_VERBS: ProviderVerb[] = ['tts', 'music', 'sfx', 'asr', 'cut
 export const PROVIDER_SITES: Readonly<Record<string, string>> = {
   openfilm: 'openfilm.dev', openai: 'openai.com', google: 'ai.google.dev', azure: 'azure.microsoft.com', elevenlabs: 'elevenlabs.io',
   inworld: 'inworld.ai', cartesia: 'cartesia.ai', openrouter: 'openrouter.ai', fal: 'fal.ai', groq: 'groq.com', mimo: 'platform.xiaomimimo.com',
-  doubao: 'volcengine.com', volcengine: 'volcengine.com', pexels: 'pexels.com', pixabay: 'pixabay.com',
+  dashscope: 'alibabacloud.com', doubao: 'volcengine.com', volcengine: 'volcengine.com', pexels: 'pexels.com', pixabay: 'pixabay.com',
   brave: 'brave.com/search/api', tavily: 'tavily.com', keenable: 'keenable.ai',
 };
 

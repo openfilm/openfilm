@@ -297,7 +297,10 @@ export function mediaFacts(file) {
           try { said = JSON.parse(String(stdout)); } catch { /* nothing to read */ }
           const duration = Number(said?.format?.duration);
           const video = said?.streams?.find((s) => s.codec_type === 'video');
-          done(duration > 0 ? { duration, w: video?.width ?? 0, h: video?.height ?? 0 } : null);
+          /* a file ffprobe reads the picture's size of but no length of (some containers): its size is still its size,
+             and it is the size a clip placed with a width but no height takes its height from (#501) */
+          const size = video?.width > 0 && video?.height > 0 ? { w: video.width, h: video.height } : null;
+          done(duration > 0 ? { duration, ...(size ?? { w: 0, h: 0 }) } : size);
         });
     }));
   }

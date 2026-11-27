@@ -80,7 +80,7 @@ export function RecycleBinView({ onBack, onClose, onRestored }: { onBack?: () =>
           if ((e.key === 'Delete' || e.key === 'Backspace') && picked.length) { e.preventDefault(); setAsking({ ids: picked }); }
         }}>
         {items === null ? <div className="flex h-40 items-center justify-center text-[var(--text-faint)]"><Loader2 size={18} className="animate-spin" /></div>
-          : !shown.length ? <div className="flex h-60 flex-col items-center justify-center gap-2 text-center"><Trash2 size={24} className="text-[var(--text-faint)]" /><strong className="text-[13px] font-medium">{t(items.length ? 'media.noResults' : 'recycleBin.emptyTitle')}</strong>{items.length ? null : <span className="max-w-[360px] text-[12px] text-[var(--text-faint)]">{t('recycleBin.emptyHint')}</span>}</div>
+          : !shown.length ? <div className="flex h-60 flex-col items-center justify-center gap-2 text-center"><Trash2 size={24} className="text-[var(--text-faint)]" /><strong className="text-[13px] font-medium">{t(items.length ? 'media.noMatch' : 'recycleBin.emptyTitle')}</strong>{items.length ? null : <span className="max-w-[360px] text-[12px] text-[var(--text-faint)]">{t('recycleBin.emptyHint')}</span>}</div>
           : <table className="w-full table-fixed border-collapse text-[12px]" role="grid" aria-label={t('recycleBin.title')}>
             <thead className="sticky top-0 bg-[var(--bg-topbar-popover)] text-left text-[11px] text-[var(--text-faint)]">
               <tr className="h-8 border-b border-[var(--border)]">

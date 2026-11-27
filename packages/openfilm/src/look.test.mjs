@@ -396,3 +396,26 @@ test("a long video with sound and no transcript beside it is pointed at its word
   writeFileSync(join(dir, 'talk.vtt'), 'WEBVTT\n');
   assert.match(wordsLine(file, facts)[0], /its words: \S*talk\.vtt$/);
 });
+
+test('a sheet whose last time lands past the video track still draws, when the container runs longer than the picture', { timeout: 120_000 }, async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'of-look-tail-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  /* an audio tail longer than the video: the container then reports ~1s while the last
+     picture is at 0.36s, so the sheet's own end time (dur - 2/fps) has no frame to find.
+     ffmpeg exits 0 and writes nothing there - the bug this covers. */
+  const file = (() => {
+    const f = join(dir, 'tail.mp4');
+    const r = spawnSync('ffmpeg', ['-v', 'error', '-y',
+      '-f', 'lavfi', '-i', 'testsrc2=s=64x64:r=25:d=0.4',
+      '-f', 'lavfi', '-i', 'sine=frequency=440:duration=1',
+      '-map', '0:v', '-map', '1:a', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'aac', f]);
+    assert.equal(r.status, 0, String(r.stderr));
+    return f;
+  })();
+  const dur = Number(spawnSync('ffprobe', ['-v', 'error', '-show_entries', 'format=duration',
+    '-of', 'default=nw=1:nk=1', file], { encoding: 'utf8' }).stdout.trim());
+  assert.ok(dur > 0.6, `the container should run past the picture (got ${dur}s)`);
+  const r = await look([file], { count: 4 });
+  assert.equal(r.ok, true, r.lines?.join('\n'));
+  assert.ok(readFileSync(r.files[0]).length > 0, 'the sheet was written');
+});

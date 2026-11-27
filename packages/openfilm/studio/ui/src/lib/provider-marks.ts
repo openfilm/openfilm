@@ -1,13 +1,14 @@
 /**
  * Each provider's mark, one color (the text's), as Settings → Services lists them (and Settings → Agents its agents).
  * The marks (including Antigravity's) are from Lobe Icons (https://github.com/lobehub/lobe-icons, MIT); Claude's, Cursor's, Copilot's, OpenCode's,
- * MiniMax's, Brave's, Pexels', Pixabay's, Google's and Xiaomi's from Simple Icons (CC0); Keenable's, Inworld's and
+ * MiniMax's, Brave's, Pexels', Pixabay's, Google's, Xiaomi's and Alibaba Cloud's from Simple Icons (CC0); Keenable's, Inworld's and
  * Cartesia's, in neither, from their own brand assets. A mark drawn in shades of its one color has `parts`, each with its opacity. OpenFilm's is its own
  * logo (BrandLogo), its clips in a lighter shade. A service with no mark here (a new one, until it has one) is a letter
  * cut out of a rounded square.
  */
 
 export const MARKS: Record<string, { viewBox: string; d: string; parts?: { d: string; opacity?: number }[] }> = {
+  dashscope: { viewBox: '0 0 24 24', d: "M3.996 4.517h5.291L8.01 6.324 4.153 7.506a1.668 1.668 0 0 0-1.165 1.601v5.786a1.668 1.668 0 0 0 1.165 1.6l3.857 1.183 1.277 1.807H3.996A3.996 3.996 0 0 1 0 15.487V8.513a3.996 3.996 0 0 1 3.996-3.996m16.008 0h-5.291l1.277 1.807 3.857 1.182c.715.227 1.17.889 1.165 1.601v5.786a1.668 1.668 0 0 1-1.165 1.6l-3.857 1.183-1.277 1.807h5.291A3.996 3.996 0 0 0 24 15.487V8.513a3.996 3.996 0 0 0-3.996-3.996m-4.007 8.345H8.002v-1.804h7.995Z" },
   doubao: { viewBox: '0 0 24 24', d: 'M5.31 15.756c.172-3.75 1.883-5.999 2.549-6.739-3.26 2.058-5.425 5.658-6.358 8.308v1.12C1.501 21.513 4.226 24 7.59 24a6.59 6.59 0 002.2-.375c.353-.12.7-.248 1.039-.378.913-.899 1.65-1.91 2.243-2.992-4.877 2.431-7.974.072-7.763-4.5l.002.001z M22.57 10.283c-1.212-.901-4.109-2.404-7.397-2.8.295 3.792.093 8.766-2.1 12.773a12.782 12.782 0 01-2.244 2.992c3.764-1.448 6.746-3.457 8.596-5.219 2.82-2.683 3.353-5.178 3.361-6.66a2.737 2.737 0 00-.216-1.084v-.002zM14.303 1.867C12.955.7 11.248 0 9.39 0 7.532 0 5.883.677 4.545 1.807 2.791 3.29 1.627 5.557 1.5 8.125v9.201c.932-2.65 3.097-6.25 6.357-8.307.5-.318 1.025-.595 1.569-.829 1.883-.801 3.878-.932 5.746-.706-.222-2.83-.718-5.002-.87-5.617h.001z M17.305 4.961a199.47 199.47 0 01-1.08-1.094c-.202-.213-.398-.419-.586-.622l-1.333-1.378c.151.615.648 2.786.869 5.617 3.288.395 6.185 1.898 7.396 2.8-1.306-1.275-3.475-3.487-5.266-5.323z' },
   openfilm: { viewBox: '0 0 24 24', d: '', parts: [{ d: 'M6 1.57H20.09Q21.39 1.57 21.39 2.87V5.48Q21.39 6.78 20.09 6.78H6Q4.7 6.78 4.7 5.48V2.87Q4.7 1.57 6 1.57Z M6.78 9.91H16.43Q17.74 9.91 17.74 11.22V13.57Q17.74 14.87 16.43 14.87H6.78Q5.48 14.87 5.48 13.57V11.22Q5.48 9.91 6.78 9.91Z', opacity: .45 }, { d: 'M3.39 1.57H8.61Q9.39 1.57 9.39 2.35V5.48Q9.39 6 9 6.39L7.04 8.09V21.39Q7.04 22.43 6 22.43Q4.96 22.43 4.96 21.39V8.09L3 6.39Q2.61 6 2.61 5.48V2.35Q2.61 1.57 3.39 1.57Z' }] },
   elevenlabs: { viewBox: '0 0 24 24', d: 'M5 0h5v24H5V0zM14 0h5v24h-5V0z' },
