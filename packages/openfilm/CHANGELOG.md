@@ -1,5 +1,39 @@
 # openfilm
 
+## 0.5.0
+
+### Minor Changes
+
+- [#531](https://github.com/openfilm/openfilm/pull/531) [`e36b9d0`](https://github.com/openfilm/openfilm/commit/e36b9d061973dcb917d2e2cb72bcd46a5372a33b) Thanks [@Xiaobaicai350](https://github.com/Xiaobaicai350)! - Add Alibaba Cloud Model Studio's native Qwen Audio speech transcription, including word timestamps across long recordings and support for Filetrans through private temporary storage.
+
+### Patch Changes
+
+- [#525](https://github.com/openfilm/openfilm/pull/525) [`dcead56`](https://github.com/openfilm/openfilm/commit/dcead56fa00985d31a094603879b75037a213758) Thanks [@HEOJUNFO](https://github.com/HEOJUNFO)! - Captions made of what is said read as the subtitles do when a line has a filler or a false start: "So, uh, we start at eight." is captioned "So, we start at eight.", where it came out as "So,uh,westartateight."
+
+- [#512](https://github.com/openfilm/openfilm/pull/512) [`43ee8ad`](https://github.com/openfilm/openfilm/commit/43ee8ade6124bf6f4aa05a1a818bc1d93ebefbcc) Thanks [@rick-mingyu-liu](https://github.com/rick-mingyu-liu)! - Closing an inspector popup with Escape keeps the selected clip and its controls available.
+
+- [#517](https://github.com/openfilm/openfilm/pull/517) [`1bd67d2`](https://github.com/openfilm/openfilm/commit/1bd67d23b32511b35680f7ae93c2054ceef89ee6) Thanks [@OMD-123](https://github.com/OMD-123)! - A clip placed with a width but no height exports as it is shown in the editor. The export took the stage's shape for the picture's own when it could not read the picture's size, so a landscape clip on a portrait stage came out letterboxed, and one placed low on the stage came out missing altogether.
+
+- [#306](https://github.com/openfilm/openfilm/pull/306) [`71d0351`](https://github.com/openfilm/openfilm/commit/71d0351e319584f4e08dc219d4a094d97fc86799) Thanks [@rick-mingyu-liu](https://github.com/rick-mingyu-liu)! - Google: a Gemini Omni clip is made in the background and asked after until it is done, so a long one does not wait on one open request. Stopping a run stops Google making the clip too, and a finished one is deleted from the Gemini project instead of being kept there.
+
+- [#537](https://github.com/openfilm/openfilm/pull/537) [`6948906`](https://github.com/openfilm/openfilm/commit/69489069aefb547e6bc9f8fd6a750f66aedd14a8) Thanks [@riverisbuilding](https://github.com/riverisbuilding)! - Linux: WebGL is no longer lost as a headless browser starts on a GPU. On a machine with an NVIDIA GPU and a Vulkan driver, Chromium's own GPU setup could fail at start, and every WebGL context made in the first second was lost: `look` showed white canvases and a render had white frames. The browser now tries Vulkan first and keeps it when its renderer is a GPU that shows videos, as on Windows; a machine with no GPU keeps Chromium's default.
+
+- [#523](https://github.com/openfilm/openfilm/pull/523) [`f27d12f`](https://github.com/openfilm/openfilm/commit/f27d12f3084807624bd9afbc277dd204e9fde540) Thanks [@e3chovivi](https://github.com/e3chovivi)! - `look` on a media file no longer dies when the sheet's last time lands past the picture. A container's duration can run longer than its video track (an audio tail, an edit list), so `duration - 2/fps` sometimes had no frame to find: ffmpeg exited 0 having written nothing, and the next line threw a bare ENOENT naming a file nobody could open. The sheet now stops inside the video track's own duration, steps back a frame if a seek still finds nothing, and reports a plain message if there is genuinely no frame there.
+
+- [#529](https://github.com/openfilm/openfilm/pull/529) [`45594a5`](https://github.com/openfilm/openfilm/commit/45594a56253b3c28ac6c91302fb5d2db17a1208f) Thanks [@andretorresdg](https://github.com/andretorresdg)! - A template sound's menu says "Delete", and a Recycle Bin search that finds nothing says so, instead of showing `timeline.menuDelete` and `media.noResults`.
+
+- [#505](https://github.com/openfilm/openfilm/pull/505) [`b125a3d`](https://github.com/openfilm/openfilm/commit/b125a3d9cdcd44539ba2468eb520e9753b4d5aaa) Thanks [@hobostay](https://github.com/hobostay)! - Fix an infinite loop in Studio's edit-history byte-cap eviction when only the first and last two versions of a tracked file remain.
+
+- [#514](https://github.com/openfilm/openfilm/pull/514) [`ef85bb3`](https://github.com/openfilm/openfilm/commit/ef85bb3aacd212a55578799cfcbc37f592854a49) Thanks [@rick-mingyu-liu](https://github.com/rick-mingyu-liu)! - Videos played through a converted copy keep their source proportions when the clip specifies only its width or height.
+
+- [#532](https://github.com/openfilm/openfilm/pull/532) [`0a76889`](https://github.com/openfilm/openfilm/commit/0a76889e6d39dc243ddad661cbea7e3d25c3fb1f) Thanks [@amine-boutouil](https://github.com/amine-boutouil)! - On Windows without Developer Mode, footage of 100 MB or more brought into My library from another drive, or linked into another of its folders, no longer fails with EPERM. It comes in as a file of its own, as smaller media does, and the original stays where it is.
+
+- [#528](https://github.com/openfilm/openfilm/pull/528) [`28ea393`](https://github.com/openfilm/openfilm/commit/28ea393320522ed085332a22e3458dfe0de994ea) Thanks [@riverisbuilding](https://github.com/riverisbuilding)! - A transparent video with motion blur (ProRes 4444 or WebM, two or more samples) exports again with ffmpeg 9.1. When the picture turned fully opaque partway through, ffmpeg 9.1 stopped the export with "Frame size or format changed without filter graph reinitialization" and wrote nothing.
+
+- [#524](https://github.com/openfilm/openfilm/pull/524) [`327ef4c`](https://github.com/openfilm/openfilm/commit/327ef4c86ceab07122a145c0d6d984045af7c295) Thanks [@HEOJUNFO](https://github.com/HEOJUNFO)! - Captions of a clip trimmed in the middle of a spoken line say only the words still heard. The last word no longer carries the rest of the line the trim cut off, and a word that starts just before the cut is left to the clip after it.
+
+- [#536](https://github.com/openfilm/openfilm/pull/536) [`137ab13`](https://github.com/openfilm/openfilm/commit/137ab13d4bcee77600e2386fdd77e3d030745fa8) Thanks [@riverisbuilding](https://github.com/riverisbuilding)! - A voice-over is spoken by a model that has its voice. A voice of another service goes to that service's model, through OpenFilm's service or a key the person has connected: a Doubao voice is no longer sent to ElevenLabs. A voice's name, such as "ShanShan" for Shan Shan, or an id cut short becomes the voice's id. A private voice may be named as Studio shows it. When no model here can speak the voice, or --model names one that cannot, `openfilm get tts` says which can, and nothing is sent or spent.
+
 ## 0.4.1
 
 ### Patch Changes
