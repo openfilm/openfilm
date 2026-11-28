@@ -1,10 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { agentUpdatePlan, createAgentUpdates, deepseekUpdateFeed, latestAgentVersion, UPDATE_PACKAGES } from './agent-updates.mjs';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { updateWithReceipt } from './agents.mjs';
 import { OWN_AGENT_IDS } from './agent-definitions.mjs';
 
@@ -194,11 +194,12 @@ test('DeepSeek Harness checks its owning app’s official channel, including a n
   assert.equal(deepseekUpdateFeed(program), null, 'never forward account keys or fetch untrusted update hosts');
 });
 
-test('completed, failed and closed update terminals stop blocking new turns immediately', async t => {
-  for (const code of [1, null, 0]) {
+test('completed and failed update terminals stop blocking new turns immediately', async t => {
+  for (const code of [1, 0]) {
     const f = fixture(t, { openCommand: async () => ({ ok: true, completion: async () => ({ code }) }) });
     await f.controller.update('claude'); await f.controller.poll();
     assert.equal(f.controller.state('claude').status, 'error', `exit ${code}: installed version is still old`);
+    if (code !== 0) assert.match(f.controller.state('claude').error, /exited with code 1/);
     assert.deepEqual(f.updated, []);
   }
   const current = fixture(t, { fetch: async () => json({ stable: '1.0.0' }), openCommand: async () => ({ ok: true, completion: async () => ({ code: 0 }) }) });
@@ -206,16 +207,70 @@ test('completed, failed and closed update terminals stop blocking new turns imme
   assert.equal(current.controller.state('claude').status, 'current', 'already up to date is a successful finished check');
 });
 
-test('terminal completion records only the exit code, with quoted multilingual receipt paths', t => {
+test('a closed update terminal is unknown rather than failed and can be retried', async t => {
+  for (const started of [true, false]) {
+    let attempts = 0;
+    const f = fixture(t, { openCommand: async () => { attempts++; return { ok: true, completion: async () => ({ code: null, reason: 'terminal-closed', started }) }; } });
+    await f.controller.update('claude'); await f.controller.poll();
+    assert.equal(f.controller.state('claude').status, 'unknown');
+    assert.ok(f.controller.state('claude').error.includes(started ? 'command started' : 'terminal closed before'));
+    assert.match(f.controller.state('claude').error, started ? /could not be confirmed/ : /could be confirmed/);
+    assert.deepEqual(f.updated, []);
+    await f.controller.update('claude');
+    assert.equal(attempts, 2, 'an unknown result does not block a retry');
+  }
+  const changed = fixture(t, { openCommand: async () => ({ ok: true, completion: async () => ({ code: null, reason: 'terminal-closed', started: true }) }) });
+  await changed.controller.update('claude'); changed.setVersion('1.0.1'); await changed.controller.poll();
+  assert.equal(changed.controller.state('claude').status, 'current', 'a verified version change wins over a missing receipt');
+});
+
+test('terminal completion records started and exit codes, with quoted multilingual receipt paths', t => {
   const dir = mkdtempSync(join(tmpdir(), 'of-update-exit-')); t.after(() => rmSync(dir, { recursive: true, force: true }));
-  const receipt = join(dir, "更新's $(literal).txt");
+  const receipt = join(dir, "更新's $(literal).txt"), startedFile = receipt + '.started';
   if (process.platform !== 'win32') {
-    const result = spawnSync('/bin/sh', ['-c', updateWithReceipt("printf 'terminal output'; exit 7", receipt)], { encoding: 'utf8' });
-    assert.equal(result.stdout, 'terminal output');
-    assert.equal(readFileSync(receipt, 'utf8'), '7');
+    const shells = ['/bin/sh']; if (existsSync('/bin/zsh')) shells.push('/bin/zsh');
+    for (const shell of shells) for (const code of [0, 7]) {
+      const result = spawnSync(shell, ['-c', updateWithReceipt(`printf 'terminal output'; cat "$OF_UPDATE_STARTED"; exit ${code}`, receipt)], {
+        encoding: 'utf8', env: { ...process.env, OF_UPDATE_STARTED: startedFile },
+      });
+      assert.equal(result.status, code);
+      assert.equal(result.stdout, 'terminal outputstarted');
+      assert.equal(readFileSync(receipt, 'utf8'), String(code));
+      assert.equal(existsSync(startedFile), false);
+    }
   }
   const windows = updateWithReceipt("& 'C:\\Tools\\claude.exe' update", "C:\\Users\\O'Neil\\update.txt", { win: true });
+  assert.match(windows, /'\.started'/);
+  assert.match(windows, /'started'/);
   assert.match(windows, /finally/);
   assert.ok(windows.includes("'C:\\Users\\O''Neil\\update.txt'"));
   assert.match(windows, /LASTEXITCODE/);
+});
+
+test('terminal completion records an exit code when the wrapper is terminated', async t => {
+  if (process.platform === 'win32') return;
+  const dir = mkdtempSync(join(tmpdir(), 'of-update-signal-')); t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const shells = ['/bin/sh']; if (existsSync('/bin/zsh')) shells.push('/bin/zsh');
+  for (const shell of shells) {
+    const receipt = join(dir, shell === '/bin/sh' ? 'sh-exit' : 'zsh-exit'), startedFile = receipt + '.started';
+    const child = spawn(shell, ['-c', updateWithReceipt('sleep 30', receipt)], { stdio: 'ignore', detached: true });
+    t.after(() => { try { process.kill(-child.pid, 'SIGKILL'); } catch { /* already exited */ } });
+    let started = false;
+    for (let i = 0; i < 200; i++) {
+      try { if (readFileSync(startedFile, 'utf8') === 'started') { started = true; break; } } catch { /* not written yet */ }
+      await new Promise(done => setTimeout(done, 25));
+    }
+    assert.equal(started, true, 'the wrapper records started before running the command');
+    const exited = new Promise((done, fail) => { child.once('exit', done); child.once('error', fail); });
+    process.kill(-child.pid, 'SIGTERM');
+    await exited;
+    let receiptValue = '';
+    for (let i = 0; i < 100; i++) {
+      try { receiptValue = readFileSync(receipt, 'utf8'); } catch { /* not written yet */ }
+      if (receiptValue === '143' && !existsSync(startedFile)) break;
+      await new Promise(done => setTimeout(done, 10));
+    }
+    assert.equal(receiptValue, '143');
+    assert.equal(existsSync(startedFile), false);
+  }
 });

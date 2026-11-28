@@ -207,8 +207,14 @@ export function createAgentUpdates({ dataDir, getAgents, readVersion, onChange, 
         } else if (completed) {
           jobs.delete(id);
           await check(id, { fresh: true });
-          if (completed.code !== 0 || state(id).status === 'available') publish(id, { ...state(id), status: 'error',
-            error: completed.code === null ? 'The update terminal was closed before completion.' : completed.code !== 0 ? `The update command exited with code ${completed.code}. Check its terminal output.` : 'The installer finished, but this program still reports an older version. Check its terminal output and installation path.' });
+          if (completed.code === null) publish(id, { ...state(id), status: 'unknown',
+            error: completed.reason === 'terminal-closed'
+              ? completed.started
+                ? 'The update command started, but its result could not be confirmed because the terminal closed. Retry the update, or run the command manually and check the version.'
+                : 'The update terminal closed before the command result could be confirmed. Retry the update, or run the command manually and check the version.'
+              : 'The update command ended without a confirmed exit code. Retry the update, or run the command manually and check the version.' });
+          else if (completed.code !== 0 || state(id).status === 'available') publish(id, { ...state(id), status: 'error',
+            error: completed.code !== 0 ? `The update command exited with code ${completed.code}. Check its terminal output.` : 'The installer finished, but this program still reports an older version. Check its terminal output and installation path.' });
         } else if (now() - job.startedAt > 15 * 60_000) {
           jobs.delete(id); publish(id, { ...state(id), status: 'error', error: 'No version change was detected. Check the update terminal, then check again.' });
         }
