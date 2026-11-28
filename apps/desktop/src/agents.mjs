@@ -757,20 +757,36 @@ export async function openAgentInstaller(id) {
 export async function openAgentUpdate(id, command) {
   if (!AGENTS[id] || typeof command !== 'string' || !command) return { ok: false, error: 'No update command for this agent.' };
   const dir = SIGN_IN_DIR(); mkdirSync(dir, { recursive: true });
-  const receipt = join(dir, `${randomUUID()}-update-exit`);
+  const receipt = join(dir, `${randomUUID()}-update-exit`), startedFile = `${receipt}.started`;
   let finished = null;
-  const readCompletion = () => {
-    if (finished) return finished;
+  const readReceipt = () => {
     try {
       const code = readFileSync(receipt, 'utf8').trim();
-      if (/^-?\d{1,10}$/.test(code)) { finished = { code: Number(code) }; unlinkSync(receipt); }
+      if (/^-?\d{1,10}$/.test(code)) return { started: true, code: Number(code) };
     } catch { /* not finished */ }
+    try { return { started: readFileSync(startedFile, 'utf8').trim() === 'started', code: null }; }
+    catch { return { started: false, code: null }; }
+  };
+  const clearReceipt = () => {
+    for (const file of [receipt, startedFile]) try { unlinkSync(file); } catch { /* already removed */ }
+  };
+  const readCompletion = () => {
+    if (finished) return finished;
+    const current = readReceipt();
+    if (current.code !== null) { finished = { code: current.code }; clearReceipt(); }
     return finished;
+  };
+  const unknownCompletion = (reason) => {
+    const late = readCompletion(); if (late) return late;
+    const current = readReceipt();
+    if (current.code !== null) { finished = { code: current.code }; clearReceipt(); return finished; }
+    try { unlinkSync(startedFile); } catch { /* already removed */ }
+    return readCompletion() ?? { code: null, reason, started: current.started };
   };
   if (windows) {
     try {
-      const child = await powerShellWindow(`${id}-update.ps1`, powerShellLine(`${AGENTS[id].label} update`, updateWithReceipt(command, receipt, { win: true })), childEnvironment({ shell: await loginShellVariables() }));
-      return { ok: true, completion: async () => readCompletion() ?? (child.exitCode !== null ? { code: null } : null) };
+      const child = await powerShellWindow(`${id}-update.ps1`, powerShellLine(`${AGENTS[id].label} update`, updateWithReceipt(command, receipt, { win: true })), childEnvironment({ shell: await loginShellVariables() }), { track: true });
+      return { ok: true, completion: async () => readCompletion() ?? (child.exitCode !== null ? unknownCompletion('process-exited') : null) };
     } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
   }
   const r = await run('/usr/bin/osascript', ['-e', terminalScript(updateWithReceipt(command, receipt), { track: true })], 15_000);
@@ -780,14 +796,27 @@ export async function openAgentUpdate(id, command) {
     const done = readCompletion(); if (done) return done;
     if (!/^\/dev\/tty[\w]+$/.test(tty)) return null;
     const checked = await run('/usr/bin/osascript', ['-e', terminalTabOpenScript(tty)], 5000);
-    return checked.ok && checked.stdout.trim() === 'closed' ? { code: null } : null;
+    if (!checked.ok || checked.stdout.trim() !== 'closed') return null;
+    return unknownCompletion('terminal-closed');
   } };
 }
 
-/** Only an exit status is written, never terminal output or credentials. The visible window stays open. */
+/**
+ * A separate start marker records that the wrapper ran without overwriting a later exit code. Traps keep nonzero and
+ * signal exits in the receipt too. Only status is written, never terminal output or credentials; the window stays open.
+ */
 export function updateWithReceipt(command, receipt, { win = false } = {}) {
-  if (!win) return `(\n${command}\n)\nprintf '%s' "$?" > ${shq(receipt)}`;
-  return `$openfilmUpdateExitCode = 0\r\ntry {\r\n${command}\r\n$openfilmUpdateSucceeded = $?\r\nif ($null -ne $LASTEXITCODE) { $openfilmUpdateExitCode = $LASTEXITCODE } elseif (-not $openfilmUpdateSucceeded) { $openfilmUpdateExitCode = 1 }\r\n} catch {\r\nWrite-Host $_\r\n$openfilmUpdateExitCode = 1\r\n} finally {\r\n[System.IO.File]::WriteAllText(${psq(receipt)}, [string]$openfilmUpdateExitCode)\r\n}`;
+  if (!win) return `(
+  openfilm_update_receipt=${shq(receipt)}
+  openfilm_update_started="$openfilm_update_receipt.started"
+  trap 'openfilm_update_status=$?; printf "%s" "$openfilm_update_status" > "$openfilm_update_receipt"; rm -f "$openfilm_update_started"' 0
+  trap 'exit 129' HUP
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
+  printf "%s" started > "$openfilm_update_started"
+${command}
+)`;
+  return `$openfilmUpdateReceipt = ${psq(receipt)}\r\n[System.IO.File]::WriteAllText($openfilmUpdateReceipt + '.started', 'started')\r\n$openfilmUpdateExitCode = 0\r\ntry {\r\n${command}\r\n$openfilmUpdateSucceeded = $?\r\nif ($null -ne $LASTEXITCODE) { $openfilmUpdateExitCode = $LASTEXITCODE } elseif (-not $openfilmUpdateSucceeded) { $openfilmUpdateExitCode = 1 }\r\n} catch {\r\nWrite-Host $_\r\n$openfilmUpdateExitCode = 1\r\n} finally {\r\n[System.IO.File]::WriteAllText($openfilmUpdateReceipt, [string]$openfilmUpdateExitCode)\r\n[System.IO.File]::Delete($openfilmUpdateReceipt + '.started')\r\n}`;
 }
 
 /**
